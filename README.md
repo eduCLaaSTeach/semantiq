@@ -110,6 +110,10 @@ Single-tenant. Organisation hierarchy is Administrator at the org root, then
 Business Unit, then Team. The System Administrator sits above the org root and
 owns platform configuration rather than records.
 
+The design-system template is authoritative for the tiers and carries the full
+per-verb permission matrix along with the tier codes `system_admin`, `admin`,
+`team`, `self` and `self_view`. The summary below is orientation, not the spec.
+
 | Role | Record scope |
 | --- | --- |
 | System Administrator | All records, plus platform and integration configuration |
@@ -128,7 +132,7 @@ owns platform configuration rather than records.
 > or ad hoc styling alongside it.
 
 It covers the four-cluster information architecture, the application shell, the
-design tokens in both themes, ten page archetypes, the sub-navigation patterns, the
+design tokens in both themes, eleven page archetypes, the sub-navigation patterns, the
 role and gate model, and the component and interaction contracts.
 
 Every rule in it is tagged either ENFORCED or PRINCIPLED. ENFORCED covers all token
@@ -171,5 +175,5 @@ cadence and failover procedure are not yet defined.
   tree, the entity list, and the confirmed UI stack including how React is served
   from Laravel.
 - Reconcile `doc/04-UI-Specification.md` and the two mockups against the template.
-- Resolve the role-count mismatch: this README lists five roles, the template works
-  from a four-tier baseline.
+- Decide the list-behaviour naming and the step-by-step form draft storage. Both are
+  new App Definition fields the template asks for and never decides.

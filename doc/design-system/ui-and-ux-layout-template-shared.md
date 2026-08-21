@@ -186,18 +186,45 @@ entities:
     state_machine: <draft -> ... -> done | none>
 
 # ---------------------------------------------------------------------------
-# ROLES - the four-tier baseline (§7). Rename labels per app; keep the tier shapes.
+# ROLES - the five-tier baseline (§7). Rename labels per app; keep the tier shapes.
+# Tiers are cumulative, highest first. System Administration is system-admin only.
 # ---------------------------------------------------------------------------
 roles:
-  - { key: administrator, label: Administrator, tier: admin,     clusters: [Workspace, Compliance, Application Administration, System Administration] }
-  - { key: collaborator,  label: Collaborator,  tier: team,      clusters: [Workspace, Compliance] }
-  - { key: contributor,   label: Contributor,   tier: self,      clusters: [Workspace] }
-  - { key: viewer,        label: Viewer,        tier: self_view, clusters: [Workspace] }
+  - { key: system_administrator, label: System Administrator, tier: system_admin, clusters: [Workspace, Compliance, Application Administration, System Administration] }
+  - { key: administrator,        label: Administrator,        tier: admin,        clusters: [Workspace, Compliance, Application Administration] }
+  - { key: collaborator,         label: Collaborator,         tier: team,         clusters: [Workspace, Compliance] }
+  - { key: contributor,          label: Contributor,          tier: self,         clusters: [Workspace] }
+  - { key: viewer,               label: Viewer,               tier: self_view,    clusters: [Workspace] }
+
+# ---------------------------------------------------------------------------
+# LIST BEHAVIOR - every list / index screen sorts and filters (§5.2).
+# Only the naming varies here, never whether they exist.
+# ---------------------------------------------------------------------------
+lists:
+  query_params:     { q, sort, dir, page, size }   # plus one per facet; keep the project's
+                                                   # own convention when it already has one
+  server_side:      true      # sort and filter on the SERVER for any paginated list
+
+# ---------------------------------------------------------------------------
+# STEP-BY-STEP FORM DRAFTS - asked, never decided (§5.4a, §8).
+# Every multi-step form saves a resumable SERVER-SIDE draft on each Continue, so
+# nothing already entered depends on the browser staying open. Browser storage
+# may cache it; it is never the copy. Only the storage varies, never whether the
+# draft exists.
+# ---------------------------------------------------------------------------
+drafts:
+  storage:          <draft_table | same_table_draft_state>   # ENFORCED: ask, never choose it   [ASK]
+  state_source:     <existing_status_dimension | new_one>    # where the draft state comes from [ASK]
+  in_flight:        one       # resumable drafts per user per flow; several only if confirmed
+  excluded_fields:  every credential, key, token, and password - always, never persisted
+  autosave:         <none | interval | on_blur | on_close>   # ON TOP OF the per-step save      [ASK]
+  retention:        <ABANDONED_DRAFT_RETENTION>              # how long an abandoned draft lives [ASK]
 ```
 
-If the app name, title-bar name, navigation tree, brand-assets path, entities, roles, or UI stack
-is missing, stop and ask before generating UI that displays or depends on it. Never invent,
-generate, randomly pick, or silently default any of them.
+If the app name, title-bar name, navigation tree, brand-assets path, entities, roles, UI stack, or
+a step-by-step form's draft storage shape and retention is missing, stop and ask before generating
+UI that displays or depends on it. Never invent, generate, randomly pick, or silently default any
+of them.
 
 ## 2 · Information Architecture
 
@@ -300,10 +327,10 @@ NAV_TREE:
   System Administration      -> nodes: [ ... access = sys_admin ]
 
 ACCESS_POLICIES:
-  workspace   -> roles: [administrator, collaborator, contributor, viewer]
-  compliance  -> roles: [administrator, collaborator]
-  app_admin   -> roles: [], admin_only: true
-  sys_admin   -> roles: [], admin_only: true
+  workspace   -> roles: [system_administrator, administrator, collaborator, contributor, viewer]
+  compliance  -> roles: [system_administrator, administrator, collaborator]
+  app_admin   -> roles: [], admin_only: true             # admin, and the system admin above it
+  sys_admin   -> roles: [], system_admin_only: true      # the system admin alone
 ```
 
 ### The Gate Engine
@@ -311,9 +338,11 @@ ACCESS_POLICIES:
 ```text
 # PSEUDO-CODE - names no framework; reimplement idiomatically
 canAccess(user, policy):
-    if user.isAdmin:            return true        # admins see everything
-    if policy.admin_only:       return false       # admin-only excludes all others
-    for role in policy.roles:   if user.hasRole(role): return true
+    if user.isSystemAdmin:        return true      # the super-tier; tiers are cumulative
+    if policy.system_admin_only:  return false     # System Administration stops here
+    if user.isAdmin:              return true      # admin reaches everything else
+    if policy.admin_only:         return false     # admin-only excludes the tiers below
+    for role in policy.roles:     if user.hasRole(role): return true
     return false
 
 canAccessKey(user, key):                            # gate controllers and handlers with this
@@ -557,12 +586,16 @@ LAYOUT shell:
       APP NAME (left)  ·  spacer  ·  notifications · theme switcher · profile menu
       NO nav tabs · NO global search bar · NO action buttons
     MAIN  [canvas surface - clearly distinct from the chrome], the scrolling region
-      BREADCRUMB   (only for destinations deeper than about 3 levels)
+      BREADCRUMB   (the full path from the cluster down, once the page sits inside a
+                    group; the trail IS the way back - never a separate back link, §8)
       PAGE HEADER  (title + subtitle left; the primary CTA right)
       TAB STRIP    (only for depth overflow or record facets, §6)
       PAGE CONTENT -> cards float on the canvas; every data region owns its
                       loading / empty / error states
-      TOAST HOST   (one persistent aria-live region, present from page load)
+
+    TOAST HOST  (fixed, TOP RIGHT and nowhere else, offset below the 52px top bar so a
+                 toast never covers the top-bar utilities; ONE host holding both the
+                 polite and the assertive aria-live region, present from page load, §8)
 ```
 
 The document head is standard for the stack. The `<title>` comes from `app.title_bar`, the favicon
@@ -580,7 +613,7 @@ tokens. Token names may adapt to the stack; token values may not change. Never h
 | --- | --- | --- |
 | Primary accent (actions, links, focus, active tab) | Midnight Blue | `#193E6B` |
 | Secondary accent (active-nav gold treatment) | Green Gold | `#B3A125` |
-| Secondary (buttons) | Cadmium Violet | `#7F3F98` |
+| Secondary (badges, chips, non-interactive accents - never a button fill) | Cadmium Violet | `#7F3F98` |
 | Secondary (non-interactive headers, info) | Jelly Bean Blue | `#448E9D` |
 | semantic.success | Avocado Green | `#5F8025` |
 | semantic.warning | Sunray | `#E9AC53` |
@@ -588,14 +621,16 @@ tokens. Token names may adapt to the stack; token values may not change. Never h
 | semantic.info | Jelly Bean Blue | `#448E9D` |
 | Neutral family | Platinum Beige plus White | `#EEE7E0` ramp, `#FFFFFF` |
 
-Color role rules (ENFORCED): secondary buttons use only Cadmium Violet; destructive is always
-Violet-Red; Green Gold is the active-nav and highlight treatment only, never warnings or deletion;
-Sunray appears interactively only as the Warning button variant; Jelly Bean Blue stays
-non-interactive. Never repurpose a role's color and never introduce an off-palette hue; a genuinely
-new tint derives from an approved hue and keeps the WCAG AA bar. Semantic colors used as text, icons,
-or thin edges on a surface always go through the theme-aware readable tokens (`--badge-*-fg`), never
-the raw semantic hex; raw Violet-Red on a dark card is about 1.6:1 and invisible. Raw semantic hex is
-only for solid fills such as a danger button with white text.
+Color role rules (ENFORCED): a button is either the solid variant of its meaning or the one neutral
+secondary look, never a second filled color, so Cadmium Violet is a badge and chip color and never a
+button fill (§8 Buttons); destructive is always Violet-Red; Green Gold is the active-nav and
+highlight treatment only, never warnings or deletion; Sunray appears interactively only as the
+Warning button fill; Jelly Bean Blue stays non-interactive. Never repurpose a role's color and never
+introduce an off-palette hue; a genuinely new tint derives from an approved hue and keeps the WCAG AA
+bar. Semantic colors used as text, icons, or thin edges on a surface always go through the
+theme-aware readable tokens (`--badge-*-fg`), never the raw semantic hex; raw Violet-Red on a dark
+card is about 1.6:1 and invisible. Raw semantic hex is only for solid fills such as a danger button
+with white text.
 
 Color split: 60% neutral background (canvas plus surfaces) · 30% secondary UI (Cadmium Violet, Jelly
 Bean Blue, Sunray) · 10% primary accent (Midnight Blue).
@@ -681,7 +716,7 @@ Weight 300 is not loaded, so nothing may use it; 800 is optional display emphasi
 | --- | --- |
 | Top bar and rail head height | 52px, their bottom dividers forming one continuous line |
 | Sidebar width | 240px expanded / 56px collapsed |
-| Controls | buttons and inputs 32px tall (small 27px), top-bar icon buttons 34px, avatar 30px |
+| Controls | buttons and inputs 32px tall (small 27px), top-bar icon buttons 34px, avatar 30px; a button and the field beside it share one height and one border token, and every button at a given size shares one geometry (§8 Buttons) |
 | Wide logo | `height: 22px; width: auto` in the rail head |
 | C2S short mark | 40x34 slot, `object-fit: contain`, centered in the collapsed rail |
 | Scrollbars | the rail's nav list and the main canvas hide scrollbars visually while staying fully scrollable |
@@ -718,7 +753,12 @@ new glyph to the registry in the same style.
 - Sizes: nav and group icons 18px (20px when the rail is collapsed); top-bar action icons 20px;
   chevrons 16px; empty-state illustration icons 48px.
 - Accessibility: decorative icons carry `aria-hidden="true"`; an icon-only control needs an
-  accessible name on the control.
+  accessible name on it. Icon-only is limited to the closed chrome list in §8 Buttons: an action the
+  user picks between, every actions-column control included, carries its visible word beside the
+  icon.
+- One glyph, one concept, everywhere: an eye is View, a pencil is Edit, a copy mark is Duplicate, a
+  trash is Delete, a restore mark is Restore from the recycle bin, and a kebab is the row's `More`
+  overflow, used only past about three row actions.
 
 Register an icon before use. Keep every icon meaningful; the same glyph always denotes the same
 concept or action.
@@ -737,22 +777,129 @@ persists per user; treat each widget as an independently renderable partial.
 
 ### 5.2 List / Index
 
-Page header with the primary CTA, an optional filter bar, a card-wrapped table, and a pagination
-footer only when there is more than one page. Table rules live in §8.
+Page header with the primary CTA, a search and filter bar, a card-wrapped table with sortable
+columns and a labeled actions column, and a pagination footer only when there is more than one page.
+Table rules live in §8.
+
+Sorting and filtering are mandatory here (ENFORCED), not an advanced tier and not a later pass. A
+list is where the user goes to find a record, and one that can only be read top to bottom gets worse
+every week the data grows.
+
+- Every column holding a value worth ordering sorts, which is most of them: name, code, status,
+  owner, dates, counts, amounts. The actions column and a free-text notes column are the exceptions.
+- Declare the default sort and open the list on it. A list with no stated order comes back in
+  whatever order the database chose, which changes under the user between visits.
+- The bar carries free text across the fields named in its placeholder, plus one facet per dimension
+  the list is genuinely narrowed by: status, type, owner, source, a date range. Each facet reads that
+  column's codified reference set, never a free-text match against a coded column.
+- Sort and filter run over the WHOLE result set, never the rows already loaded. Where the list is
+  paginated they are server parameters and the page arrives already narrowed and ordered. Reordering
+  the 25 rows on screen while the other 222 matches sit behind pagination is a defect.
+- Any change to a filter, the sort, or the page size returns to page 1, and both the toolbar count
+  and the pagination info report the filtered total ("12 found" and "Showing 1-12 of 12").
+- The state lives in the URL query, so a refresh, the back button, a bookmark, and a link pasted to
+  a colleague all reproduce the view. Restore it by reading the URL, not from remembered client
+  state. The declared convention is `q`, `sort`, `dir`, `page`, `size`, plus one parameter per facet,
+  used the same way on every list; keep the project's own convention where it already has one, and
+  omit an empty parameter rather than writing `&status=`.
+- Zero matches is the no-results state with a clear-filters escape, never the no-data-yet state and
+  never a blank body. Announce the new count politely from its own live region on the count element.
+
+Proportionate: a short read-only sub-table inside a detail page, and the dashboard's recent-activity
+table, need neither control. This applies to the list / index archetype.
 
 ### 5.3 Detail / Show
 
-Back link, a header card (title, status badge, meta line, right-aligned actions), then a 2/3 plus 1/3
-body grid. The side-panel column widens to full width when its sibling is absent. When the record has
-several facets, switch them with the horizontal in-canvas tab strip above the body (§6): one tab per
-facet, each a deep-linkable route.
+A breadcrumb line carrying the full path from the cluster down, whose parent segment is the way back
+to the list, then a header card (title, status badge, meta line, right-aligned actions, each carrying
+its word), then a 2/3 plus 1/3 body grid. There is no separate back link; the trail is it (§8). The
+side-panel column widens to full width when its sibling is absent. When the record has several
+facets, switch them with the horizontal in-canvas tab strip above the body (§6): one tab per facet,
+each a deep-linkable route.
 
 ### 5.4 Form (create / edit)
 
 One shared template serves both modes, keyed on whether the record exists; it flips the title, the
-action route, the method, the submit label, and the back/cancel targets. Regions: back link, section
-cards of fields, an optional error-summary card, then a footer with cancel plus submit. Always
-repopulate prior input. Field, validation, grouping, and wizard rules live in §8.
+action route, the method, and the submit label. Regions: the breadcrumb line whose parent segment
+returns to the list, section cards of fields, then a footer with a neutral secondary `Cancel` beside
+the one solid submit. Always repopulate prior input. Field, validation, and grouping rules live in §8.
+
+Data entry is page-hosted (ENFORCED). The form is its own route (`.../new`, `.../<id>/edit`) or a
+form region on the current page, inside the shell, with the navigation, the breadcrumb, and the page
+header all still there. A popup is not an option for data entry, however few fields it has, and a
+drawer or an off-canvas panel is not a loophole. A modal stays what it is for: a decision that must
+be answered now, carrying at most the three or so fields that ARE the decision (§8 Modals). Row-level
+editing in a table stays inline for a single cell; anything wider routes to the record's edit page.
+
+There is no error-summary card. Every field error is inline below its field, and a blocked submit is
+announced once by an error toast while focus moves to the first invalid field (§8 Forms).
+
+### 5.4a Step-By-Step Form (multi-step / wizard)
+
+One step's fields at a time beside a vertical step rail on the left, page-hosted like any other form
+and carrying the same breadcrumb line, with exactly two footer controls: a neutral secondary `Back`
+immediately left of the one solid `Continue`. On the last step that same button's label becomes
+`Create` / `Save` / `Finish` and it commits. Never a third persistent button, and never a
+`Save as draft`: `Continue` is the save.
+
+It carries a stricter mandatory sub-pattern (ENFORCED), because a multi-step form holds work the user
+has already done. Held only in the browser, that work is gone the moment the tab closes, the session
+expires, the battery dies, the connection drops, or the user picks up another machine, and they
+restart at step one.
+
+- `Continue` validates the current step, persists the entered values as a draft, and advances only
+  after the save succeeds. It is the async action from §8 Buttons: disable, show the loading
+  affordance, guard against double-submit.
+- The step rail runs vertically down the left, with the step on screen beside it, and it is
+  navigable rather than a read-only indicator. Every saved step, plus the furthest step reached, is
+  one control covering both its number and its label; anything beyond that is rendered so the shape
+  of the flow stays visible, but inert, because it has never been validated. Moving back behaves
+  like `Back`, validating nothing and losing nothing. Moving forward behaves like `Continue`,
+  validating and saving the step being left, so an adjustment made on the way back is persisted
+  rather than leaving the draft a step behind the screen. Freeze the rail while a save is in
+  flight. The rail is a component primitive, so it takes neither button look (§8).
+- The draft is stored server-side, owned by the user who entered it, and carries the step reached. A
+  draft that exists only in `localStorage`, `sessionStorage`, or IndexedDB does not satisfy this,
+  because it dies with the browser profile and the device, which is half of what the pattern is for.
+- Authorize a draft like any other record, through the same layers in §7: the per-record policy and
+  the list query both hold it to its owner, so nobody resumes, reads, or discards someone else's
+  half-finished work by guessing an id.
+- A failed save is the case this exists for. Do not advance, do not clear the fields, keep every
+  entered value on screen, and surface a retryable failure in the footer in the danger role.
+- Confirm the save quietly: a muted `Draft saved 14:32` line in the footer, announced politely
+  through the live region. A per-step toast is noise. This is the one sanctioned exception to
+  confirming an async action with a toast; a failed save or an explicit save-and-close may still
+  toast.
+- Resume, do not restart. The draft is reachable from a standing surface (the entity list with a
+  `Draft` badge in the neutral role plus a `Continue` row action, or a drafts view), and re-entering
+  the create flow offers the saved draft rather than opening blank. Resuming reopens the step that
+  was reached with every earlier step restored and marked done, and states in one muted line what was
+  restored.
+- On completion the draft stops being a draft, closed out in the same transaction that commits the
+  record, so the finished record appears once and the draft leaves the drafts surface.
+- Discarding is explicit and confirm-guarded, and the confirmation names what is lost. A draft never
+  became a record, so it does not route to the recycle bin. The guard on leaving mid-step says
+  plainly that the saved steps are kept and only the current step's unsaved edits go.
+- A draft never holds a secret. Leave credential, API key, token, and password fields out of the
+  persisted payload and re-collect them on resume. A restored draft is also never a passed connection
+  test (§5.5).
+- The storage shape is the developer's decision, declared in §1 and never chosen here: a separate
+  draft table, or the record's own table with a draft state. Name the trade-off when asking. A draft
+  in the live table needs its required columns relaxed until completion, which weakens them for
+  committed rows too; a separate table keeps the live constraints strict. Either way the draft store
+  is persisted data like any other, so it goes through the project's schema and data-model workflow
+  rather than being invented here.
+- The draft state is a codified member of a reference set, never free text, and where it comes from -
+  the platform's existing status dimension or a new one - is declared in §1.
+- One resumable draft per user per flow by default. Several in flight only when the developer
+  confirms it, and then the list becomes the resume surface.
+- Either way a draft is not a record. It may sit as a row in its own owner's list view with the
+  `Draft` badge and a `Continue` action, and it stays out of the default-filtered result and its
+  counts until the owner asks for drafts, and out of every other list, export, metric tile, and
+  report. With the drafts filter on, those rows count in that filtered total like any other match.
+- Autosaving more often than each advance (on an interval, on blur, on close) is welcome and stays
+  the project's call. Saving on every advance is the floor, not the ceiling, and extra autosave never
+  relaxes the step validation that gates advancing.
 
 ### 5.5 Settings / Config
 
@@ -763,24 +910,28 @@ Connection and integration configuration is a stricter mandatory sub-pattern (EN
 whenever the fields configure a connection to an external system: API credentials, email or SMTP, a
 third-party app integration, a webhook, or any similar outbound-connection config.
 
-| State | Buttons shown | Emphasis |
+| State | Buttons shown | Look |
 | --- | --- | --- |
-| Untested (first load, or after any tested field is edited) | `Reset` + `Test Configuration` | `Reset` ghost; `Test Configuration` primary |
-| Test in progress | `Reset` (disabled) + `Test Configuration` (loading) | Same as above |
-| Test succeeded, values unchanged since | `Reset` + `Test Configuration` + `Save` | `Reset` ghost; `Test Configuration` outline; `Save` primary |
-| Test failed | `Reset` + `Test Configuration` | Same as Untested, with inline failure detail and no `Save` |
+| Untested (first load, or after any tested field is edited) | `Reset` + `Test Configuration` | both neutral secondary, so the footer carries NO solid button |
+| Test in progress | `Reset` (disabled) + `Test Configuration` (loading) | unchanged; loading swaps the label for a spinner at the same width |
+| Test succeeded, values unchanged since | `Reset` + `Test Configuration` + `Save` | `Reset` and `Test Configuration` unchanged; `Save` is the one solid action |
+| Test failed | `Reset` + `Test Configuration` | as Untested, with the failure shown inline and no `Save` |
 
 - `Reset` restores the last-saved values, or clears the form on first setup, discarding unsaved edits
-  and any test result. It is a routine exit, not destructive, so it is ghost emphasis.
+  and any test result. It is a routine exit, not destructive, so it takes the one neutral secondary
+  look like every other labeled action that is not the group's solid button (§8 Buttons).
 - `Test Configuration` runs the real connection check as an async action (§8 Buttons): disable and
   show the loading affordance, guard against double-submit, keep the width stable. Report the result
   two ways: a toast, and an inline connection-status indicator beside the fields (a status badge,
   never color alone) that persists after the toast dismisses.
 - `Save` is never rendered, or stays disabled with an explanatory affordance, until the most recent
-  `Test Configuration` against the current unedited field values returned success.
+  `Test Configuration` against the current unedited field values returned success. `Save` is the only
+  solid button this footer ever carries.
 - Editing invalidates the test. The moment any tested field changes after a successful test, `Save`
-  hides or disables again, the inline status clears back to untested, and the primary emphasis
-  returns to `Test Configuration`. A fresh successful test is required before `Save` reappears.
+  hides or disables again and the inline status clears back to untested, leaving the footer with no
+  solid button. `Reset` and `Test Configuration` look exactly as they did before the pass, because a
+  button's look never changes with its state. A fresh successful test is required before `Save`
+  reappears.
 
 Never offer a way to save unvalidated connection settings. There is no "save anyway", no "skip
 test", and no force-save affordance. This applies only to the fields that configure an outbound
@@ -789,8 +940,10 @@ connection, not to a boolean toggle or an unrelated setting on the same screen.
 ### 5.6 Builder (hub and spoke)
 
 For multi-step authoring such as templates, form builders, or pipelines. A central hub page whose row
-actions spoke out to single-purpose sub-pages, each returning via a back link. Lifecycle state shows
-inline with exactly one confirm-guarded "advance" control per row; terminal states show no button. A
+actions spoke out to single-purpose sub-pages, each returning through its breadcrumb trail (§8) and
+never a separate back link. Every hub row action carries its word beside its icon. Lifecycle state
+shows inline with exactly one confirm-guarded "advance" control per row; terminal states show no
+button. A
 spreadsheet-style field builder edits rows in a table with add-row and per-row delete. A validation
 gate checks readiness before a transition, and its success copy names the next workflow step.
 Drag-and-drop or canvas builders may be desktop-only; say so in the UI.
@@ -803,9 +956,13 @@ the credential form, an optional tagline, and a trust footer.
 ### 5.8 Recycle Bin / Soft Delete
 
 Destructive deletes route here, not to a hard delete. Per-user restore. The admin view buckets by
-entity, each bucket listing trashed records with restore plus a confirm-gated permanent delete.
-"Empty everything" requires typing a confirm word, the strongest guard in the app. Owners restore
-their own records; only an admin permanently deletes.
+entity, each bucket listing trashed records with a labeled `Restore` beside a confirm-gated labeled
+`Delete permanently`, both carrying their word next to the icon. "Empty everything" requires typing a
+confirm word, the strongest guard in the app. Owners restore their own records; an admin permanently
+deletes application records, and a system admin permanently deletes system configuration (§7).
+
+A step-by-step form's draft never routes here. A draft never became a record, so it is discarded
+under its own confirm-guarded control (§5.4a).
 
 ### 5.9 Status / Result
 
@@ -824,38 +981,58 @@ new row and never a code change.
 | --- | --- | --- |
 | Model catalog | 5.2 List / index | Browse, filter, and act on the entries |
 | Add / edit model | 5.4 Form, with the 5.5 test-before-save contract | Author one entry |
-| Run | 5.4 Form plus the call-result panel below | Send a prompt to a saved entry and read the result |
 
-Placement. The catalog is integration configuration that authorizes spending, so it sits under
-`System Administration`, admin-only, gated at the handler as well as in the nav (§7). Where the Run
-screen sits depends on who uses it: beside the catalog when it is an admin diagnostic, under
-`Workspace` when end users work in it. Ask; never place it by guessing. Never add a cluster for this.
+Two screens, not three. There is no run or playground screen by default: calls come from application
+code, which is where the prompt is decided, and the form's own test block already answers "does this
+entry work". Build one only when the developer asks for it, and ask where it sits rather than placing
+it.
 
-The list carries name, model id, method pill, endpoint (truncated per the table URL-cell treatment),
-cost in and out with the currency, a status badge, and when it was last tested. Row actions are Run,
-Edit, Duplicate, and Move to Recycle Bin. Status uses the fixed roles only: active is success, draft
-and retired are neutral, a failed last test is danger, never-tested is warning. Show last tested,
+Placement. The catalog is an outbound integration like any other, so it sits as a leaf inside the
+`Integrations` group in the `System Administration` cluster, beside the project's other connection
+configuration. Never give it a group of its own, and never add a cluster for it. System-admin only,
+gated at the handler and in the query scope as well as in the nav (§7). Label it for what it holds -
+`AI Providers` is the default - and use the same words in the page title and the breadcrumb.
+
+The list carries name, method pill, endpoint (truncated per the table URL-cell treatment), cost in
+and out with the currency, a status badge, and when it was last tested. The model id is not a column;
+it lives in a body row, because promoting it would imply the engine reads it. Sort and filter are
+required here like any other list (§5.2): default the order to name ascending, and give the bar a
+search across name and endpoint plus status and last-test-result facets. Row actions are `Edit`,
+`Duplicate`, and `Delete`, three labeled buttons in the one neutral secondary look, each carrying its
+word beside its registry icon, so none of them goes behind a `More` control. `Delete` only opens the
+recycle-bin confirmation, so it keeps the neutral shell with the danger color on its icon and label
+alone. Name the entry the way someone picking it from a dropdown would recognise it, after the
+provider and model, not after the job it happens to do today. Status uses the fixed roles only:
+active is success, draft and retired are neutral, a failed last test is danger, never-tested is
+warning. Show last tested,
 because an entry that has never made a successful call is the thing a reader most needs to notice
 before depending on it. Render cost as unknown, never as zero or a dash that reads like zero, when
 the price is unset. Never render a credential, a partial credential, or a length hint anywhere.
 
-The form's section cards run: identity, endpoint, credential, header rows, body rows, response paths,
-cost, routing, then the test block. Header and body rows use the typed row repeater (§8). The
-credential field takes a reference; where an admin may enter a value for the secret store, it is a
-password-type input, never re-rendered with a saved value, showing a masked badge that says where the
-value is stored, and a blank field on edit means unchanged rather than cleared.
+The form's seven section cards run: identity (name, the masked API key, status), endpoint, header
+rows, body rows, response paths, cost, then the test block. Every field in a section sits on one row;
+a section never wraps into a second row of fields, so declare the column count per section and step
+it down on narrower screens. There is no separate credential section, because the key is a field in
+identity, and no routing section, because the timeout is one project-wide value and there is no
+fallback hop. Header and body rows use the typed row repeater (§8). The key field is a password-type
+input, never re-rendered with a saved value and never showing a partial value or a length hint, and a
+blank field on edit means unchanged rather than cleared. Errors report once, where they are: inline
+under each field, with a blocked submit announced by one error toast, never a summary card (§8).
 
 This is connection configuration, so the test-before-save contract in §5.5 applies in full, with
-`Test call` as the check: `Reset` plus `Test call` until a call on the current values succeeds, then
-`Save` appears; editing any tested field clears the result and hides `Save` again.
+`Test call` as the check. `Reset` and `Test call` are both the neutral secondary look in every state,
+so the footer carries no solid button until a call on the current values succeeds and `Save` appears
+as the one solid action; editing any tested field, a header row or a body row included, clears the
+result and hides `Save` again. On the edit screen the key field is blank, so a test with a blank key
+uses the saved one, which is what lets `Test call` work without retyping it.
 
 There is no save-anyway, skip-test, or force-save path. A saved but untested entry is a call that
 fails in production at the moment a user needs it, having already been marked configured.
 
-The Run screen is a card with a model picker, a prompt textarea, and one primary `Send`, then the
-result panel. The picker offers only callable entries (active, last test passed) and shows the
-selected entry's price and last-tested state, so the person sending knows what a call costs before
-sending it. `Send` is the async action from §8 Buttons.
+If the developer does ask for a Run screen, it is a page-hosted card with a model picker, a prompt
+textarea, and `Send` as its one solid action, then the result panel. The picker offers only callable
+entries (active, last test passed) and shows the selected entry's price and last-tested state, so the
+person sending knows what a call costs before sending it. `Send` is the async action from §8 Buttons.
 
 #### The Call Result Panel
 
@@ -949,15 +1126,16 @@ second row and never truncates the active tab. Touch targets are at least 44px.
 Terminal (ENFORCED). A tab panel holds content, never another tab strip and never a fresh sidebar
 accordion. If a panel seems to need sub-tabs, the tree is mis-shaped: restructure it.
 
-### Pattern C · Click-Through And Back
+### Pattern C · Click-Through And Return
 
 Use when drilling into a different record or a nested collection: list to detail, category to its
-items, bin to its records. Standing navigation does not change; the sub-page opens with the canonical
-back link and returns through it.
+items, bin to its records. Standing navigation does not change; the sub-page opens with its
+breadcrumb trail and returns through it. There is no separate back link (§8 Breadcrumbs).
 
 ```text
 # PSEUDO-STRUCTURE
-BACK LINK: <- All <ENTITY_PL>   (muted, small, arrow-left icon, -> the index route)
+BREADCRUMB: <Cluster> > <Group> > All <ENTITY_PL> > <RECORD>
+                                  ^^^^^^^^^^^^^^^ the parent segment IS the way back
 ```
 
 ### Tabs Versus Filters
@@ -967,29 +1145,36 @@ narrow a list's rows and read as a filter, not navigation; they live in the sear
 (§8), not here. Do not use the navigation tab strip for a list filter, and do not move either into
 the top bar.
 
-| | A · Sidebar accordion | B · Horizontal tab strip | C · Click-through and back |
+| | A · Sidebar accordion | B · Horizontal tab strip | C · Click-through and return |
 | --- | --- | --- | --- |
 | Scope | standing nav tree, at most 3 levels | depth overflow plus one record's facets | between records or nested collections |
 | Placement | left sidebar, always | top of the canvas, under breadcrumb and title | full-page navigation |
 | Mental model | "where in the app am I" | "which face or deeper area is this" | "I opened a different thing" |
-| Form | accordion groups plus leaves | horizontal route-backed links, terminal | a link out plus a back link |
+| Form | accordion groups plus leaves | horizontal route-backed links, terminal | a link out plus the breadcrumb's parent segment |
 
 ## 7 · Role And Access Model
 
-Four tiers, four gate layers. Confirmed labels live in the App Definition. Rename or extend only for
+Five tiers, four gate layers. Confirmed labels live in the App Definition. Rename or extend only for
 a documented per-app reason, keeping the tier shapes.
 
-### The Four Tiers
+### The Five Tiers
+
+Highest first, and cumulative: each tier sees everything the tier below it sees.
 
 | Role | Tier | Clusters | Record scope | Create | Read | Update | Soft delete | Restore | Permanent delete |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Administrator | `admin` | all four | everyone's | yes | all | all | all | all | yes (only tier) |
+| System Administrator | `system_admin` | all four | everyone's | yes | all | all | all | all | yes, including system configuration |
+| Administrator | `admin` | Workspace · Compliance · Application Administration | everyone's | yes | all | all | all | all | yes, application records |
 | Collaborator | `team` | Workspace · Compliance | self plus people beneath them | yes | scope | scope | scope | scope | no |
 | Contributor | `self` | Workspace | own only | yes | own | own | own | own | no |
 | Viewer | `self_view` | Workspace | own only, configurable per app | no | own | no | no | no | no |
 
-- Administrator is the super-tier. It bypasses every cluster, policy, and ownership filter, and is
-  the only tier that permanently deletes.
+- System Administrator is the super-tier and the only tier that reaches `System Administration`. It
+  exists because the fourth cluster is system-level: connection strings, API keys, sign-in methods,
+  and model catalogs are not the same responsibility as managing the application's own users, and an
+  app admin who can invite a colleague should not thereby hold every provider credential.
+- Administrator owns everything inside the application, including `Application Administration`, and
+  permanently deletes application records. It does not reach system configuration.
 - Collaborator is a team-lead tier: full CRUD over its own records plus records owned by users
   beneath it in the org hierarchy. It gets Compliance for oversight but neither administration
   cluster.
@@ -997,24 +1182,25 @@ a documented per-app reason, keeping the tier shapes.
 - Viewer views but never mutates, within Workspace. The default view scope is own; an auditor-style
   read-only that sees everything sets its scope wider, recorded per app.
 
-Cluster grants:
+Cluster grants. An app may narrow these; it should not widen them.
 
 | Cluster | Roles granted |
 | --- | --- |
-| Workspace | Viewer, Contributor, Collaborator, Administrator |
-| Compliance | Collaborator, Administrator |
-| Application Administration | Administrator only |
-| System Administration | Administrator only |
+| Workspace | Viewer, Contributor, Collaborator, Administrator, System Administrator |
+| Compliance | Collaborator, Administrator, System Administrator |
+| Application Administration | Administrator, System Administrator |
+| System Administration | System Administrator only |
 
 ### Data Scope
 
 "Own data" means the record's owner is the current user. Scope widens by tier:
 
 ```text
-admin      -> all records
-team       -> records owned by { self } union { everyone reporting up to self }   (org subtree)
-self       -> records where owner = self
-self_view  -> records where owner = self   (read-only)
+system_admin -> all records
+admin        -> all records
+team         -> records owned by { self } union { everyone reporting up to self }   (org subtree)
+self         -> records where owner = self
+self_view    -> records where owner = self   (read-only)
 ```
 
 The hierarchy is a self-referential manager or team reference on the user; `teamMemberIds()` returns
@@ -1027,17 +1213,21 @@ hierarchy. Decide this in the App Definition.
 1. Cluster and feature access. `canAccessKey(user, policyKey)` decides sidebar visibility and gates
    the controller or handler; deny if not allowed.
 2. Per-record policy. Authorizes a single record's actions, including ownership and any state lock.
+   A step-by-step form's draft is authorized here like any other record, held to its owner, so
+   nobody resumes or reads someone else's half-finished work by guessing an id (§5.4a).
 3. Query scope. List and index queries filter to the user's visible scope, so out-of-scope records
-   never load.
-4. Permanent-delete guard. A hard admin-only gate on force-delete and purge routes.
+   never load. The same scope holds a draft to its owner.
+4. Permanent-delete guard. A hard gate on force-delete and purge routes: admin for application
+   records, system admin for system configuration.
 
 ```text
 # PSEUDO-CODE - implement in the confirmed language
-isAdmin(user)      -> user.tier == "admin"
-isReadonly(user)   -> user.tier == "self_view"
+isSystemAdmin(u)   -> u.tier == "system_admin"
+isAdmin(u)         -> u.tier in ["system_admin", "admin"]  # cumulative: sys admin is also an admin
+isReadonly(u)      -> u.tier == "self_view"
 teamMemberIds(u)   -> [u.id] + descendants(u).ids          # self plus org subtree
-visibleOwnerIds(u):                                        # none = "all" (admin)
-    admin -> none ;  team -> teamMemberIds(u) ;  otherwise -> [u.id]
+visibleOwnerIds(u):                                        # none = "all"
+    system_admin, admin -> none ;  team -> teamMemberIds(u) ;  otherwise -> [u.id]
 
 # query scope - apply to EVERY list query for the entity
 scopeVisibleTo(query, u):
@@ -1051,7 +1241,8 @@ create(u)         -> not isReadonly(u)
 update(u, r)      -> (state lock) and not isReadonly(u) and inScope(u, r)
 delete(u, r)      -> not isReadonly(u) and inScope(u, r)   # soft
 restore(u, r)     -> not isReadonly(u) and inScope(u, r)
-forceDelete(u, r) -> isAdmin(u)                            # admin only
+forceDelete(u, r) -> isAdmin(u)                            # application records
+purgeSystemConfig(u) -> isSystemAdmin(u)                   # system configuration
 inScope(u, r)     -> ids = visibleOwnerIds(u); ids is none or r.owner in ids
 ```
 
@@ -1075,25 +1266,85 @@ control always gets the same primitive and the same behavior.
 
 ### Buttons
 
-A button is one semantic meaning, one emphasis level, one size, one state. Pick the variant by what
-the action does, not by color preference.
+A button is one semantic meaning, one of two looks, one size, one state. Color says what kind of
+action it is; the look says how important. A button that means the same thing on two screens looks
+the same on both, so emphasis is never a per-screen judgement.
+
+There are exactly two looks (ENFORCED), and nothing else exists.
+
+| Look | Appearance | Used for |
+| --- | --- | --- |
+| Solid | filled with the variant's color | exactly one per action group: that group's one main action |
+| Neutral secondary | surface fill, one control border, ink text | every other labeled action, on every screen |
+
+Retired, and never reintroduced under another name: the borderless (ghost) labeled button, the
+outlined labeled button, and Cadmium Violet as a button fill.
+
+The variant picks the solid one's color by what the action does:
 
 | Variant | Color | Text | Use for |
 | --- | --- | --- | --- |
-| Primary | Midnight Blue `#193E6B` | white | the single main action: Submit, Save, Create, Confirm, Continue |
-| Secondary | Cadmium Violet `#7F3F98` | white | a real alternative beside primary, for example Save as draft next to Publish |
-| Danger | Violet-Red `#991547` | white | destructive or irreversible: Delete, Remove, Discard, Revoke |
+| Primary | Midnight Blue `#193E6B` | white | the group's main action: Submit, Save, Create, Confirm, Continue |
+| Danger | Violet-Red `#991547` | white | the destructive action that actually commits: Delete, Remove, Discard, Revoke |
 | Warning | Sunray `#E9AC53` | dark ink `#1E2E42` | caution, not destruction: Proceed anyway, override |
 | Success | Avocado Green `#5F8025` | white | confirming a positive completion: Approve, Mark complete, Publish |
 | Accent | Green Gold `#B3A125` | dark ink `#1E2E42` | highlight or upsell CTA |
 
-Emphasis: solid (the one primary action per group), outline (medium), ghost (Cancel, Back,
-toolbar and table-row actions). Exactly one solid button per action group. Cancel and Back are never
-a filled color.
+An action group is one cluster of controls the user chooses between in one place: a form footer, a
+dialog footer, a page header's action cluster, a row's actions cell, a table toolbar, an empty
+state's action row. A page is not a group, so a page-header CTA and a failed region's `Retry` are
+both solid without competing. Inside one cluster: one solid, or none.
+
+Never the solid one, whatever the screen: `Cancel` · `Back` · `Close` · `Dismiss` · `Skip` ·
+`Keep editing` · `Clear` · `Clear all` · `Clear filters` · `Reset` · `Reset filters` · `Apply` ·
+`Filters` · `Export` · `Columns` · `Density` · `Duplicate` · `Test Configuration` (also written
+`Test call`) · and every control in an actions column.
+
+A group that only changes what is on screen has no solid button at all - a filter bar, a filter
+popover footer, a toolbar of view controls. Nothing in it commits anything, so nothing in it earns
+the one solid; the page's solid action stays the archetype's primary CTA in the page header.
+`Test Configuration` is on that list for the same reason, since it proves a connection rather than
+saving it, which is why a connection form shows no solid button until the test passes and `Save`
+appears (§5.5).
+
+Same geometry across both looks. One height, padding, radius, font, weight, icon size, and icon-label
+gap per size step; only the fill, the border, and the label color differ. Never resize or re-round a
+single button to make it fit a layout. A labeled button standing beside a form field takes that
+field's height rather than the dense table size, so a filter bar's `Clear` never sits shorter than
+the select next to it.
+
+A button's look never changes with state. Loading swaps the label for a spinner at the same width and
+changes nothing else. Never promote a control from secondary to solid, or demote it, because its
+state changed.
+
+A status meaning colors the label, not the shell. A destructive secondary action, such as a row's
+`Delete` that only opens the confirmation, keeps the identical neutral shell and takes the
+theme-aware danger foreground on its icon and label only, never a different fill, border, height, or
+radius. Danger is the only status a label carries.
+
+Icon-only is chrome, not a button, and the list is closed by kind: a dismiss or close mark on
+something dismissable (a modal, a toast, a flash), a clear mark on a field or a chip (a search input,
+a filter field, a filter chip), and a form repeater's per-row remove control. Each carries an
+accessible name. Anything else is a labeled button.
+
+A component primitive is neither look and keeps the one its own component defines: the shell's
+top-bar icon controls and rail toggle, a sortable column header, the pager's page buttons and arrows,
+an expandable row's chevron, a tab strip, a segmented control, a step-by-step form's step rail, and a
+toast's single inline action. A
+current-item marker inside one of those, such as the active page or the active tab, is a marker
+rather than an action's emphasis, so it does not count as that group's solid button.
+
+Every labeled action carries its word beside its icon: `View`, `Edit`, `Delete`, `Restore`,
+`Duplicate`, `Test`. The icon is the half recognisable at a glance; the word is the half that tells a
+first-time user which one is which, survives a touch device that has no hover, and stops two
+irreversible actions sitting a pixel apart with nothing to tell them apart. An `aria-label` is the
+floor for assistive technology, not a substitute for the visible word, and the word stays at every
+breakpoint.
 
 Sizes: small 27px (dense tables and toolbars), medium 32px (the default), large 48px (hero, empty
-state, mobile primary). Touch targets are at least 44x44px; use the large size for a mobile primary
-action. Icon-only buttons require an accessible name.
+state, mobile primary). Touch targets are at least 44x44px: on a coarse pointer the small size and
+icon-only chrome grow to a 44px minimum rather than shrinking the label out, and a mobile primary
+action uses the large size.
 
 States: rest, hover (lift 1px and darken), active (press 1px and darken further), visible
 `:focus-visible` ring, disabled (`opacity: 0.5`, not-allowed, no transforms), and loading.
@@ -1109,7 +1360,9 @@ consistent through the flow so Publish produces a "Published." toast.
 
 ### Cards
 
-One base shell filling a subset of slots: header (title plus icon or actions), body, optional footer.
+One base shell filling a subset of slots: header (title plus actions), body, optional footer. A
+card's actions are one action group like any other, so each carries its word beside its icon and at
+most one of them is the solid action (§8 Buttons).
 The card surface is white on the light canvas and raised navy on dark, flat at rest with a 1px border,
 12px radius, and no resting shadow. Card titles use the h3 step (16px). Variants: content (the
 default), KPI/metric (label, large value at the display step, direction-based trend color through the
@@ -1125,7 +1378,7 @@ Pick the smallest tier that does the job:
 | Tier | Use for | Capabilities |
 | --- | --- | --- |
 | Simple | short read-only list, about 10 rows or fewer | header, rows, hover |
-| Standard | the workhorse list or index view | plus sortable columns, row-click to detail, status pills, row action icons, pagination |
+| Standard | the workhorse list or index view | plus sortable columns, the search and filter bar, row-click to detail, status pills, labeled row actions, pagination |
 | Advanced | dense power-user data management | plus row selection and a bulk bar, sticky check and action columns, column show/hide, density toggle, expandable rows, inline cell editing |
 
 Keep the light look at every tier: a white card with a 1px border and no resting shadow, 10px
@@ -1133,24 +1386,39 @@ uppercase muted headers, 1px horizontal row dividers, subtle hover. No gradient 
 gridlines, no heavy borders.
 
 - Align by type: text left; numbers, currency, and counts right-aligned with tabular figures; status
-  as a pill; actions in the right-most column as ghost icon buttons.
+  as a pill; actions in the right-most column as labeled buttons, each an icon plus its word in the
+  one neutral secondary look, never a bare glyph. Past about three actions on a row, keep the first
+  three labeled inline and move the rest behind one `More` control whose accessible name names the
+  row.
 - Never leave a blank cell; render a muted placeholder.
-- A sortable header is a `<button>` inside the `th`, and the `th` carries `aria-sort`. One column
-  sorts at a time.
-- Pagination is numbered and canonical: show it when total rows exceed 25, default page size 25, with
-  options 25 / 50 / 75 / 100, info text "Showing 1-25 of 247", and Prev, numbered pages, Next. On
-  small screens simplify to Prev / Next plus "Page 3 of 10" and hide the per-page selector.
-- Selection reveals the bulk bar only when at least one row is selected. A destructive bulk action
-  routes through a confirmation and resolves with a toast.
+- Sorting and the search-and-filter bar are mandatory on every list / index table, both running over
+  the whole result set with the state in the URL query (§5.2). A sortable header is a `<button>`
+  inside the `th`, and the `th` carries `aria-sort`. One column sorts at a time, and the list opens
+  on a declared default sort.
+- Pagination is numbered and canonical, and it comes after the sort and the filter rather than
+  instead of them: show it when the filtered total exceeds 25, default page size 25, with options
+  25 / 50 / 75 / 100, info text "Showing 1-25 of 247" reporting the filtered total, and Prev,
+  numbered pages, Next. Any filter, sort, or page-size change returns to page 1. On small screens
+  simplify to Prev / Next plus "Page 3 of 10" and hide the per-page selector.
+- A table never gets a button style of its own for an action. Its own primitives are a separate
+  matter and keep the look their component defines: the sortable column header, an expandable row's
+  chevron, and the pager, whose filled active page is a current-item marker like an active tab
+  rather than the group's solid action.
+- Selection reveals the bulk bar only when at least one row is selected, and every action in that bar
+  carries its word. A destructive bulk action routes through a confirmation and resolves with a
+  toast.
 - On narrow screens the table scrolls horizontally inside its scroll container with the checkbox and
-  action columns pinned, so the row's identity and controls never scroll out of view. Do not
-  transform rows into stacked cards by default.
+  action columns pinned, so the row's identity and controls never scroll out of view. The action
+  labels stay at every breakpoint; the pinned column scrolls rather than degrading to bare icons. Do
+  not transform rows into stacked cards by default.
 - Every table ships loading, empty, and error states. A bare blank box is never acceptable.
 
 ### Forms And Validation
 
-Two sizing contexts, page form (roomy) and modal form (compact), plus a third structural shape, the
-multi-step wizard. Sizing differs; validation is identical everywhere.
+Data entry is page-hosted (ENFORCED, §5.4). Two sizing contexts: the page form (roomy), which is
+every create, edit, multi-step, and settings form, and the handful of fields that sit inside a
+decision dialog (compact), which is never a record editor. The multi-step form is a third structural
+shape and is always a page (§5.4a). Sizing differs; validation is identical everywhere.
 
 A field is a visible associated label, the control, optional help text, and a reserved validation
 message slot. Placeholders are not labels. Mark required-ness with one consistent convention per form.
@@ -1162,20 +1430,28 @@ Validation contract (ENFORCED):
    field returns to rest.
 3. Submit stays enabled. Never grey out the primary button. Clicking it runs full validation.
 4. Re-validate on input once a field has errored, so the error clears the moment it is fixed.
-5. On submit, if anything is invalid, focus and scroll to the first invalid field and announce it.
-6. Map async and server errors back to the field, or to a form-level summary. Never swallow them.
+5. On submit, if anything is invalid, block, focus and scroll to the first invalid field, and
+   announce the failure once with an error toast naming how many fields need attention. There is no
+   error-summary card, at the top of the form or the foot: the inline messages are the record of what
+   is wrong, and repeating them makes the user read every error twice and track it in two places. An
+   error toast persists until dismissed, so nothing is lost by not repeating it in the page.
+6. Map async and server errors back to their own field. One that belongs to no field - the submit
+   itself failed, a cross-field rule broke, the service was unreachable - gets one persistent inline
+   alert at the form foot, beside the submit, where the user needs the reason while acting on it. One
+   message about the form, never a list of its fields. Never swallow either.
 7. Do not flag required-ness on first focus. Empty-but-untouched is not an error yet.
 8. Reserve the message slot so the layout does not jump, and never signal validity by color alone.
 
 Layout: single column by default, capped at a readable line length. Two or three columns only with
-justification, and within the modal-size limit; all multi-column rows collapse to one column on touch.
-Group beyond about eight fields, by section headings or fieldsets, by tabs (page forms and large
-modals), or by wizard steps. Keep required fields in the first group, tab, or step.
+justification; all multi-column rows collapse to one column on touch. Group beyond about eight
+fields, by section headings or fieldsets, by tabs, or by steps. Keep required fields in the first
+group, tab, or step.
 
-Wizards use exactly two buttons in the same right-aligned footer group: Back (hidden or disabled on
-step one) immediately left of the one solid Next. On the last step Next's label becomes Create, Save,
-or Finish and it submits; never add a third persistent button. Validate the current step before
-advancing and never lose entered data on Back.
+The footer is a neutral secondary `Cancel` beside the one solid submit. A step-by-step form uses
+exactly two controls in that same right-aligned group, `Back` immediately left of the one solid
+`Continue`, and `Continue` validates the step, saves the resumable draft, then advances; on the last
+step that same button's label becomes `Create`, `Save`, or `Finish` and it commits. Never a third
+persistent button and never a `Save as draft`. The full draft contract is in §5.4a.
 
 Connection and integration config forms follow the test-before-save contract in §5.5.
 
@@ -1199,7 +1475,9 @@ Body
 - A legend row labels the columns, and every column is a real labelled control. A placeholder is not
   a label.
 - One icon-only remove control per row, keyboard-reachable, with an accessible name saying what it
-  removes.
+  removes. This is the sanctioned icon-only action inside a table-shaped surface, because a repeater
+  row is a field group rather than a record and the legend row already says what the column is. A
+  list's actions column is never a bare icon (§8 Buttons).
 - `Add row` appends an empty row and moves focus into its first field. Server-rendered and
   script-added rows use identical markup, so one set of behaviors covers both.
 - Removing the last row leaves the legend and the add control visible, never a bare empty area.
@@ -1209,8 +1487,14 @@ Body
 
 ### Modals And Dialogs
 
-Use a modal only when a decision must happen now or context must stay visible. Otherwise use a page,
-a drawer, or a toast. Never open a modal from within a modal.
+Use a modal only when a decision must happen now. Otherwise use a page or a toast.
+
+Data entry is never a modal (ENFORCED): no create form, edit form, multi-step form, or settings form,
+however few fields it has, and a drawer or an off-canvas panel is not a loophole (§5.4). A dialog may
+carry up to about three fields when those fields are the decision itself - the word typed to confirm
+a purge, a reason for a rejection, a new date when rescheduling. That is a decision with an input,
+not a record editor. One reaching for a fourth field, a section heading, or a tab strip has become a
+form, and a form is a page. Never open a modal from within a modal.
 
 Behavior is ENFORCED. Every modal implements all four: `Escape` closes, backdrop click closes (both
 treated as Cancel), focus is trapped inside, and focus returns to the trigger on close. Supporting
@@ -1218,12 +1502,16 @@ requirements: move focus in on open (to the first field, the dialog, or, for a d
 safe action), scroll-lock the background, and make the rest of the page inert.
 
 Label it with `role="dialog"`, or `role="alertdialog"` for destructive and critical cases, plus
-`aria-modal="true"` and `aria-labelledby` / `aria-describedby`. Exactly one solid action; Cancel is a
-ghost. Only the body scrolls; the header and footer stay pinned.
+`aria-modal="true"` and `aria-labelledby` / `aria-describedby`. At most one solid action, the one
+that commits; `Cancel` and every other labeled action is the one neutral secondary look, and a dialog
+with nothing to decide but close carries no solid button at all. The header's close mark is icon-only
+chrome, not a button. Only the body scrolls; the header and footer stay pinned.
 
-Sizes by content: small 420px (confirmations and simple forms, a strict minimum), medium 600px
-(standard forms, the default), large 900px (complex data entry). Above 900px only when content
-genuinely needs it, still capped so it never becomes full-bleed.
+Sizes by content: small 420px (a confirmation, and the decision that carries its own field, a strict
+minimum), medium 600px (a result or an explanation too long for a toast), large 900px (read-only
+content that needs the room, such as a wide table or a side-by-side compare). Above 900px only when
+content genuinely needs it, still capped so it never becomes full-bleed. There is no form-modal size,
+because there is no form modal.
 
 Destructive confirmations name the exact target, state the consequence and whether it is recoverable,
 use a verb-labeled danger action rather than "OK" or "Yes", and put initial focus on the safe action.
@@ -1231,14 +1519,16 @@ High-stakes or bulk deletes require friction first: type the name, type a confir
 understand".
 
 Discard prompts appear only when the form is actually dirty and guard every exit path: Cancel, the
-close control, `Escape`, the backdrop, and in-app navigation. The destructive choice is Discard;
-Keep editing is the safe ghost default with initial focus.
+close control, `Escape`, the backdrop, and in-app navigation. The destructive choice is the solid
+danger `Discard`; `Keep editing` is the neutral secondary that takes initial focus. Leaving a
+step-by-step form mid-step says plainly that the saved steps are kept and only the current step's
+unsaved edits go, rather than implying everything is lost or that everything is safe (§5.4a).
 
 Resolve the outcome with a toast and close on success; on error keep the modal with an inline message.
 Never leave a modal showing a success checkmark.
 
-The segmented, in-header-tabbed form modal is an opt-in variant built only when the developer asks
-for it. Never convert a form into tabbed segments on your own.
+There is no form-modal variant, tabbed or otherwise. A form that wants tabs is a page form with tabs
+(§8 Forms And Validation).
 
 ### Toasts
 
@@ -1251,10 +1541,23 @@ type sits on a left accent bar plus the icon; the surface stays neutral so text 
 signal type by color alone.
 
 Every toast has a manual close, even when it auto-dismisses. Auto-dismiss pauses on hover and on
-keyboard focus. Stack in one corner, default top-right, newest nearest the edge, capped at about three
-or four visible. At most one inline action (Undo, Retry, View), styled low-emphasis; a toast carrying
-an action must not auto-dismiss out from under the user. On small or tall screens toasts reflow
-full-width across the top.
+keyboard focus.
+
+Placement is the top right, always, in every app, for every type (ENFORCED). One fixed host anchored
+there, offset below the top bar by the spacing scale so a toast never covers the top-bar utilities it
+sits beside, newest nearest the top edge, capped at about three or four visible with the rest queued.
+Success and error share that host: the polite and the assertive live region are separate elements
+inside it, assertive first, so nothing moves to another corner because of its type. Bottom-right,
+top-center, and bottom-center are not options, including for one screen, one toast type, or a layout
+where the top right feels crowded, and a toast is never repositioned to dodge content. On small or
+tall screens the toast goes full-width across that same top edge with side margins: the edge widened,
+never a different corner.
+
+At most one inline action (Undo, Retry, View). It is the toast's own inline text action, a component
+primitive rather than one of the two button looks, so it carries no border and is never solid. A
+toast carrying an action must not auto-dismiss out from under the user. A `Clear all` attached above
+the stack, appearing once the visible stack passes about three and carrying the count in its
+accessible name, is the shared neutral secondary at the small size.
 
 Render one persistent `aria-live` region in the DOM at page load, polite for success and info,
 assertive with `role="alert"` for errors. A toast never steals focus. Write human copy: outcome first,
@@ -1274,9 +1577,12 @@ line, and one action. Three flavors, picked by why it is empty:
 
 | Flavor | Trigger | Title | Action |
 | --- | --- | --- | --- |
-| No data yet | nothing created in this collection | "No `<things>` yet" | primary "Add `<thing>`" |
-| No results | a search or filter returned nothing | "No matches for '`<query>`'" | "Clear filters", never "Add" |
+| No data yet | nothing created in this collection | "No `<things>` yet" | the one solid action, "Add `<thing>`", starting the create path |
+| No results | a search or filter returned nothing | "No matches for '`<query>`'" | a neutral secondary "Clear filters", never "Add" |
 | Post-action / cleared | the user emptied it themselves | "All clear" | usually none |
+
+Clearing a filter only changes what is on screen, so a no-results state carries no solid button at
+all, and any second action beside the no-data-yet solid one is the neutral secondary (§8 Buttons).
 
 Error is the third sibling, in the same slot when the data failed to load: a danger icon, a human
 message with no raw status codes, and a Retry action. A failed fetch must never silently render as an
@@ -1289,17 +1595,28 @@ with `role="alert"` on error, and never steal focus.
 
 ### Breadcrumbs
 
-Render only for destinations deeper than about three levels; a shallow page gets none. One trail per
-page, in the content area above the page title, kept live while the data region skeletons.
+Once a page sits inside a navigation group, show the trail above the page title carrying the full
+path from its cluster down, generated from the navigation config rather than written per page. A
+hand-written trail drifts from the menu the moment a feature moves, and then the two disagree about
+where the user is. A page whose whole path is its cluster and itself renders no trail, because the
+sidebar already says that much. One trail per page, in the content area above the page title, kept
+live while the data region skeletons.
 
-Smart links (ENFORCED): a crumb that resolves to a real route is a link; a section-grouping label with
-no destination is plain muted text; the current page is emphasized, non-link, and carries
-`aria-current="page"`. Never render a dead link, including an ancestor the user lacks permission for.
+The trail is the way back (ENFORCED), so no page carries a separate back link on a row of its own. A
+record page or a record form is not itself a navigation entry, so it declares the list it belongs to,
+and that list joins the trail as an ordinary link one click away. A back link on one row with a
+breadcrumb on the next is two controls, two rows, one meaning.
+
+Smart links (ENFORCED): a crumb that resolves to a real route is a link; a cluster or group heading
+has no page of its own, so it reads as plain muted text; the current page is emphasized, non-link,
+and carries `aria-current="page"`. Never render a dead link, including an ancestor the user lacks
+permission for - render that one as text.
 
 Structure is `<nav aria-label="Breadcrumb">` wrapping an `<ol>`, with `aria-hidden` chevron
 separators. Muted ancestors, bold current, compact 12px row. Collapse a trail longer than four crumbs
-to Home, an overflow control, and the last two. On a narrow or portrait viewport collapse to the last
-two crumbs preceded by a back affordance.
+to the first crumb, an overflow control, and the last two, never truncating the current page. On a
+narrow or portrait viewport collapse to the last two crumbs preceded by a chevron affordance to the
+parent.
 
 ### Tabs
 
@@ -1307,13 +1624,18 @@ The in-canvas navigation tab strip, bounded to depth overflow and record facets.
 
 ### Search And Filter
 
-Search is free-text matching across fields; a filter narrows by a known facet. A list often has both.
+Search is free-text matching across fields; a filter narrows by a known facet. Every list / index
+screen carries both (ENFORCED, §5.2), so the question is never whether to narrow a list, only which
+controls do it.
 
 The search box is one shape: a flat pill with a 1px border, 8px radius, a leading magnifier from the
-registry, and a borderless input. The clear control appears only when the field has text; never a
-permanently visible empty one. Name the searchable fields in the placeholder rather than a bare
-"Search...". Filtering already-loaded rows is instant; only server round-trips are debounced, at about
-250ms, showing an in-field spinner while in flight.
+registry, and a borderless input, at the same 32px control height as a form field so it sits in a row
+beside fields and buttons without reading as a mistake. The clear control is icon-only chrome and
+appears only when the field has text; never a permanently visible empty one. Name the searchable
+fields in the placeholder rather than a bare "Search...". Filtering is instant only while the table
+already holds its whole result set; the moment the list is paginated or server-fed, the query goes to
+the server debounced at about 250ms with an in-field spinner while in flight, and the page returns
+already narrowed and ordered (§5.2).
 
 Pick the filter affordance by cardinality:
 
@@ -1330,6 +1652,16 @@ facet, group, or tab whose behavior is not wired; omit it rather than showing it
 placeholder rule applies only to navigation destinations. Every search and filter ships a no-results
 state with a Clear filters escape.
 
+The bar only changes what is on screen, so it carries no solid button. `Filters`, `Apply`,
+`Reset filters`, and `Clear all` are all the one neutral secondary look at the small size, and the
+page's solid action stays the archetype's primary CTA in the page header (§8 Buttons). A per-field
+clear mark and a chip's remove mark are icon-only chrome, and neither is visible until that field or
+chip has a value.
+
+Each facet reads its column's codified reference set, so the values are the real codes with their
+labels, never a free-text match against a coded column. Changing a facet returns to page 1, and both
+the result count and the pagination total report the filtered total.
+
 ### Date And Time
 
 Use the brand-styled native input: `type="date"` for a single day, `type="datetime-local"` for date
@@ -1338,7 +1670,8 @@ linked `type="date"` fields where the end's minimum follows the chosen start and
 follows the chosen end. Express bounds with `min` and `max`; validate cross-field rules on submit
 through the forms error pattern. Style the field shell and keep the native calendar indicator visible.
 Add quick presets (Today, Last 7 days, This month) only when the picker filters a list, and only wired
-ones.
+ones. Each preset is the shared neutral secondary at the small size, never a pill and never a second
+button look; a preset row lays the controls out and defines no look of its own (§8 Buttons).
 
 ## 9 · Conventions And Guardrails
 
@@ -1351,7 +1684,21 @@ ones.
   ("Move X to Recycle Bin?"); only an admin permanently deletes, and "empty everything" requires
   typing a confirm word.
 - Authorization in views gates row and page actions with policy checks, not merely by hiding links.
-- Pagination appears only when there is more than one page.
+- Data entry is page-hosted. A create, edit, multi-step, or settings form is its own route or a form
+  region on the current page, never a modal, a drawer, or an off-canvas panel (§5.4).
+- A step-by-step form saves a resumable server-side draft on every `Continue`, and that draft never
+  holds a credential, key, token, or password (§5.4a).
+- Every list / index screen sorts and filters, over the whole result set rather than the loaded page,
+  with a declared default sort and the state in the URL query (§5.2).
+- Two button looks and no more: one solid action per group, and one neutral secondary for every other
+  labeled action, so `Cancel` and `Clear` never look like different kinds of control. A borderless or
+  outlined labeled button does not exist (§8 Buttons).
+- Every actions-column control carries its visible word beside its icon, at every breakpoint.
+- A form reports an error once, where the error is: inline under its own field, plus one error toast
+  announcing a blocked submit. No summary card repeats them.
+- Every toast appears at the top right and nowhere else.
+- Pagination appears only when there is more than one page, and always after the active sort and
+  filter, over the filtered total.
 - Iconography is stable: the same glyph always denotes the same concept or action.
 - Accessibility meets WCAG AA: full keyboard navigation, ARIA labels on custom controls, an
   always-visible focus indicator on every interactive element, and respected reduced-motion. Never
@@ -1383,6 +1730,18 @@ ones.
 - Hardcode colors, or use system fonts where Montserrat and Source Sans 3 are specified.
 - Skip loading, empty, or error states.
 - Vary button colors by domain, use Green Gold for destructive, or use Jelly Bean Blue for a button.
+- Give one button role two looks, use a borderless (ghost) or outlined labeled button, put a second
+  solid button in one action group, make a filter-bar control the solid one, or change a button's
+  look because it is loading. Cadmium Violet is retired as a button fill.
+- Render an actions-column control as a bare icon, or drop its label on a narrow screen.
+- Put a create, edit, multi-step, or settings form in a modal, a drawer, or an off-canvas panel.
+- Advance a step-by-step form without saving its resumable draft, keep that draft in browser storage
+  only, or persist a credential, key, token, or password into one.
+- Ship a list / index with no column sorting or no search and filter bar, sort or filter only the
+  rows already loaded, or keep the sort and filter state out of the URL query.
+- Stack an error-summary card over the inline field messages.
+- Place a toast anywhere but the top right, or move it by type, screen, or breakpoint.
+- Render a back link on its own row beside a breadcrumb that says the same thing.
 - Invent, generate, recolour, or plate a logo. Use the bundled per-theme assets as supplied.
 - Invent a project-specific variant of a pattern the standard defines.
 
@@ -1408,8 +1767,9 @@ Produce and report the following, in order, in the confirmed stack:
       icons, and access keys, nested at most three levels (§2).
 - [ ] Access config: policy keys mapped to roles and flags (§2, §7).
 - [ ] Gate helpers: `canAccess`, `canAccessKey`, `clustersFor`, `filterNodes` (§2).
-- [ ] Role and policy layer: tiers, `visibleOwnerIds()`, `teamMemberIds()`, the query scope, one
-      per-record policy per ownable entity, and the permanent-delete gate (§7).
+- [ ] Role and policy layer: the five tiers, `visibleOwnerIds()`, `teamMemberIds()`, the query scope,
+      one per-record policy per ownable entity, and the permanent-delete gates - admin for
+      application records, system admin for system configuration (§7).
 - [ ] Design-token file: every token in §4, in both themes, with `color-scheme` declared per theme.
 - [ ] Icon registry: one central inline-SVG registry in the fixed style, with a meaningful icon for
       every nav node plus the action and status icons the screens reference (§4).
@@ -1428,9 +1788,26 @@ Produce and report the following, in order, in the confirmed stack:
       routes, with record facets on the in-canvas tab strip (§6).
 - [ ] Profile page plus sign-out wiring.
 - [ ] When enabled: the customizable widget dashboard, the recycle bin, and the audit log.
-- [ ] When `ai_model_catalog` is on: the catalog list, the add/edit form with the typed row repeater
-      and the test-before-save footer, and the Run screen with the call-result panel (§5.10). The
-      catalog under `System Administration`, admin-gated; the Run screen's cluster asked, not chosen.
+- [ ] When `ai_model_catalog` is on: the catalog list and the add/edit form with the typed row
+      repeater and the test-before-save footer - two screens, not three (§5.10). The catalog as a
+      leaf inside the `Integrations` group under `System Administration`, system-admin gated at the
+      handler and in the query scope. A Run screen only if the developer asked, with its placement
+      asked rather than chosen.
+- [ ] Every list / index screen: a declared default sort, sortable columns, the search and filter bar
+      with a facet per narrowed dimension, both running over the whole result set, the state in the
+      URL query, and pagination after them over the filtered total (§5.2).
+- [ ] Buttons: exactly one solid action per group and the one neutral secondary look for every other
+      labeled action, no borderless or outlined labeled button anywhere, and every actions-column
+      control carrying its visible word beside its icon (§8).
+- [ ] Every create, edit, multi-step, and settings form page-hosted, with the breadcrumb as the way
+      back rather than a back link, inline field errors plus one blocked-submit toast, and no summary
+      card (§5.4, §8).
+- [ ] Every step-by-step form: `Continue` validates the step, saves the server-side draft, then
+      advances; the draft is owner-scoped, resumable from a standing surface, confirm-guarded to
+      discard, holds no secret, and its storage shape and retention came from the App Definition
+      (§5.4a).
+- [ ] One toast host, fixed at the top right, offset below the top bar, holding both the polite and
+      the assertive live region (§8).
 - [ ] Every data-driven view covers success, empty (both flavors), loading (skeleton), and error.
 - [ ] Accessibility pass: keyboard reach, focus rings, `aria-current` on active nav and tabs, labelled
       custom controls, contrast, and reduced motion.
@@ -1447,7 +1824,8 @@ finished business logic. The team fills domain logic into a working skeleton.
 
 The UI stack and charting library, the app name and title-bar name, the optional tagline,
 `<BRAND_ASSETS_PATH>`, the navigation tree under the four fixed clusters, the entities, the roles and
-their scopes, the feature toggles, and the domain copy. Nothing visual: the theme, tokens, palette,
+their scopes, a step-by-step form's draft storage shape and its abandoned-draft retention, the
+feature toggles, and the domain copy. Nothing visual: the theme, tokens, palette,
 surfaces, fonts, logos, favicons, icon style, shell architecture, archetypes, and status-role meanings
 are approved constants.
 
@@ -1469,10 +1847,12 @@ meaningful one.
 `i-key` (access, credentials) · `i-cog` (settings) · `i-adjustments` · `i-plug` · `i-globe`
 (environment, region) · `i-headset` (support) · `i-bell` (notifications) · `i-search` ·
 `i-filter` (outlined inactive, solid active) · `i-panel` (the rail collapse AND expand toggle) ·
-`i-chevron-down` (accordion, flyout hint) · `i-chevron-right` · `i-arrow-left` (back link) ·
-`i-x` (close) · `i-sun` / `i-moon` (Appearance) · `i-logout` · `i-check-circle` · `i-chart-bar` ·
-`i-upload` · `i-plug-off` (failed to load) · `i-sparkles` (AI model, model catalog) ·
-`i-play` (run a prompt) · `i-braces` (raw or structured payload)
+`i-chevron-down` (accordion, flyout hint) · `i-chevron-right` · `i-chevron-left` (the breadcrumb's
+small-screen affordance to the parent) · `i-x` (close, clear) · `i-sun` / `i-moon` (Appearance) ·
+`i-logout` · `i-check-circle` · `i-chart-bar` · `i-upload` · `i-copy` (duplicate) ·
+`i-dots` (a row's `More` overflow) · `i-rotate` (restore from the recycle bin) ·
+`i-plug-off` (failed to load) · `i-sparkles` (AI model, model catalog) · `i-play` (run a prompt) ·
+`i-braces` (raw or structured payload)
 
 Add domain glyphs in the same style so each destination is recognizable at a glance. The goal is
 meaningful, never decorative.
@@ -1484,14 +1864,16 @@ meaningful, never decorative.
 | Cluster landing, KPIs, widgets | §5.1 Dashboard |
 | Browse a collection | §5.2 List / index |
 | Inspect one record | §5.3 Detail / show |
-| Create or edit a record | §5.4 Form |
+| Create or edit a record | §5.4 Form (page-hosted, never a modal) |
+| Create a record across ordered steps | §5.4a Step-by-step form, saving a draft per step |
+| Answer a decision now, with at most ~3 fields that are the decision | §8 Modals And Dialogs |
 | Manage config, integrations, secrets | §5.5 Settings / config |
 | Configure an outbound connection | §5.5 Settings, test-before-save sub-pattern |
 | Multi-step authoring plus lifecycle | §5.6 Builder (hub and spoke) |
 | Sign in, SSO | §5.7 Auth |
 | Restore or purge deleted records | §5.8 Recycle bin |
 | Show an action's outcome | §5.9 Status / result |
-| Manage AI model definitions, or send a prompt to one | §5.10 AI model catalog (composite) |
+| Manage AI model definitions | §5.10 AI model catalog (list plus test-before-save form) |
 | Edit a variable-length list of rows in a form | §8 Typed row repeater |
 
 ## Mockup Mode
@@ -1526,6 +1908,11 @@ any archetype.
 - Wire the theme switcher fully, including the logo and favicon swap.
 - Mobile-first and responsive, with realistic empty, loading (skeleton), and error states. No
   lorem-ipsum beyond what makes the mockup read as real.
+- Demonstrate the mandatory patterns, because a mockup that skips them teaches the wrong shape: a
+  list opening on its declared default sort with sortable headers and a working search-and-filter
+  bar, an actions column whose every control carries its word, two button looks only with one solid
+  per group, a page-hosted create form rather than a modal, a step-by-step form whose `Continue`
+  saves its draft, and the toast host fixed at the top right below the top bar.
 - Always include the in-canvas tab strip, even when it was not asked for, and demonstrate both
   sanctioned uses: a sidebar branch nested to the three-level limit whose overflow leaf becomes a
   tab-strip page, and a detail page reached from a list row showing an `Overview · ...` facet strip.
