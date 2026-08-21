@@ -27,6 +27,7 @@ server.
 | `doc/` | Solution architecture, requirement scoping, functional, workflow and UI specifications, plus a self-contained HTML mockup and Word exports |
 | `.github/workflows/` | The deployment pipeline |
 | `deployment/` | The versioned cPanel front-door `.htaccess` |
+| `doc/design-system/` | The sole authority for layout, structure and theme, with the brand asset pack beside it in `assets/` |
 
 Application code has not landed yet. There is no `composer.json` or
 `package.json` in the repository, so the pipeline's build steps cannot pass until
@@ -117,21 +118,33 @@ owns platform configuration rather than records.
 | Contributor | Own or directly assigned records only |
 | Viewer | Read-only |
 
-## Interface Conventions
+## User Interface
 
-Brand is CLaaS2SaaS. Palette: Midnight Blue `#193E6B`, Green Gold `#B3A125`,
-Avocado `#5F8025`, Sunray `#E9AC53`, Violet-Red `#991547`, Jelly Bean `#448E9D`,
-Cadmium Violet `#7F3F98`. Montserrat for headings, Source Sans 3 for body, compact
-density, WCAG AA.
+> [!IMPORTANT]
+> [ui-and-ux-layout-template-shared.md](doc/design-system/ui-and-ux-layout-template-shared.md) is the
+> single authority for layout, structure and theme across the entire application.
+> Nothing else defines them. Read it before generating any screen, component or
+> stylesheet, and do not introduce a second design system, component library theme,
+> or ad hoc styling alongside it.
 
-Four navigation clusters in fixed order: Workspace, Compliance, Application
-Administration, System Administration. Light and dark themes with a System option.
+It covers the four-cluster information architecture, the application shell, the
+design tokens in both themes, ten page archetypes, the sub-navigation patterns, the
+role and gate model, and the component and interaction contracts.
 
-List screens sort and filter server-side over the whole result set, with state in
-the URL query using `q`, `sort`, `dir`, `page`, `size` plus one parameter per
-facet.
+Every rule in it is tagged either ENFORCED or PRINCIPLED. ENFORCED covers all token
+values, brand assets and theme decisions and is not deviable. A PRINCIPLED default
+may be deviated from only with written justification and sign-off, recorded as a
+documented exception rather than applied silently.
 
-Full detail is in [doc/04-UI-Specification.md](doc/04-UI-Specification.md).
+The brand asset pack lives in [doc/design-system/assets/](doc/design-system/assets/), next to the template, which is
+where the template expects it. Those files are never modified, recoloured,
+regenerated or substituted. Their destination inside the application is a separate
+decision recorded as `BRAND_ASSETS_PATH`, and it is still unrecorded.
+
+[doc/04-UI-Specification.md](doc/04-UI-Specification.md) and the mockups under
+`doc/mockups/` predate this decision and were written against a design system that
+is no longer in the repository. Where they disagree with the template, the template
+wins, and they need reconciling.
 
 ## Data Governance
 
@@ -152,5 +165,11 @@ cadence and failover procedure are not yet defined.
 - Provision a queue worker and a scheduler. The pipeline configures neither, so no
   queued job or scheduled task currently runs.
 - Add post-deploy `migrate` and cache steps to the pipeline.
-- Brand assets (logos and favicons) are no longer in the working tree. Recover
-  them from git history or re-source them, and decide where they live in the app.
+- Record `BRAND_ASSETS_PATH`, the destination for the brand pack inside the
+  application. The template forbids choosing this without the developer.
+- Fill in the template's App Definition: browser title, tagline, the real navigation
+  tree, the entity list, and the confirmed UI stack including how React is served
+  from Laravel.
+- Reconcile `doc/04-UI-Specification.md` and the two mockups against the template.
+- Resolve the role-count mismatch: this README lists five roles, the template works
+  from a four-tier baseline.

@@ -58,6 +58,40 @@ one clear meaning per row, atomic values rather than stored totals, codified
 reference lists rather than free text, and state changes captured as rows rather
 than overwritten.
 
+## User Interface
+
+Use only `doc/design-system/ui-and-ux-layout-template-shared.md`. It is the single
+authority for
+layout, structure and theme for the entire application, and there is no second
+source. Read it before generating or changing any screen, component, layout or
+stylesheet.
+
+Do not introduce another design system, theme, component-library skin or ad hoc
+styling alongside it. Do not invent a token value, a colour, a font, a spacing step,
+a shell dimension or an icon style; take them from the template. Never modify,
+recolour, regenerate or substitute a logo or favicon, and never source one from
+outside the pack in `doc/design-system/assets/`.
+
+Never ask about or offer alternatives for the theme, colours, fonts, logos or
+favicon. Those are settled. The only things ever asked are the app-specific values
+in the template's App Definition, and `BRAND_ASSETS_PATH`, which is the developer's
+choice and must never be chosen for them.
+
+Every rule is tagged ENFORCED or PRINCIPLED. ENFORCED, which covers every token
+value, brand asset and theme decision, is not deviable. To deviate from a
+PRINCIPLED default, state the standard pattern, the proposed deviation, the
+rationale, the domain context and the trade-offs, then get sign-off before
+generating. Record an authorized deviation as a documented exception; never apply
+one silently.
+
+Generate in the template's order: navigation and access config, then the role and
+policy layer, then the shell, then tokens in both themes, then one page per screen
+from the matching archetype. Cover the success, empty, loading, error and small
+screen states of every screen, not only success.
+
+Where `doc/04-UI-Specification.md` or the mockups under `doc/mockups/` disagree with
+the template, the template wins.
+
 ## Code
 
 Match the repository's existing conventions, formatting and naming. Keep changes
