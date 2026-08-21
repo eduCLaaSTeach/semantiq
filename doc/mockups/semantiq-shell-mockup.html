@@ -1,0 +1,992 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SemantIQ Shell Mockup</title>
+<!-- ASSET MISSING: approved per-theme wide wordmark, C2S short mark, favicons.
+     Expected: the approved CLaaS2SaaS brand asset pack, installed at a location to be
+     supplied by the development team. A marked placeholder is used in the brand block.
+     Impact: the sidebar brand block and the sign-in screen cannot be signed off visually
+     until the asset pack arrives. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" />
+<style>
+:root{
+  color-scheme: light;
+  --color-primary:#193E6B; --color-primary-hover:#142F52; --color-primary-contrast:#FFFFFF;
+  --color-accent:#B3A125; --color-secondary-violet:#7F3F98; --color-secondary-blue:#448E9D;
+  --color-secondary-sunray:#E9AC53; --color-success:#5F8025; --color-danger:#991547;
+  --chrome-bg:#FFFFFF; --chrome-text:#223349; --chrome-muted:#566779;
+  --chrome-hover:rgba(25,62,107,0.07); --chrome-edge:rgba(15,25,45,0.14);
+  --color-bg-page:#E8DFD0; --color-surface:#FFFFFF; --card-border:#E8E2D8;
+  --card-border-strong:#D5CEC1; --surface-hover:rgba(25,62,107,0.06); --divider:#E4DCCD;
+  --color-text:#1E2E42; --color-text-muted:#4D5E75;
+  --nav-active-bg:rgba(179,161,37,0.16); --nav-active-fg:#5C5010; --nav-active-bar:#B3A125;
+  --badge-neutral-bg:#F0EBE1; --badge-neutral-fg:#514A3B;
+  --badge-success-bg:color-mix(in srgb, var(--color-success) 16%, #FFFFFF); --badge-success-fg:#3A4E13;
+  --badge-warning-bg:color-mix(in srgb, var(--color-secondary-sunray) 26%, #FFFFFF); --badge-warning-fg:#7A500C;
+  --badge-danger-bg:color-mix(in srgb, var(--color-danger) 14%, #FFFFFF); --badge-danger-fg:#85113E;
+  --badge-info-bg:color-mix(in srgb, var(--color-secondary-blue) 18%, #FFFFFF); --badge-info-fg:#1E545F;
+  --badge-violet-bg:color-mix(in srgb, var(--color-secondary-violet) 15%, #FFFFFF); --badge-violet-fg:#5B2B6E;
+  --font-heading:'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body:'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --text-display:1.5rem; --text-h1:1.25rem; --text-h2:1.125rem; --text-h3:1rem;
+  --text-h4:.9375rem; --text-lead:.875rem; --text-body:.8125rem; --text-small:.75rem;
+  --text-xs:.6875rem; --text-micro:.625rem;
+  --spacing-xs:4px; --spacing-sm:8px; --spacing-md:16px; --spacing-lg:24px;
+  --spacing-xl:32px; --spacing-2xl:48px; --spacing-3xl:64px;
+  --radius-card:12px; --radius-control:8px; --radius-modal:14px; --radius-pill:999px;
+  --shadow-md:0 2px 8px rgba(25,40,65,0.08); --shadow-lg:0 8px 24px rgba(15,25,45,0.14);
+  --rail:240px; --rail-collapsed:56px; --bar:52px;
+}
+html[data-theme="dark"]{
+  color-scheme: dark;
+  --color-primary:#7FADE1; --color-primary-hover:#93BBE8; --color-primary-contrast:#0F1C2E;
+  --chrome-bg:#080F1A; --chrome-text:#E4EBF4; --chrome-muted:#9AABC0;
+  --chrome-hover:rgba(255,255,255,0.09); --chrome-edge:rgba(0,0,0,0.50);
+  --color-bg-page:#1A2E46; --color-surface:#253E5D; --card-border:rgba(255,255,255,0.10);
+  --card-border-strong:rgba(255,255,255,0.18); --surface-hover:rgba(255,255,255,0.07);
+  --divider:rgba(255,255,255,0.13); --color-text:#E9EFF6; --color-text-muted:#A3B2C5;
+  --nav-active-bg:rgba(201,182,47,0.22); --nav-active-fg:#EBDD7E; --nav-active-bar:#C9B62F;
+  --badge-neutral-bg:rgba(255,255,255,0.10); --badge-neutral-fg:rgba(255,255,255,0.80);
+  --badge-success-bg:color-mix(in srgb, var(--color-success) 28%, #253E5D); --badge-success-fg:#CBE79B;
+  --badge-warning-bg:color-mix(in srgb, var(--color-secondary-sunray) 30%, #253E5D); --badge-warning-fg:#F8DFAC;
+  --badge-danger-bg:color-mix(in srgb, var(--color-danger) 32%, #253E5D); --badge-danger-fg:#F5B8CF;
+  --badge-info-bg:color-mix(in srgb, var(--color-secondary-blue) 30%, #253E5D); --badge-info-fg:#B4E3EC;
+  --badge-violet-bg:color-mix(in srgb, var(--color-secondary-violet) 30%, #253E5D); --badge-violet-fg:#DFBAEC;
+  --shadow-md:0 3px 10px rgba(0,0,0,0.30); --shadow-lg:0 10px 28px rgba(0,0,0,0.45);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  font-family:var(--font-body); font-size:var(--text-body); line-height:1.5;
+  color:var(--color-text); background:var(--color-bg-page); overflow-x:hidden;
+}
+h1,h2,h3,h4{font-family:var(--font-heading);margin:0}
+h1{font-size:var(--text-h1);font-weight:700}
+h2{font-size:var(--text-h2);font-weight:700}
+h3{font-size:var(--text-h3);font-weight:600}
+h4{font-size:var(--text-h4);font-weight:600}
+a{color:var(--color-primary)}
+:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.icon{width:18px;height:18px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.icon-lg{width:48px;height:48px;stroke-width:1.5}
+
+/* ---------- shell ---------- */
+.app{display:flex;height:100vh;overflow:hidden}
+.rail{
+  width:var(--rail);flex:0 0 var(--rail);display:flex;flex-direction:column;
+  background:var(--chrome-bg);border-right:1px solid var(--divider);
+  transition:width .28s ease,flex-basis .28s ease;
+}
+.app[data-collapsed="true"] .rail{width:var(--rail-collapsed);flex-basis:var(--rail-collapsed)}
+.brand{
+  height:var(--bar);flex:0 0 var(--bar);display:flex;align-items:center;gap:var(--spacing-sm);
+  padding:0 var(--spacing-sm) 0 var(--spacing-md);border-bottom:1px solid var(--divider);
+  background:none;border-left:0;border-top:0;border-right:0;width:100%;cursor:pointer;
+  color:var(--chrome-text);font:inherit;text-align:left;
+}
+.brand:hover{background:var(--chrome-hover)}
+.brand-mark{
+  height:22px;display:flex;align-items:center;gap:6px;font-family:var(--font-heading);
+  font-weight:700;font-size:var(--text-h3);letter-spacing:-.01em;white-space:nowrap;overflow:hidden
+}
+.brand-ph{
+  font-size:var(--text-micro);font-weight:600;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--chrome-muted);border:1px dashed var(--card-border-strong);
+  border-radius:var(--radius-pill);padding:1px 6px
+}
+.brand-short{width:40px;height:34px;display:none;align-items:center;justify-content:center;
+  font-family:var(--font-heading);font-weight:700;font-size:var(--text-small);color:var(--chrome-text)}
+.app[data-collapsed="true"] .brand{padding:0;justify-content:center}
+.app[data-collapsed="true"] .brand-mark{display:none}
+.app[data-collapsed="true"] .brand-short{display:flex}
+.brand-toggle{margin-left:auto;display:flex;color:var(--chrome-muted)}
+.app[data-collapsed="true"] .brand-toggle{display:none}
+.nav{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;padding:var(--spacing-sm) 0 var(--spacing-lg)}
+.cluster{
+  font-size:var(--text-micro);font-weight:600;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--chrome-muted);padding:var(--spacing-md) var(--spacing-md) var(--spacing-xs)
+}
+.app[data-collapsed="true"] .cluster{text-align:center;padding-left:0;padding-right:0;font-size:0}
+.app[data-collapsed="true"] .cluster::after{content:"···";font-size:var(--text-small)}
+.navitem,.navgroup{
+  display:flex;align-items:center;gap:10px;width:100%;min-height:34px;
+  padding:6px var(--spacing-md);background:none;border:0;color:var(--chrome-text);
+  font:inherit;font-size:var(--text-body);text-align:left;cursor:pointer;text-decoration:none;
+  border-left:3px solid transparent;
+}
+.navitem:hover,.navgroup:hover{background:var(--chrome-hover)}
+.navitem[aria-current="page"]{
+  background:var(--nav-active-bg);color:var(--nav-active-fg);border-left-color:var(--nav-active-bar);font-weight:600
+}
+.navitem[aria-disabled="true"]{color:var(--chrome-muted);cursor:default}
+.navlabel{flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chev{transition:transform .2s ease;color:var(--chrome-muted)}
+.navgroup[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.subnav{display:none;list-style:none;margin:0;padding:0}
+.subnav[data-open="true"]{display:block}
+.subnav .navitem{padding-left:38px}
+.subnav .subnav .navitem{padding-left:56px}
+.soon{
+  font-size:var(--text-micro);font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+  background:var(--badge-neutral-bg);color:var(--badge-neutral-fg);border-radius:var(--radius-pill);padding:1px 6px
+}
+.app[data-collapsed="true"] .navlabel,
+.app[data-collapsed="true"] .chev,
+.app[data-collapsed="true"] .soon{display:none}
+.app[data-collapsed="true"] .navitem,
+.app[data-collapsed="true"] .navgroup{justify-content:center;padding:6px 0}
+.app[data-collapsed="true"] .subnav{display:none !important}
+.app[data-collapsed="true"] .navitem:hover .flyout,
+.app[data-collapsed="true"] .navitem:focus-visible .flyout,
+.app[data-collapsed="true"] .navgroup:hover .flyout,
+.app[data-collapsed="true"] .navgroup:focus-visible .flyout{display:block}
+.flyout{
+  display:none;position:absolute;left:var(--rail-collapsed);z-index:40;
+  background:var(--chrome-bg);color:var(--chrome-text);border:1px solid var(--divider);
+  border-radius:var(--radius-control);box-shadow:var(--shadow-lg);
+  padding:6px 10px;font-size:var(--text-small);white-space:nowrap
+}
+
+.main{flex:1 1 auto;display:flex;flex-direction:column;min-width:0}
+.topbar{
+  height:var(--bar);flex:0 0 var(--bar);display:flex;align-items:center;gap:var(--spacing-sm);
+  padding:0 var(--spacing-md);background:var(--chrome-bg);border-bottom:1px solid var(--divider);
+  box-shadow:var(--shadow-md);position:relative;z-index:30
+}
+.appname{font-family:var(--font-heading);font-weight:700;font-size:var(--text-h4);color:var(--chrome-text)}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:var(--spacing-xs)}
+.iconbtn{
+  width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;
+  background:none;border:0;border-radius:var(--radius-control);color:var(--chrome-text);cursor:pointer
+}
+.iconbtn:hover{background:var(--chrome-hover)}
+.avatar{
+  width:30px;height:30px;border-radius:var(--radius-pill);background:var(--color-primary);
+  color:var(--color-primary-contrast);display:inline-flex;align-items:center;justify-content:center;
+  font-size:var(--text-small);font-weight:600;border:0;cursor:pointer
+}
+.menu{
+  position:absolute;top:calc(var(--bar) + 4px);right:var(--spacing-md);width:280px;z-index:50;
+  background:var(--color-surface);border:1px solid var(--card-border);border-radius:var(--radius-card);
+  box-shadow:var(--shadow-lg);padding:var(--spacing-sm);display:none
+}
+.menu[data-open="true"]{display:block}
+.menu-id{
+  display:flex;gap:var(--spacing-sm);align-items:center;width:100%;padding:var(--spacing-sm);
+  background:none;border:0;border-radius:var(--radius-control);color:var(--color-text);
+  font:inherit;text-align:left;cursor:pointer
+}
+.menu-id:hover{background:var(--surface-hover)}
+.menu-sec{
+  font-size:var(--text-micro);font-weight:600;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--color-text-muted);padding:var(--spacing-sm) var(--spacing-sm) var(--spacing-xs)
+}
+.seg{display:flex;gap:2px;background:var(--badge-neutral-bg);border-radius:var(--radius-control);padding:2px}
+.seg button{
+  flex:1;min-height:27px;background:none;border:0;border-radius:6px;font:inherit;
+  font-size:var(--text-small);color:var(--color-text);cursor:pointer
+}
+.seg button[aria-pressed="true"]{background:var(--color-surface);font-weight:600;box-shadow:var(--shadow-md)}
+.menu-out{
+  display:flex;align-items:center;gap:var(--spacing-sm);width:100%;min-height:32px;margin-top:var(--spacing-xs);
+  padding:0 var(--spacing-sm);background:none;border:0;border-radius:var(--radius-control);
+  color:var(--color-text);font:inherit;cursor:pointer
+}
+.menu-out:hover{background:var(--surface-hover)}
+.canvas{flex:1 1 auto;overflow-y:auto;padding:var(--spacing-lg);min-width:0}
+
+/* ---------- mockup-only control ---------- */
+.mockbar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:var(--spacing-sm);margin-bottom:var(--spacing-lg);
+  padding:var(--spacing-sm) var(--spacing-md);border:1px dashed var(--card-border-strong);
+  border-radius:var(--radius-card);color:var(--color-text-muted);font-size:var(--text-small)
+}
+.mockbar strong{font-family:var(--font-heading);font-size:var(--text-micro);text-transform:uppercase;letter-spacing:.08em}
+
+/* ---------- primitives ---------- */
+.pagehead{display:flex;flex-wrap:wrap;align-items:flex-start;gap:var(--spacing-md);margin-bottom:var(--spacing-lg)}
+.pagehead .grow{flex:1 1 260px;min-width:0}
+.crumbs{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:0 0 var(--spacing-xs);padding:0;
+  font-size:var(--text-small);color:var(--color-text-muted)}
+.crumbs li::after{content:"›";margin-left:6px;color:var(--color-text-muted)}
+.crumbs li:last-child::after{content:""}
+.crumbs li[aria-current]{font-weight:600;color:var(--color-text)}
+.sub{color:var(--color-text-muted);font-size:var(--text-small);margin:var(--spacing-xs) 0 0}
+.card{background:var(--color-surface);border:1px solid var(--card-border);border-radius:var(--radius-card)}
+.card + .card{margin-top:var(--spacing-md)}
+.card-pad{padding:var(--spacing-md)}
+.card-head{
+  display:flex;flex-wrap:wrap;align-items:center;gap:var(--spacing-sm);
+  padding:var(--spacing-md);border-bottom:1px solid var(--card-border)
+}
+.grid{display:grid;gap:var(--spacing-md)}
+.tiles{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.split{grid-template-columns:1fr;align-items:start}
+@media (min-width:900px){.split{grid-template-columns:2fr 1fr}}
+.tile{background:var(--color-surface);border:1px solid var(--card-border);border-radius:var(--radius-card);padding:var(--spacing-md)}
+.tile-l{font-size:var(--text-micro);font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-muted)}
+.tile-v{font-family:var(--font-heading);font-size:var(--text-display);font-weight:700;margin-top:6px;
+  font-variant-numeric:tabular-nums}
+.tile-m{font-size:var(--text-xs);color:var(--color-text-muted);margin-top:2px}
+.pill{
+  display:inline-flex;align-items:center;gap:5px;border-radius:var(--radius-pill);
+  padding:2px 9px;font-size:var(--text-small);font-weight:600;white-space:nowrap
+}
+.p-neutral{background:var(--badge-neutral-bg);color:var(--badge-neutral-fg)}
+.p-success{background:var(--badge-success-bg);color:var(--badge-success-fg)}
+.p-warning{background:var(--badge-warning-bg);color:var(--badge-warning-fg)}
+.p-danger{background:var(--badge-danger-bg);color:var(--badge-danger-fg)}
+.p-info{background:var(--badge-info-bg);color:var(--badge-info-fg)}
+.p-violet{background:var(--badge-violet-bg);color:var(--badge-violet-fg)}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px;
+  padding:0 14px;border-radius:var(--radius-control);border:1px solid transparent;
+  font:inherit;font-size:var(--text-h4);font-weight:600;cursor:pointer;white-space:nowrap
+}
+.btn-sm{min-height:27px;padding:0 10px;font-size:var(--text-small)}
+.b-primary{background:var(--color-primary);color:var(--color-primary-contrast)}
+.b-primary:hover{background:var(--color-primary-hover)}
+.b-secondary{background:var(--color-secondary-violet);color:#fff}
+.b-success{background:var(--color-success);color:#fff}
+.b-danger{background:var(--color-danger);color:#fff}
+.b-ghost{background:none;color:var(--color-text)}
+.b-ghost:hover{background:var(--surface-hover)}
+.b-outline{background:none;color:var(--color-text);border-color:var(--card-border-strong)}
+.b-outline:hover{background:var(--surface-hover)}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.toolbar{display:flex;flex-wrap:wrap;gap:var(--spacing-sm);align-items:center;padding:var(--spacing-md);
+  border-bottom:1px solid var(--card-border)}
+.search{position:relative;flex:1 1 240px;max-width:420px;display:flex;align-items:center}
+.search .icon{position:absolute;left:10px;color:var(--color-text-muted)}
+.search input{
+  width:100%;min-height:32px;padding:0 var(--spacing-md) 0 34px;border-radius:var(--radius-pill);
+  border:1px solid var(--card-border-strong);background:var(--color-surface);color:var(--color-text);
+  font:inherit;font-size:var(--text-body)
+}
+select,input[type=text],textarea{
+  min-height:32px;border-radius:var(--radius-control);border:1px solid var(--card-border-strong);
+  background:var(--color-surface);color:var(--color-text);font:inherit;font-size:var(--text-body);
+  padding:4px 10px;max-width:100%
+}
+label{display:block;font-size:var(--text-small);font-weight:500;margin-bottom:var(--spacing-xs)}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th{
+  text-align:left;font-size:var(--text-micro);font-weight:600;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--color-text-muted);padding:10px var(--spacing-md);border-bottom:1px solid var(--card-border);white-space:nowrap
+}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+td{padding:10px var(--spacing-md);border-bottom:1px solid var(--card-border);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--surface-hover)}
+.sortbtn{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.muted{color:var(--color-text-muted)}
+.em{color:var(--color-text-muted)}
+.who{display:inline-flex;align-items:center;gap:8px}
+.ini{
+  width:24px;height:24px;border-radius:var(--radius-pill);background:var(--badge-info-bg);color:var(--badge-info-fg);
+  display:inline-flex;align-items:center;justify-content:center;font-size:var(--text-micro);font-weight:700
+}
+.bar{height:6px;border-radius:var(--radius-pill);background:var(--badge-neutral-bg);overflow:hidden;min-width:80px}
+.bar > i{display:block;height:100%;background:var(--color-primary)}
+.pager{display:flex;flex-wrap:wrap;align-items:center;gap:var(--spacing-sm);padding:var(--spacing-md);
+  border-top:1px solid var(--card-border);font-size:var(--text-small);color:var(--color-text-muted)}
+.pager .btn{margin-left:auto}
+.code{
+  border:1px solid var(--card-border-strong);border-radius:var(--radius-control);
+  background:var(--badge-neutral-bg);color:var(--color-text);padding:var(--spacing-md);
+  overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:var(--text-small);margin:0
+}
+.state{padding:var(--spacing-2xl) var(--spacing-md);text-align:center;color:var(--color-text-muted)}
+.state h3{color:var(--color-text);margin-bottom:6px}
+.state p{margin:0 auto var(--spacing-md);max-width:44ch;font-size:var(--text-body)}
+.state .icon-lg{color:var(--color-text-muted)}
+.state.err .icon-lg{color:var(--badge-danger-fg)}
+.sk{background:var(--badge-neutral-bg);border-radius:6px;height:12px;animation:pulse 1.4s ease-in-out infinite}
+.sk-row{display:flex;gap:var(--spacing-md);align-items:center;padding:14px var(--spacing-md);border-bottom:1px solid var(--card-border)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:var(--radius-pill);
+  background:var(--badge-neutral-bg);color:var(--badge-neutral-fg);padding:3px 10px;font-size:var(--text-small)}
+.chip button{background:none;border:0;color:inherit;cursor:pointer;display:flex;padding:0}
+.suggest{border:1px solid var(--card-border-strong);border-radius:var(--radius-control);
+  background:var(--badge-info-bg);color:var(--badge-info-fg);padding:var(--spacing-md)}
+.suggest p{color:var(--color-text);margin:var(--spacing-sm) 0}
+.turn{padding:var(--spacing-md);border-bottom:1px solid var(--card-border)}
+.turn:last-child{border-bottom:0}
+.turn .who{margin-bottom:6px;font-weight:600;font-size:var(--text-small)}
+.stagerow{display:flex;flex-wrap:wrap;gap:var(--spacing-md);align-items:center;
+  padding:14px var(--spacing-md);border-bottom:1px solid var(--card-border)}
+.stagerow:last-child{border-bottom:0}
+.stagerow:hover{background:var(--surface-hover)}
+.stagerow .name{flex:1 1 220px;min-width:0}
+.stagerow .name a{font-weight:600;text-decoration:none}
+.stagerow .name a:hover{text-decoration:underline}
+.counts{display:flex;gap:var(--spacing-md);font-size:var(--text-small);color:var(--color-text-muted)}
+.counts b{font-variant-numeric:tabular-nums;color:var(--color-text)}
+.blockmsg{font-size:var(--text-small);color:var(--badge-warning-fg);margin-top:4px}
+.hidden{display:none !important}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+@media (max-width:700px){
+  .canvas{padding:var(--spacing-md)}
+  .btn{min-height:44px}
+  .iconbtn{width:44px;height:44px}
+  .b-primary{min-height:48px}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app" data-collapsed="false">
+
+  <!-- ================= sidebar ================= -->
+  <nav class="rail" aria-label="Main navigation">
+    <button class="brand" id="railToggle" aria-expanded="true" aria-controls="navlist">
+      <span class="brand-mark">SemantIQ <span class="brand-ph">logo pending</span></span>
+      <span class="brand-short" aria-hidden="true">C2S</span>
+      <span class="brand-toggle" aria-hidden="true">
+        <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </span>
+      <span class="sr">Collapse navigation</span>
+    </button>
+
+    <div class="nav" id="navlist">
+      <div class="cluster">Workspace</div>
+      <a class="navitem" href="#" data-screen="none">
+        <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        <span class="navlabel">Dashboard</span><span class="flyout">Dashboard</span></a>
+      <a class="navitem" href="#" data-screen="blueprint" aria-current="page">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <span class="navlabel">Projects</span><span class="flyout">Projects</span></a>
+      <a class="navitem" href="#" data-screen="none">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+        <span class="navlabel">Readiness</span><span class="flyout">Readiness</span></a>
+      <a class="navitem" href="#" data-screen="none">
+        <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/></svg>
+        <span class="navlabel">Environments</span><span class="flyout">Environments</span></a>
+
+      <button class="navgroup" aria-expanded="false" aria-controls="g-sources">
+        <svg class="icon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/></svg>
+        <span class="navlabel">Sources</span>
+        <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="flyout">Sources</span>
+      </button>
+      <ul class="subnav" id="g-sources" role="list">
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="navlabel">Source Register</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M9 15l6-6"/><rect x="2" y="12" width="8" height="8" rx="4"/><rect x="14" y="4" width="8" height="8" rx="4"/></svg><span class="navlabel">Connections</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M12 20v-6M5 14h14"/><circle cx="12" cy="7" r="4"/></svg><span class="navlabel">Connectivity &amp; Gateways</span></a></li>
+      </ul>
+
+      <button class="navgroup" aria-expanded="false" aria-controls="g-platform">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/></svg>
+        <span class="navlabel">Data Platform</span>
+        <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="flyout">Data Platform</span>
+      </button>
+      <ul class="subnav" id="g-platform" role="list">
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/></svg><span class="navlabel">Lakehouse</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg><span class="navlabel">Medallion Layers</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 10v10"/></svg><span class="navlabel">Warehouse</span></a></li>
+        <li>
+          <button class="navgroup" aria-expanded="false" aria-controls="g-ingest">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
+            <span class="navlabel">Ingestion</span>
+            <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          <ul class="subnav" id="g-ingest" role="list">
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 12h6l2-4 2 8 2-4h4"/></svg><span class="navlabel">Pipelines</span></a></li>
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg><span class="navlabel">Schedules</span></a></li>
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h8"/></svg><span class="navlabel">Run History</span></a></li>
+          </ul>
+        </li>
+        <li>
+          <button class="navgroup" aria-expanded="false" aria-controls="g-transform">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M4 8h12l-3-3M20 16H8l3 3"/></svg>
+            <span class="navlabel">Transformation</span>
+            <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          <ul class="subnav" id="g-transform" role="list">
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8h12l-3-3M20 16H8l3 3"/></svg><span class="navlabel">Transformations</span></a></li>
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><circle cx="16" cy="16" r="4"/><path d="M11 11l2 2"/></svg><span class="navlabel">Entities &amp; Keys</span></a></li>
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="navlabel">Quality Rules</span></a></li>
+          </ul>
+        </li>
+      </ul>
+
+      <button class="navgroup" aria-expanded="true" aria-controls="g-semantic">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M17 7l-3 3M7 17l3-3M17 17l-3-3"/></svg>
+        <span class="navlabel">Semantic Layer</span>
+        <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="flyout">Semantic Layer</span>
+      </button>
+      <ul class="subnav" id="g-semantic" data-open="true" role="list">
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16"/></svg><span class="navlabel">Semantic Models</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><path d="M9 12h6"/></svg><span class="navlabel">Relationships</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 18V6M9 18v-8M14 18V9M19 18v-5"/></svg><span class="navlabel">Measures</span></a></li>
+        <li><a class="navitem" href="#" data-screen="enrichment"><svg class="icon" viewBox="0 0 24 24"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5z"/></svg><span class="navlabel">Enrichment</span></a></li>
+        <li>
+          <button class="navgroup" aria-expanded="false" aria-controls="g-sec">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+            <span class="navlabel">Security</span>
+            <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          <ul class="subnav" id="g-sec" role="list">
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8h16M4 12h16M4 16h16"/></svg><span class="navlabel">Row-Level Security</span></a></li>
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M8 4v16M12 4v16M16 4v16"/></svg><span class="navlabel">Column-Level Security</span></a></li>
+          </ul>
+        </li>
+        <li>
+          <button class="navgroup" aria-expanded="false" aria-controls="g-ai">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5z"/></svg>
+            <span class="navlabel">AI Preparation</span>
+            <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          <ul class="subnav" id="g-ai" role="list">
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 12l2 2 4-4"/></svg><span class="navlabel">AI Surface</span></a></li>
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M6 4h12v16l-6-3-6 3z"/></svg><span class="navlabel">AI Instructions</span></a></li>
+            <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg><span class="navlabel">Verified Answers</span></a></li>
+          </ul>
+        </li>
+      </ul>
+
+      <button class="navgroup" aria-expanded="true" aria-controls="g-agents">
+        <svg class="icon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/></svg>
+        <span class="navlabel">Data Agents</span>
+        <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="flyout">Data Agents</span>
+      </button>
+      <ul class="subnav" id="g-agents" data-open="true" role="list">
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4"/></svg><span class="navlabel">Agents</span></a></li>
+        <li><a class="navitem" href="#" data-screen="console"><svg class="icon" viewBox="0 0 24 24"><path d="M8 9l-3 3 3 3M13 15h4"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg><span class="navlabel">Test Console</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="navlabel">Ground Truth</span></a></li>
+      </ul>
+
+      <button class="navgroup" aria-expanded="false" aria-controls="g-conv">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M20 15a3 3 0 01-3 3H8l-4 3V6a3 3 0 013-3h10a3 3 0 013 3z"/></svg>
+        <span class="navlabel">Conversational Apps</span>
+        <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="flyout">Conversational Apps</span>
+      </button>
+      <ul class="subnav" id="g-conv" role="list">
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M20 15a3 3 0 01-3 3H8l-4 3V6a3 3 0 013-3h10a3 3 0 013 3z"/></svg><span class="navlabel">Applications</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="navlabel">Validation</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M12 20v-6M5 14h14"/><circle cx="12" cy="7" r="4"/></svg><span class="navlabel">Channels &amp; Sharing</span></a></li>
+      </ul>
+
+      <button class="navgroup" aria-expanded="false" aria-controls="g-mon">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M4 18l5-7 4 4 3-5 4 8"/></svg>
+        <span class="navlabel">Monitoring</span>
+        <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="flyout">Monitoring</span>
+      </button>
+      <ul class="subnav" id="g-mon" role="list">
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 18l5-7 4 4 3-5 4 8"/></svg><span class="navlabel">Capacity</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 12h6l2-4 2 8 2-4h4"/></svg><span class="navlabel">Pipeline Operations</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M20 15a3 3 0 01-3 3H8l-4 3V6a3 3 0 013-3h10a3 3 0 013 3z"/></svg><span class="navlabel">Conversation Quality</span></a></li>
+      </ul>
+
+      <a class="navitem" href="#" data-screen="none">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M6 4h12v16l-6-3-6 3z"/></svg>
+        <span class="navlabel">Business Glossary</span><span class="flyout">Business Glossary</span></a>
+      <a class="navitem" href="#" data-screen="assistant">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M20 15a3 3 0 01-3 3H8l-4 3V6a3 3 0 013-3h10a3 3 0 013 3z"/><path d="M9 10h6M9 13h4"/></svg>
+        <span class="navlabel">Assistant</span><span class="flyout">Assistant</span></a>
+
+      <div class="cluster">Compliance</div>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg><span class="navlabel">Audit Trail</span><span class="flyout">Audit Trail</span></a>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 4l-7 12A2 2 0 005 19h14a2 2 0 001.7-3l-7-12a2 2 0 00-3.4 0z"/></svg><span class="navlabel">Exceptions</span><span class="flyout">Exceptions</span></a>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0114-5M20 12a8 8 0 01-14 5"/><path d="M18 4v3h-3M6 20v-3h3"/></svg><span class="navlabel">Change Control</span><span class="flyout">Change Control</span></a>
+      <button class="navgroup" aria-expanded="false" aria-controls="g-gov">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z"/></svg>
+        <span class="navlabel">Governance</span>
+        <svg class="icon chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="flyout">Governance</span>
+      </button>
+      <ul class="subnav" id="g-gov" role="list">
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0112 0M16 11h5"/></svg><span class="navlabel">Access Review</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8l8-4 8 4-8 4z"/></svg><span class="navlabel">Sensitivity Labels</span></a></li>
+        <li><a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 12l10-6M7 12l10 6"/></svg><span class="navlabel">Lineage</span></a></li>
+      </ul>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg><span class="navlabel">Go-Live Readiness</span><span class="flyout">Go-Live Readiness</span></a>
+
+      <div class="cluster">Application Administration</div>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0112 0"/><circle cx="18" cy="9" r="2"/></svg><span class="navlabel">Users</span><span class="flyout">Users</span></a>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span class="navlabel">Roles</span><span class="flyout">Roles</span></a>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0v5l2 3H4l2-3z"/><path d="M10 20h4"/></svg><span class="navlabel">Notifications</span><span class="flyout">Notifications</span></a>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg><span class="navlabel">Recycle Bin</span><span class="flyout">Recycle Bin</span></a>
+      <a class="navitem" href="#" aria-disabled="true"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span class="navlabel">Application Settings</span><span class="soon">Soon</span><span class="flyout">Application Settings — Soon</span></a>
+
+      <div class="cluster">System Administration</div>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18"/></svg><span class="navlabel">Tenant Connections</span><span class="flyout">Tenant Connections</span></a>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 12l2 2 4-4"/></svg><span class="navlabel">Entra Application</span><span class="flyout">Entra Application</span></a>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h4M7 14h8"/></svg><span class="navlabel">Fabric Capacities</span><span class="flyout">Fabric Capacities</span></a>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M9 15l6-6"/><rect x="2" y="12" width="8" height="8" rx="4"/><rect x="14" y="4" width="8" height="8" rx="4"/></svg><span class="navlabel">Integration Settings</span><span class="flyout">Integration Settings</span></a>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M12 4v6M12 14v6M6 12h12"/><circle cx="12" cy="12" r="9"/></svg><span class="navlabel">Capability Probe</span><span class="flyout">Capability Probe</span></a>
+      <a class="navitem" href="#" data-screen="none"><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="navlabel">Step Catalogue</span><span class="flyout">Step Catalogue</span></a>
+    </div>
+  </nav>
+
+  <!-- ================= main ================= -->
+  <div class="main">
+    <header class="topbar">
+      <span class="appname">CLaaS2SaaS SemantIQ</span>
+      <div class="topbar-right">
+        <button class="iconbtn" aria-label="Notifications, 3 unread">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0v5l2 3H4l2-3z"/><path d="M10 20h4"/></svg>
+        </button>
+        <button class="iconbtn" id="themeQuick" aria-label="Switch theme">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        </button>
+        <button class="avatar" id="profileBtn" aria-expanded="false" aria-controls="profileMenu" aria-label="Account menu for Priya Raman">PR</button>
+      </div>
+      <div class="menu" id="profileMenu" role="menu" aria-label="Account">
+        <button class="menu-id" role="menuitem">
+          <span class="avatar" aria-hidden="true">PR</span>
+          <span>
+            <span style="display:block;font-weight:600">Priya Raman</span>
+            <span class="muted" style="font-size:var(--text-xs)">priya.raman@example.com</span>
+          </span>
+        </button>
+        <div class="menu-sec" id="apLabel">Appearance</div>
+        <div class="seg" role="group" aria-labelledby="apLabel">
+          <button data-theme-set="system" aria-pressed="true">System</button>
+          <button data-theme-set="dark" aria-pressed="false">Dark</button>
+          <button data-theme-set="light" aria-pressed="false">Light</button>
+        </div>
+        <button class="menu-out" role="menuitem">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3"/><path d="M10 16l-4-4 4-4M6 12h9"/></svg>
+          Sign out
+        </button>
+      </div>
+    </header>
+
+    <main class="canvas" id="canvas">
+      <!-- mockup-only affordance, not part of the product UI -->
+      <div class="mockbar">
+        <strong>Mockup controls</strong>
+        <span>· not part of the product UI ·</span>
+        <label for="stateSel" style="margin:0">Preview state</label>
+        <select id="stateSel">
+          <option value="success">Success</option>
+          <option value="loading">Loading (skeleton)</option>
+          <option value="empty">Empty — no data yet</option>
+          <option value="noresults">Empty — no results</option>
+          <option value="error">Error</option>
+        </select>
+      </div>
+
+      <!-- ============ Blueprint Runner ============ -->
+      <section id="s-blueprint" class="screen">
+        <div class="pagehead">
+          <div class="grow">
+            <ol class="crumbs"><li><a href="#">Projects</a></li><li><a href="#">Northwind Learning Analytics</a></li><li aria-current="page">Blueprint</li></ol>
+            <h1>Blueprint — Northwind Learning Analytics</h1>
+            <p class="sub">14 stages · 80 steps · <span class="pill p-warning">3 awaiting input</span> <span class="pill p-danger">1 failed</span></p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn b-ghost btn-sm">Re-run failed</button>
+            <button class="btn b-outline btn-sm">Evidence</button>
+          </div>
+        </div>
+
+        <div class="card" data-region>
+          <div class="card-head"><h3>Stages</h3><span class="muted" style="margin-left:auto;font-size:var(--text-small)" role="status">34 of 80 steps verified</span></div>
+          <div data-body>
+            <div class="stagerow">
+              <div class="name"><a href="#">1 · Readiness</a></div>
+              <div class="counts"><span><b>4</b> verified</span><span><b>0</b> open</span></div>
+              <span class="pill p-success"><svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Complete</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">2 · Environments</a></div>
+              <div class="counts"><span><b>4</b> verified</span><span><b>0</b> open</span></div>
+              <span class="pill p-success">Complete</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">3 · Sources</a></div>
+              <div class="counts"><span><b>5</b> verified</span><span><b>0</b> open</span></div>
+              <span class="pill p-success">Complete</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">4 · Data Platform</a></div>
+              <div class="counts"><span><b>5</b> verified</span><span><b>0</b> open</span></div>
+              <span class="pill p-success">Complete</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">5 · Ingestion</a></div>
+              <div class="counts"><span><b>3</b> verified</span><span><b>1</b> failed</span></div>
+              <span class="pill p-danger"><svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>Failed</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name">
+                <a href="#">6 · Transformation</a>
+                <div class="blockmsg">Blocked by step 24 — Data Quality Gate: 2 blocking rules failing</div>
+              </div>
+              <div class="counts"><span><b>2</b> verified</span><span><b>2</b> open</span></div>
+              <span class="pill p-warning">Awaiting input</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">7 · Dimensional Modelling</a></div>
+              <div class="counts"><span><b>2</b> verified</span><span><b>0</b> open</span></div>
+              <span class="pill p-success">Complete</span>
+              <button class="btn b-primary btn-sm">Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">8 · Semantics</a></div>
+              <div class="counts"><span><b>6</b> verified</span><span><b>5</b> open</span></div>
+              <span class="pill p-warning">In progress</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">9 · Agents</a></div>
+              <div class="counts"><span><b>1</b> verified</span><span><b>6</b> open</span></div>
+              <span class="pill p-warning">In progress</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">10 · Evaluation</a></div>
+              <div class="counts"><span><b>0</b> verified</span><span><b>5</b> blocked</span></div>
+              <span class="pill p-neutral">Blocked</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">11 · Publication &amp; Access</a></div>
+              <div class="counts"><span><b>0</b> verified</span><span><b>3</b> blocked</span></div>
+              <span class="pill p-neutral">Blocked</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">12 · Conversation</a></div>
+              <div class="counts"><span><b>0</b> verified</span><span><b>17</b> blocked</span></div>
+              <span class="pill p-neutral">Blocked</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">13 · Observability</a></div>
+              <div class="counts"><span><b>2</b> verified</span><span><b>1</b> open</span></div>
+              <span class="pill p-warning">In progress</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+            <div class="stagerow">
+              <div class="name"><a href="#">14 · Lifecycle &amp; Governance</a></div>
+              <div class="counts"><span><b>1</b> verified</span><span><b>1</b> exception</span></div>
+              <span class="pill p-violet">Exception approved</span>
+              <button class="btn b-ghost btn-sm" disabled>Advance</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Enrichment Queue ============ -->
+      <section id="s-enrichment" class="screen hidden">
+        <div class="pagehead">
+          <div class="grow">
+            <ol class="crumbs"><li>Semantic Layer</li><li aria-current="page">Enrichment</li></ol>
+            <h1>Enrichment</h1>
+            <p class="sub" role="status">AI surface coverage <strong>68%</strong> — 41 of 60 objects described
+              <span class="bar" style="display:inline-block;width:120px;vertical-align:middle"><i style="width:68%"></i></span>
+            </p>
+          </div>
+          <button class="btn b-ghost btn-sm">Sync model</button>
+        </div>
+
+        <div class="card" data-region>
+          <div class="toolbar">
+            <div class="search">
+              <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+              <input type="text" id="enrSearch" placeholder="Search objects" aria-label="Search model objects" />
+            </div>
+            <label class="sr" for="fType">Type</label>
+            <select id="fType"><option>All types</option><option>Table</option><option>Column</option><option>Measure</option></select>
+            <label class="sr" for="fSurface">In AI surface</label>
+            <select id="fSurface"><option>All objects</option><option>In AI surface</option><option>Excluded</option></select>
+            <label class="sr" for="fRev">Reviewed</label>
+            <select id="fRev"><option>Any review state</option><option>Reviewed</option><option>Unreviewed</option></select>
+          </div>
+          <div data-body>
+            <div class="tablewrap">
+              <table>
+                <caption class="sr">Model objects awaiting enrichment. Default sort: in AI surface first, then objects with no description.</caption>
+                <thead><tr>
+                  <th scope="col"><button class="sortbtn" aria-sort="ascending">Object <svg class="icon" style="width:12px;height:12px" viewBox="0 0 24 24"><path d="M12 5v14M6 11l6-6 6 6"/></svg></button></th>
+                  <th scope="col">Type</th><th scope="col">In AI surface</th><th scope="col">Description</th>
+                  <th scope="col" class="num">Synonyms</th><th scope="col">Reviewed</th><th scope="col">Actions</th>
+                </tr></thead>
+                <tbody>
+                  <tr><td>Revenue</td><td><span class="pill p-neutral">Measure</span></td><td><span class="pill p-info">In surface</span></td><td class="em">—</td><td class="num">0</td><td><span class="pill p-neutral">Unreviewed</span></td><td><a href="#">Enrich</a></td></tr>
+                  <tr><td>Completion Rate</td><td><span class="pill p-neutral">Measure</span></td><td><span class="pill p-info">In surface</span></td><td class="em">—</td><td class="num">2</td><td><span class="pill p-neutral">Unreviewed</span></td><td><a href="#">Enrich</a></td></tr>
+                  <tr><td>Learner</td><td><span class="pill p-neutral">Table</span></td><td><span class="pill p-info">In surface</span></td><td>People enrolled on a programme, one row per learner</td><td class="num">4</td><td><span class="pill p-success">Reviewed</span></td><td><a href="#">Enrich</a></td></tr>
+                  <tr><td>Learner.status</td><td><span class="pill p-neutral">Column</span></td><td><span class="pill p-info">In surface</span></td><td>Current enrolment status</td><td class="num">3</td><td><span class="pill p-success">Reviewed</span></td><td><a href="#">Enrich</a></td></tr>
+                  <tr><td>Enrolment</td><td><span class="pill p-neutral">Table</span></td><td><span class="pill p-info">In surface</span></td><td>One row per learner per course enrolment</td><td class="num">2</td><td><span class="pill p-success">Reviewed</span></td><td><a href="#">Enrich</a></td></tr>
+                  <tr><td>Course.internal_code</td><td><span class="pill p-neutral">Column</span></td><td><span class="pill p-neutral">Excluded</span></td><td class="em">—</td><td class="num">0</td><td><span class="pill p-neutral">Unreviewed</span></td><td><a href="#">Enrich</a></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="pager">
+              <span role="status">Showing 1–6 of 60</span>
+              <label class="sr" for="perpage">Rows per page</label>
+              <select id="perpage"><option>25</option><option>50</option><option>75</option><option>100</option></select>
+              <button class="btn b-outline btn-sm">Next</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Test Console ============ -->
+      <section id="s-console" class="screen hidden">
+        <div class="pagehead">
+          <div class="grow">
+            <ol class="crumbs"><li>Data Agents</li><li aria-current="page">Test Console</li></ol>
+            <h1>Test Console</h1>
+            <p class="sub">Learning Analytics Agent <span class="pill p-neutral">v4 draft</span></p>
+          </div>
+        </div>
+        <div class="grid split">
+          <div>
+            <div class="card">
+              <div class="card-head"><h3>Compose test</h3></div>
+              <div class="card-pad">
+                <label for="q">Question</label>
+                <input type="text" id="q" style="width:100%" value="What was total revenue last month by programme?" />
+                <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:var(--spacing-md)">
+                  <div><label for="exp">Expected value</label><input type="text" id="exp" value="482,910" /></div>
+                  <div><label for="tol">Tolerance</label><input type="text" id="tol" value="±0.5%" /></div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:var(--spacing-md)">
+                  <button class="btn b-primary">Run test</button>
+                  <button class="btn b-ghost">Clear</button>
+                </div>
+              </div>
+            </div>
+            <div class="card" data-region>
+              <div class="card-head"><h3>Result</h3><span class="pill p-success" style="margin-left:auto">Passed</span></div>
+              <div data-body>
+                <div class="card-pad">
+                  <p style="margin-top:0"><strong>Total revenue last month was 482,910</strong>, across 6 programmes. The largest contributor was Data Engineering at 164,220.</p>
+                  <p class="sub" style="margin-bottom:var(--spacing-md)">Expected 482,910 · returned 482,910 · within tolerance</p>
+                  <h4 style="margin-bottom:var(--spacing-sm)">Generated DAX</h4>
+                  <pre class="code">EVALUATE
+SUMMARIZECOLUMNS(
+    'Programme'[Programme Name],
+    TREATAS( { DATE(2026,7,1) .. DATE(2026,7,31) }, 'Calendar'[Date] ),
+    "Revenue", [Revenue]
+)
+ORDER BY [Revenue] DESC</pre>
+                  <div style="display:flex;gap:8px;margin-top:var(--spacing-md);flex-wrap:wrap">
+                    <button class="btn b-secondary btn-sm">Add to ground truth</button>
+                    <button class="btn b-ghost btn-sm">Copy query</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-head"><h3>Recent runs</h3></div>
+              <div class="card-pad">
+                <ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px">
+                  <li style="display:flex;gap:8px;align-items:center"><span class="pill p-success">Pass</span><span class="muted">Revenue by programme</span></li>
+                  <li style="display:flex;gap:8px;align-items:center"><span class="pill p-danger">Fail</span><span class="muted">Completion rate YoY</span></li>
+                  <li style="display:flex;gap:8px;align-items:center"><span class="pill p-neutral">Unverified</span><span class="muted">Active learners in Q2</span></li>
+                </ul>
+                <p class="sub">An <strong>Unverified</strong> run returned an answer with no independent expected value. It is deliberately not a pass.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Assistant ============ -->
+      <section id="s-assistant" class="screen hidden">
+        <div class="pagehead">
+          <div class="grow">
+            <h1>Assistant</h1>
+            <p class="sub">Learning Analytics Agent · <span class="pill p-warning"><svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>Data as at 06:00 — last night's Enrolment load failed</span></p>
+          </div>
+        </div>
+        <div class="grid split">
+          <div>
+            <div class="card" data-region>
+              <div class="card-head"><h3>Conversation</h3></div>
+              <div data-body>
+                <ul style="list-style:none;margin:0;padding:0">
+                  <li class="turn">
+                    <div class="who"><span class="ini" aria-hidden="true">PR</span> Priya Raman</div>
+                    <p style="margin:0">How many active learners do we have in Singapore?</p>
+                  </li>
+                  <li class="turn">
+                    <div class="who"><span class="ini" aria-hidden="true" style="background:var(--badge-violet-bg);color:var(--badge-violet-fg)">AI</span> Learning Analytics Agent</div>
+                    <p style="margin:0 0 var(--spacing-sm)">There are <strong>1,284 active learners</strong> in Singapore as at 06:00 today.</p>
+                    <p class="sub" style="margin:0 0 var(--spacing-sm)">Definitions used: <a href="#">Active learner</a> · <a href="#">Region</a></p>
+                    <div style="display:flex;gap:8px">
+                      <button class="btn b-ghost btn-sm" aria-label="Rate this answer as helpful">
+                        <svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M7 11v9H4v-9zM7 11l4-7a2 2 0 013 2l-1 5h5a2 2 0 012 2l-1 6a2 2 0 01-2 2H7"/></svg> Helpful</button>
+                      <button class="btn b-ghost btn-sm" aria-label="Rate this answer as not helpful">
+                        <svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M17 13V4h3v9zM17 13l-4 7a2 2 0 01-3-2l1-5H6a2 2 0 01-2-2l1-6a2 2 0 012-2h10"/></svg> Not helpful</button>
+                    </div>
+                  </li>
+                </ul>
+                <div class="card-pad" style="border-top:1px solid var(--card-border)">
+                  <label for="ask">Ask a question</label>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <input type="text" id="ask" style="flex:1 1 220px" placeholder="For example, compare that with last year" />
+                    <button class="btn b-primary">Send</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-head"><h3>Suggested questions</h3></div>
+              <div class="card-pad">
+                <ul style="list-style:none;margin:0;padding:0;display:grid;gap:10px">
+                  <li><a href="#">What was total revenue last month?</a></li>
+                  <li><a href="#">Which programmes have the lowest completion rate?</a></li>
+                  <li><a href="#">How many enrolments are at risk this cycle?</a></li>
+                </ul>
+                <p class="sub">Drawn from approved verified answers.</p>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>Definitions behind the last answer</h3></div>
+              <div class="card-pad">
+                <p style="margin:0 0 var(--spacing-sm)"><strong>Active learner</strong> — enrolled, not withdrawn, with activity in the last 30 days. Owner: Programme Operations.</p>
+                <p style="margin:0"><a href="#">Open Business Glossary</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+  var html=document.documentElement, app=document.getElementById('app');
+
+  /* theme: System default, persisted */
+  function applyTheme(pref){
+    if(pref==='system'){ html.removeAttribute('data-theme'); }
+    else { html.setAttribute('data-theme', pref); }
+    document.querySelectorAll('[data-theme-set]').forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.dataset.themeSet===pref));
+    });
+    try{ localStorage.setItem('semantiq-theme', pref); }catch(e){}
+  }
+  var savedTheme='system';
+  try{ savedTheme=localStorage.getItem('semantiq-theme')||'system'; }catch(e){}
+  applyTheme(savedTheme);
+  document.querySelectorAll('[data-theme-set]').forEach(function(b){
+    b.addEventListener('click',function(){ applyTheme(b.dataset.themeSet); });
+  });
+  document.getElementById('themeQuick').addEventListener('click',function(){
+    var cur='system';
+    try{ cur=localStorage.getItem('semantiq-theme')||'system'; }catch(e){}
+    applyTheme(cur==='dark'?'light':cur==='light'?'system':'dark');
+  });
+
+  /* rail collapse, persisted */
+  var toggle=document.getElementById('railToggle');
+  function applyCollapsed(c){
+    app.dataset.collapsed=String(c);
+    toggle.setAttribute('aria-expanded', String(!c));
+    try{ localStorage.setItem('semantiq-rail', c?'1':'0'); }catch(e){}
+  }
+  var savedRail='0';
+  try{ savedRail=localStorage.getItem('semantiq-rail')||'0'; }catch(e){}
+  applyCollapsed(savedRail==='1');
+  toggle.addEventListener('click',function(){ applyCollapsed(app.dataset.collapsed!=='true'); });
+
+  /* accordion groups */
+  document.querySelectorAll('.navgroup').forEach(function(g){
+    g.addEventListener('click',function(){
+      var open=g.getAttribute('aria-expanded')==='true';
+      g.setAttribute('aria-expanded', String(!open));
+      var panel=document.getElementById(g.getAttribute('aria-controls'));
+      if(panel){ if(open){ panel.removeAttribute('data-open'); } else { panel.dataset.open='true'; } }
+    });
+  });
+
+  /* profile menu */
+  var pBtn=document.getElementById('profileBtn'), pMenu=document.getElementById('profileMenu');
+  function closeMenu(){ pMenu.removeAttribute('data-open'); pBtn.setAttribute('aria-expanded','false'); }
+  pBtn.addEventListener('click',function(e){
+    e.stopPropagation();
+    var open=pMenu.dataset.open==='true';
+    if(open){ closeMenu(); } else { pMenu.dataset.open='true'; pBtn.setAttribute('aria-expanded','true'); }
+  });
+  document.addEventListener('click',function(e){ if(!pMenu.contains(e.target)) closeMenu(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ closeMenu(); pBtn.focus(); } });
+
+  /* screen switching from the nav */
+  var screens={blueprint:'s-blueprint',enrichment:'s-enrichment',console:'s-console',assistant:'s-assistant'};
+  document.querySelectorAll('.navitem[data-screen]').forEach(function(a){
+    a.addEventListener('click',function(e){
+      e.preventDefault();
+      var key=a.dataset.screen;
+      if(!screens[key]) return;
+      document.querySelectorAll('.navitem[aria-current]').forEach(function(n){ n.removeAttribute('aria-current'); });
+      a.setAttribute('aria-current','page');
+      Object.keys(screens).forEach(function(k){ document.getElementById(screens[k]).classList.add('hidden'); });
+      document.getElementById(screens[key]).classList.remove('hidden');
+      document.getElementById('stateSel').value='success';
+      renderState('success');
+      document.getElementById('canvas').scrollTop=0;
+    });
+  });
+
+  /* state preview: skeleton / both empty flavours / error */
+  var stored={};
+  function skeleton(){
+    var h='';
+    for(var i=0;i<6;i++){
+      h+='<div class="sk-row"><span class="sk" style="width:22%"></span><span class="sk" style="width:14%"></span>'+
+         '<span class="sk" style="width:30%"></span><span class="sk" style="width:12%"></span></div>';
+    }
+    return h;
+  }
+  function emptyNoData(){
+    return '<div class="state"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h8"/></svg>'+
+      '<h3>Nothing here yet</h3><p>Sync the semantic model to load its tables, columns and measures for enrichment.</p>'+
+      '<button class="btn b-primary">Sync model</button></div>';
+  }
+  function emptyNoResults(){
+    return '<div class="state"><svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>'+
+      '<h3>No matches for &ldquo;attendance&rdquo;</h3><p>No object matches the current search and filters.</p>'+
+      '<button class="btn b-outline">Clear filters</button></div>';
+  }
+  function errorState(){
+    return '<div class="state err"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>'+
+      '<h3>Couldn&rsquo;t load this</h3><p>The request to Microsoft Fabric did not complete. Your search and filters are unchanged.</p>'+
+      '<button class="btn b-outline">Retry</button></div>';
+  }
+  function renderState(state){
+    document.querySelectorAll('.screen:not(.hidden) [data-region]').forEach(function(region,idx){
+      var body=region.querySelector('[data-body]');
+      if(!body) return;
+      var key=(region.closest('.screen').id)+'-'+idx;
+      if(stored[key]===undefined){ stored[key]=body.innerHTML; }
+      if(state==='success'){ body.innerHTML=stored[key]; }
+      else if(state==='loading'){ body.innerHTML=skeleton(); }
+      else if(state==='empty'){ body.innerHTML=emptyNoData(); }
+      else if(state==='noresults'){ body.innerHTML=emptyNoResults(); }
+      else { body.innerHTML=errorState(); }
+    });
+  }
+  document.getElementById('stateSel').addEventListener('change',function(e){ renderState(e.target.value); });
+})();
+</script>
+</body>
+</html>
