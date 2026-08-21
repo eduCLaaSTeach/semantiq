@@ -1,33 +1,41 @@
-name: Deploy to cPanel (SSH)
+name: Deploy DEV to cPanel (SSH)
 
 on:
   push:
-    branches: main
+    branches: DEV
   workflow_dispatch:
 
 concurrency:
-  group: cpanel-deploy
+  group: cpanel-deploy-dev
   cancel-in-progress: false
+
+# The pipeline only reads the repository. Narrow the ambient GITHUB_TOKEN scope
+# explicitly rather than inheriting whatever the organization default happens to be.
+permissions:
+  contents: read
 
 jobs:
   deploy:
     name: Build and sync to cPanel over SSH
     runs-on: ubuntu-latest
 
+    # Binding the job to a GitHub environment is what makes environment-scoped
+    # secrets and a DEV-only deployment branch policy possible. Both are configured
+    # in the repository settings, not here; see PROJECT-CONTEXT.md.
+    environment: development
+
     env:
       CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
       CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
       CPANEL_USER: ${{ secrets.CPANEL_USER }}
       CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
-      CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
-      CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Configure PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.5'
 
@@ -38,7 +46,7 @@ jobs:
         run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
 
       - name: Configure Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
@@ -64,15 +72,22 @@ jobs:
       # The private key remains encrypted on disk, and the passphrase is supplied
       # through an SSH askpass helper rather than a command-line argument.
       - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
         run: |
           set -euo pipefail
+          # Create every file in this step at 0600, so the private key needs no
+          # follow-up chmod and the askpass helper is never briefly readable before it
+          # is promoted to 0700 below.
+          umask 077
+
           : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
           : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
 
           install -m 700 -d ~/.ssh
 
           printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
-          chmod 600 ~/.ssh/cpanel_deploy_key
 
           cat > ~/.ssh/askpass.sh <<'EOF'
           #!/bin/sh
@@ -103,7 +118,7 @@ jobs:
             -o IdentitiesOnly=yes \
             -o BatchMode=yes \
             "$CPANEL_USER@$CPANEL_HOST" \
-            "pwd && command -v rsync && rsync --version | head -n 1"
+            "cd \"$CPANEL_DEPLOY_PATH\" && pwd && command -v rsync && rsync --version | head -n 1"
 
       # Transfer the complete built application, including vendor/ and
       # public/build. Excluded runtime paths remain managed by the server.
