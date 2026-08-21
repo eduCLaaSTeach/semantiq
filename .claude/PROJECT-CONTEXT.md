@@ -318,7 +318,7 @@ Cluster grants per role:
 
 ## Deployment Policy
 
-- Deployment target: DEV environment at [Development Site](https://semantiq.claas2saas.com/), on cPanel shared hosting. Files are deployed over SSH into the document root that the `CPANEL_DEPLOY_PATH` secret points at, and the committed forwarder rewrites every request into `public/`. Exact document root for the `semantiq` subdomain: `<ASK_DEVELOPER>`
+- Deployment target: DEV environment at [Development Site](https://semantiq.claas2saas.com/), on cPanel shared hosting. Files are deployed over SSH into the document root that the `CPANEL_DEPLOY_PATH` secret points at, and the committed forwarder rewrites every request into `public/`. That target is the cPanel account's main document root, not a subdomain-specific one, which is why the forwarder is needed at all.
 - Deployment method: GitHub Actions builds the release, then `rsync -az --delete` over SSH to the target path held in the `CPANEL_DEPLOY_PATH` repository secret. No FTP, no cPanel Git Version Control, no container registry.
 - Source control provider: GitHub, remote over SSH using the local host alias `gp` (`git@gp:eduCLaaSTeach/semantiq.git`)
 - GitHub repository URL: [GitHub Repository](https://github.com/eduCLaaSTeach/semantiq)
@@ -341,7 +341,7 @@ Cluster grants per role:
 - Source control and pipeline: GitHub plus GitHub Actions (`.github/workflows/deploy.yml`)
 - Hosting account/project/resource placeholder: `<CPANEL_USER>` on `<CPANEL_HOST>`, port `<CPANEL_PORT>`, deploy path `<CPANEL_DEPLOY_PATH>`
 - Production URL and subdirectory: [Production Site](<PROD_SITE_URL>), subdirectory: `<ASK_DEVELOPER>`
-- Web root, artifact path, startup command, service entry point, or container image: the web root is the `semantiq` subdomain's cPanel document root, held in the `CPANEL_DEPLOY_PATH` secret (exact path `<ASK_DEVELOPER>`). Application files land directly in it, and the committed `deployment/public_html.htaccess` is deployed as `.htaccess` to rewrite every request into `public/`, where Laravel's front controller runs. No startup command and no container image; requests are served by the host's PHP handler.
+- Web root, artifact path, startup command, service entry point, or container image: the web root is the cPanel account's main document root, held in the `CPANEL_DEPLOY_PATH` secret and kept out of this file because the pipeline treats it as one. Application files land directly in it, and the committed `deployment/public_html.htaccess` is deployed as `.htaccess` to rewrite every request into `public/`, where Laravel's front controller runs. No startup command and no container image; requests are served by the host's PHP handler.
 - Runtime/platform version: target runtime PHP 8.5 (confirm the cPanel PHP selector matches). Node.js 24 is build-time only on the runner and is not required on the target.
 - Package manager/build availability on target: none needed. Composer and npm run on the runner only, and `vendor/` plus `public/build` are transferred already built. `rsync` must exist on the target and the workflow verifies it in the SSH authentication step.
 - Background processing/scheduler support: not configured by the pipeline. Queue worker and scheduler (cron) support on the target: `<ASK_DEVELOPER>`
