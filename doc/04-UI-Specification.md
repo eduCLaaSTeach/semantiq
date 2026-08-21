@@ -219,7 +219,7 @@ fully specified by naming the archetype.
 
 | Screen Name | Page Archetype | Shell Placement | Wireframe/Mock-up | Branding | UI States | Role & Access | Accessibility | Device Support |
 |---|---|---|---|---|---|---|---|---|
-| Sign In | Auth | **No shell.** Route `/login`; no cluster, no breadcrumb | Standalone centered card: brand mark → application name → "Sign in with Microsoft" as the single primary action → flash and error display → trust footer. No local username and password field, since authentication is delegated entirely to Microsoft Entra ID | Standard branding, applied on the auth surface without the shell. The approved per-theme wordmark is the brand mark. **Blocked pending the brand asset pack** | Success: redirect to Entra ID. Loading: the sign-in control shows its own bounded in-control wait, the only permitted spinner. Error: a persistent human message for consent declined, tenant not permitted, or the callback failing, each distinguished. No empty state — the screen has no data region | Unauthenticated. No role applies. The screen reveals nothing about whether a tenant or account exists | Standard accessibility. The single action is a real button with an accessible name; the error region is an assertive live region; the theme control is not present here, so the effective theme follows the system preference | Standard device support. The card is near-full-width on small screens with the action at the 48px large size |
+| Sign In | Auth | **No shell.** Route `/login`; no cluster, no breadcrumb | **Built:** `doc/mockups/semantiq-signin-mockup.html`. Standalone centered card, max-width 420px (the approved modal default, reused rather than a new value): per-theme wordmark -> "Sign in to SemantIQ" + one-line lede -> form-level message region -> **one solid** `btn-primary btn-lg btn-block` "Sign in with Microsoft" carrying the Microsoft mark -> "Single sign-on only" divider -> help text -> trust footer outside the card. No username or password field: authentication is delegated entirely to Microsoft Entra ID, so there is no local credential to collect | Standard branding. The approved `logo-full-light.png` / `logo-full-dark.png` wordmark at the approved 22px height, width auto, swapping with the effective theme; the matching per-theme favicon wired by `prefers-color-scheme`. **Verified rendered:** light canvas `#E8DFD0`, dark canvas `#1A2E46`, light action `#193E6B`, dark action `#7FADE1`, logo aspect preserved at 158x22 from a 1242x173 source. One named deviation for the Microsoft mark — section 7, conflict 3 | Success: redirect to Entra ID. Loading: the control disables, sets `aria-busy`, relabels to "Redirecting to Microsoft…" and shows its own bounded in-control spinner at stable width — the only permitted spinner. Error: one persistent inline alert in the form-level message region, with **three distinguished causes** — consent declined, tenant not enabled, callback failed — each naming who can resolve it, plus a signed-out notice variant. No empty state: the screen has no data region | Unauthenticated. No role applies. The screen reveals nothing about whether a tenant, account or organisation exists — every message names a class of cause, never whether a specific identity is known | Standard accessibility. The action is a real `<button type="submit">`; the message region is `role="alert"` with `aria-live="assertive"`; the Microsoft mark is `aria-hidden` so the accessible name is the label alone; `aria-busy` during redirect; reduced motion honoured. No theme switcher — the profile menu does not exist pre-authentication — so the effective theme follows `prefers-color-scheme` | Standard device support. Card near-full-width on small screens; the action is `btn-lg` at 48px, above the 44px touch floor, full width via `btn-block`. **Verified at 390px:** no horizontal page scroll |
 | Tenant Onboarding | Step-by-step form (wizard) | `Workspace` cluster, reached on first sign-in rather than from the nav; route `/onboarding`; breadcrumb suppressed | Standard shell. Step indicator → one step at a time: **1** Confirm tenant → **2** Grant consent → **3** Connectivity probe → **4** Capability probe → **5** Review. Footer carries exactly **Back** and **Continue**; Continue becomes **Finish** on step 5 | Standard branding | Standard states. The two probe steps show a skeleton per endpoint row while probing, then a per-endpoint result. A blocked endpoint renders as a warning row with its reason, not as an error state for the whole page — the page succeeded, the endpoint did not | Platform Administrator and Tenant Administrator only. Absent for every other tier. The server-side handler gates identically to the sidebar | Standard accessibility. The step indicator marks the current step as current; each probe result region carries a polite live region; a blocked endpoint is signalled by icon and text, not colour | Standard device support. The step indicator collapses to "Step 3 of 5" with the current step title on small screens |
 
 ### 6.2 Project and blueprint execution
@@ -365,6 +365,26 @@ every enforced contract intact: data entry stays page-hosted, the async control 
 loading and stable-width rules, and the transcript is a semantic list. **This needs the
 technical lead's confirmation**, since a conversational surface will recur across the
 product and is worth settling once rather than per screen.
+
+**Conflict 3 — the Microsoft mark is not in the approved icon registry.** Named as a deviation rather
+than taken silently, using the skill's deviation protocol.
+
+- **Standard pattern:** one central icon registry, one style — 24px viewBox, 2px stroke, round caps,
+  outline, monochrome through `currentColor`.
+- **Proposed deviation:** the Microsoft four-square mark, in its four brand colours, inside the
+  "Sign in with Microsoft" button.
+- **Rationale:** this is a third-party identity-provider brand mark, the same category as our own
+  wordmark, not an app action icon. Microsoft's branding guidance requires the mark on a
+  "Sign in with Microsoft" control, and it is what users actually scan for on an SSO button.
+  A monochrome outline substitute would breach that guidance and make the button less recognisable at
+  exactly the moment recognition matters.
+- **Domain context:** SemantIQ is a Microsoft Fabric control plane. Every user signs in with a Microsoft
+  work account and there is no second identity provider to stay consistent with.
+- **Trade-offs acknowledged:** it introduces four off-palette colours, inside one control on one screen.
+  Scoped to the sign-in action only, inline SVG with no external request, `aria-hidden` so it adds
+  nothing to the accessible name, and deliberately **not** registered in the icon registry, so it cannot
+  be reused as a general-purpose icon.
+- **Needs the technical lead's sign-off**, because the palette is an ENFORCED constant.
 
 **Conflict 2 — "quick create" would have been a modal.** Several list screens would
 conventionally offer an inline create dialog. Data entry is page-hosted without exception,

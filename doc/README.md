@@ -15,7 +15,8 @@ procedure.
 | 03 | [Workflow and Process Specification](03-Workflow-Process-Specification.md) | 25 end-to-end workflows — Cluster, Feature, Workflow, Triggers, Steps, Conditions, Integration, AI & Automation, Expected Output. Includes an explicit map of where AI is and is not used |
 | 04 | [UI Specification](04-UI-Specification.md) | The navigation tree, role labels, common standards, and per-screen specifications against the approved CLaaS2SaaS design system. Two archetype conflicts named and resolved |
 | 05 | [Mockup Screen Curation](05-Mockup-Screen-Curation.md) | 14 curated screens with archetype rationale, runners-up, and what was deliberately excluded |
-| — | [Interactive mockup](mockups/semantiq-shell-mockup.html) | The approved shell and four screens, both themes, all UI states — self-contained HTML |
+| — | [Shell mockup](mockups/semantiq-shell-mockup.html) | The approved shell and four screens, both themes, all UI states — self-contained HTML |
+| — | [Sign-in mockup](mockups/semantiq-signin-mockup.html) | The Auth screen with Microsoft SSO, the real approved brand assets, both themes, all message states |
 | — | [`word/`](word/) | Word versions of every document, each with its right-justified footnote per the house format |
 
 ## Reading order
