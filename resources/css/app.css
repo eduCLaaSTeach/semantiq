@@ -1,0 +1,466 @@
+@import 'tailwindcss';
+
+/**
+ * CLaaS2SaaS design system - approved tokens.
+ *
+ * Every value here is reproduced verbatim from
+ * .claude/skills/ui-ux-design/reference/design-tokens.md, which is the single
+ * source of truth. Token NAMES may adapt to the stack; token VALUES may not.
+ * Never hardcode a raw colour in a component - reference a token.
+ */
+:root {
+    color-scheme: light;
+
+    /* Brand palette */
+    --color-primary: #193e6b;
+    --color-primary-hover: #142f52;
+    --accent-contrast: #ffffff;
+    --color-accent: #b3a125;
+    --color-secondary-violet: #7f3f98;
+    --color-secondary-blue: #448e9d;
+    --color-secondary-sunray: #e9ac53;
+    --color-success: #5f8025;
+    --color-danger: #991547;
+
+    /* Chrome - sidebar and top bar share ONE colour */
+    --chrome-bg: #ffffff;
+    --chrome-text: #223349;
+    --chrome-muted: #566779;
+    --chrome-hover: rgba(25, 62, 107, 0.07);
+    --chrome-edge: rgba(15, 25, 45, 0.14);
+
+    /* Canvas and surfaces */
+    --color-bg-page: #e8dfd0;
+    --color-surface: #ffffff;
+    --card-border: #e8e2d8;
+    --card-border-strong: #d5cec1;
+    --surface-hover: rgba(25, 62, 107, 0.06);
+    --divider: #e4dccd;
+    --color-text: #1e2e42;
+    --color-text-muted: #4d5e75;
+
+    /* Active nav - gold treatment */
+    --nav-active-bg: rgba(179, 161, 37, 0.16);
+    --nav-active-fg: #5c5010;
+    --nav-active-bar: #b3a125;
+
+    /* Readable semantic pairs. A semantic hue used as text, icon or thin edge on a
+       surface always goes through these, never the raw brand hex. */
+    --badge-neutral-bg: #f0ebe1;
+    --badge-neutral-fg: #514a3b;
+    --badge-success-bg: color-mix(in srgb, var(--color-success) 16%, var(--color-surface));
+    --badge-success-fg: #3a4e13;
+    --badge-warning-bg: color-mix(in srgb, var(--color-secondary-sunray) 26%, var(--color-surface));
+    --badge-warning-fg: #7a500c;
+    --badge-danger-bg: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
+    --badge-danger-fg: #85113e;
+    --badge-info-bg: color-mix(in srgb, var(--color-secondary-blue) 18%, var(--color-surface));
+    --badge-info-fg: #1e545f;
+    --badge-violet-bg: color-mix(in srgb, var(--color-secondary-violet) 15%, var(--color-surface));
+    --badge-violet-fg: #5b2b6e;
+
+    /* Type */
+    --font-heading: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --text-display: 1.5rem;
+    --text-h1: 1.25rem;
+    --text-h2: 1.125rem;
+    --text-h3: 1rem;
+    --text-h4: 0.9375rem;
+    --text-lead: 0.875rem;
+    --text-body: 0.8125rem;
+    --text-small: 0.75rem;
+    --text-xs: 0.6875rem;
+    --text-micro: 0.625rem;
+
+    /* Spacing, shape, elevation */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+    --spacing-2xl: 48px;
+    --spacing-3xl: 64px;
+    --radius-card: 12px;
+    --radius-control: 8px;
+    --radius-tab: 10px;
+    --radius-modal: 14px;
+    --radius-pill: 999px;
+    --shadow-md: 0 2px 8px rgba(25, 40, 65, 0.08);
+    --shadow-lg: 0 8px 24px rgba(15, 25, 45, 0.14);
+
+    /* Shell dimensions */
+    --bar-height: 52px;
+    --rail-width: 240px;
+    --rail-collapsed: 56px;
+
+    /* Buttons */
+    --btn-radius: var(--radius-control);
+    --btn-font-weight: 600;
+    --btn-focus-ring: var(--color-primary);
+    --btn-secondary-bg: var(--color-surface);
+    --btn-secondary-fg: var(--color-text);
+    --btn-secondary-border: color-mix(in srgb, var(--color-text) 25%, transparent);
+    --btn-secondary-border-hover: color-mix(in srgb, var(--color-text) 40%, transparent);
+    --btn-secondary-hover-bg: color-mix(in srgb, var(--color-text) 6%, var(--color-surface));
+}
+
+/* The two chromes are different colours by design. Never render the same chrome in both modes. */
+html[data-theme='dark'] {
+    color-scheme: dark;
+
+    --color-primary: #7fade1;
+    --color-primary-hover: #93bbe8;
+    --accent-contrast: #0f1c2e;
+
+    --chrome-bg: #080f1a;
+    --chrome-text: #e4ebf4;
+    --chrome-muted: #9aabc0;
+    --chrome-hover: rgba(255, 255, 255, 0.09);
+    --chrome-edge: rgba(0, 0, 0, 0.5);
+
+    --color-bg-page: #1a2e46;
+    --color-surface: #253e5d;
+    --card-border: rgba(255, 255, 255, 0.1);
+    --card-border-strong: rgba(255, 255, 255, 0.18);
+    --surface-hover: rgba(255, 255, 255, 0.07);
+    --divider: rgba(255, 255, 255, 0.13);
+    --color-text: #e9eff6;
+    --color-text-muted: #a3b2c5;
+
+    --nav-active-bg: rgba(201, 182, 47, 0.22);
+    --nav-active-fg: #ebdd7e;
+    --nav-active-bar: #c9b62f;
+
+    --badge-neutral-bg: rgba(255, 255, 255, 0.1);
+    --badge-neutral-fg: rgba(255, 255, 255, 0.8);
+    --badge-success-bg: color-mix(in srgb, var(--color-success) 28%, var(--color-surface));
+    --badge-success-fg: #cbe79b;
+    --badge-warning-bg: color-mix(in srgb, var(--color-secondary-sunray) 30%, var(--color-surface));
+    --badge-warning-fg: #f8dfac;
+    --badge-danger-bg: color-mix(in srgb, var(--color-danger) 32%, var(--color-surface));
+    --badge-danger-fg: #f5b8cf;
+    --badge-info-bg: color-mix(in srgb, var(--color-secondary-blue) 30%, var(--color-surface));
+    --badge-info-fg: #b4e3ec;
+    --badge-violet-bg: color-mix(in srgb, var(--color-secondary-violet) 30%, var(--color-surface));
+    --badge-violet-fg: #dfbaec;
+
+    --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* System default resolves from the OS preference. An explicit data-theme always wins. */
+@media (prefers-color-scheme: dark) {
+    html:not([data-theme='light']) {
+        color-scheme: dark;
+
+        --color-primary: #7fade1;
+        --color-primary-hover: #93bbe8;
+        --accent-contrast: #0f1c2e;
+
+        --chrome-bg: #080f1a;
+        --chrome-text: #e4ebf4;
+        --chrome-muted: #9aabc0;
+        --chrome-hover: rgba(255, 255, 255, 0.09);
+        --chrome-edge: rgba(0, 0, 0, 0.5);
+
+        --color-bg-page: #1a2e46;
+        --color-surface: #253e5d;
+        --card-border: rgba(255, 255, 255, 0.1);
+        --card-border-strong: rgba(255, 255, 255, 0.18);
+        --surface-hover: rgba(255, 255, 255, 0.07);
+        --divider: rgba(255, 255, 255, 0.13);
+        --color-text: #e9eff6;
+        --color-text-muted: #a3b2c5;
+
+        --nav-active-bg: rgba(201, 182, 47, 0.22);
+        --nav-active-fg: #ebdd7e;
+        --nav-active-bar: #c9b62f;
+
+        --badge-neutral-bg: rgba(255, 255, 255, 0.1);
+        --badge-neutral-fg: rgba(255, 255, 255, 0.8);
+        --badge-success-bg: color-mix(in srgb, var(--color-success) 28%, var(--color-surface));
+        --badge-success-fg: #cbe79b;
+        --badge-warning-bg: color-mix(in srgb, var(--color-secondary-sunray) 30%, var(--color-surface));
+        --badge-warning-fg: #f8dfac;
+        --badge-danger-bg: color-mix(in srgb, var(--color-danger) 32%, var(--color-surface));
+        --badge-danger-fg: #f5b8cf;
+        --badge-info-bg: color-mix(in srgb, var(--color-secondary-blue) 30%, var(--color-surface));
+        --badge-info-fg: #b4e3ec;
+        --badge-violet-bg: color-mix(in srgb, var(--color-secondary-violet) 30%, var(--color-surface));
+        --badge-violet-fg: #dfbaec;
+
+        --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.3);
+        --shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.45);
+    }
+}
+
+/* ===================== base ===================== */
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+}
+
+body {
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: 1.5;
+    color: var(--color-text);
+    background: var(--color-bg-page);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+    font-family: var(--font-heading);
+    margin: 0;
+}
+h1 { font-size: var(--text-h1); font-weight: 700; }
+h2 { font-size: var(--text-h2); font-weight: 700; }
+h3 { font-size: var(--text-h3); font-weight: 600; }
+h4 { font-size: var(--text-h4); font-weight: 600; }
+
+a { color: var(--color-primary); }
+
+/* Focus ring: 2px solid accent at 2px offset, on every interactive element. */
+:focus-visible {
+    outline: 2px solid var(--btn-focus-ring);
+    outline-offset: 2px;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+/* ===================== buttons ===================== */
+/* Two looks only: one solid per action group, and the neutral secondary for
+   every other labeled action. btn-ghost and btn-outline are retired. */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
+    border: 1px solid transparent;
+    border-radius: var(--btn-radius);
+    font-family: inherit;
+    font-weight: var(--btn-font-weight);
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    padding: 0 13px;
+    font-size: var(--text-h4);
+    min-height: 32px;
+    --btn-spinner: #fff;
+}
+
+.btn:hover { transform: translateY(-1px); filter: brightness(0.94); }
+.btn:active { transform: translateY(1px); filter: brightness(0.9); }
+.btn:focus-visible { outline: 2px solid var(--btn-focus-ring); outline-offset: 2px; }
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    filter: none;
+}
+
+.btn.is-loading {
+    position: relative;
+    color: transparent;
+    pointer-events: none;
+}
+
+.btn.is-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1em;
+    height: 1em;
+    margin: -0.5em 0 0 -0.5em;
+    border: 2px solid color-mix(in srgb, var(--btn-spinner) 35%, transparent);
+    border-top-color: var(--btn-spinner);
+    border-radius: 50%;
+    animation: btn-spin 0.6s linear infinite;
+}
+
+@keyframes btn-spin {
+    to { transform: rotate(360deg); }
+}
+
+.btn-primary {
+    background: var(--color-primary);
+    color: var(--accent-contrast);
+    --btn-spinner: var(--accent-contrast);
+}
+.btn-primary:hover { background: var(--color-primary-hover); }
+
+.btn-secondary {
+    background: var(--btn-secondary-bg);
+    color: var(--btn-secondary-fg);
+    border-color: var(--btn-secondary-border);
+    --btn-spinner: var(--color-text);
+}
+.btn-secondary:hover {
+    background: var(--btn-secondary-hover-bg);
+    border-color: var(--btn-secondary-border-hover);
+}
+
+.btn-lg { min-height: 48px; padding: 0 var(--spacing-lg); font-size: var(--text-h3); }
+.btn-block { display: flex; width: 100%; }
+
+/* ===================== alert ===================== */
+/* A form-level message that belongs to no single field: one persistent inline
+   alert. Never a summary card repeating field errors, never a toast here. */
+
+.alert {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: flex-start;
+    border: 1px solid var(--card-border-strong);
+    border-radius: var(--radius-control);
+    padding: var(--spacing-md);
+    font-size: var(--text-body);
+}
+.alert svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    margin-top: 1px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.alert strong { display: block; font-weight: 600; margin-bottom: var(--spacing-xs); }
+.alert p { margin: 0; }
+.alert-danger { background: var(--badge-danger-bg); color: var(--badge-danger-fg); }
+.alert-warning { background: var(--badge-warning-bg); color: var(--badge-warning-fg); }
+.alert-info { background: var(--badge-info-bg); color: var(--badge-info-fg); }
+
+/* ===================== auth archetype ===================== */
+/* Standalone centered card, no shell. */
+
+.auth-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-lg) var(--spacing-md);
+}
+
+.auth-shell { width: 100%; max-width: 420px; }
+
+.auth-card {
+    background: var(--color-surface);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-card);
+    padding: var(--spacing-xl);
+}
+
+.auth-brand { display: flex; justify-content: center; margin-bottom: var(--spacing-lg); }
+.auth-brand img { height: 22px; width: auto; display: block; }
+
+.auth-head { text-align: center; margin-bottom: var(--spacing-lg); }
+.auth-head p { color: var(--color-text-muted); font-size: var(--text-lead); margin: var(--spacing-sm) 0 0; }
+
+.auth-message { margin-bottom: var(--spacing-lg); }
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin: var(--spacing-lg) 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
+}
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--divider);
+}
+
+.auth-help {
+    margin: var(--spacing-md) 0 0;
+    text-align: center;
+    font-size: var(--text-small);
+    color: var(--color-text-muted);
+}
+
+.auth-trust {
+    margin-top: var(--spacing-lg);
+    text-align: center;
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+.auth-trust .row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+}
+.auth-trust svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.auth-trust a { color: var(--color-text-muted); }
+
+/* The Microsoft mark is a third-party identity-provider brand mark, signed off as
+   a documented deviation (doc/04-UI-Specification.md section 7, conflict 3). It is
+   deliberately not in the icon registry and must not be reused as a general icon. */
+.ms-mark { width: 18px; height: 18px; flex: 0 0 auto; }
+.btn.is-loading .ms-mark { visibility: hidden; }
+
+/* Touch: raise controls to the 44px floor on a coarse pointer. */
+@media (pointer: coarse) {
+    .btn { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+/* Per-theme brand asset swap. Both variants are in the markup and CSS chooses,
+   so the correct wordmark is present at first paint with no JS involved. */
+.auth-brand .brand-light { display: block; }
+.auth-brand .brand-dark { display: none; }
+html[data-theme='dark'] .auth-brand .brand-light { display: none; }
+html[data-theme='dark'] .auth-brand .brand-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+    html:not([data-theme='light']) .auth-brand .brand-light { display: none; }
+    html:not([data-theme='light']) .auth-brand .brand-dark { display: block; }
+}
