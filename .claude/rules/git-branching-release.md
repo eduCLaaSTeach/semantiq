@@ -94,6 +94,16 @@ These practices coordinate several people or agents working at once; they comple
 
 ## After Pushing A Branch (PR Hand-Off)
 
+> **Amended by owner standing instruction OSI-1** (`.claude/rules/owner-standing-instructions.md`).
+> The owner has issued a standing explicit request that Claude create the Pull Request, which
+> is the exact action this section already permits on request. For this repository the
+> hand-off default below is therefore **replaced by automatic PR creation**, and steps 1 and 2
+> are still performed. Step 3's ordered list is still given, now covering review, approval,
+> merge, promotion and tagging rather than PR creation. Step 4 is narrowed: the owner
+> performs the **merge, promotion and deploy**; Claude performs the PR creation and then
+> monitors the PR per OSI-3. Merging is **not** automated by OSI-1.
+
+
 After committing and pushing a working branch, the default is to hand the Pull Request to the developer instead of opening or merging it automatically. Claude must:
 
 1. Show the PR creation URL (from the `git push` output, or the equivalent compare/PR URL for the host).
