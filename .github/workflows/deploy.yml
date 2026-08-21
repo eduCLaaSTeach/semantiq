@@ -1,12 +1,12 @@
-name: Deploy DEV to cPanel (SSH)
+name: Deploy to cPanel (SSH)
 
 on:
   push:
-    branches: DEV
+    branches: main
   workflow_dispatch:
 
 concurrency:
-  group: cpanel-deploy-dev
+  group: cpanel-deploy
   cancel-in-progress: false
 
 # The pipeline only reads the repository. Narrow the ambient GITHUB_TOKEN scope
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     # Binding the job to a GitHub environment is what makes environment-scoped
-    # secrets and a DEV-only deployment branch policy possible. Both are configured
+    # secrets and a main-only deployment branch policy possible. Both are configured
     # in the repository settings, not here; see PROJECT-CONTEXT.md.
     environment: development
 
