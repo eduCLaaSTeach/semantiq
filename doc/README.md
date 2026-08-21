@@ -67,19 +67,20 @@ per release.
 | Provisioning | Both create and attach; attach built first |
 | Conversational runtime | Fabric Data Agent, surfaced through Copilot Studio |
 | Stack | Laravel 13, PHP 8.3+, React 19 with TypeScript, MySQL 8 |
-| Host | GoDaddy server, AlmaLinux 9.8 |
+| Host | GoDaddy server, AlmaLinux 9.8, deployed to cPanel over SSH by GitHub Actions on push to `DEV` (verified) |
 | Personas | Data Engineer, Business User, Administrator |
 
 ## Outstanding items
 
-1. **Hosting profile** — VPS/dedicated with root, or shared cPanel without it. See
-   00-Solution-Architecture section 9.2. The design works either way; only the runbook
-   changes.
-2. **Outbound egress test** to the Microsoft endpoints listed in 00 section 9.1, on the real
-   host. The highest-risk unknown in the plan.
-3. **Brand asset pack** — the approved per-theme wordmark, C2S short mark and favicons, plus
-   the location they are installed to. The sidebar brand block and the sign-in screen cannot
-   be signed off without them.
+1. ~~Hosting profile~~ — **resolved by reading `.github/workflows/deploy.yml`: cPanel over
+   SSH, rsync from GitHub Actions, deploying on every push to `DEV`.** Two gaps follow from
+   it, both in 00 section 9.2: no queue worker or scheduler cron, and no post-deploy release
+   steps.
+2. **Outbound egress test** to the Microsoft endpoints listed in 00 section 9.1, **from the
+   cPanel host**. Still the highest-risk unknown in the plan.
+3. ~~Brand asset pack~~ — **resolved: present on `DEV`** at
+   `.claude/skills/ui-ux-design/assets/`. Still to confirm: which copy is authoritative, and
+   the `<BRAND_ASSETS_PATH>` install location.
 4. **Confirmation** of the navigation tree (04 section 4) and the role labels (04 section 5).
 5. **Entra app registration model** — one multi-tenant registration, or one per customer.
 6. **Archetype decision** for the conversational surface (04 section 7, conflict 1).

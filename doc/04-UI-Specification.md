@@ -26,13 +26,13 @@ These are the only values that vary per application. They must be confirmed, not
 | Application name (top bar) | **`CLaaS2SaaS SemantIQ`** — confirmed by the user in this engagement |
 | Browser title-bar name | **To confirm.** Recommended: `SemantIQ` |
 | Sidebar navigation tree | Specified in section 4, **for confirmation** |
-| Brand asset pack and its installed location | **Outstanding — please supply.** The approved per-theme wide wordmark, the C2S short mark and the favicons are required. Until they arrive, mockups carry a clearly marked placeholder and the gap is flagged in delivery |
+| Brand asset pack and its installed location | **Located, verified on branch `DEV`:** `.claude/skills/ui-ux-design/assets/` holds `logo-full-light.png`, `logo-full-dark.png`, `logo-short-light.png`, `logo-short-dark.png`, `favicon-light.ico`, `favicon-dark.ico`. A second copy exists at `developer-handbook/layout-template/assets/images/`. **Still to confirm:** which of the two is authoritative, and the `<BRAND_ASSETS_PATH>` the application installs them to — `.claude/rules/ui-ux-quality.md` requires that path to be asked for, never chosen |
 | Role labels | Specified in section 5, **for confirmation** |
 | Entity names | Project, Blueprint, Step, Environment, Source, Connection, Lakehouse, Pipeline, Transformation, Semantic Model, Measure, Data Agent, Conversational App, Question, Definition |
 | UI technology stack | React 19 with TypeScript, server-rendered page props, mobile-first CSS — confirmed by the user |
 
-**One screen cannot be finalised without the asset pack:** the sidebar brand block and the
-authentication screen both display identity assets directly.
+The sidebar brand block and the sign-in screen display these assets directly, so both are
+unblocked once the authoritative copy and the install path are confirmed.
 
 ## 3. Common standards, cited not restated
 
@@ -416,9 +416,9 @@ status, validation, sort state or filter state rests on colour alone anywhere.
 **Branding.** The approved palette, type, shape, spacing and elevation are applied unmodified
 in both themes, with no per-screen colour or font anywhere in this document. The application
 name was confirmed by the user; the navigation tree and role labels are specified here for
-the technical lead's confirmation. **The brand asset pack and its installed location remain
-outstanding and are required** — the sidebar brand block and the sign-in screen both display
-identity assets directly, and no substitute has been chosen for them.
+the technical lead's confirmation. **The brand asset pack has been located on `DEV`** (see
+section 2); the authoritative copy and the install path remain to be confirmed, and no
+substitute has been chosen for either.
 
 **Authorized deviations.** None. Two conflicts were named in section 7 and resolved into
 compliant shapes rather than taken as exceptions.
