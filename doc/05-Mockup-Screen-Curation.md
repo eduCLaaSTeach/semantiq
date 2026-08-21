@@ -45,8 +45,11 @@ full in 04-UI-Specification and are cited rather than repeated.
 
 ## 3. Interactive mockup
 
-**File:** `doc/mockups/semantiq-shell-mockup.html` — self-contained, no external dependencies
-beyond the approved Google Fonts import.
+**Files**, both self-contained with no external dependency beyond the approved Google Fonts import:
+
+- `doc/mockups/semantiq-shell-mockup.html` — the authenticated shell and four screens.
+- `doc/mockups/semantiq-signin-mockup.html` — the Auth screen, with the **real approved brand assets
+  embedded as data URIs**, both themes, and all six message states switchable.
 
 **What it renders:**
 
