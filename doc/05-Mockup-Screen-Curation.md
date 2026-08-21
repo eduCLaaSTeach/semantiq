@@ -14,9 +14,11 @@ components each screen uses, and why** — it does not propose a style, a palett
 layout. The accompanying HTML mockup is built as a real instance of the approved design
 system in both themes, not as a placeholder theme to be re-skinned.
 
-**Outstanding asset:** the approved per-theme wordmark, the C2S short mark and the favicons.
-The mockup carries a clearly marked placeholder in the sidebar brand block and flags it in
-the file. Please supply the asset pack and its installed location.
+**Asset status:** the approved per-theme wordmark, short mark and favicons are present on
+branch `DEV` at `.claude/skills/ui-ux-design/assets/` (verified). The mockup still renders a
+marked text placeholder in the brand block, because the authoritative copy and the
+`<BRAND_ASSETS_PATH>` install location are not yet confirmed and `ui-ux-quality.md` requires
+that path to be asked for rather than chosen. Confirm both and the placeholder is replaced.
 
 ## 2. Curated screens
 
@@ -63,9 +65,10 @@ beyond the approved Google Fonts import.
   the error state are all rendered and switchable, so reviewers can see them.
 - One inline SVG icon set in the approved style throughout.
 
-**Known placeholder:** the brand assets. The mockup carries a marked placeholder in the
-brand block and an HTML comment naming the missing asset. **Impact:** the sidebar brand block
-and the sign-in screen cannot be signed off visually until the approved asset pack arrives.
+**Known placeholder:** the brand mark. The assets exist on `DEV` (see section 1); the mockup
+still shows a marked text placeholder and an HTML comment, pending confirmation of the
+authoritative copy and the install path. **Impact:** the sidebar brand block and the sign-in
+screen cannot be signed off visually until those two are confirmed.
 
 ## 4. Final reporting
 
@@ -120,8 +123,8 @@ business tier genuinely leads.
 **Branding.** The approved palette, type, shape, spacing and elevation applied unmodified in
 both themes, with no per-screen colour or font anywhere in this curation. Application name
 confirmed by the user; navigation tree and role labels specified for confirmation.
-**Missing asset flagged:** the approved brand asset pack and its installed location, with its
-impact stated in section 3.
+**Asset status flagged:** the approved brand asset pack is present on `DEV`; its authoritative
+copy and install location are unconfirmed, with the impact stated in section 3.
 
 **Authorized deviations.** None. One archetype conflict was named openly and resolved into a
 compliant shape rather than taken as an exception, and it is referred back to the technical

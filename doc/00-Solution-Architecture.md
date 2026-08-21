@@ -216,7 +216,14 @@ Cluster grants follow the default and are narrowed, never widened.
 
 ## 9. Deployment feasibility on the confirmed target
 
-**Answer: yes, with one qualification you should settle before Phase 0.**
+**Answer: yes — and the hosting mechanism is already established in this repository.**
+
+**Verified from the repository, not assumed:** `.github/workflows/deploy.yml` on `DEV`
+deploys to **cPanel over SSH** on every push to `DEV`, using `rsync -az --delete` from a
+GitHub Actions runner, with `composer install --no-dev` and `npm run build` performed in CI
+(PHP 8.5, Node 24) and `node_modules` removed before transfer. `.env` and `storage/` are
+excluded from the sync and remain server-managed; the job is bound to the `development`
+GitHub environment with `permissions: contents: read`. This settles the question below.
 
 AlmaLinux 9.8, MySQL 8.0.46, PHP 8.4, Laravel 13 and React 19 are a sound stack for this
 application. The question is not the OS — it is **whether the account gives root or
@@ -251,8 +258,22 @@ running, backing off to 15s when idle), and every unit of work is a small, re-qu
 job. If you later move to Profile A or to Azure, nothing has to be redesigned — Redis and
 Reverb become optimisations, not rescues.
 
-**Please confirm which profile the GoDaddy account is**, since it changes the deployment
-runbook (systemd vs cron) but nothing above it.
+**Profile B is confirmed** by the existing pipeline: deployment is cPanel over SSH with
+rsync, which is a managed-hosting shape, and the workflow provisions no long-running
+process. Nothing above the deployment layer changes as a result — which is the point of
+having designed for it.
+
+**Two gaps in the current pipeline, both verified by reading it:**
+
+1. **No queue worker and no scheduler.** The workflow syncs files and fixes `storage/`
+   permissions, and stops there. SemantIQ needs two cPanel cron entries — one running
+   `php artisan queue:work --stop-when-empty --max-time=55` each minute, one running
+   `php artisan schedule:run` each minute. Without them no Fabric operation ever executes,
+   because every operation is queued by design. These are cPanel-side actions.
+2. **No post-deploy release steps.** The workflow does not run `php artisan migrate --force`,
+   `config:cache`, `route:cache` or `view:cache` after the sync. Add them as a final SSH step
+   before the first release — noting that a migration is a separate action requiring
+   explicit approval under the project's own deployment rule.
 
 ### 9.3 Known constraints to design around
 
@@ -282,7 +303,7 @@ not as an emergency.
 
 | Phase | Outcome | Exit criteria |
 |---|---|---|
-| **0** Foundation | Laravel 13 + Inertia + React 19 skeleton, design system implemented, Entra sign-in, Fabric client, LRO poller, CI, deployment runbook | A real Fabric workspace is listed in the UI from a real customer tenant, on the real host |
+| **0** Foundation | Laravel + Inertia + React skeleton, design system implemented, Entra sign-in, Fabric client, LRO poller, the two cPanel cron entries, post-deploy release steps, CI | A real Fabric workspace is listed in the UI from a real customer tenant, on the real host. **Note:** the repository has no `composer.json` or `package.json` yet, so the `DEV` deploy workflow currently fails at `composer validate` — Phase 0 must land the scaffolding for the pipeline to go green |
 | **1** Blueprint engine | Step catalogue (80), stage/run state machine, tier A/B/C execution, verification probes, audit trail, polling progress UI | A blueprint runs end to end against a dev tenant with mixed A/B/C steps |
 | **2** Readiness and environments | Clusters 1-2: preflight, workspace lifecycle, capacity, DEV/TEST/PROD | A customer can go from empty tenant to three assigned workspaces |
 | **3** Data spine | Clusters 3-7: sources, connections, lakehouse, medallion, ingestion, transformation, quality, dimensional model | Bronze -> Silver -> Gold running on a schedule with quality gates |
@@ -293,10 +314,13 @@ not as an emergency.
 
 ## 11. Open items for the technical lead
 
-1. Hosting profile A or B (section 9.2), and confirmation of outbound egress to the
-   Microsoft endpoints listed in 9.1.
-2. Application name string for the top bar and browser title, and the approved brand
-   asset pack plus its installed location.
+1. ~~Hosting profile A or B~~ — **resolved: Profile B, cPanel over SSH** (section 9.2).
+   Outbound egress to the Microsoft endpoints in 9.1 **still needs testing from the cPanel
+   host**, and remains the highest-risk unknown in the plan.
+2. ~~The approved brand asset pack~~ — **resolved: present on `DEV`** at
+   `.claude/skills/ui-ux-design/assets/`. Still needed: which copy is authoritative (a second
+   set exists under `developer-handbook/layout-template/assets/images/`) and the
+   `<BRAND_ASSETS_PATH>` the application installs them to.
 3. Confirmation of the five role labels in section 7.
 4. Whether a single Entra app registration is used for all customer tenants
    (multi-tenant) or one per customer.
