@@ -1,0 +1,78 @@
+# Automated checks on every pull request, and on main after a merge.
+#
+# Separate from deploy.yml on purpose. That workflow installs with --no-dev,
+# which strips PHPUnit and Pint out of the vendor directory, so it could not run
+# these checks even if a step were added to it. It also fires on push to main,
+# which is the same push that deploys, so a failure there is discovered after
+# the deployment has already started.
+#
+# This workflow is the gate before that point. It never touches the server and
+# holds no deployment secret.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: main
+
+# Read-only. Nothing here writes to the repository or reaches the server.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Pint and PHPUnit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          # SQLite backs the test database; phpunit.xml points at :memory:.
+          extensions: mbstring, pdo_sqlite, sqlite3
+          coverage: none
+
+      # With dev dependencies, unlike the deploy workflow. Pint and PHPUnit
+      # both live there.
+      - name: Install PHP dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # Nine feature tests render Blade views containing @vite, which reads
+      # public/build/manifest.json. That directory is gitignored, so it exists
+      # on a developer machine that has built once and never on a clean runner.
+      # Without this step those tests fail with a 500 that looks like an
+      # application bug rather than a missing build.
+      - name: Build frontend assets
+        run: npm run build
+
+      # The suite needs an application key for session and cookie encryption,
+      # and .env is not in the repository. A fresh throwaway key is generated on
+      # the runner each time rather than a fixed one being committed, so nothing
+      # that looks like a credential ever enters source control.
+      - name: Prepare the test environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --no-interaction
+
+      - name: Check formatting
+        run: vendor/bin/pint --test
+
+      - name: Run tests
+        run: php artisan test
