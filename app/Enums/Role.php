@@ -33,16 +33,21 @@ enum Role: string
     }
 
     /**
-     * The label shown to a person, per the template's ROLES block.
+     * The label shown to a person.
+     *
+     * These are SemantIQ's own labels, confirmed against doc/06-App-Definition.md
+     * section 3, not the template's generic baseline names. The backing tier
+     * codes are what authorisation compares, so relabelling is safe and never
+     * changes who can reach what.
      */
     public function label(): string
     {
         return match ($this) {
-            self::SystemAdmin => 'System Administrator',
-            self::Admin => 'Administrator',
-            self::Team => 'Collaborator',
-            self::SelfService => 'Contributor',
-            self::Viewer => 'Viewer',
+            self::SystemAdmin => 'Platform Administrator',
+            self::Admin => 'Tenant Administrator',
+            self::Team => 'Lead Data Engineer',
+            self::SelfService => 'Data Engineer',
+            self::Viewer => 'Business User',
         };
     }
 
