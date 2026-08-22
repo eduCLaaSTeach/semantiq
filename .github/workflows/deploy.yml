@@ -131,6 +131,7 @@ jobs:
             --human-readable \
             --itemize-changes \
             -e "ssh -i ~/.ssh/cpanel_deploy_key -p $CPANEL_PORT -o IdentitiesOnly=yes -o BatchMode=yes" \
+            --exclude ".well-known/" \
             --exclude ".git/" \
             --exclude ".github/" \
             --exclude "deployment/" \

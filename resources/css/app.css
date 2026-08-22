@@ -1,0 +1,629 @@
+/* ---------------------------------------------------------------------------
+ * CLaaS2SaaS SemantIQ - design system
+ *
+ * Token values come verbatim from doc/design-system/ui-and-ux-layout-template-shared.md
+ * (section 4, Design System And Tokens) and the button contract from section 8.
+ * Token names adapt to this stack; token VALUES never change, and no component
+ * in this application may hardcode a hex.
+ *
+ * Theme resolution has three states, matching the approved switcher:
+ *   - no data-theme attribute  -> System: follow prefers-color-scheme
+ *   - data-theme="light"       -> Light, regardless of the OS
+ *   - data-theme="dark"        -> Dark, regardless of the OS
+ * ------------------------------------------------------------------------- */
+
+/* ===========================================================================
+ * 1 · Tokens - light theme (the base definition; every token is defined here)
+ * ======================================================================== */
+
+:root {
+    color-scheme: light;
+
+    /* -- Brand palette (raw hues; only ever used as solid fills or to mix) -- */
+    --brand-midnight-blue: #193E6B;
+    --brand-green-gold: #B3A125;
+    --brand-cadmium-violet: #7F3F98;
+    --brand-jelly-bean-blue: #448E9D;
+    --brand-avocado-green: #5F8025;
+    --brand-sunray: #E9AC53;
+    --brand-violet-red: #991547;
+    --brand-platinum-beige: #EEE7E0;
+    --brand-white: #FFFFFF;
+
+    /* -- Semantic roles ---------------------------------------------------- */
+    --semantic-success: var(--brand-avocado-green);
+    --semantic-warning: var(--brand-sunray);
+    --semantic-danger: var(--brand-violet-red);
+    --semantic-info: var(--brand-jelly-bean-blue);
+
+    /* -- Chrome (sidebar plus top bar share ONE color) --------------------- */
+    --chrome: #FFFFFF;
+    --chrome-text: #223349;
+    --chrome-muted: #566779;
+    --chrome-hover: rgba(25, 62, 107, 0.07);
+    --chrome-edge: rgba(15, 25, 45, 0.14);
+
+    /* -- Canvas and surfaces ----------------------------------------------- */
+    --canvas: #E8DFD0;
+    --card: #FFFFFF;
+    --card-border: #E8E2D8;
+    --card-border-strong: #D5CEC1;
+    --surface-hover: rgba(25, 62, 107, 0.06);
+    --divider: #E4DCCD;
+
+    /* -- Text -------------------------------------------------------------- */
+    --text: #1E2E42;
+    --text-muted: #4D5E75;
+
+    /* -- Interactive accent ------------------------------------------------ */
+    --accent: #193E6B;
+    --accent-hover: #142F52;
+    --accent-contrast: #FFFFFF;
+
+    /* -- Navigation active state (gold treatment) -------------------------- */
+    --nav-active-bg: rgba(179, 161, 37, 0.16);
+    --nav-active-fg: #5C5010;
+    --nav-active-bar: #B3A125;
+
+    /* -- Assorted chrome pieces -------------------------------------------- */
+    --rail-filter-bg: #EFE8DB;
+    --soon-pill-bg: #EFEAE0;
+    --soon-pill-fg: #514A3B;
+    --alert-dot: #991547;
+    --tooltip-surface: #202C3E;
+    --tooltip-fg: #FFFFFF;
+    --selection: rgba(179, 161, 37, 0.35);
+
+    /* -- Status badges (theme-aware readable pairs) ------------------------ */
+    --badge-neutral-bg: #F0EBE1;
+    --badge-neutral-fg: #514A3B;
+    --badge-success-bg: color-mix(in srgb, var(--brand-avocado-green) 16%, var(--card));
+    --badge-success-fg: #3A4E13;
+    --badge-warning-bg: color-mix(in srgb, var(--brand-sunray) 26%, var(--card));
+    --badge-warning-fg: #7A500C;
+    --badge-danger-bg: color-mix(in srgb, var(--brand-violet-red) 14%, var(--card));
+    --badge-danger-fg: #85113E;
+    --badge-info-bg: color-mix(in srgb, var(--brand-jelly-bean-blue) 18%, var(--card));
+    --badge-info-fg: #1E545F;
+    --badge-violet-bg: color-mix(in srgb, var(--brand-cadmium-violet) 15%, var(--card));
+    --badge-violet-fg: #5B2B6E;
+
+    /* -- Elevation --------------------------------------------------------- */
+    --elevation-md: 0 2px 8px rgba(25, 40, 65, 0.08);
+    --elevation-lg: 0 8px 24px rgba(15, 25, 45, 0.14);
+
+    /* ---- Theme-independent tokens (identical in both themes) ------------- */
+
+    /* Type families */
+    --font-heading: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+    /* Type scale - the only sizes that exist */
+    --text-display: 24px;
+    --text-h1: 20px;
+    --text-h2: 18px;
+    --text-h3: 16px;
+    --text-h4: 15px;
+    --text-lead: 14px;
+    --text-body: 13px;
+    --text-small: 12px;
+    --text-xs: 11px;
+    --text-micro: 10px;
+
+    /* Spacing scale - 4px base */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 16px;
+    --space-4: 24px;
+    --space-5: 32px;
+    --space-6: 48px;
+    --space-7: 64px;
+
+    /* Radius */
+    --radius-card: 12px;
+    --radius-control: 8px;
+    --radius-tab: 10px;
+    --radius-modal: 14px;
+    --radius-pill: 999px;
+
+    /* Shell dimensions */
+    --topbar-height: 52px;
+    --rail-width: 240px;
+    --rail-width-collapsed: 56px;
+    --control-height: 32px;
+    --control-height-sm: 27px;
+    --control-height-lg: 48px;
+    --topbar-icon-size: 34px;
+    --avatar-size: 30px;
+    --touch-target-min: 44px;
+
+    /* Motion */
+    --rail-transition: 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===========================================================================
+ * 2 · Tokens - dark theme
+ *
+ * Only the tokens that differ are redefined. The same block is repeated for the
+ * System state (prefers-color-scheme, suppressed by an explicit light choice)
+ * and for the explicit dark choice, so the switcher wins in both directions.
+ * ======================================================================== */
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+        color-scheme: dark;
+
+        --chrome: #080F1A;
+        --chrome-text: #E4EBF4;
+        --chrome-muted: #9AABC0;
+        --chrome-hover: rgba(255, 255, 255, 0.09);
+        --chrome-edge: rgba(0, 0, 0, 0.50);
+
+        --canvas: #1A2E46;
+        --card: #253E5D;
+        --card-border: rgba(255, 255, 255, 0.10);
+        --card-border-strong: rgba(255, 255, 255, 0.18);
+        --surface-hover: rgba(255, 255, 255, 0.07);
+        --divider: rgba(255, 255, 255, 0.13);
+
+        --text: #E9EFF6;
+        --text-muted: #A3B2C5;
+
+        --accent: #7FADE1;
+        --accent-hover: #93BBE8;
+        --accent-contrast: #0F1C2E;
+
+        --nav-active-bg: rgba(201, 182, 47, 0.22);
+        --nav-active-fg: #EBDD7E;
+        --nav-active-bar: #C9B62F;
+
+        --rail-filter-bg: rgba(255, 255, 255, 0.08);
+        --soon-pill-bg: rgba(255, 255, 255, 0.16);
+        --soon-pill-fg: #DCE4F0;
+        --alert-dot: #F3AFC9;
+        --tooltip-surface: #2A3A52;
+
+        --badge-neutral-bg: rgba(255, 255, 255, 0.10);
+        --badge-neutral-fg: rgba(255, 255, 255, 0.80);
+        --badge-success-bg: color-mix(in srgb, var(--brand-avocado-green) 28%, var(--card));
+        --badge-success-fg: #CBE79B;
+        --badge-warning-bg: color-mix(in srgb, var(--brand-sunray) 30%, var(--card));
+        --badge-warning-fg: #F8DFAC;
+        --badge-danger-bg: color-mix(in srgb, var(--brand-violet-red) 32%, var(--card));
+        --badge-danger-fg: #F5B8CF;
+        --badge-info-bg: color-mix(in srgb, var(--brand-jelly-bean-blue) 30%, var(--card));
+        --badge-info-fg: #B4E3EC;
+        --badge-violet-bg: color-mix(in srgb, var(--brand-cadmium-violet) 30%, var(--card));
+        --badge-violet-fg: #DFBAEC;
+
+        --elevation-md: 0 3px 10px rgba(0, 0, 0, 0.30);
+        --elevation-lg: 0 10px 28px rgba(0, 0, 0, 0.45);
+    }
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+
+    --chrome: #080F1A;
+    --chrome-text: #E4EBF4;
+    --chrome-muted: #9AABC0;
+    --chrome-hover: rgba(255, 255, 255, 0.09);
+    --chrome-edge: rgba(0, 0, 0, 0.50);
+
+    --canvas: #1A2E46;
+    --card: #253E5D;
+    --card-border: rgba(255, 255, 255, 0.10);
+    --card-border-strong: rgba(255, 255, 255, 0.18);
+    --surface-hover: rgba(255, 255, 255, 0.07);
+    --divider: rgba(255, 255, 255, 0.13);
+
+    --text: #E9EFF6;
+    --text-muted: #A3B2C5;
+
+    --accent: #7FADE1;
+    --accent-hover: #93BBE8;
+    --accent-contrast: #0F1C2E;
+
+    --nav-active-bg: rgba(201, 182, 47, 0.22);
+    --nav-active-fg: #EBDD7E;
+    --nav-active-bar: #C9B62F;
+
+    --rail-filter-bg: rgba(255, 255, 255, 0.08);
+    --soon-pill-bg: rgba(255, 255, 255, 0.16);
+    --soon-pill-fg: #DCE4F0;
+    --alert-dot: #F3AFC9;
+    --tooltip-surface: #2A3A52;
+
+    --badge-neutral-bg: rgba(255, 255, 255, 0.10);
+    --badge-neutral-fg: rgba(255, 255, 255, 0.80);
+    --badge-success-bg: color-mix(in srgb, var(--brand-avocado-green) 28%, var(--card));
+    --badge-success-fg: #CBE79B;
+    --badge-warning-bg: color-mix(in srgb, var(--brand-sunray) 30%, var(--card));
+    --badge-warning-fg: #F8DFAC;
+    --badge-danger-bg: color-mix(in srgb, var(--brand-violet-red) 32%, var(--card));
+    --badge-danger-fg: #F5B8CF;
+    --badge-info-bg: color-mix(in srgb, var(--brand-jelly-bean-blue) 30%, var(--card));
+    --badge-info-fg: #B4E3EC;
+    --badge-violet-bg: color-mix(in srgb, var(--brand-cadmium-violet) 30%, var(--card));
+    --badge-violet-fg: #DFBAEC;
+
+    --elevation-md: 0 3px 10px rgba(0, 0, 0, 0.30);
+    --elevation-lg: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* ===========================================================================
+ * 3 · Base
+ * ======================================================================== */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    font-weight: 400;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+    background: var(--selection);
+}
+
+h1,
+h2,
+h3,
+h4 {
+    margin: 0;
+    font-family: var(--font-heading);
+    color: var(--text);
+    line-height: 1.25;
+}
+
+h1 { font-size: var(--text-h1); font-weight: 700; }
+h2 { font-size: var(--text-h2); font-weight: 700; }
+h3 { font-size: var(--text-h3); font-weight: 600; }
+h4 { font-size: var(--text-h4); font-weight: 600; }
+
+p {
+    margin: 0;
+}
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+}
+
+/* One visible focus indicator on every interactive element. Never removed. */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Utility type steps, so a component never restates a size. */
+.text-display { font-family: var(--font-heading); font-size: var(--text-display); font-weight: 700; }
+.text-lead    { font-size: var(--text-lead); }
+.text-small   { font-size: var(--text-small); font-weight: 500; }
+.text-xs      { font-size: var(--text-xs); }
+.text-micro   { font-size: var(--text-micro); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.text-muted   { color: var(--text-muted); }
+
+/* ===========================================================================
+ * 4 · Buttons
+ *
+ * Exactly two looks exist: the solid variant of the action's meaning, and the
+ * one neutral secondary look for every other labeled action. The borderless
+ * (ghost) labeled button, the outlined labeled button, and Cadmium Violet as a
+ * button fill are retired and are never reintroduced under another name.
+ *
+ * Both looks share one geometry per size step; only the fill, the border, and
+ * the label color differ. A button's look never changes with its state.
+ * ======================================================================== */
+
+.btn {
+    /* Per-variant surface, resolved by the modifier classes below. */
+    --btn-bg: var(--card);
+    --btn-fg: var(--text);
+    --btn-border: var(--card-border-strong);
+    --btn-bg-hover: var(--surface-hover);
+
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    height: var(--control-height);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--btn-border);
+    border-radius: var(--radius-control);
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.btn:hover:not(:disabled):not([aria-busy='true']) {
+    background: var(--btn-bg-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--elevation-md);
+}
+
+.btn:active:not(:disabled):not([aria-busy='true']) {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* The neutral secondary look is the default above; this class states it. */
+.btn-secondary {
+    --btn-bg: var(--card);
+    --btn-fg: var(--text);
+    --btn-border: var(--card-border-strong);
+    --btn-bg-hover: color-mix(in srgb, var(--text) 6%, var(--card));
+}
+
+/*
+ * Danger is the only status a label carries. A destructive secondary action
+ * (a row's Delete that only opens the confirmation) keeps the identical neutral
+ * shell and takes the readable danger foreground on its icon and label only.
+ */
+.btn-secondary.is-danger {
+    --btn-fg: var(--badge-danger-fg);
+}
+
+/* -- The solid look, one per action group, colored by what the action does -- */
+
+.btn-solid {
+    border-color: transparent;
+}
+
+/*
+ * Primary follows the theme-aware interactive accent, which section 4 names as
+ * the token for primary buttons: Midnight Blue on white light chrome, and the
+ * lifted blue on dark, where Midnight Blue on a raised navy card is invisible.
+ */
+.btn-solid.btn-primary {
+    --btn-bg: var(--accent);
+    --btn-fg: var(--accent-contrast);
+    --btn-bg-hover: var(--accent-hover);
+}
+
+.btn-solid.btn-danger {
+    --btn-bg: #991547;
+    --btn-fg: #FFFFFF;
+    --btn-bg-hover: #7C1039;
+}
+
+.btn-solid.btn-warning {
+    --btn-bg: #E9AC53;
+    --btn-fg: #1E2E42;
+    --btn-bg-hover: #DB9A3A;
+}
+
+.btn-solid.btn-success {
+    --btn-bg: #5F8025;
+    --btn-fg: #FFFFFF;
+    --btn-bg-hover: #4E691E;
+}
+
+.btn-solid.btn-accent {
+    --btn-bg: #B3A125;
+    --btn-fg: #1E2E42;
+    --btn-bg-hover: #9C8C1F;
+}
+
+/* -- Sizes. Geometry only; the look is unchanged. -------------------------- */
+
+.btn-sm {
+    height: var(--control-height-sm);
+    padding: 0 var(--space-2);
+    font-size: var(--text-small);
+}
+
+.btn-lg {
+    height: var(--control-height-lg);
+    padding: 0 var(--space-4);
+    font-size: var(--text-lead);
+}
+
+/*
+ * Touch targets are at least 44x44px. On a coarse pointer the small size grows
+ * to that minimum rather than shrinking the label out.
+ */
+@media (pointer: coarse) {
+    .btn,
+    .btn-sm {
+        min-height: var(--touch-target-min);
+        min-width: var(--touch-target-min);
+    }
+}
+
+/*
+ * Loading swaps the label for a centered spinner at the same width and changes
+ * nothing else, so the button never jumps and never changes emphasis.
+ */
+.btn[aria-busy='true'] {
+    cursor: progress;
+    pointer-events: none;
+    /* Transparent text hides a bare label text node, which visibility on children cannot. */
+    color: transparent;
+}
+
+.btn[aria-busy='true']::after {
+    content: '';
+    position: absolute;
+    width: 1em;
+    height: 1em;
+    border: 2px solid var(--btn-fg);
+    border-right-color: transparent;
+    border-radius: var(--radius-pill);
+    animation: btn-spin 0.6s linear infinite;
+}
+
+@keyframes btn-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Icons render at 1em and are sized through font-size, never by scaling. */
+.btn .icon {
+    width: 1em;
+    height: 1em;
+    flex: none;
+}
+
+/* ===========================================================================
+ * 5 · Status badges
+ * ======================================================================== */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-small);
+    font-weight: 600;
+    line-height: 1.4;
+    background: var(--badge-neutral-bg);
+    color: var(--badge-neutral-fg);
+}
+
+.badge-success { background: var(--badge-success-bg); color: var(--badge-success-fg); }
+.badge-warning { background: var(--badge-warning-bg); color: var(--badge-warning-fg); }
+.badge-danger  { background: var(--badge-danger-bg);  color: var(--badge-danger-fg); }
+.badge-info    { background: var(--badge-info-bg);    color: var(--badge-info-fg); }
+.badge-violet  { background: var(--badge-violet-bg);  color: var(--badge-violet-fg); }
+
+/* ===========================================================================
+ * 6 · Cards
+ * ======================================================================== */
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-card);
+    /* Flat at rest: a resting card never carries a shadow. */
+    box-shadow: none;
+}
+
+/* ===========================================================================
+ * 7 · Motion preference
+ * ======================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ===========================================================================
+ * 8 · Text inputs
+ *
+ * A button and the field beside it share one height and one border token, so a
+ * control never sits shorter than the button next to it.
+ * ======================================================================== */
+
+.input {
+    height: var(--control-height);
+    min-width: 0;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--card-border-strong);
+    border-radius: var(--radius-control);
+    background: var(--card);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input::placeholder {
+    color: var(--text-muted);
+}
+
+.input:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* A field and the button beside it, sharing one baseline. */
+.field-row {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.field-row .input {
+    flex: 1;
+}
+
+/* ===========================================================================
+ * 9 · Layout helpers
+ * ======================================================================== */
+
+.page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    padding: var(--space-4);
+}
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.stack-tight {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.divide-top {
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--card-border);
+}
