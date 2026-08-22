@@ -317,10 +317,10 @@ not as an emergency.
 1. ~~Hosting profile A or B~~ — **resolved: Profile B, cPanel over SSH** (section 9.2).
    Outbound egress to the Microsoft endpoints in 9.1 **still needs testing from the cPanel
    host**, and remains the highest-risk unknown in the plan.
-2. ~~The approved brand asset pack~~ — **resolved: present on `DEV`** at
-   `.claude/skills/ui-ux-design/assets/`. Still needed: which copy is authoritative (a second
-   set exists under `developer-handbook/layout-template/assets/images/`) and the
-   `<BRAND_ASSETS_PATH>` the application installs them to.
+2. ~~The approved brand asset pack~~ — **resolved.** The assets now live at
+   `doc/design-system/assets/`, and the application vendors its own copies at
+   `resources/images/brand/` (Vite-managed, fingerprinted) and `public/brand/` (favicons,
+   stable URL), so the app no longer depends on a documentation path.
 3. Confirmation of the five role labels in section 7.
 4. Whether a single Entra app registration is used for all customer tenants
    (multi-tenant) or one per customer.

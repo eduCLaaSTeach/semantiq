@@ -15,7 +15,7 @@ layout. The accompanying HTML mockup is built as a real instance of the approved
 system in both themes, not as a placeholder theme to be re-skinned.
 
 **Asset status:** the approved per-theme wordmark, short mark and favicons are present on
-branch `DEV` at `.claude/skills/ui-ux-design/assets/` (verified). The mockup still renders a
+`doc/design-system/assets/` (verified). The mockup still renders a
 marked text placeholder in the brand block, because the authoritative copy and the
 `<BRAND_ASSETS_PATH>` install location are not yet confirmed and `ui-ux-quality.md` requires
 that path to be asked for rather than chosen. Confirm both and the placeholder is replaced.

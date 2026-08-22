@@ -79,9 +79,8 @@ per release.
    steps.
 2. **Outbound egress test** to the Microsoft endpoints listed in 00 section 9.1, **from the
    cPanel host**. Still the highest-risk unknown in the plan.
-3. ~~Brand asset pack~~ — **resolved: present on `DEV`** at
-   `.claude/skills/ui-ux-design/assets/`. Still to confirm: which copy is authoritative, and
-   the `<BRAND_ASSETS_PATH>` install location.
+3. ~~Brand asset pack~~ — **resolved.** Source of record is `doc/design-system/assets/`; the
+   application vendors its own copies under `resources/images/brand/` and `public/brand/`.
 4. **Confirmation** of the navigation tree (04 section 4) and the role labels (04 section 5).
 5. **Entra app registration model** — one multi-tenant registration, or one per customer.
 6. **Archetype decision** for the conversational surface (04 section 7, conflict 1).

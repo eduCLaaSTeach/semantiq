@@ -26,7 +26,7 @@ These are the only values that vary per application. They must be confirmed, not
 | Application name (top bar) | **`CLaaS2SaaS SemantIQ`** — confirmed by the user in this engagement |
 | Browser title-bar name | **To confirm.** Recommended: `SemantIQ` |
 | Sidebar navigation tree | Specified in section 4, **for confirmation** |
-| Brand asset pack and its installed location | **Located, verified on branch `DEV`:** `.claude/skills/ui-ux-design/assets/` holds `logo-full-light.png`, `logo-full-dark.png`, `logo-short-light.png`, `logo-short-dark.png`, `favicon-light.ico`, `favicon-dark.ico`. A second copy exists at `developer-handbook/layout-template/assets/images/`. **Still to confirm:** which of the two is authoritative, and the `<BRAND_ASSETS_PATH>` the application installs them to — `.claude/rules/ui-ux-quality.md` requires that path to be asked for, never chosen |
+| Brand asset pack and its installed location | **Resolved.** Source of record is `doc/design-system/assets/`. The application vendors its own copies: wordmarks at `resources/images/brand/` (imported through Vite, fingerprinted at build) and favicons at `public/brand/` (stable URL, since a favicon is not a bundled module). The app therefore has no runtime dependency on a documentation path |
 | Role labels | Specified in section 5, **for confirmation** |
 | Entity names | Project, Blueprint, Step, Environment, Source, Connection, Lakehouse, Pipeline, Transformation, Semantic Model, Measure, Data Agent, Conversational App, Question, Definition |
 | UI technology stack | React 19 with TypeScript, server-rendered page props, mobile-first CSS — confirmed by the user |
