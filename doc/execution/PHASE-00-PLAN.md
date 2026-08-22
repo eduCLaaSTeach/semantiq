@@ -1,7 +1,7 @@
 # Phase 00 Implementation Plan
 
 **Reference:** P00-FND, `doc/phases/PHASE-00-FOUNDATION.md`
-**Status: PENDING USER APPROVAL. No material implementation has begun.**
+**Status: DECISIONS RECORDED, AWAITING EXPLICIT PLAN APPROVAL. No material implementation has begun.**
 **Completion phrase (later, not now):** `CONFIRM PHASE 00 COMPLETE`
 
 ---
@@ -229,34 +229,50 @@ Rendered in a browser in both themes, as with previous work, rather than asserte
 
 ## Assumptions and blockers
 
-### Decisions required before I start
+### Decisions, as answered on 22 August 2026
 
-**D1. Navigation order - recommended, not blocked.**
-`doc/CONFLICT_RESOLUTION_v1.3.md` already rules that the design system wins on layout and the SRS on feature behaviour. That settles it: the four fixed clusters stay, and the Workspace groups re-sequence into the SRS section 7.1 lifecycle order - Setup, Fabric, Data Sources, Data Foundation, Business Model, Governance, AI and Agents, Validation, Deploy, Monitor. I will proceed on this reading unless you say otherwise.
+**D1. Navigation order - SETTLED by doc/CONFLICT_RESOLUTION_v1.3.md.**
+The design system wins on layout, the SRS on feature behaviour. The four fixed clusters stay; the Workspace groups re-sequence into the SRS section 7.1 lifecycle order.
 
-**D2. Projects and Blueprints - blocked, needs your answer.**
-The shipped sidebar leads with a Projects group containing Blueprints. The SRS contains the word "blueprint" **zero times** and "project" twice, incidentally. The Blueprint engine comes from `doc/00`, which I wrote. The SRS models the same idea as `WorkflowRun` with `current_step`.
+**D2. Projects and Blueprints - ANSWERED: drop them, follow the SRS.**
+Remove the Projects group and Blueprints from `config/navigation.php`. Model the same idea as `WorkflowRun` with `workflow_type` and `current_step`, per SRS section 17. Mark the Blueprint engine in `doc/00` section 4.2 as superseded by the SRS, with a short note explaining why rather than deleting the section outright.
 
-*Recommendation:* drop Projects and Blueprints from the navigation, model `WorkflowRun` per the SRS, and record the Blueprint engine in `doc/00` as superseded. Every node under it is currently a disabled `Soon` placeholder, so nothing breaks.
+**D3. Six missing help topics - ANSWERED: draft them for review.**
+Author `HLP-ORG-001`, `HLP-AUD-001`, `HLP-MDL-001`, `HLP-SRC-001`, `HLP-SRC-003` and `HLP-VAL-001` against the SRS section 15.1 template, add all six to `HELP_TOPIC_INDEX.md`, and seed the two this phase needs. The index stops carrying dangling references.
 
-*Why I will not decide this myself:* it discards a design you may have valued, and it changes `doc/00`.
+**D4. Role labels - ANSWERED: realign to the SRS personas.**
 
-**D3. Six missing help topics - blocked.**
-`HLP-ORG-001` and `HLP-AUD-001` are required by this phase's screens but are absent from the index, along with `HLP-MDL-001`, `HLP-SRC-001`, `HLP-SRC-003`, `HLP-VAL-001`. Do these exist in a document I have not seen, or should I draft them for your review and add them to the index?
+The five tiers are cumulative authority levels; the SRS section 3 personas are functional roles. They do not map one to one, and pretending otherwise is what produced the current labels. Four map cleanly:
 
-**D4. Role labels - blocked.**
-Keep Platform Administrator, Tenant Administrator, Lead Data Engineer, Data Engineer, Business User; or realign to the SRS section 3 personas, where "Lead Data Engineer" matches nothing and the stewardship roles are Data Owner/Steward, Semantic Model Owner and AI/Agent Owner. Display labels only; tier codes do not change either way.
+| Tier | SRS persona | SRS responsibility that justifies the tier |
+|---|---|---|
+| `system_admin` | Semantiq Platform Admin | Manages Semantiq organisation configuration, users, integration state and support |
+| `admin` | Data Platform Admin | Creates and manages workspaces, roles, connections, Lakehouses, pipelines, deployment topology |
+| `team` | Data Owner / Steward | Registers sources, approves quality rules, business terms, classifications and lineage |
+| `self` | **OPEN - see below** | |
+| `self_view` | Business User | Asks governed business questions and consumes approved insights |
 
-**D5. Approved geographies - blocked, and I must not guess.**
-The `DataProtectionProfile` needs real values for approved storage and processing geographies. The standard's example says Singapore; I will not infer a customer's data residency from an example. What are the approved geographies?
+**The `self` tier has no SRS persona.** The remaining candidates, Semantic Model Owner and AI / Agent Owner, are both described as *approvers*, which is team authority or above, not "own records only". Customer Tenant Admin, Fabric Administrator and Azure Platform Admin are Microsoft-side roles, not SemantIQ application users. Semantiq Support / Operator is a vendor role that does not belong in a customer tier ladder.
 
-**D6. Retention defaults - blocked.**
-`CLAUDE.md` records seven years for operational data, audit and backups. The sovereignty standard's profile example says "90 days metadata" and "no indefinite retention by default". These can coexist across different classes, but the profile needs concrete defaults.
+Three defensible options, none of which I will pick unilaterally, since a label change touches every user row, role picker and permission screen:
 
-*Proposal:* audit and compliance events seven years; operational metadata 90 days; both policy-driven and overridable. Confirm or correct.
+1. **Contributor** - the layout template's own baseline name for that tier. Honest about the fact that the SRS has no persona there, at the cost of mixing vocabularies.
+2. **Semantic Model Owner** - uses an SRS persona, but overstates the tier: that persona approves model releases, which is team-level authority.
+3. **Data Engineer** - keeps one label from the current set. Not an SRS persona, but describes who actually works at that tier in this product.
 
-**D7. Draft storage - blocked before SC-002 only.**
-`doc/06` questions Q2a to Q2d are unanswered. SC-002 is a multi-step form with a Save Draft action in the SRS section 7.2 footer, so it needs them. Everything else in this phase can proceed without them.
+Tier codes do not change under any option. Nothing about who can reach what changes.
+
+**D5 and D6. Geographies and retention - ANSWERED: defer the values, build the mechanism.**
+
+Corrected analysis: these do not block Phase 00. Nothing is provisioned in this phase, so W7 needs the profile *schema* and the *server-side check*, not the geography *values*.
+
+- `DataProtectionProfile` ships with approved storage and processing geographies **unset**, and all three cross-geo flags **false**.
+- `VAL-SOV-GEO-001` returns `BLOCKED` for any production activation attempted while the geographies are unset. The absence of a value is a refusal, never a pass.
+- Retention defaults: audit and compliance events seven years, per the `CLAUDE.md` project baseline; operational metadata 90 days, per the standard's "no indefinite retention by default". Both policy-driven and overridable.
+- The values must be set before Phase 02 provisioning. Recorded as a Phase 02 precondition.
+
+**D7. Draft storage - STILL OPEN, blocks SC-002 only.**
+`doc/06` questions Q2a to Q2d remain unanswered. SC-002 is the only work item that needs them, and it is the last. I will ask again when W10 is reached rather than hold the phase.
 
 ### A process irregularity I need to record honestly
 
@@ -278,13 +294,13 @@ This is not a failure of the gate - the gate arrived afterwards - but the status
 ## Data protection and sovereignty
 
 - **Data classifications in scope:** Internal (organisation configuration, workflow state, audit metadata). No Confidential or Restricted customer business data enters the control plane in this phase.
-- **Approved storage geography:** `<PENDING D5>`
-- **Approved processing geography:** `<PENDING D5>`
+- **Approved storage geography:** Unset in this phase by decision D5. `VAL-SOV-GEO-001` blocks production activation while unset.
+- **Approved processing geography:** Unset in this phase by decision D5, under the same block.
 - **Cross-geo settings required:** No. All three flags default to false, per the standard.
 - **Network controls:** Not applicable this phase; no Fabric or Azure resource is provisioned. Evaluated from Phase 02.
 - **Encryption and CMK:** Profile field created and enforced from Phase 02. cPanel MySQL at-rest posture to be recorded in the sovereignty register, not assumed.
 - **Purview label, DLP:** Profile fields created; evaluated from Phase 03.
-- **Retention, deletion, logging:** `<PENDING D6>`. Production payload logging false by default. Credentials and tokens never logged.
+- **Retention, deletion, logging:** Audit and compliance seven years; operational metadata 90 days; both policy-driven (D6). Production payload logging false by default. Credentials and tokens never logged.
 
 ---
 
@@ -305,10 +321,13 @@ Each register is updated **in the same change** as the behaviour, not afterwards
 
 ## User approval
 
-**Status: Pending.**
+**Status: Pending explicit approval.**
 
-Nothing in this plan has been implemented. Reply with corrections, or approve to proceed.
+The blocking decisions were answered on 22 August 2026 and are recorded above. Nothing in this plan has been implemented.
 
-D2, D3, D4, D5 and D6 block the start of the work they touch. D1 I will proceed on as reasoned above. D7 blocks only SC-002.
+Two items remain before implementation starts:
+
+1. **Explicit plan approval.** The protocol treats it as its own gate, separate from answering the decisions, so it is not inferred here.
+2. **The `self` tier label**, the one part of D4 the SRS cannot settle.
 
 On approval I will set Phase 00 to `IN_PROGRESS` in `IMPLEMENTATION_STATUS.md`, implement only what is above, and produce `doc/execution/PHASE-00-VERIFICATION.md` with real evidence before asking for the completion phrase.
