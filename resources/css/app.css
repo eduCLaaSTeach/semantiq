@@ -627,3 +627,110 @@ a:hover {
     padding-top: var(--space-3);
     border-top: 1px solid var(--card-border);
 }
+
+/* ===========================================================================
+ * 10 · Notices
+ *
+ * The flash and error display used by the auth screens and, later, by the
+ * shell. Tinted by outcome through the theme-aware readable pairs, never with
+ * a raw semantic hex, which would be unreadable on one theme or the other.
+ * ======================================================================== */
+
+.notice {
+    padding: var(--space-3);
+    border-radius: var(--radius-control);
+    background: var(--badge-info-bg);
+    color: var(--badge-info-fg);
+}
+
+.notice-success { background: var(--badge-success-bg); color: var(--badge-success-fg); }
+.notice-warning { background: var(--badge-warning-bg); color: var(--badge-warning-fg); }
+.notice-danger  { background: var(--badge-danger-bg);  color: var(--badge-danger-fg); }
+.notice-info    { background: var(--badge-info-bg);    color: var(--badge-info-fg); }
+
+.notice-title {
+    font-family: var(--font-heading);
+    font-size: var(--text-h4);
+    font-weight: 600;
+}
+
+.notice-body {
+    margin-top: var(--space-1);
+    font-size: var(--text-small);
+}
+
+/* ===========================================================================
+ * 11 · Auth screens (archetype 5.7)
+ *
+ * A standalone centered card with no shell, sharing only the brand mark, the
+ * tokens, and the fonts.
+ * ======================================================================== */
+
+.auth {
+    width: 100%;
+    max-width: 420px;
+}
+
+.auth-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-5);
+}
+
+.auth-brand {
+    display: flex;
+    justify-content: center;
+    padding-bottom: var(--space-1);
+}
+
+/*
+ * The wordmark is never recoloured, plated, or re-typeset. Only which of the
+ * two supplied files is shown changes with the theme.
+ */
+.brand-mark {
+    height: 22px;
+    width: auto;
+}
+
+.brand-mark-dark { display: none; }
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .brand-mark-light { display: none; }
+    :root:not([data-theme='light']) .brand-mark-dark { display: block; }
+}
+
+:root[data-theme='dark'] .brand-mark-light { display: none; }
+:root[data-theme='dark'] .brand-mark-dark { display: block; }
+:root[data-theme='light'] .brand-mark-light { display: block; }
+:root[data-theme='light'] .brand-mark-dark { display: none; }
+
+.auth-intro {
+    text-align: center;
+}
+
+.auth-submit {
+    width: 100%;
+}
+
+/* Microsoft's mark keeps its own colours, so it is sized but never restyled. */
+.ms-mark {
+    font-size: 18px;
+}
+
+.auth-unconfigured,
+.auth-footer {
+    text-align: center;
+}
+
+.auth-footer {
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--card-border);
+}
+
+/* On a small screen the card gives its padding back to the content. */
+@media (max-width: 480px) {
+    .auth-card {
+        padding: var(--space-4) var(--space-3);
+    }
+}

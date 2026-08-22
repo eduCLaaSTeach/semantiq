@@ -208,6 +208,13 @@ jobs:
           SESSION_DRIVER=file
           CACHE_STORE=file
           QUEUE_CONNECTION=sync
+
+          MICROSOFT_TENANT_ID=
+          MICROSOFT_CLIENT_ID=
+          MICROSOFT_CLIENT_SECRET=
+          MICROSOFT_REDIRECT_URI=
+
+          MASTER_ADMIN_EMAILS=
           ENVFILE
             chmod 600 .env
           else

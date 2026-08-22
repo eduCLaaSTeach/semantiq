@@ -14,6 +14,15 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
+
+        /*
+         * Laravel's defaults point at routes named "login" and "home", neither of
+         * which exists here. Without these, the auth middleware throws a route-not-
+         * found error instead of redirecting, which turns every unauthenticated
+         * visit to a protected page into a 500.
+         */
+        $middleware->redirectGuestsTo(fn () => route('sign-in'));
+        $middleware->redirectUsersTo('/');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
