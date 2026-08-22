@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
 
+/**
+ * The application's temporary landing screen.
+ *
+ * It keeps the scaffold's two API probes as a deployment smoke test, but is
+ * built entirely from the approved design system in resources/css/app.css: no
+ * component-level colors, no inline stylesheet, and no hardcoded hex. It is
+ * replaced by the real shell and sign-in route as those land.
+ */
 export default function App() {
     const [query, setQuery] = useState("");
     const [getResult, setGetResult] = useState(null);
@@ -47,204 +55,127 @@ export default function App() {
     };
 
     return (
-        <div className="app">
-            <style>{css}</style>
+        <main className="page">
+            <div className="card" style={{ width: "100%", maxWidth: "480px", padding: "24px" }}>
+                <div className="stack">
+                    <header className="stack-tight">
+                        <h1>CLaaS2SaaS SemantIQ</h1>
+                        <p className="text-muted">
+                            Environment check. The design system is loaded; the application
+                            shell is not built yet.
+                        </p>
+                    </header>
 
-            <div className="card">
-                <header className="card__header">
-                    <h1 className="card__title">Laravel + React</h1>
-                    <p className="card__subtitle">API connection playground</p>
-                </header>
+                    <Probe
+                        method="GET"
+                        endpoint="/api/example"
+                        value={query}
+                        onChange={setQuery}
+                        placeholder="Query parameter, for example hello"
+                        buttonLabel="Send request"
+                        loading={getLoading}
+                        error={getError}
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            callGet();
+                        }}
+                        result={getResult}
+                        resultLabel="Query"
+                        resultValue={getResult?.query}
+                    />
 
-                <div className="card__body">
-                    <section className="panel">
-                        <div className="panel__head">
-                            <span className="badge badge--get">GET</span>
-                            <span className="endpoint">/api/example</span>
-                        </div>
-                        <form
-                            className="row"
-                            onSubmit={(event) => {
-                                event.preventDefault();
-                                callGet();
-                            }}
-                        >
-                            <input
-                                className="input"
-                                type="text"
-                                value={query}
-                                placeholder="Query param, e.g. hello (?q=)"
-                                onChange={(event) => setQuery(event.target.value)}
-                            />
-                            <button className="btn" type="submit" disabled={getLoading}>
-                                {getLoading ? "…" : "Send"}
-                            </button>
-                        </form>
-                        {getError && <p className="error">{getError}</p>}
-                        {getResult && (
-                            <Result data={getResult} label="Query" value={getResult.query} />
-                        )}
-                    </section>
-
-                    <section className="panel">
-                        <div className="panel__head">
-                            <span className="badge badge--post">POST</span>
-                            <span className="endpoint">/api/echo</span>
-                        </div>
-                        <form className="row" onSubmit={callPost}>
-                            <input
-                                className="input"
-                                type="text"
-                                value={name}
-                                placeholder="Data to send…"
-                                onChange={(event) => setName(event.target.value)}
-                            />
-                            <button className="btn" type="submit" disabled={postLoading}>
-                                {postLoading ? "…" : "Send"}
-                            </button>
-                        </form>
-                        {postError && <p className="error">{postError}</p>}
-                        {postResult && (
-                            <Result data={postResult} label="Received" value={postResult.received} />
-                        )}
-                    </section>
+                    <Probe
+                        method="POST"
+                        endpoint="/api/echo"
+                        value={name}
+                        onChange={setName}
+                        placeholder="Data to send"
+                        buttonLabel="Send request"
+                        loading={postLoading}
+                        error={postError}
+                        onSubmit={callPost}
+                        result={postResult}
+                        resultLabel="Received"
+                        resultValue={postResult?.received}
+                    />
                 </div>
             </div>
-        </div>
+        </main>
     );
 }
 
-function Result({ data, label, value }) {
+/**
+ * One API probe: a labeled endpoint, a field with its send button, and the
+ * outcome. The send button is the group's one solid action; nothing else in the
+ * group is solid.
+ */
+function Probe({
+    method,
+    endpoint,
+    value,
+    onChange,
+    placeholder,
+    buttonLabel,
+    loading,
+    error,
+    onSubmit,
+    result,
+    resultLabel,
+    resultValue,
+}) {
+    const fieldId = `probe-${method.toLowerCase()}`;
+
     return (
-        <div className="result">
-            <div className="result__top">
-                <span className="status">
-                    <span className="status__dot" />
-                    {data.status ?? "success"}
+        <section className="stack-tight divide-top">
+            <div className="stack-tight">
+                <span>
+                    <span className={`badge badge-${method === "GET" ? "success" : "warning"}`}>
+                        {method}
+                    </span>{" "}
+                    <span className="text-small text-muted">{endpoint}</span>
                 </span>
-                <span className="time">{data.timestamp}</span>
+                <label className="text-small" htmlFor={fieldId}>
+                    Request value
+                </label>
             </div>
-            <p className="result__msg">{data.message}</p>
-            <p className="field">
-                <span>{label}</span>
-                <span className="field__val">{value || "—"}</span>
-            </p>
-        </div>
+
+            <form className="field-row" onSubmit={onSubmit}>
+                <input
+                    id={fieldId}
+                    className="input"
+                    type="text"
+                    value={value}
+                    placeholder={placeholder}
+                    onChange={(event) => onChange(event.target.value)}
+                />
+                <button
+                    className="btn btn-solid btn-primary"
+                    type="submit"
+                    disabled={loading}
+                    aria-busy={loading || undefined}
+                >
+                    {buttonLabel}
+                </button>
+            </form>
+
+            {error && (
+                <p className="text-small" style={{ color: "var(--badge-danger-fg)" }}>
+                    {error}
+                </p>
+            )}
+
+            {result && (
+                <div className="stack-tight">
+                    <span>
+                        <span className="badge badge-success">{result.status ?? "success"}</span>{" "}
+                        <span className="text-xs text-muted">{result.timestamp}</span>
+                    </span>
+                    <p className="text-small">{result.message}</p>
+                    <p className="text-small text-muted">
+                        {resultLabel}: <strong>{resultValue || "—"}</strong>
+                    </p>
+                </div>
+            )}
+        </section>
     );
 }
-
-const css = `
-* { box-sizing: border-box; }
-html, body, #root { margin: 0; height: 100%; }
-body {
-    overflow: hidden;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    -webkit-font-smoothing: antialiased;
-}
-
-.app {
-    width: 100dvw;
-    height: 100dvh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    overflow: auto;
-    background: radial-gradient(1200px 600px at 50% -10%, #1e293b, #0f172a);
-}
-
-.card {
-    width: 100%;
-    max-width: 460px;
-    background: #ffffff;
-    border-radius: 16px;
-    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
-    overflow: hidden;
-}
-
-.card__header {
-    padding: 22px 24px;
-    background: linear-gradient(135deg, #6366f1, #4f46e5);
-    color: #ffffff;
-}
-.card__title { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
-.card__subtitle { margin: 4px 0 0; font-size: 13px; color: rgba(255, 255, 255, 0.82); }
-
-.card__body { padding: 8px 24px 24px; }
-
-.panel { padding: 18px 0; }
-.panel + .panel { border-top: 1px solid #eef2f7; }
-
-.panel__head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.badge {
-    font: 700 11px/1 ui-monospace, monospace;
-    letter-spacing: 0.06em;
-    padding: 5px 8px;
-    border-radius: 6px;
-    color: #ffffff;
-}
-.badge--get { background: #059669; }
-.badge--post { background: #ea580c; }
-.endpoint { font: 500 13px/1 ui-monospace, "SF Mono", Menlo, monospace; color: #475569; }
-
-.row { display: flex; gap: 8px; }
-.input {
-    flex: 1;
-    min-width: 0;
-    padding: 10px 12px;
-    border: 1px solid #cbd5e1;
-    border-radius: 9px;
-    font-size: 14px;
-    color: #0f172a;
-    outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
-}
-.input::placeholder { color: #94a3b8; }
-.input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16); }
-
-.btn {
-    padding: 10px 16px;
-    border: 0;
-    border-radius: 9px;
-    background: #4f46e5;
-    color: #ffffff;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s, transform 0.05s;
-}
-.btn:hover { background: #4338ca; }
-.btn:active { transform: translateY(1px); }
-.btn:disabled { background: #c7d2fe; cursor: default; }
-
-.result {
-    margin-top: 14px;
-    border: 1px solid #e6ebf2;
-    border-radius: 12px;
-    background: #f8fafc;
-    padding: 12px 14px;
-}
-.result__top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.status {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #059669;
-    text-transform: capitalize;
-}
-.status__dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #10b981;
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
-}
-.time { font: 500 12px/1 ui-monospace, monospace; color: #94a3b8; }
-.result__msg { margin: 0 0 8px; font-size: 14px; color: #0f172a; }
-.field { display: flex; gap: 8px; margin: 0; font-size: 13px; color: #64748b; }
-.field__val { color: #0f172a; font-weight: 600; word-break: break-word; }
-
-.error { margin: 10px 0 0; font-size: 13px; color: #dc2626; }
-`;
