@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Support\Navigation;
+use App\Support\Tenancy\OrganisationAwareUserProvider;
+use App\Support\Tenancy\OrganisationContext;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\View;
@@ -17,6 +19,13 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(Navigation::class);
+
+        /*
+         * One organisation context per process, so the global scope, the
+         * authorisation checks and the audit writer cannot disagree about
+         * whose data is in play.
+         */
+        $this->app->singleton(OrganisationContext::class);
     }
 
     /**
@@ -24,6 +33,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        /*
+         * The session guard must resolve the signed-in user without the
+         * organisation scope, because the context is derived from that user.
+         * See OrganisationAwareUserProvider for why this is not a hole in the
+         * boundary.
+         */
+        Auth::provider('eloquent-organisation', fn ($app, array $config) => new OrganisationAwareUserProvider(
+            $app['hash'], $config['model']
+        ));
+
         /*
          * The shell needs the same two things on every page: the navigation
          * filtered for whoever is signed in, and their initials for the account

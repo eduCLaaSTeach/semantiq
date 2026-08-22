@@ -6,6 +6,7 @@ namespace Tests\Feature\Auth;
 
 use App\Enums\Role;
 use App\Models\User;
+use App\Support\Tenancy\OrganisationContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
@@ -166,7 +167,7 @@ class SignInTest extends TestCase
             ->get('/auth/microsoft/callback?code=abc&state=st')
             ->assertRedirect('/');
 
-        $user = User::query()->where('email', 'newcomer@example.test')->sole();
+        $user = $this->unscoped(fn () => User::query()->where('email', 'newcomer@example.test')->sole());
 
         $this->assertAuthenticatedAs($user);
         $this->assertSame(Role::Viewer, $user->role);
@@ -186,7 +187,7 @@ class SignInTest extends TestCase
             ->get('/auth/microsoft/callback?code=abc&state=st')
             ->assertRedirect('/');
 
-        $user = User::query()->where('email', 'salil@lithan.com')->sole();
+        $user = $this->unscoped(fn () => User::query()->where('email', 'salil@lithan.com')->sole());
 
         $this->assertSame(Role::SystemAdmin, $user->role);
         $this->assertTrue($user->isSystemAdmin());
@@ -201,7 +202,7 @@ class SignInTest extends TestCase
 
         $this->withSession($this->pendingSignIn())->get('/auth/microsoft/callback?code=abc&state=st');
 
-        $this->assertSame(Role::SystemAdmin, User::query()->sole()->role);
+        $this->assertSame(Role::SystemAdmin, $this->unscoped(fn () => User::query()->sole())->role);
     }
 
     #[Test]
@@ -219,7 +220,7 @@ class SignInTest extends TestCase
 
         $this->withSession($this->pendingSignIn())->get('/auth/microsoft/callback?code=abc&state=st');
 
-        $this->assertSame(Role::SystemAdmin, User::query()->sole()->role);
+        $this->assertSame(Role::SystemAdmin, $this->unscoped(fn () => User::query()->sole())->role);
     }
 
     #[Test]
@@ -234,8 +235,8 @@ class SignInTest extends TestCase
 
         $this->withSession($this->pendingSignIn())->get('/auth/microsoft/callback?code=abc&state=st');
 
-        $this->assertSame(1, User::query()->count());
-        $user = User::query()->sole();
+        $this->assertSame(1, $this->unscoped(fn () => User::query()->count()));
+        $user = $this->unscoped(fn () => User::query()->sole());
         $this->assertSame('Renamed Person', $user->name);
         // An existing role survives a later sign-in.
         $this->assertSame(Role::Admin, $user->role);
@@ -253,8 +254,8 @@ class SignInTest extends TestCase
 
         $this->withSession($this->pendingSignIn())->get('/auth/microsoft/callback?code=abc&state=st');
 
-        $this->assertSame(1, User::query()->count());
-        $this->assertSame('new.address@example.test', User::query()->sole()->email);
+        $this->assertSame(1, $this->unscoped(fn () => User::query()->count()));
+        $this->assertSame('new.address@example.test', $this->unscoped(fn () => User::query()->sole())->email);
     }
 
     #[Test]
@@ -272,7 +273,7 @@ class SignInTest extends TestCase
             ->assertSessionHas('status.title', 'Sign-in could not be completed');
 
         $this->assertGuest();
-        $this->assertSame(0, User::query()->count());
+        $this->assertSame(0, $this->unscoped(fn () => User::query()->count()));
     }
 
     #[Test]
@@ -294,7 +295,7 @@ class SignInTest extends TestCase
             ->assertSessionHas('status.title', 'Your directory profile could not be read');
 
         $this->assertGuest();
-        $this->assertSame(0, User::query()->count());
+        $this->assertSame(0, $this->unscoped(fn () => User::query()->count()));
     }
 
     #[Test]
@@ -326,6 +327,24 @@ class SignInTest extends TestCase
     {
         $this->post('/sign-out')->assertRedirect();
         $this->assertGuest();
+    }
+
+    /**
+     * Read the users table the way the sign-in flow does, outside the
+     * organisation scope.
+     *
+     * A federated account is created before any organisation is assigned, so
+     * asserting about it through the scoped default would assert about an
+     * empty set and pass for the wrong reason.
+     *
+     * @template TReturn
+     *
+     * @param  callable(): TReturn  $callback
+     * @return TReturn
+     */
+    private function unscoped(callable $callback): mixed
+    {
+        return app(OrganisationContext::class)->withoutScoping($callback);
     }
 
     /**

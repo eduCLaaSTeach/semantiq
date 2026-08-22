@@ -63,7 +63,13 @@ return [
 
     'providers' => [
         'users' => [
-            'driver' => 'eloquent',
+            /*
+             * Not the stock 'eloquent' driver: identity lookups must bypass the
+             * organisation scope, or the guard can never resolve the user that
+             * the scope's context is derived from. App\Support\Tenancy\
+             * OrganisationAwareUserProvider explains the circularity.
+             */
+            'driver' => 'eloquent-organisation',
             'model' => env('AUTH_MODEL', User::class),
         ],
 
