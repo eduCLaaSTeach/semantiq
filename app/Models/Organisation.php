@@ -52,6 +52,43 @@ class Organisation extends Model
     }
 
     /**
+     * The workflow runs performed for this organisation.
+     *
+     * These relationships read through the organisation scope like any other
+     * query, so they return rows only when this organisation is the active one.
+     * That is deliberate: a relationship is not a way around the boundary.
+     */
+    public function workflowRuns(): HasMany
+    {
+        return $this->hasMany(WorkflowRun::class);
+    }
+
+    /**
+     * The audit trail for this organisation.
+     */
+    public function auditEvents(): HasMany
+    {
+        return $this->hasMany(AuditEvent::class);
+    }
+
+    /**
+     * The Fabric items SemantIQ manages for this organisation.
+     */
+    public function fabricItems(): HasMany
+    {
+        return $this->hasMany(FabricItem::class);
+    }
+
+    /**
+     * Every version of this organisation's data protection profile, current and
+     * superseded.
+     */
+    public function dataProtectionProfiles(): HasMany
+    {
+        return $this->hasMany(DataProtectionProfile::class);
+    }
+
+    /**
      * The person accountable for this organisation's configuration.
      */
     public function owner(): BelongsTo

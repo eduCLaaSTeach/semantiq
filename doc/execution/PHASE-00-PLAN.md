@@ -1,8 +1,25 @@
 # Phase 00 Implementation Plan
 
 **Reference:** P00-FND, `doc/phases/PHASE-00-FOUNDATION.md`
-**Status: DECISIONS RECORDED, AWAITING EXPLICIT PLAN APPROVAL. No material implementation has begun.**
+**Status: IN PROGRESS.** Decisions D1 to D6 answered on 22 August 2026; the user directed implementation to proceed rather than gate further. D7 remains open and blocks work item W10 only.
 **Completion phrase (later, not now):** `CONFIRM PHASE 00 COMPLETE`
+
+## Work item progress
+
+| Item | State | Evidence |
+|---|---|---|
+| W1 Organisation and tenant boundary | Done | PR #11. `organisations` table, global scope failing closed, organisation-aware user provider, 12 boundary tests |
+| W2 Configuration data model baseline | Done | `workflow_runs`, `audit_events`, `help_topics`, `fabric_items`, `data_protection_profiles` with models, factories and tests |
+| W3 Status model | Done | `App\Enums\WorkflowStatus` (ten states) and `App\Enums\BadgeRole` (six roles), mapping asserted against the table below |
+| W4 Workflow orchestration | Not started | |
+| W5 Audit framework | Not started | Table and immutable model exist; the writer and hashing do not |
+| W6 Secret provider abstraction | Not started | |
+| W7 Data protection profile and sovereignty gate | Partly done | Profile schema, model and deny-by-default posture shipped in W2. `VAL-SOV-GEO-001` itself not yet written |
+| W8 Help framework | Partly done | `help_topics` schema and model shipped in W2. Contextual help control and the six drafted topics not yet written |
+| W9 Capability registry | Not started | |
+| W10 Screens, navigation and context registers | Partly done | All six context registers populated for what is built. Screens and the navigation re-sequence not yet done |
+
+The context registers are updated in the same change as the behaviour, per `CLAUDE.md`, rather than being left to W10.
 
 ---
 
