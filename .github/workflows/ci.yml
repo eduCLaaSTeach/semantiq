@@ -45,6 +45,23 @@ jobs:
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # Nine feature tests render Blade views containing @vite, which reads
+      # public/build/manifest.json. That directory is gitignored, so it exists
+      # on a developer machine that has built once and never on a clean runner.
+      # Without this step those tests fail with a 500 that looks like an
+      # application bug rather than a missing build.
+      - name: Build frontend assets
+        run: npm run build
+
       # The suite needs an application key for session and cookie encryption,
       # and .env is not in the repository. A fresh throwaway key is generated on
       # the runner each time rather than a fixed one being committed, so nothing
