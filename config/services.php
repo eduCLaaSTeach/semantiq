@@ -35,4 +35,23 @@ return [
         ],
     ],
 
+    'microsoft' => [
+        /*
+         * Entra ID (Azure AD) application registration.
+         *
+         * SemantIQ holds no local credential of its own: identity is delegated
+         * entirely to Entra ID. All four values are set on the server and never
+         * in this repository.
+         *
+         * 'tenant' is the directory the sign-in is issued against. Use a tenant
+         * GUID or verified domain to pin sign-in to one organisation. 'common'
+         * accepts any Microsoft work, school, or personal account, which is
+         * almost never what a control plane wants, so it is not the default.
+         */
+        'tenant' => env('MICROSOFT_TENANT_ID'),
+        'client_id' => env('MICROSOFT_CLIENT_ID'),
+        'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
+        'redirect' => env('MICROSOFT_REDIRECT_URI'),
+    ],
+
 ];
