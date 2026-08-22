@@ -1,179 +1,191 @@
 # SemantIQ
 
-A control plane for Microsoft Fabric, covering the 80-step end-to-end provisioning
-and governance procedure as a single web application.
+SemantIQ is a control plane for Microsoft Fabric, intended to turn the end-to-end Fabric data-intelligence setup and governance journey into one guided web application.
 
 - Live site: https://semantiq.claas2saas.com/
 - Repository: https://github.com/eduCLaaSTeach/semantiq
-- Design and specification set: [doc/README.md](doc/README.md)
+- Existing design/specification index: `doc/README.md`
+- Phase implementation plan: `doc/MASTER_IMPLEMENTATION_PLAN.md`
 
-## Stack
+## Confirmed Application Stack
 
 | Layer | Choice |
 | --- | --- |
 | Backend | Laravel 13 on PHP 8.5 |
 | Frontend | React 19 |
 | Database | MySQL, cPanel-hosted |
-| Build toolchain | Composer, and Node.js 24 with npm for frontend assets only |
+| Build toolchain | Composer plus Node.js 24/npm for frontend assets |
 | Architecture | Modular monolith |
+| Hosting/deployment | cPanel, deployed by GitHub Actions over SSH/rsync |
 
-Node.js is a build-time dependency on the CI runner. It is not required on the
-server.
+Node.js is a build-time dependency on the CI runner. It is not required as a production application runtime unless a later approved architecture decision adds a Node service.
+
+At this repository baseline, application code has not landed yet. There is no `composer.json` or `package.json`, so the build workflow cannot currently pass until the Laravel/React application is scaffolded. Re-check this statement before acting because it will become stale as soon as Phase 00 scaffolding lands.
+
+## Current Deployment Mode And Product Direction
+
+The current hosted application baseline is single-customer/single-tenant per SemantIQ application instance.
+
+The product is being designed to become reusable for customers that bring their own Microsoft Fabric environment. Therefore customer-owned metadata/configuration must preserve organisation/tenant boundaries and deny cross-organisation access by default, but Release 1 must not silently introduce shared multi-customer SaaS tenancy or multi-tenant Entra sign-in. Those require an explicit approved architecture decision.
+
+This resolves the earlier difference between the existing repository's single-tenant deployment statement and the SRS product ambition for a multi-tenant-ready control plane.
 
 ## Repository Layout
 
 | Path | Holds |
 | --- | --- |
-| `doc/` | Solution architecture, requirement scoping, functional, workflow and UI specifications, plus a self-contained HTML mockup and Word exports |
-| `.github/workflows/` | The deployment pipeline |
-| `deployment/` | The versioned cPanel front-door `.htaccess` |
-| `doc/design-system/` | The sole authority for layout, structure and theme, with the brand asset pack beside it in `assets/` |
+| `CLAUDE.md` | Repository execution, safety, phase-gate, security, sovereignty and coding rules |
+| `IMPLEMENTATION_STATUS.md` | Single authoritative phase state |
+| `doc/` | Existing solution/design specs plus the phased implementation documentation |
+| `doc/design-system/` | Sole authority for UI layout, structure, theme and brand assets |
+| `doc/phases/` | Claude Code implementation scope, one phase at a time |
+| `doc/reference/` | SRS mirror, API/help/traceability, AI and data-protection standards |
+| `doc/context/` | Code/data/validation/configuration/sovereignty context registers |
+| `doc/execution/` | Phase plans, verification evidence and architecture/user decisions |
+| `doc/templates/` | Phase-plan, verification and decision templates |
+| `.github/workflows/` | Existing deployment pipeline; this kit does not overwrite it |
+| `deployment/` | Existing cPanel front-door `.htaccess`; this kit does not overwrite it |
 
-Application code has not landed yet. There is no `composer.json` or
-`package.json` in the repository, so the pipeline's build steps cannot pass until
-the Laravel application is scaffolded.
+The new package intentionally uses `doc/`, not `docs/`, because the existing repository already uses `doc/` and the design system references that path.
 
-## Branching
+## Documentation Precedence
 
-One branch, `main`. It is the GitHub default and the deploy trigger. There is no
-`DEV`, `QA`, `STAG` or `PROD` branch and no promotion chain.
+- UI: `doc/design-system/ui-and-ux-layout-template-shared.md` is the single authority for layout, theme and brand rules.
+- Execution/safety: root `CLAUDE.md`.
+- Phase state: root `IMPLEMENTATION_STATUS.md`.
+- Implementation order: `doc/MASTER_IMPLEMENTATION_PLAN.md` and the active `doc/phases/PHASE-XX-*.md` file.
+- Functional requirements: `doc/reference/SEMANTIQ_SRS_BASELINE.md` and formal Word SRS under `doc/reference/word/`.
 
-> [!WARNING]
-> Every push to `main` triggers a deployment to the live site. There is no
-> pre-production branch and no approval gate in front of it. Open a pull request
-> and review before merging rather than pushing directly.
+If material requirements still conflict, Claude Code must stop, record a decision and ask the user rather than silently selecting an interpretation.
 
-## Deployment
+## Phase-Gated Delivery
 
-GitHub Actions builds the release on the runner, then transfers the built tree to
-cPanel over SSH. Defined entirely in
-[.github/workflows/deploy.yml](.github/workflows/deploy.yml).
+SemantIQ is implemented in ten controlled phases:
 
-1. Check out, set up PHP 8.5, `composer validate`, `composer install --no-dev`.
-2. Set up Node.js 24, `npm ci`, `npm run build`, then remove `node_modules`.
-3. Copy `deployment/public_html.htaccess` to `.htaccess` at the deployment root so
-   the document root forwards every request into `public/`.
-4. Load the passphrase-protected deploy key into `ssh-agent` through an askpass
-   helper, then verify SSH and `rsync` on the target.
-5. `rsync -az --delete` to the deploy path.
-6. Create the Laravel runtime directories if missing and make them writable.
+| Phase | Scope | Initial state |
+| --- | --- | --- |
+| 00 | Engineering foundation and control-plane skeleton | READY_FOR_PLAN |
+| 01 | Organisation/tenant onboarding, SSO and Fabric automation identity | LOCKED |
+| 02 | Fabric readiness, capacity and workspace provisioning | LOCKED |
+| 03 | Source connectivity, gateway and schema discovery | LOCKED |
+| 04 | Ingestion, Lakehouse and medallion data foundation | LOCKED |
+| 05 | Data quality, standardisation and business modelling | LOCKED |
+| 06 | Semantic model, security and governance | LOCKED |
+| 07 | AI readiness, Fabric Data Agent and validation | LOCKED |
+| 08 | Deployment, operations, help centre and lifecycle | LOCKED |
+| 09 | End-to-end UAT, go-live and handover | LOCKED |
 
-`vendor/` and `public/build` are transferred already built. Excluded from
-transfer: `.git/`, `.github/`, `deployment/`, `node_modules/`, `tests/`,
-`phpunit.xml`, `README.md`, `.editorconfig`, `.gitignore`, `.gitattributes`,
-`.env`, `.env.example`, `storage/`, `public/storage`.
+Claude Code must plan, get approval, implement, verify, present evidence and wait for the exact user completion phrase before unlocking the next phase.
 
-> [!CAUTION]
-> `rsync --delete` mirrors the source. Anything in the deploy path that is not in
-> the build and not on the exclude list is deleted. There is no dry-run guard.
+## Branching And Deployment
 
-### Required GitHub secrets
+`main` is the only long-lived branch and the live deployment trigger. There is no permanent Git DEV/QA/STAG/PROD promotion chain.
 
-Names only. Values are entered in the GitHub UI and never committed.
+Use short-lived feature/phase branches for pull requests where review is required. A merge/push to `main` triggers the live deploy, so it must not be treated as a harmless source-control action.
 
-| Secret | Purpose |
-| --- | --- |
-| `CPANEL_HOST` | SSH host |
-| `CPANEL_PORT` | SSH port, defaults to `22` |
-| `CPANEL_USER` | SSH and cPanel account user |
-| `CPANEL_DEPLOY_PATH` | Deploy path, the account document root |
-| `CPANEL_SSH_PRIVATE_KEY` | Passphrase-protected deploy key |
-| `CPANEL_SSH_KEY_PASSPHRASE` | Passphrase for that key |
+The current GitHub Actions workflow builds the release and transfers it to cPanel over SSH/rsync. The repository documentation reports these steps:
 
-The job is bound to a GitHub environment named `development`, which is where a
-branch policy and environment-scoped secrets would be configured.
+1. Set up PHP 8.5 and run Composer validation/install.
+2. Set up Node.js 24, run npm install/build and remove `node_modules`.
+3. Copy the versioned cPanel front-door `.htaccess` to the deployment root.
+4. Load the passphrase-protected deployment key into `ssh-agent`.
+5. Verify SSH/rsync.
+6. `rsync -az --delete` the built release to the target.
+7. Create required Laravel runtime directories if missing.
+
+The existing workflow transfers built `vendor/` and `public/build`. Its documented exclusions include `.git/`, `.github/`, `deployment/`, `node_modules/`, `tests/`, `phpunit.xml`, `README.md`, `.editorconfig`, `.gitignore`, `.gitattributes`, `.env`, `.env.example`, `storage/` and `public/storage`. In particular, server `.env` is excluded and is not created or overwritten by the deployment. Re-verify the actual workflow before relying on this list.
+
+The existing `rsync --delete` behaviour is high impact because files present only at the target can be removed. A sentinel/dry-run/release-directory guard remains an open hardening item.
+
+### GitHub Deployment Secrets
+
+Values are configured in the GitHub UI and never committed. The current workflow expects names including:
+
+- `CPANEL_HOST`
+- `CPANEL_PORT`
+- `CPANEL_USER`
+- `CPANEL_DEPLOY_PATH`
+- `CPANEL_SSH_PRIVATE_KEY`
+- `CPANEL_SSH_KEY_PASSPHRASE`
+
+Deployment credentials needed by CI belong in GitHub Environment/Actions secrets. Runtime database credentials normally belong in the server `.env` or an approved secret store and should not be copied into GitHub secrets unless an approved workflow genuinely requires them.
+
+The current workflow is reported as using a GitHub environment named `development` even though `main` deploys the live site. This is a naming/control mismatch. The target should be a production-labelled/protected environment, but renaming it and moving secrets is a deployment change requiring explicit approval.
 
 ## Database
 
-MySQL, created through cPanel. The application connects directly through
-Laravel's MySQL driver.
+The planned application database is MySQL hosted through cPanel and accessed through Laravel's MySQL driver.
 
-Laravel migrations in `database/migrations/` are the source of truth for the
-schema. Pair every forward migration with a working `down()`. Never edit a
-migration that has been merged or applied; add a new one instead.
+Once application code exists, Laravel migrations under `database/migrations/` are the schema source of truth. Do not edit an already merged/applied migration; add a new migration. Pair forward changes with a valid `down()` unless an explicitly approved irreversible migration is documented.
 
-Connection settings live in `.env` on the server, which the pipeline excludes from
-transfer and therefore never creates or overwrites. Keys: `DB_CONNECTION`,
-`DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`.
+Runtime connection settings live in server-side environment/secret configuration, not committed files. Typical keys include `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` and `DB_PASSWORD`.
 
-> [!IMPORTANT]
-> No credential, connection string or `.env` value belongs in this repository, in
-> a GitHub secret, or in any committed file. Use placeholders such as
-> `<DATABASE_NAME>` and `<DATABASE_USER>` in documentation.
+## Roles And Access
 
-Applying a migration against any environment is a deployment action. It is not
-performed as part of a normal change.
+Current organisation hierarchy is Administrator at the organisation root, then Business Unit, then Team. The System Administrator sits above the organisation root for platform/integration configuration rather than ordinary business-record ownership.
 
-## Roles And Tenancy
-
-Single-tenant. Organisation hierarchy is Administrator at the org root, then
-Business Unit, then Team. The System Administrator sits above the org root and
-owns platform configuration rather than records.
-
-The design-system template is authoritative for the tiers and carries the full
-per-verb permission matrix along with the tier codes `system_admin`, `admin`,
-`team`, `self` and `self_view`. The summary below is orientation, not the spec.
+Current role baseline:
 
 | Role | Record scope |
 | --- | --- |
-| System Administrator | All records, plus platform and integration configuration |
-| Administrator | All records; permanently deletes application records |
-| Collaborator | Own records plus records in their Business Unit |
-| Contributor | Own or directly assigned records only |
+| System Administrator | Platform/integration configuration plus approved records |
+| Administrator | Organisation-level records and administration |
+| Collaborator | Own records plus records within assigned Business Unit |
+| Contributor | Own/directly assigned records |
 | Viewer | Read-only |
+
+The design-system template remains authoritative for detailed role/gate rules and tier codes.
 
 ## User Interface
 
-> [!IMPORTANT]
-> [ui-and-ux-layout-template-shared.md](doc/design-system/ui-and-ux-layout-template-shared.md) is the
-> single authority for layout, structure and theme across the entire application.
-> Nothing else defines them. Read it before generating any screen, component or
-> stylesheet, and do not introduce a second design system, component library theme,
-> or ad hoc styling alongside it.
+`doc/design-system/ui-and-ux-layout-template-shared.md` is the single authority for the application shell, page archetypes, layout, theme, tokens, brand assets and interaction contracts.
 
-It covers the four-cluster information architecture, the application shell, the
-design tokens in both themes, eleven page archetypes, the sub-navigation patterns, the
-role and gate model, and the component and interaction contracts.
+Where `doc/04-UI-Specification.md` or `doc/mockups/` conflict with the design-system template, the template wins until those older artifacts are reconciled.
 
-Every rule in it is tagged either ENFORCED or PRINCIPLED. ENFORCED covers all token
-values, brand assets and theme decisions and is not deviable. A PRINCIPLED default
-may be deviated from only with written justification and sign-off, recorded as a
-documented exception rather than applied silently.
+## Data Protection And Data Sovereignty
 
-The brand asset pack lives in [doc/design-system/assets/](doc/design-system/assets/), next to the template, which is
-where the template expects it. Those files are never modified, recoloured,
-regenerated or substituted. Their destination inside the application is a separate
-decision recorded as `BRAND_ASSETS_PATH`, and it is still unrecorded.
+Every phase must follow `doc/reference/DATA_PROTECTION_SOVEREIGNTY_STANDARD.md`.
 
-[doc/04-UI-Specification.md](doc/04-UI-Specification.md) and the mockups under
-`doc/mockups/` predate this decision and were written against a design system that
-is no longer in the repository. Where they disagree with the template, the template
-wins, and they need reconciling.
+Core engineering defaults include:
 
-## Data Governance
+- collect/store the minimum customer business data needed by the control plane;
+- prefer metadata and Fabric resource IDs over duplicating business datasets;
+- capture approved storage/processing geographies before production provisioning;
+- default cross-geo Fabric/AI processing, storage and conversation-history settings to OFF;
+- require a documented exception before a production cross-border/cross-geo configuration is enabled;
+- apply least privilege and redact logs/support exports;
+- evaluate Private Link/managed private endpoints, public-access blocking, Purview controls and workspace CMK when the customer's policy/classification requires them;
+- update code, data, validation, configuration, security and sovereignty context registers together with implementation changes.
 
-Retention is 7 years for operational data, audit and compliance logs, and backups.
-No privacy regime has been determined as applicable. Recovery objectives, restore
-cadence and failover procedure are not yet defined.
+The repository currently states seven-year retention for operational data, audit/compliance logs and backups. Treat that as the current project policy baseline, configurable by data class/customer/legal requirement rather than a hard-coded universal rule.
 
-## Open Items
+No legal privacy regime has yet been formally determined for the product in the repository. The code must still implement privacy-by-design and sovereignty controls. Legal applicability, including Singapore PDPA or other regional/customer obligations, must be confirmed before production acceptance rather than inferred by developers.
 
-- Scaffold the Laravel application so the pipeline's build steps can pass.
-- Confirm whether the cPanel host serves MySQL or MariaDB, and verify `DB_HOST`
-  and `DB_PORT`.
-- Set the cPanel PHP selector to 8.5.
-- Create the `development` GitHub environment, move the `CPANEL_*` secrets onto
-  it, and restrict its deployment branch policy to `main`.
-- Pin the SSH host key instead of trusting it live on every run, and add a
-  sentinel or dry-run guard in front of `rsync --delete`.
-- Provision a queue worker and a scheduler. The pipeline configures neither, so no
-  queued job or scheduled task currently runs.
-- Add post-deploy `migrate` and cache steps to the pipeline.
-- Record `BRAND_ASSETS_PATH`, the destination for the brand pack inside the
-  application. The template forbids choosing this without the developer.
-- Fill in the template's App Definition: browser title, tagline, the real navigation
-  tree, the entity list, and the confirmed UI stack including how React is served
-  from Laravel.
-- Reconcile `doc/04-UI-Specification.md` and the two mockups against the template.
-- Decide the list-behaviour naming and the step-by-step form draft storage. Both are
-  new App Definition fields the template asks for and never decides.
+## AI And Conversational AI
+
+Before AI implementation, read `doc/reference/AI_CONVERSATIONAL_TECHNOLOGY_GUIDE.md` and create `doc/execution/AI-TECHNOLOGY-DECISION.md`.
+
+Technology selection must compare the actual use case, Microsoft-first options and meaningful open-source alternatives. The primary application remains Laravel/PHP/React. A .NET/Python agent framework, model server or other sidecar runtime may be selected only through a separately approved architecture decision.
+
+Deterministic Fabric provisioning must remain validated workflow/API code, not direct LLM execution.
+
+## Existing Open Items Carried Forward
+
+- Scaffold Laravel 13 / React 19 so Composer/npm validation can run.
+- Confirm whether the cPanel database service is MySQL or MariaDB and verify host/port.
+- Confirm the cPanel PHP selector/runtime supports PHP 8.5.
+- Protect the GitHub deploy environment appropriately for the live deployment and resolve the current `development` naming mismatch.
+- Pin the SSH host key instead of trusting it live on each run.
+- Add a safe guard/sentinel/dry-run or release strategy around `rsync --delete`.
+- Provision queue-worker/scheduler support before implementing workflows that rely on them.
+- Decide and approve post-deploy migration/cache behaviour.
+- Record `BRAND_ASSETS_PATH` without moving/modifying brand assets prematurely.
+- Complete the design-system App Definition values, including browser title, tagline, navigation tree, entity list and how React is served from Laravel.
+- Reconcile older UI spec/mockups against the design-system template.
+- Define list-behaviour naming and step-by-step form draft-storage behaviour.
+- Define RPO, RTO, restore cadence and failover procedures.
+- Confirm applicable privacy/legal regimes and customer-specific retention/sovereignty requirements before production acceptance.
+
+## Start Here In Claude Code Desktop
+
+Open the local clone of this repository, not a separate documentation folder. Then ask Claude Code to read `CLAUDE.md`, `README.md`, `IMPLEMENTATION_STATUS.md`, `doc/MASTER_IMPLEMENTATION_PLAN.md`, the current Phase 00 document, the data-protection standard and the existing repository. It should create the Phase 00 plan and stop for approval before coding.
