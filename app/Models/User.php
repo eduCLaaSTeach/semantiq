@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use App\Enums\Role;
+use App\Support\Tenancy\BelongsToOrganisation;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -28,7 +30,7 @@ use Illuminate\Support\Carbon;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use BelongsToOrganisation, HasFactory, Notifiable;
 
     /**
      * Get the attributes that should be cast.
@@ -43,6 +45,18 @@ class User extends Authenticatable
             'password' => 'hashed',
             'role' => Role::class,
         ];
+    }
+
+    /**
+     * The organisation this account belongs to.
+     *
+     * Nullable: a user row exists as soon as Entra returns a profile, which can
+     * precede any organisation assignment. A user with no organisation has no
+     * access to customer-owned records, because the scope fails closed.
+     */
+    public function organisation(): BelongsTo
+    {
+        return $this->belongsTo(Organisation::class);
     }
 
     /**

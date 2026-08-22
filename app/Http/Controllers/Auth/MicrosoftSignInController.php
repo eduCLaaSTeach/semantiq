@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Auth;
 use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Tenancy\OrganisationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -279,6 +280,30 @@ class MicrosoftSignInController extends Controller
         $email = $this->emailFrom($profile);
         $name = (string) ($profile['displayName'] ?? $email);
 
+        /*
+         * Identity resolution happens BEFORE tenancy is known, so it must run
+         * outside the organisation scope. At this point in the flow nobody is
+         * authenticated and no organisation context exists, so a scoped query
+         * would match nothing and every returning person would look like a new
+         * one, silently duplicating accounts.
+         *
+         * This is the sanctioned use of withoutScoping: the lookup is by Entra
+         * object identifier, which is globally unique, not by anything a
+         * caller in one organisation could use to fish for another's records.
+         */
+        return app(OrganisationContext::class)->withoutScoping(
+            fn (): User => $this->resolveAndSave($objectId, $email, $name)
+        );
+    }
+
+    /**
+     * Find or create the local mirror, and apply the role rules.
+     *
+     * Split from upsertUser so the unscoped region is exactly as small as it
+     * needs to be, and so what runs inside it is obvious to a reader.
+     */
+    private function resolveAndSave(string $objectId, string $email, string $name): User
+    {
         $user = User::query()->where('entra_object_id', $objectId)->first()
             ?? User::query()->whereRaw('LOWER(email) = ?', [$email])->first()
             ?? new User;
