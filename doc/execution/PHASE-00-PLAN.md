@@ -46,7 +46,7 @@ Observed directly in the repository at commit `136dec0`, not assumed.
 | Roles | `app/Enums/Role.php`, five cumulative tiers | Live |
 | Application shell | Rail, top bar, four fixed clusters, theme switcher, nav filter, access gating | Live, 42 tests total |
 | Navigation config | `config/navigation.php`, single source of truth for sidebar, breadcrumb and guards | Live |
-| CI | Build, Pint, PHPUnit run on the runner before deploy | Passing |
+| CI | **Correction, verified 22 August 2026:** the only workflow is `deploy.yml`, triggered on push to `main`. It runs `composer validate`, `composer install --no-dev` and `npm run build`, then syncs over SSH. It does **not** run Pint or PHPUnit, and `--no-dev` means it could not. Nothing runs on a pull request at all | **Gap, now closed.** An earlier draft of this plan stated CI ran Pint and PHPUnit before deploy. That was wrong. `.github/workflows/ci.yml` now runs both on every pull request and on `main`. `deploy.yml` is untouched |
 
 ### What Phase 00 requires and does not exist
 
