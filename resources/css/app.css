@@ -266,6 +266,16 @@ body {
     height: 100%;
 }
 
+/*
+ * The hidden attribute must win. The user-agent rule for it is only
+ * [hidden] { display: none }, so any author rule that sets display on the same
+ * element beats it and the attribute silently stops working. Every component
+ * here that sets display would otherwise be un-hideable.
+ */
+[hidden] {
+    display: none !important;
+}
+
 body {
     margin: 0;
     background: var(--canvas);
@@ -733,4 +743,584 @@ a:hover {
     .auth-card {
         padding: var(--space-4) var(--space-3);
     }
+}
+
+/* ===========================================================================
+ * 12 · The shell
+ *
+ * A full-height rail owning the top-left corner, and a column holding the top
+ * bar and the canvas. The rail and the top bar are ONE chrome colour; the
+ * canvas is a different surface so the working area reads as distinct.
+ * ======================================================================== */
+
+body.has-shell {
+    overflow: hidden;
+}
+
+.skip-link {
+    position: absolute;
+    left: -9999px;
+    z-index: 100;
+    padding: var(--space-2) var(--space-3);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-radius: var(--radius-control);
+}
+
+.skip-link:focus {
+    left: var(--space-3);
+    top: var(--space-3);
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.shell {
+    display: flex;
+    height: 100dvh;
+}
+
+/* -- The rail ------------------------------------------------------------- */
+
+.rail {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    width: var(--rail-width);
+    background: var(--chrome);
+    color: var(--chrome-text);
+    box-shadow: 2px 0 10px var(--chrome-edge);
+    transition: width var(--rail-transition);
+    z-index: 20;
+}
+
+:root.rail-is-collapsed .rail {
+    width: var(--rail-width-collapsed);
+}
+
+.rail-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    height: var(--topbar-height);
+    flex: none;
+    padding: 0 var(--space-3);
+    border-bottom: 1px solid var(--divider);
+}
+
+.rail-home {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    text-decoration: none;
+}
+
+.rail-home:hover {
+    text-decoration: none;
+}
+
+/*
+ * Which mark the rail width calls for. This is decided on the wrapper, so it
+ * cannot collide with the theme rules, which decide which file inside the
+ * wrapper shows and do so with the same display property.
+ */
+.rail-mark-short { display: none; }
+
+:root.rail-is-collapsed .rail-mark-wide { display: none; }
+:root.rail-is-collapsed .rail-mark-short { display: block; }
+
+.rail-wordmark { height: 22px; width: auto; }
+
+/* The short mark sits in a fixed slot, centred, and is never distorted. */
+.rail-shortmark {
+    width: 40px;
+    height: 34px;
+    object-fit: contain;
+}
+
+:root.rail-is-collapsed .rail-head { padding: 0; justify-content: center; }
+:root.rail-is-collapsed .rail-home { justify-content: center; width: 100%; }
+
+/*
+ * Collapsed, the expander overlays the same slot the mark occupies, revealed
+ * on hover or keyboard focus so the control is reachable either way.
+ */
+:root.rail-is-collapsed .rail-toggle {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+:root.rail-is-collapsed .rail-head:hover .rail-toggle,
+:root.rail-is-collapsed .rail-toggle:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+:root.rail-is-collapsed .rail-head:hover .rail-shortmark {
+    visibility: hidden;
+}
+
+.rail-head { position: relative; }
+
+.rail-filter {
+    flex: none;
+    padding: var(--space-2) var(--space-3);
+}
+
+.rail-filter .input {
+    width: 100%;
+    background: var(--rail-filter-bg);
+    border-color: transparent;
+    color: var(--chrome-text);
+}
+
+:root.rail-is-collapsed .rail-filter { display: none; }
+
+/* The nav list is the only scrolling region in the rail, and hides its bar. */
+.rail-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 var(--space-2) var(--space-3);
+    scrollbar-width: none;
+}
+
+.rail-body::-webkit-scrollbar { display: none; }
+
+.nav-cluster + .nav-cluster {
+    margin-top: var(--space-3);
+}
+
+.nav-cluster-label {
+    padding: var(--space-2) var(--space-2) var(--space-1);
+    color: var(--chrome-muted);
+}
+
+:root.rail-is-collapsed .nav-cluster-label { display: none; }
+
+/* -- Nav items ------------------------------------------------------------ */
+
+.nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: 34px;
+    padding: var(--space-1) var(--space-2);
+    padding-left: calc(var(--space-2) + (var(--nav-depth, 0) * var(--space-3)));
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--chrome-text);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    font-weight: 500;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.nav-item:hover {
+    background: var(--chrome-hover);
+    text-decoration: none;
+    color: var(--chrome-text);
+}
+
+.nav-icon {
+    font-size: 18px;
+    flex: none;
+    color: var(--chrome-muted);
+}
+
+.nav-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nav-chevron {
+    font-size: 16px;
+    flex: none;
+    color: var(--chrome-muted);
+    transition: transform 0.18s ease;
+}
+
+[aria-expanded='true'] > .nav-chevron {
+    transform: rotate(180deg);
+}
+
+/* The active leaf takes the gold treatment and its 3px bar. */
+.nav-leaf.is-active {
+    background: var(--nav-active-bg);
+    color: var(--nav-active-fg);
+    font-weight: 600;
+}
+
+.nav-leaf.is-active .nav-icon {
+    color: var(--nav-active-fg);
+}
+
+.nav-leaf.is-active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    border-radius: var(--radius-pill);
+    background: var(--nav-active-bar);
+}
+
+/* A group holding the active route shows the trail tint, not the active state. */
+.nav-group-toggle.is-trail {
+    color: var(--nav-active-fg);
+}
+
+.nav-group-toggle.is-trail .nav-icon {
+    color: var(--nav-active-fg);
+}
+
+/*
+ * An unbuilt destination: visible, disabled, and labelled. Distinct from a node
+ * the role cannot reach, which is not rendered at all.
+ */
+.nav-leaf.is-soon {
+    cursor: not-allowed;
+    color: var(--chrome-muted);
+}
+
+.nav-leaf.is-soon:hover {
+    background: transparent;
+}
+
+.soon-pill {
+    flex: none;
+    padding: 1px var(--space-2);
+    border-radius: var(--radius-pill);
+    background: var(--soon-pill-bg);
+    color: var(--soon-pill-fg);
+    font-size: var(--text-micro);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.nav-empty {
+    padding: var(--space-3) var(--space-2);
+    color: var(--chrome-muted);
+}
+
+/* Collapsed, only icons remain. */
+:root.rail-is-collapsed .nav-label,
+:root.rail-is-collapsed .nav-chevron,
+:root.rail-is-collapsed .soon-pill,
+:root.rail-is-collapsed .nav-children,
+:root.rail-is-collapsed .nav-empty {
+    display: none;
+}
+
+:root.rail-is-collapsed .nav-item {
+    justify-content: center;
+    padding-left: var(--space-2);
+}
+
+:root.rail-is-collapsed .nav-icon {
+    font-size: 20px;
+}
+
+/* -- The column ----------------------------------------------------------- */
+
+.column {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: var(--topbar-height);
+    flex: none;
+    padding: 0 var(--space-3);
+    background: var(--chrome);
+    color: var(--chrome-text);
+    border-bottom: 1px solid var(--divider);
+    box-shadow: 0 2px 10px var(--chrome-edge);
+    z-index: 10;
+}
+
+.topbar-app {
+    font-family: var(--font-heading);
+    font-size: var(--text-h3);
+    font-weight: 700;
+}
+
+.topbar-utilities {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
+}
+
+/* Icon-only chrome: a closed set, each with an accessible name. */
+.icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--topbar-icon-size);
+    height: var(--topbar-icon-size);
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--chrome-text);
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled) {
+    background: var(--chrome-hover);
+}
+
+.icon-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.topbar-rail-open { display: none; }
+
+/* The theme control shows the glyph for the theme in effect. */
+.theme-icon-dark { display: none; }
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .theme-icon-light { display: none; }
+    :root:not([data-theme='light']) .theme-icon-dark { display: inline-block; }
+}
+
+:root[data-theme='dark'] .theme-icon-light { display: none; }
+:root[data-theme='dark'] .theme-icon-dark { display: inline-block; }
+:root[data-theme='light'] .theme-icon-light { display: inline-block; }
+:root[data-theme='light'] .theme-icon-dark { display: none; }
+
+/* -- Menus ---------------------------------------------------------------- */
+
+.menu { position: relative; }
+
+.menu-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + var(--space-1));
+    min-width: 160px;
+    padding: var(--space-1);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-control);
+    background: var(--card);
+    box-shadow: var(--elevation-lg);
+    z-index: 30;
+}
+
+.menu-panel-wide { min-width: 240px; }
+
+.menu-heading {
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--card-border);
+    margin-bottom: var(--space-1);
+}
+
+.menu-name {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.menu-meta { color: var(--text-muted); }
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-2);
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    text-align: left;
+    cursor: pointer;
+}
+
+.menu-item:hover { background: var(--surface-hover); }
+
+.menu-item.is-current {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.avatar-button {
+    display: inline-flex;
+    align-items: center;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+}
+
+.avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: var(--text-small);
+    font-weight: 700;
+}
+
+/* -- The canvas ----------------------------------------------------------- */
+
+.canvas {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--space-4);
+    background: var(--canvas);
+    scrollbar-width: none;
+}
+
+.canvas::-webkit-scrollbar { display: none; }
+
+.breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+    font-size: var(--text-small);
+    color: var(--text-muted);
+}
+
+.breadcrumb-step.is-current {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+.page-header-text { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.page-header-actions { display: flex; gap: var(--space-2); }
+
+/* Mobile-first grid: one column, fanning out as width allows. */
+.card-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+}
+
+@media (min-width: 900px) {
+    .card-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.card-pad { padding: var(--space-4); }
+
+.card-body-text { margin-top: var(--space-2); }
+
+.detail-list {
+    margin: var(--space-3) 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.detail-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: baseline;
+}
+
+.detail-row dt { min-width: 110px; }
+.detail-row dd { margin: 0; }
+
+.tick-list {
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.tick-list li { display: flex; align-items: center; gap: var(--space-2); }
+
+.tick { color: var(--badge-success-fg); font-size: 16px; }
+
+/* -- Toasts --------------------------------------------------------------- */
+
+.toast-host {
+    position: fixed;
+    top: calc(var(--topbar-height) + var(--space-2));
+    right: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    z-index: 40;
+    pointer-events: none;
+}
+
+/* -- Small screens: the rail becomes an off-canvas drawer ----------------- */
+
+.shell-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 25, 45, 0.45);
+    z-index: 15;
+}
+
+@media (max-width: 860px) {
+    .rail {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        transform: translateX(-100%);
+        transition: transform var(--rail-transition);
+    }
+
+    :root.rail-is-open .rail {
+        transform: translateX(0);
+        width: var(--rail-width);
+    }
+
+    /* The logo must still show, so the opener never stands alone. */
+    .topbar-rail-open { display: inline-flex; }
+
+    .canvas { padding: var(--space-3); }
 }
