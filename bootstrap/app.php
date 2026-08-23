@@ -3,6 +3,11 @@
 use App\Http\Middleware\EnforceNavigationPolicy;
 use App\Http\Middleware\EnforcePermission;
 use App\Modules\Platform\Http\Middleware\AssignCorrelationId;
+use App\Modules\Security\Http\Middleware\ConfirmIdentity;
+use App\Modules\Security\Http\Middleware\EnforceSessionPolicy;
+use App\Modules\Security\Http\Middleware\LimitRequestSize;
+use App\Modules\Security\Http\Middleware\RequireSecurityStorage;
+use App\Modules\Security\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -35,15 +40,52 @@ return Application::configure(basePath: dirname(__DIR__))
              * permission. Routes that need both name both.
              */
             'permission' => EnforcePermission::class,
+            /*
+             * Release 1 gate 3, ADM-010. Demands a recent proof of identity
+             * before a critical action. Named AFTER `permission` on every route
+             * that uses it, so authorization is settled before anybody is asked
+             * to prove themselves again.
+             */
+            'confirm' => ConfirmIdentity::class,
+            /*
+             * Release 1 gate 3, ADM-012. Refuses a secret-reference action
+             * before its table exists. Runs BEFORE implicit model binding,
+             * which is the whole reason it is a middleware - a check inside the
+             * controller would arrive after the query that fails.
+             */
+            'security-storage' => RequireSecurityStorage::class,
         ]);
 
         /*
          * Runs first, so anything that logs, audits or fails later in the
          * request already has an id to quote. ADM-024 asks Diagnostics to show
          * recent error correlation ids; this is where they come from.
+         *
+         * `LimitRequestSize` sits immediately behind it, ahead of everything
+         * that would parse or store a body: refusing an oversized request after
+         * it has been read has already spent the memory the limit exists to
+         * protect. Correlation still comes first, so the refusal is traceable.
          */
         $middleware->web(prepend: [
             AssignCorrelationId::class,
+            LimitRequestSize::class,
+        ]);
+
+        /*
+         * Release 1 gate 3.
+         *
+         * `SecurityHeaders` is appended rather than prepended because it acts
+         * on the RESPONSE, and a middleware that decorates a response wants to
+         * be as close to the response as possible so that everything below it
+         * is covered - including error pages produced further in.
+         *
+         * `EnforceSessionPolicy` is appended so the framework's own session and
+         * authentication middleware have already run: it needs a resolved user
+         * and a started session to have anything to judge. ADM-010.
+         */
+        $middleware->web(append: [
+            SecurityHeaders::class,
+            EnforceSessionPolicy::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

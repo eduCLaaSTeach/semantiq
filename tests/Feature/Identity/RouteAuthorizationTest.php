@@ -16,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\ControlsSecurityPolicy;
 use Tests\TestCase;
 
 /**
@@ -29,7 +30,7 @@ use Tests\TestCase;
  */
 class RouteAuthorizationTest extends TestCase
 {
-    use RefreshDatabase;
+    use ControlsSecurityPolicy, RefreshDatabase;
 
     /**
      * An account placed in the organisation currently in force.
@@ -169,7 +170,14 @@ class RouteAuthorizationTest extends TestCase
         $admin = $this->person(Role::Admin);
         $subject = $this->person(Role::Viewer);
 
+        // `withSession($this->confirmedIdentity())` because a tier change is an
+        // ADM-010 critical action from gate 3 onwards: without a recent identity
+        // confirmation the request is redirected to the confirmation screen and
+        // never reaches the authority check this test is about. The escalation
+        // is still refused either way; confirming first is what makes the
+        // refusal come from the RIGHT control.
         $this->actingAs($admin)
+            ->withSession($this->confirmedIdentity())
             ->from(route('admin.users.show', $subject))
             ->post(route('admin.users.tier', $subject), ['role' => Role::SystemAdmin->value])
             ->assertSessionHasErrors('authority');
@@ -189,6 +197,7 @@ class RouteAuthorizationTest extends TestCase
         // but a grant that silently does nothing is its own kind of lie, and an
         // access review would show authority the person does not have.
         $this->actingAs($admin)
+            ->withSession($this->confirmedIdentity())
             ->from(route('admin.users.show', $admin))
             ->post(route('admin.users.roles', $admin), ['role_id' => $powerful->getKey(), 'operation' => 'assign'])
             ->assertSessionHasErrors('roles');

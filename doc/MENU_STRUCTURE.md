@@ -595,7 +595,21 @@ Route family:
 /admin/security/secrets
 ```
 
-Implemented in Release 1 gate 3. The group renders as unbuilt until then.
+**Implemented in Release 1 gate 3 (R1.3).** Every leaf now resolves to a real
+screen and none renders as unbuilt.
+
+`Security Overview` is the one leaf with no ADM feature behind it. It came from
+DEC-001's navigation shape rather than from the Release 1 specification, and is
+built as a READ-ONLY roll-up over ADM-009 to ADM-012 - decision D5, approved
+25 August 2026. It invents no policy and no control; every number on it is read
+from something one of those four features owns. Gap M9 stays open in case a
+later requirement says what the screen should be.
+
+`Secret References` is gated by `admin.secrets.view` while the other four are
+gated by `admin.security.view`. Both sit at System Administrator today. They are
+separate because they protect different things - a set of switches, and a map of
+every credential this deployment depends on - and a later decision to delegate
+policy reading must not hand the map over with it.
 
 ## 13. Role-Aware Navigation Examples
 

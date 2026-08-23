@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\ControlsSecurityPolicy;
 use Tests\TestCase;
 
 /**
@@ -27,8 +28,17 @@ use Tests\TestCase;
  */
 class MicrosoftSignInTest extends TestCase
 {
-    use RefreshDatabase;
+    use ControlsSecurityPolicy, RefreshDatabase;
 
+    /**
+     * ADM-009's "Auto-create Users" is OFF by default from Release 1 gate 3, so
+     * a directory account with no SemantIQ account is refused rather than given
+     * one. Most tests in this file are about the FLOW - state, nonce, PKCE, the
+     * profile lookup - and need an account to come out of it, so they turn the
+     * policy on.
+     *
+     * That the default refuses is its own test, at the bottom of this file.
+     */
     protected function setUp(): void
     {
         parent::setUp();
@@ -39,6 +49,8 @@ class MicrosoftSignInTest extends TestCase
             'client_secret' => 'shh',
             'redirect' => 'http://localhost/auth/microsoft/callback',
         ]);
+
+        $this->withSecurityPolicy('sign_in.auto_create_users', true);
     }
 
     /**

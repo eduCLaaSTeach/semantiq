@@ -66,6 +66,21 @@ return [
         'admin-entitlements' => ['min' => Role::Admin, 'permission' => 'admin.entitlements.view'],
         'admin-access-reviews' => ['min' => Role::Admin, 'permission' => 'admin.access_reviews.view'],
 
+        /*
+         * Release 1 gate 3. Both sit at System Administrator, tier and
+         * permission alike, so the coarse gate and the fine one agree rather
+         * than one being wider than the other.
+         *
+         * `admin-secrets` is separate from `admin-security` even though both
+         * resolve to the same tier today. They protect different things - one a
+         * set of switches, the other a map of every credential this system
+         * depends on - and folding them into one policy would mean a later
+         * decision to delegate security policy reading would silently hand over
+         * the credential map with it.
+         */
+        'admin-security' => ['min' => Role::SystemAdmin, 'permission' => 'admin.security.view'],
+        'admin-secrets' => ['min' => Role::SystemAdmin, 'permission' => 'admin.secrets.view'],
+
         'domain-executive' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Executive],
         'domain-sales' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Sales],
         'domain-finance' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Finance],
@@ -1490,42 +1505,58 @@ return [
              * Configuration is application settings, and a security policy
              * surface is neither.
              *
-             * The group is authored now and every leaf renders as an unbuilt
-             * "Soon" destination, so the shape of the product is legible and
-             * the decision lives where navigation is authored. The screens
-             * themselves are gate 3, in R1.3. No route is named here, and
-             * NavigationIntegrityTest would fail if one were named without
-             * being registered.
+             * BUILT IN R1.3. Every leaf now names a real route. The group was
+             * authored in R1.2 with no routes at all, rendering as unbuilt
+             * "Soon" destinations, so the shape of the product was legible
+             * before the screens existed.
              */
             [
                 'label' => 'Security',
                 'icon' => 'i-shield',
+                /*
+                 * The coarse cluster gate, matching how every other built group
+                 * is shaped, and no route of its own: the group is a heading,
+                 * and giving it the same destination as its first child would
+                 * be two paths to one screen - the duplicate-entry problem the
+                 * filter-not-fork rule exists to prevent.
+                 */
                 'policy' => 'system-admin',
                 'children' => [
                     [
                         'label' => 'Security Overview',
                         'icon' => 'i-shield',
-                        'policy' => 'system-admin',
+                        'policy' => 'admin-security',
+                        'route' => 'admin.security.overview',
                     ],
                     [
                         'label' => 'Authentication Policy',
                         'icon' => 'i-fingerprint',
-                        'policy' => 'system-admin',
+                        'policy' => 'admin-security',
+                        'route' => 'admin.security.authentication',
                     ],
                     [
                         'label' => 'Session Policy',
                         'icon' => 'i-clock',
-                        'policy' => 'system-admin',
+                        'policy' => 'admin-security',
+                        'route' => 'admin.security.sessions',
                     ],
                     [
                         'label' => 'API Security',
                         'icon' => 'i-code',
-                        'policy' => 'system-admin',
+                        'policy' => 'admin-security',
+                        'route' => 'admin.security.api',
                     ],
                     [
                         'label' => 'Secret References',
                         'icon' => 'i-lock',
-                        'policy' => 'system-admin',
+                        /*
+                         * The one leaf in this group NOT gated by
+                         * `admin-security`. Reading the credential map is a
+                         * different grant from reading the policy switches -
+                         * see the policy declarations above.
+                         */
+                        'policy' => 'admin-secrets',
+                        'route' => 'admin.security.secrets',
                     ],
                 ],
             ],

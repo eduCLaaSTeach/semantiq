@@ -8,6 +8,9 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Audit\Enums\AuditOutcome;
 use App\Modules\Audit\Support\AuditLogger;
+use App\Modules\Security\Support\AuthenticationGuard;
+use App\Modules\Security\Support\Reauthentication;
+use App\Modules\Security\Support\SecurityPolicies;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -30,26 +33,35 @@ use Illuminate\View\View;
  */
 class SignInController extends Controller
 {
-    /**
-     * How many attempts one address and address-plus-network pair may make.
+    /*
+     * The attempt threshold and the lockout duration used to be two private
+     * constants here. They are now ADM-009 policy, read from
+     * `AuthenticationGuard`, because "Failed Login Threshold" and "Lock
+     * Duration" are two of the settings that feature names and a constant in a
+     * controller is not a setting anybody can change.
      *
-     * Throttling is on the credential path only. Without it the form is an
+     * Throttling remains on the credential path only. Without it the form is an
      * offline password list with a network connection attached.
      */
-    private const MAX_ATTEMPTS = 5;
-
-    private const DECAY_SECONDS = 60;
 
     public function __construct(
         private readonly AuditLogger $audit,
+        private readonly AuthenticationGuard $guard,
     ) {}
 
     /**
      * Show the screen.
+     *
+     * Which ways in are OFFERED comes from ADM-009's authentication mode. A way
+     * in that policy has turned off is absent from the screen, not disabled on
+     * it: a greyed-out password field invites somebody to ask for it back.
      */
     public function show(): View
     {
-        return view('auth.sign-in');
+        return view('auth.sign-in', [
+            'offersCredentialForm' => $this->guard->offersCredentialForm(),
+            'offersFederatedSignIn' => $this->guard->offersFederatedSignIn(),
+        ]);
     }
 
     /**
@@ -57,6 +69,24 @@ class SignInController extends Controller
      */
     public function attempt(Request $request): RedirectResponse
     {
+        /*
+         * The form may be gone from the screen while this route still exists,
+         * so the route refuses independently. A control that is only hidden is
+         * not an access control.
+         */
+        if (! $this->guard->offersCredentialForm()) {
+            $this->audit->denied(
+                action: 'auth.login.failed',
+                module: 'Security',
+                resourceType: 'user',
+                reason: 'Credential sign-in is not offered under the current authentication policy.',
+            );
+
+            throw ValidationException::withMessages([
+                'form' => 'Signing in with a password is not available. Use the Microsoft sign-in button.',
+            ]);
+        }
+
         $credentials = $request->validate([
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string'],
@@ -68,7 +98,7 @@ class SignInController extends Controller
 
         $key = $this->throttleKey($request);
 
-        if (RateLimiter::tooManyAttempts($key, self::MAX_ATTEMPTS)) {
+        if (RateLimiter::tooManyAttempts($key, $this->guard->attemptThreshold())) {
             throw ValidationException::withMessages([
                 'form' => sprintf(
                     'Too many sign-in attempts. Try again in %d seconds.',
@@ -77,8 +107,8 @@ class SignInController extends Controller
             ]);
         }
 
-        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
-            RateLimiter::hit($key, self::DECAY_SECONDS);
+        if (! Auth::attempt($credentials, $this->mayRemember($request))) {
+            RateLimiter::hit($key, $this->guard->lockSeconds());
 
             $this->audit->record(
                 action: 'auth.login.failed',
@@ -110,12 +140,31 @@ class SignInController extends Controller
          */
         $user = Auth::user();
 
-        if ($user instanceof User && ! $user->mayAuthenticate()) {
+        /*
+         * Two separate questions, both asked after the password is verified and
+         * both answered with the SAME sentence.
+         *
+         * 1. Is the ACCOUNT allowed to authenticate at all - VAL-USER-DISABLED-001
+         *    and VAL-USER-WINDOW-001.
+         * 2. Is this FORM allowed to admit this account under ADM-009's
+         *    authentication policy - VAL-AUTH-MODE-001. A federated account, or
+         *    anybody who is not a local System Administrator while Entra is the
+         *    primary path, is refused here even with the right password.
+         *
+         * The reason differs in the trail and never differs in the browser.
+         */
+        $refusal = $user instanceof User
+            ? ($user->mayAuthenticate()
+                ? $this->guard->credentialRefusal($user)
+                : 'Account is '.$user->status->label().' or outside its access window.')
+            : null;
+
+        if ($user instanceof User && $refusal !== null) {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
-            RateLimiter::hit($key, self::DECAY_SECONDS);
+            RateLimiter::hit($key, $this->guard->lockSeconds());
 
             $this->audit->record(
                 action: 'auth.login.failed',
@@ -125,7 +174,7 @@ class SignInController extends Controller
                 resourceId: $user->getKey(),
                 /* The reason IS recorded in the trail, where an administrator
                  * can see it. It is only withheld from the browser. */
-                reason: 'Account is '.$user->status->label().' or outside its access window.',
+                reason: $refusal,
             );
 
             throw ValidationException::withMessages([
@@ -148,6 +197,14 @@ class SignInController extends Controller
          */
         $request->session()->regenerate();
 
+        /*
+         * Signing in a moment ago IS a proof of identity, so it counts as one
+         * for ADM-010's critical actions. Recording it here rather than making
+         * an administrator confirm twice in the same minute is the difference
+         * between a control people respect and one they click through.
+         */
+        app(Reauthentication::class)->confirm();
+
         return redirect()->intended('/');
     }
 
@@ -162,6 +219,8 @@ class SignInController extends Controller
             resourceType: 'user',
             resourceId: Auth::id(),
         );
+
+        app(Reauthentication::class)->forget();
 
         Auth::logout();
 
@@ -179,5 +238,21 @@ class SignInController extends Controller
     private function throttleKey(Request $request): string
     {
         return 'sign-in|'.mb_strtolower((string) $request->input('email')).'|'.$request->ip();
+    }
+
+    /**
+     * Whether "remember me" is honoured at all.
+     *
+     * ADM-010's remember-me policy, applied at the one place it can actually
+     * take effect. Zero days turns it off, which is the default: a remembered
+     * sign-in outlives the browser closing and is a credential sitting on a
+     * device. A ticked box that policy does not honour is ignored silently
+     * here, and the sign-in screen does not render the box when the policy is
+     * zero, so the two agree.
+     */
+    private function mayRemember(Request $request): bool
+    {
+        return $request->boolean('remember')
+            && app(SecurityPolicies::class)->number('activity.remember_me_days') > 0;
     }
 }

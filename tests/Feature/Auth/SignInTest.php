@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Auth;
 
+use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -30,13 +31,26 @@ class SignInTest extends TestCase
         RateLimiter::clear('sign-in|person@example.test|127.0.0.1');
     }
 
+    /**
+     * An account the credential form will admit.
+     *
+     * A LOCAL SYSTEM ADMINISTRATOR, since Release 1 gate 3. ADM-009's default
+     * authentication mode is Entra with break-glass local administrator
+     * sign-in, so a local Viewer is refused at this form however correct their
+     * password is. That refusal is its own test in the gate 3 suite; these
+     * tests are about the form itself, so they use an account it accepts.
+     */
     private function person(string $password = 'correct-horse-battery'): User
     {
-        return User::query()->create([
+        $user = User::query()->create([
             'name' => 'Test Person',
             'email' => 'person@example.test',
             'password' => Hash::make($password),
         ]);
+
+        $user->forceFill(['role' => Role::SystemAdmin])->save();
+
+        return $user->refresh();
     }
 
     #[Test]

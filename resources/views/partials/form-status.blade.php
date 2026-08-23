@@ -15,7 +15,10 @@
     </div>
 @endif
 
-@foreach (['form', 'authority', 'roles', 'entitlements', 'review'] as $slot)
+{{-- `policies` and `sessions` are the gate 3 slots: a refusal from
+     SecurityPolicies or SessionRegistry belongs to the whole form rather than
+     to one field, in the same way `authority` and `roles` already do. --}}
+@foreach (['form', 'authority', 'roles', 'entitlements', 'review', 'policies', 'sessions'] as $slot)
     @error($slot)
         <div class="alert" role="alert">
             <svg class="icon" aria-hidden="true"><use href="#i-alert-circle"/></svg>

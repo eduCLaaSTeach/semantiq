@@ -414,3 +414,431 @@ guard and a message string.
 
 **Gate 2 is met.** R1.3 has not been started and needs review of this batch
 first.
+
+---
+
+# Appendix A - Rollback-safe proof of the audit DELETE trigger
+
+**Status: OUTSTANDING.** SEC-DEC-037's `BEFORE UPDATE` trigger was proved in
+production on 25 August 2026. The `BEFORE DELETE` trigger has NOT been proved,
+and it is the one that matters: a mass delete is the attack the append-only
+control exists to stop.
+
+**Do not run `DELETE FROM audit_events LIMIT 1;` against production.** If the
+trigger is missing or has stopped firing, that statement destroys a real audit
+record, and the record it destroys is evidence.
+
+This procedure proves the same thing without a real row ever being at risk. It
+inserts its own marker inside a transaction, tries to delete only that marker,
+and rolls the whole thing back. Either the trigger blocks the delete - which is
+the pass - or it does not, in which case only the marker was deleted and the
+rollback removes the marker too.
+
+It does not block production acceptance of gate 3. It DOES block go-live.
+
+## Step 0 - confirm rollback will actually work
+
+```sql
+SELECT ENGINE
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'audit_events';
+```
+
+**Expected: `InnoDB`.** If this returns `MyISAM`, STOP. MyISAM does not support
+transactions and the rollback in step 3 would do nothing, which would turn this
+safe procedure into the unsafe one.
+
+## Step 1 - confirm both triggers are still attached
+
+```sql
+SELECT TRIGGER_NAME, ACTION_TIMING, EVENT_MANIPULATION
+FROM information_schema.TRIGGERS
+WHERE TRIGGER_SCHEMA = DATABASE()
+  AND EVENT_OBJECT_TABLE = 'audit_events';
+```
+
+**Expected: two rows** - `audit_events_no_update` (BEFORE UPDATE) and
+`audit_events_no_delete` (BEFORE DELETE). If the DELETE trigger is absent, skip
+to "If the proof fails" below and recreate it before doing anything else.
+
+## Step 2 - record the count
+
+```sql
+SELECT COUNT(*) AS before_count FROM audit_events;
+```
+
+Write the number down. Step 4 compares against it.
+
+## Step 3 - the proof
+
+Paste all four statements into ONE phpMyAdmin SQL box and submit ONCE. Splitting
+them across submissions can put each on its own connection, and the transaction
+would not span them.
+
+```sql
+START TRANSACTION;
+
+INSERT INTO audit_events
+  (organisation_id, occurred_at, actor_user_id, actor_type, actor_label,
+   action, module, resource_type, resource_id, outcome,
+   before_summary, after_summary, reason, ip_address, correlation_id,
+   environment, created_at)
+VALUES
+  (NULL, UTC_TIMESTAMP(), NULL, 'system', 'trigger proof',
+   'audit.trigger.proof', 'Security', 'audit_events', 'delete-trigger-proof',
+   'succeeded', NULL, NULL,
+   'Rollback-safe proof of the BEFORE DELETE trigger. Never committed.',
+   NULL, NULL, 'production', UTC_TIMESTAMP());
+
+DELETE FROM audit_events WHERE action = 'audit.trigger.proof';
+
+ROLLBACK;
+```
+
+**Expected result - this is the PASS:**
+
+```text
+#1644 - audit_events is append only: rows cannot be deleted
+```
+
+phpMyAdmin stops at the failing statement and will not run the `ROLLBACK` that
+follows it. That is fine: the transaction was never committed, and MySQL rolls
+back an open transaction when the connection closes. Submit `ROLLBACK;` on its
+own anyway, so the state is closed deliberately rather than by timeout.
+
+## Step 4 - confirm nothing was left behind
+
+```sql
+SELECT COUNT(*) AS after_count FROM audit_events;
+SELECT COUNT(*) AS proof_rows FROM audit_events WHERE action = 'audit.trigger.proof';
+```
+
+**Expected:** `after_count` equals the number from step 2, and `proof_rows` is
+`0`. If `proof_rows` is not 0, the marker committed - delete it is not possible
+while the trigger stands, so drop the trigger, delete the marker, recreate the
+trigger, and re-run this appendix from step 1.
+
+## If the proof fails
+
+A failure here means step 3's `DELETE` **succeeded** with no `#1644`. The
+append-only guarantee is not in force at the database, and only the model hooks
+are protecting the trail - which SEC-DEC-021 already established do not fire on
+a mass delete.
+
+1. Run `ROLLBACK;` immediately.
+2. Run step 4 and confirm `proof_rows` is `0`.
+3. Recreate the trigger:
+
+```sql
+CREATE TRIGGER audit_events_no_delete
+BEFORE DELETE ON audit_events
+FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'audit_events is append only: rows cannot be deleted.';
+```
+
+4. Re-run this appendix from step 1.
+5. Record the gap in `doc/context/SECURITY_PRIVACY_DECISIONS.md` against
+   SEC-DEC-037, including how long the trigger was absent if that can be
+   established.
+
+## When to re-run this
+
+Per SEC-DEC-039, triggers belong to the table and do not survive it. Re-run this
+appendix after any operation that rebuilds `audit_events`, after any database
+credential rotation that recreates the application's database user
+(SEC-DEC-040), and as part of go-live acceptance.
+
+---
+
+# Gate 3 - Security (R1.3)
+
+**Features:** ADM-009 Authentication Policy, ADM-010 Session Policy, ADM-011 API
+Security, ADM-012 Secret References, plus the Security Overview roll-up.
+**Plan:** `doc/execution/R1.3-GATE-3-SECURITY-PLAN.md`, decisions D1 to D5
+approved by the product owner 25 August 2026.
+**Navigation:** `doc/MENU_STRUCTURE.md` 12.16, route family settled by DEC-001.
+
+## 1. Automated tests
+
+| Command | Result |
+|---|---|
+| `php artisan test` | **384 tests, 2818 assertions, all passing.** 269 before this gate, so 115 are new |
+| `./vendor/bin/pint` | Clean |
+| `php artisan migrate` then `migrate:rollback --step=2` then `migrate` | Both new migrations applied, rolled back and re-applied without error |
+
+New test files:
+
+| File | Tests | What it proves |
+|---|---|---|
+| `tests/Feature/Security/SecurityPolicyServiceTest.php` | 16 | The six guards on the policy store, organisation isolation, and that no catalogue key is redacted out of its own audit trail |
+| `tests/Feature/Security/AuthenticationPolicyTest.php` | 16 | That ADM-009 CHANGES BEHAVIOUR. Every test drives a real sign-in and asserts what the policy did to it |
+| `tests/Feature/Security/SessionPolicyTest.php` | 24 | Idle and maximum enforcement, both session drivers, revocation, concurrency, and the four re-authentication paths |
+| `tests/Feature/Security/ApiSecurityTest.php` | 18 | The headers on a real response, the payload limit, and all eight controls including one deliberately broken |
+| `tests/Feature/Security/SecretReferenceTest.php` | 14 | That a credential cannot reach the table through the form, the model, or any free-text field |
+| `tests/Feature/Security/SecurityOverviewTest.php` | 15 | That the roll-up tells the truth. Each test creates a real problem and asserts it surfaces |
+| `tests/Feature/Security/SecurityAccessTest.php` | 12 | Structural: the route family, the gating, the rail-route agreement, and the two-dimension model |
+
+## 2. Migrations
+
+| Migration | Tables | Rollback |
+|---|---|---|
+| `2026_08_26_090000_create_security_policies_table` | `security_policies` | Working `down()`, verified |
+| `2026_08_26_090100_create_secret_references_table` | `secret_references` | Working `down()`, verified |
+
+**One table, not the two the release plan listed.** `session_policies` is dropped:
+authentication and session policy are the same key/value store viewed through
+two screens. SEC-DEC-046.
+
+No existing table is altered, so rolling this gate back cannot damage gate 1 or
+gate 2 data.
+
+## 3. Permissions introduced
+
+| Key | Ceiling | Auto-granted from | Risk | Audited |
+|---|---|---|---|---|
+| `admin.security.view` | System Administrator | System Administrator | Normal | No |
+| `admin.security.update` | System Administrator | System Administrator | High | Yes |
+| `admin.secrets.view` | System Administrator | System Administrator | Normal | No |
+| `admin.secrets.manage` | System Administrator | System Administrator | High | Yes |
+
+None names a business domain, and a System Administrator holding all four still
+holds no entitlement to Sales, Finance or People data. Asserted, not assumed:
+`SecurityAccessTest::a_system_administrator_holds_no_business_domain_by_virtue_of_the_security_grants`.
+
+## 4. Audit events introduced
+
+| Action | When | Outcome recorded |
+|---|---|---|
+| `security.policy.updated` | Any policy change, and any refused change | Succeeded or Denied, with before, after and the reason |
+| `security.sessions.revoked` | An administrator ends an account's sessions, or is refused | Succeeded with a count, or Denied with why |
+| `security.sessions.limited` | The concurrency policy ends older sessions | Succeeded with the count and the limit |
+| `security.secret_reference.created` / `.updated` / `.retired` | Secret reference lifecycle | Succeeded, with the pointer but never a value |
+| `security.request.refused` | An oversized request | Denied, with the declared size |
+| `auth.session.expired` | Idle or maximum timeout ends a session | Succeeded, naming which rule |
+| `auth.reauthentication.succeeded` / `.failed` | Identity confirmation | Succeeded or Denied |
+
+Existing `auth.login.failed` gains new reasons from the ADM-009 checks: mode,
+tenant, domain, and self-provisioning.
+
+## 5. Security checks
+
+| Check | Result |
+|---|---|
+| Every security route gated by a declared permission | Pass, structurally asserted |
+| Every security WRITE route also demands a fresh identity confirmation | Pass, structurally asserted |
+| Rail node and route gated by the same permission | Pass, leaf by leaf |
+| Cross-organisation policy read or write | Refused, global scope, fails closed |
+| Cross-organisation session revocation | 404, through the `UserRegistry` guard (SEC-DEC-033, SEC-DEC-034) |
+| A credential reaching `secret_references` | Refused at three layers, and removed from the flashed input |
+| A credential reaching `security_policies` | Refused, and the refusal audited without the value |
+| Secret value rendered anywhere | None. No column holds one |
+| Entra client secret on a screen | None. Presence only, SEC-DEC-017 |
+| Refusal wording discloses the tenant or domain allow-list | No. SEC-DEC-045 |
+| HSTS default | **OFF**, duration one day. Gate 3 rule 8 |
+| A control that cannot be verified reported as Healthy | None. `NotVerified` is a distinct state and a distinct badge |
+| An unavailable action rendered as a working control | None. The revocation action is absent, and the route refuses independently |
+
+## 6. Browser verification
+
+Chromium, signed in as a System Administrator, on all six screens plus the
+confirmation prompt, in **light and dark at 1440px and 390px** - 25 combinations.
+No console errors, no page errors, and no page scrolls sideways.
+
+**Seven defects it caught that 384 passing tests did not:**
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | Four tables used `col-primary` on their first column. That class is 55% wide and is for a row name carrying a long description; here the LAST column was the long one, so the middle columns wrapped to two or three words a line | `col-label` |
+| 2 | "1 reference have already expired", "for 1 minutes", "5 attempt(s)" | Singular and plural spelled out per case |
+| 3 | The same four-sentence "Not Available" paragraph appeared beside three fields AND in the banner | Short phrase beside each field, full explanation once in the banner |
+| 4 | "Enforced on every request by EnforceSessionPolicy" - a class name in user-facing help | Rewritten |
+| 5 | The reason field carried a required asterisk while being only conditionally required, which would make the asterisk mean something different here than on every other screen | Asterisk removed; the badges and help text carry it |
+| 6 | The reason placeholder wrapped to three lines in a three-row box at 390px and overflowed it | Shortened |
+| 7 | `.settings-foot` had no `flex-wrap`, so on the first form with two buttons AND a note the note was squeezed into a ribbon a few words wide at 390px | `flex-wrap: wrap`, which also fixes the same latent problem on the existing settings screens |
+
+## 7. What the tests caught that review had not
+
+| # | Defect | How it was found |
+|---|---|---|
+| 1 | **A refused credential was being flashed back into the session and rendered into the next page's HTML.** A form request is a COPY of the request and the exception handler flashes the original, so blanking the field on the form request did nothing | A test that looked for the value on the page afterwards, rather than only asserting the save was refused. SEC-DEC-051 |
+| 2 | The revocation audit summary recorded `[redacted]` instead of a count, because the key was `sessions_ended` and the redactor replaces any key containing "session" | An assertion comparing the recorded count to 2. SEC-DEC-044 |
+| 3 | Laravel 13 renamed `ValidateCsrfToken` to `PreventRequestForgery`, so the CSRF control reported itself missing on a correctly configured application | The test asserting every control is healthy. SEC-DEC-047 |
+| 4 | Laravel's `storage.local` routes carry no middleware and looked like an anonymous hole. They are signature-gated inside the handler - **but only while the local disk is private** | Investigating a failing control, which turned a false positive into a real conditional check. SEC-DEC-053 |
+| 5 | `DATA_SOVEREIGNTY_REGISTER.md` still said the applicable privacy regime was "not determined" - DEC-002 had updated the sovereignty standard and the decisions register but not this table | Re-reading the registers before adding to them |
+
+## 8. Menu structure
+
+`doc/MENU_STRUCTURE.md` 12.16 is fully built. Five leaves, five routes, exactly
+the family DEC-001 settled. No leaf renders as unbuilt, no duplicate node exists,
+and no route was added outside the recorded family.
+
+**Gap M9 highlighted:** Security Overview has no ADM feature behind it. Built as
+a read-only roll-up under decision D5; the gap stays open in case a later
+requirement defines the screen.
+
+## 9. Known issues and items carried forward
+
+| # | Item | Status |
+|---|---|---|
+| 1 | **`SESSION_DRIVER=file` on production.** Session revocation and concurrent session limits cannot run | Built, tested under both drivers, reported unavailable on screen. Switching is a separate approved change, and it signs everybody out at the moment it takes effect |
+| 2 | **HSTS is off.** Enabling it on production is a separate approval, because it cannot be withdrawn from a browser that has already seen it | By design, gate 3 rule 8 |
+| 3 | **The default authentication mode shuts the credential form to local accounts below System Administrator.** The Authentication Policy screen states how many accounts that is | Check the count on production before relying on it |
+| 4 | The Content Security Policy is report-only. It has not been run against real usage yet, so what it would block is unknown | Read the browser reports before enforcing |
+| 5 | No provider is ever contacted to confirm a secret reference's expiry date. Every date is one an administrator typed in, and the screen says so | By design in Release 1. Resolving a reference belongs with gate 5 |
+| 6 | `MASTER_ADMIN_EMAILS` is in the deploy `.env` template and **nothing in the application reads it** | Found while implementing ADM-009. Left alone: it is in the deploy workflow, and removing it is a deployment change |
+| 7 | Gap M9, Security Overview has no feature | Open, mitigated |
+| 8 | The audit DELETE trigger is still unproved | Appendix A. Does not block gate 3; **does block go-live** |
+| 9 | `QUEUE_CONNECTION=sync` on production | Open, gate 6 |
+| 10 | PDPA gaps 1 to 3 | Open, gate 4 |
+
+## 10. Result against the gate
+
+| Exit criterion | Result |
+|---|---|
+| ADM-009 Authentication Policy implemented and enforced | **Pass.** The mode, the allow-lists, auto-create, the threshold and the lock duration all change real sign-in behaviour |
+| ADM-010 Session Policy implemented and enforced | **Pass**, with revocation and concurrency reporting themselves unavailable on this environment by design |
+| ADM-011 API Security implemented | **Pass.** Eight controls checked live; the headers middleware and the payload limit are new and real |
+| ADM-012 Secret References implemented | **Pass.** No credential can reach the table through any path |
+| Security Overview | **Pass**, as a read-only roll-up under D5 |
+| Navigation matches MENU_STRUCTURE 12.16 | **Pass** |
+| Server-side enforcement, not navigation alone | **Pass**, structurally asserted |
+| All security policy changes audited | **Pass**, and there is no unaudited path |
+| High-risk changes require a reason | **Pass** |
+| Secret References stores metadata only | **Pass**, three layers |
+| No credential persisted anywhere | **Pass** |
+| Not Verified rather than Healthy where unverifiable | **Pass** |
+| HSTS off by default | **Pass** |
+| No working-looking action for an unavailable capability | **Pass** |
+| Automated tests, Pint, migrations up-down-up | **Pass** |
+| Responsive UI in both themes | **Pass**, 25 combinations |
+| Production `.env` unchanged | **Pass.** Nothing in this gate touches the server |
+| Production database unchanged | **Pass.** Two new migrations, not yet run on production |
+| No gate 4 PDPA feature implemented | **Pass** |
+
+**Gate 3 is complete and ready for review.**
+
+## 11. What the reviewer should know before merging
+
+**This release contains two migrations.** The deploy workflow ships code only.
+Until `php artisan migrate --force` is run on the server, every Security screen
+will fail: the Overview, all three policy screens and Secret References all read
+tables that will not exist yet. The exact command and the screens at risk are in
+the completion report.
+
+## 12. Deployment order and release safety
+
+Added after a product-owner review of PR #21 found that gate 3 could not survive
+its own release. It is recorded here rather than in a commit message because it
+is a property of every future release that adds a table, not a one-off fix.
+
+### The problem, measured rather than assumed
+
+The deploy workflow ships code and does **not** run migrations. That is
+deliberate - a deployment that migrates a production database unattended is a
+deployment that can lose data - but it opens a window on every release that adds
+a table:
+
+```text
+code deployed  ->  migration not yet run  ->  the new tables do not exist
+```
+
+Gate 3's middleware runs on the **web** stack, not only on `/admin/security`.
+`SecurityHeaders` reads a policy on every single response and
+`EnforceSessionPolicy` reads two more, so the very first request after a deploy
+queried a table that did not exist.
+
+**The measured result: `GET /sign-in` returned 500.** Not the Security screens -
+the sign-in screen, so nobody could get in to notice. A test written to
+demonstrate it failed exactly that way before any fix was made.
+
+### How readiness is detected
+
+`App\Modules\Security\Support\SecurityStorage` asks one specific question -
+`Schema::hasTable()` - and answers only that.
+
+**It does not catch database exceptions.** Catching one and falling back would
+also swallow a broken connection, a permissions problem or a corrupt table, and
+report all three as "everything is fine, using defaults". Those must still fail
+loudly. The check is a schema question, not an error handler.
+
+The class is a container **singleton** and memoises per request, so the answer
+costs one schema query per table per request rather than one per consumer, on
+every response the application sends. `SecurityPolicies`, `SecurityCapabilities`,
+`AuthenticationGuard`, `Reauthentication` and `SessionRegistry` were registered
+as singletons in the same change, for the same reason.
+
+### What happens in the window
+
+| Path | Behaviour | Why |
+|---|---|---|
+| **Policy READ** | Falls back to the `config/security.php` default | Not a compromise: with no table there can be no override, so the catalogue default IS the value in force. The secure defaults stay authoritative |
+| **Policy WRITE** | Refused with `SecurityStorageNotInitialised`, before any other check runs | Accepting a write and discarding it would tell an administrator their security policy had changed when nothing had. Nothing is written and nothing is audited as though it might have been |
+| **Security headers** | Sent, using the catalogue defaults | A release window must not be a window with the headers switched off |
+| **Session policy** | Enforced, using the catalogue defaults | The idle timeout still ends a stale session. A window that silently suspended it would be a security regression dressed as resilience |
+| **Critical actions** | Still confirmed | Same reason |
+| **Secret References index** | A controlled "Migration required" state | **Deliberately NOT the empty state.** "No references recorded" says the store exists and is empty, which is a different and far more comforting fact than "we cannot tell you" |
+| **Secret References writes and detail pages** | Refused by the `security-storage` middleware, redirected to the index with the reason | Fails closed |
+| **Security Overview** | Renders. Secret posture reads **Not Verified**, and the storage gap is the first configuration gap listed | Gate 3 rule 9 |
+| **Expiring credentials panel** | "Cannot be checked yet" | It previously showed a green tick and "nothing expiring in the next 30 days" - a false healthy about the one thing on that page that can take an integration down, at exactly the moment the screen cannot see the data |
+| **Everything else** | Unaffected | Asserted screen by screen |
+
+### A second defect the fix exposed
+
+Four secret-reference routes carry a `{secretReference}` segment, and Laravel's
+`SubstituteBindings` lives in the **`web` middleware group**, which runs before
+any route-level middleware. An implicit model binding therefore queried
+`secret_references` *before* `security-storage` could refuse, and a typed URL
+during the window still returned a raw database error.
+
+The parameter is now a plain integer resolved inside the controller, matching
+how `sessions.revoke` already resolves its subject. Caught by the test that
+walks all five routes with the table dropped, not by review.
+
+### Evidence
+
+`tests/Feature/Security/DeploymentOrderTest.php`, 21 tests:
+
+| Area | Proved |
+|---|---|
+| Pre-migration | `/sign-in` renders AND a real sign-in completes; a guest redirect is normal; nine existing screens return 200; headers and session policy use the safe defaults; the idle timeout still ends a stale session; a critical action is still confirmed |
+| Screens | Overview, all three policy screens and the Secret References index render and explain themselves; the Save button and the New reference button are absent rather than disabled |
+| Writes | The service refuses with a controlled message quoting no SQL and no table name; nothing changes; nothing is audited; the form shows the message; all five secret write and detail routes are refused |
+| Round trip | pre-migration -> up -> gate 3 behaviour -> down -> safe again -> up, asserted end to end in one test |
+| Half-migrated | One table present and the other missing is handled independently, which is the state a failed migration leaves |
+| Detection | Readiness is a schema question; the answer is memoised; the services are singletons |
+
+Manual verification against a database with the gate 3 migrations rolled back,
+served on a real HTTP server and driven in Chromium in both themes:
+
+```text
+/sign-in                        200, with all five base headers and the report-only CSP
+/                               200
+/admin, /admin/users            200
+/admin/organisation             200
+/admin/system/diagnostics       200
+/admin/security                 200
+/admin/security/authentication  200
+/admin/security/sessions        200
+/admin/security/api             200
+/admin/security/secrets         200
+/admin/security/secrets/new     302 to the index, with the reason
+/admin/security/secrets/1       302 to the index, with the reason
+```
+
+Migration sequence run against a file database: up, down, up, down, up. Both
+migrations applied and rolled back cleanly five times.
+
+### What is deliberately NOT done
+
+**The deployment workflow is unchanged.** It still does not run migrations, and
+making it do so is an architecture change requiring separate approval. This work
+makes the application survive the window; it does not remove the window.
+
+### The rule this establishes for later gates
+
+Any release adding a table that request-path code reads must either carry the
+same readiness fallback, or not be read from the request path at all. Gate 4's
+`data_protection_profiles` and gate 5's `integrations` are both candidates -
+whichever screens read them, if anything on the web middleware stack does, the
+same window applies.
