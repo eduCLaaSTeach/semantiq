@@ -548,3 +548,180 @@ Per SEC-DEC-039, triggers belong to the table and do not survive it. Re-run this
 appendix after any operation that rebuilds `audit_events`, after any database
 credential rotation that recreates the application's database user
 (SEC-DEC-040), and as part of go-live acceptance.
+
+---
+
+# Gate 3 - Security (R1.3)
+
+**Features:** ADM-009 Authentication Policy, ADM-010 Session Policy, ADM-011 API
+Security, ADM-012 Secret References, plus the Security Overview roll-up.
+**Plan:** `doc/execution/R1.3-GATE-3-SECURITY-PLAN.md`, decisions D1 to D5
+approved by the product owner 25 August 2026.
+**Navigation:** `doc/MENU_STRUCTURE.md` 12.16, route family settled by DEC-001.
+
+## 1. Automated tests
+
+| Command | Result |
+|---|---|
+| `php artisan test` | **384 tests, 2818 assertions, all passing.** 269 before this gate, so 115 are new |
+| `./vendor/bin/pint` | Clean |
+| `php artisan migrate` then `migrate:rollback --step=2` then `migrate` | Both new migrations applied, rolled back and re-applied without error |
+
+New test files:
+
+| File | Tests | What it proves |
+|---|---|---|
+| `tests/Feature/Security/SecurityPolicyServiceTest.php` | 16 | The six guards on the policy store, organisation isolation, and that no catalogue key is redacted out of its own audit trail |
+| `tests/Feature/Security/AuthenticationPolicyTest.php` | 16 | That ADM-009 CHANGES BEHAVIOUR. Every test drives a real sign-in and asserts what the policy did to it |
+| `tests/Feature/Security/SessionPolicyTest.php` | 24 | Idle and maximum enforcement, both session drivers, revocation, concurrency, and the four re-authentication paths |
+| `tests/Feature/Security/ApiSecurityTest.php` | 18 | The headers on a real response, the payload limit, and all eight controls including one deliberately broken |
+| `tests/Feature/Security/SecretReferenceTest.php` | 14 | That a credential cannot reach the table through the form, the model, or any free-text field |
+| `tests/Feature/Security/SecurityOverviewTest.php` | 15 | That the roll-up tells the truth. Each test creates a real problem and asserts it surfaces |
+| `tests/Feature/Security/SecurityAccessTest.php` | 12 | Structural: the route family, the gating, the rail-route agreement, and the two-dimension model |
+
+## 2. Migrations
+
+| Migration | Tables | Rollback |
+|---|---|---|
+| `2026_08_26_090000_create_security_policies_table` | `security_policies` | Working `down()`, verified |
+| `2026_08_26_090100_create_secret_references_table` | `secret_references` | Working `down()`, verified |
+
+**One table, not the two the release plan listed.** `session_policies` is dropped:
+authentication and session policy are the same key/value store viewed through
+two screens. SEC-DEC-046.
+
+No existing table is altered, so rolling this gate back cannot damage gate 1 or
+gate 2 data.
+
+## 3. Permissions introduced
+
+| Key | Ceiling | Auto-granted from | Risk | Audited |
+|---|---|---|---|---|
+| `admin.security.view` | System Administrator | System Administrator | Normal | No |
+| `admin.security.update` | System Administrator | System Administrator | High | Yes |
+| `admin.secrets.view` | System Administrator | System Administrator | Normal | No |
+| `admin.secrets.manage` | System Administrator | System Administrator | High | Yes |
+
+None names a business domain, and a System Administrator holding all four still
+holds no entitlement to Sales, Finance or People data. Asserted, not assumed:
+`SecurityAccessTest::a_system_administrator_holds_no_business_domain_by_virtue_of_the_security_grants`.
+
+## 4. Audit events introduced
+
+| Action | When | Outcome recorded |
+|---|---|---|
+| `security.policy.updated` | Any policy change, and any refused change | Succeeded or Denied, with before, after and the reason |
+| `security.sessions.revoked` | An administrator ends an account's sessions, or is refused | Succeeded with a count, or Denied with why |
+| `security.sessions.limited` | The concurrency policy ends older sessions | Succeeded with the count and the limit |
+| `security.secret_reference.created` / `.updated` / `.retired` | Secret reference lifecycle | Succeeded, with the pointer but never a value |
+| `security.request.refused` | An oversized request | Denied, with the declared size |
+| `auth.session.expired` | Idle or maximum timeout ends a session | Succeeded, naming which rule |
+| `auth.reauthentication.succeeded` / `.failed` | Identity confirmation | Succeeded or Denied |
+
+Existing `auth.login.failed` gains new reasons from the ADM-009 checks: mode,
+tenant, domain, and self-provisioning.
+
+## 5. Security checks
+
+| Check | Result |
+|---|---|
+| Every security route gated by a declared permission | Pass, structurally asserted |
+| Every security WRITE route also demands a fresh identity confirmation | Pass, structurally asserted |
+| Rail node and route gated by the same permission | Pass, leaf by leaf |
+| Cross-organisation policy read or write | Refused, global scope, fails closed |
+| Cross-organisation session revocation | 404, through the `UserRegistry` guard (SEC-DEC-033, SEC-DEC-034) |
+| A credential reaching `secret_references` | Refused at three layers, and removed from the flashed input |
+| A credential reaching `security_policies` | Refused, and the refusal audited without the value |
+| Secret value rendered anywhere | None. No column holds one |
+| Entra client secret on a screen | None. Presence only, SEC-DEC-017 |
+| Refusal wording discloses the tenant or domain allow-list | No. SEC-DEC-045 |
+| HSTS default | **OFF**, duration one day. Gate 3 rule 8 |
+| A control that cannot be verified reported as Healthy | None. `NotVerified` is a distinct state and a distinct badge |
+| An unavailable action rendered as a working control | None. The revocation action is absent, and the route refuses independently |
+
+## 6. Browser verification
+
+Chromium, signed in as a System Administrator, on all six screens plus the
+confirmation prompt, in **light and dark at 1440px and 390px** - 25 combinations.
+No console errors, no page errors, and no page scrolls sideways.
+
+**Seven defects it caught that 384 passing tests did not:**
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | Four tables used `col-primary` on their first column. That class is 55% wide and is for a row name carrying a long description; here the LAST column was the long one, so the middle columns wrapped to two or three words a line | `col-label` |
+| 2 | "1 reference have already expired", "for 1 minutes", "5 attempt(s)" | Singular and plural spelled out per case |
+| 3 | The same four-sentence "Not Available" paragraph appeared beside three fields AND in the banner | Short phrase beside each field, full explanation once in the banner |
+| 4 | "Enforced on every request by EnforceSessionPolicy" - a class name in user-facing help | Rewritten |
+| 5 | The reason field carried a required asterisk while being only conditionally required, which would make the asterisk mean something different here than on every other screen | Asterisk removed; the badges and help text carry it |
+| 6 | The reason placeholder wrapped to three lines in a three-row box at 390px and overflowed it | Shortened |
+| 7 | `.settings-foot` had no `flex-wrap`, so on the first form with two buttons AND a note the note was squeezed into a ribbon a few words wide at 390px | `flex-wrap: wrap`, which also fixes the same latent problem on the existing settings screens |
+
+## 7. What the tests caught that review had not
+
+| # | Defect | How it was found |
+|---|---|---|
+| 1 | **A refused credential was being flashed back into the session and rendered into the next page's HTML.** A form request is a COPY of the request and the exception handler flashes the original, so blanking the field on the form request did nothing | A test that looked for the value on the page afterwards, rather than only asserting the save was refused. SEC-DEC-051 |
+| 2 | The revocation audit summary recorded `[redacted]` instead of a count, because the key was `sessions_ended` and the redactor replaces any key containing "session" | An assertion comparing the recorded count to 2. SEC-DEC-044 |
+| 3 | Laravel 13 renamed `ValidateCsrfToken` to `PreventRequestForgery`, so the CSRF control reported itself missing on a correctly configured application | The test asserting every control is healthy. SEC-DEC-047 |
+| 4 | Laravel's `storage.local` routes carry no middleware and looked like an anonymous hole. They are signature-gated inside the handler - **but only while the local disk is private** | Investigating a failing control, which turned a false positive into a real conditional check. SEC-DEC-053 |
+| 5 | `DATA_SOVEREIGNTY_REGISTER.md` still said the applicable privacy regime was "not determined" - DEC-002 had updated the sovereignty standard and the decisions register but not this table | Re-reading the registers before adding to them |
+
+## 8. Menu structure
+
+`doc/MENU_STRUCTURE.md` 12.16 is fully built. Five leaves, five routes, exactly
+the family DEC-001 settled. No leaf renders as unbuilt, no duplicate node exists,
+and no route was added outside the recorded family.
+
+**Gap M9 highlighted:** Security Overview has no ADM feature behind it. Built as
+a read-only roll-up under decision D5; the gap stays open in case a later
+requirement defines the screen.
+
+## 9. Known issues and items carried forward
+
+| # | Item | Status |
+|---|---|---|
+| 1 | **`SESSION_DRIVER=file` on production.** Session revocation and concurrent session limits cannot run | Built, tested under both drivers, reported unavailable on screen. Switching is a separate approved change, and it signs everybody out at the moment it takes effect |
+| 2 | **HSTS is off.** Enabling it on production is a separate approval, because it cannot be withdrawn from a browser that has already seen it | By design, gate 3 rule 8 |
+| 3 | **The default authentication mode shuts the credential form to local accounts below System Administrator.** The Authentication Policy screen states how many accounts that is | Check the count on production before relying on it |
+| 4 | The Content Security Policy is report-only. It has not been run against real usage yet, so what it would block is unknown | Read the browser reports before enforcing |
+| 5 | No provider is ever contacted to confirm a secret reference's expiry date. Every date is one an administrator typed in, and the screen says so | By design in Release 1. Resolving a reference belongs with gate 5 |
+| 6 | `MASTER_ADMIN_EMAILS` is in the deploy `.env` template and **nothing in the application reads it** | Found while implementing ADM-009. Left alone: it is in the deploy workflow, and removing it is a deployment change |
+| 7 | Gap M9, Security Overview has no feature | Open, mitigated |
+| 8 | The audit DELETE trigger is still unproved | Appendix A. Does not block gate 3; **does block go-live** |
+| 9 | `QUEUE_CONNECTION=sync` on production | Open, gate 6 |
+| 10 | PDPA gaps 1 to 3 | Open, gate 4 |
+
+## 10. Result against the gate
+
+| Exit criterion | Result |
+|---|---|
+| ADM-009 Authentication Policy implemented and enforced | **Pass.** The mode, the allow-lists, auto-create, the threshold and the lock duration all change real sign-in behaviour |
+| ADM-010 Session Policy implemented and enforced | **Pass**, with revocation and concurrency reporting themselves unavailable on this environment by design |
+| ADM-011 API Security implemented | **Pass.** Eight controls checked live; the headers middleware and the payload limit are new and real |
+| ADM-012 Secret References implemented | **Pass.** No credential can reach the table through any path |
+| Security Overview | **Pass**, as a read-only roll-up under D5 |
+| Navigation matches MENU_STRUCTURE 12.16 | **Pass** |
+| Server-side enforcement, not navigation alone | **Pass**, structurally asserted |
+| All security policy changes audited | **Pass**, and there is no unaudited path |
+| High-risk changes require a reason | **Pass** |
+| Secret References stores metadata only | **Pass**, three layers |
+| No credential persisted anywhere | **Pass** |
+| Not Verified rather than Healthy where unverifiable | **Pass** |
+| HSTS off by default | **Pass** |
+| No working-looking action for an unavailable capability | **Pass** |
+| Automated tests, Pint, migrations up-down-up | **Pass** |
+| Responsive UI in both themes | **Pass**, 25 combinations |
+| Production `.env` unchanged | **Pass.** Nothing in this gate touches the server |
+| Production database unchanged | **Pass.** Two new migrations, not yet run on production |
+| No gate 4 PDPA feature implemented | **Pass** |
+
+**Gate 3 is complete and ready for review.**
+
+## 11. What the reviewer should know before merging
+
+**This release contains two migrations.** The deploy workflow ships code only.
+Until `php artisan migrate --force` is run on the server, every Security screen
+will fail: the Overview, all three policy screens and Secret References all read
+tables that will not exist yet. The exact command and the screens at risk are in
+the completion report.

@@ -439,7 +439,7 @@ Checked node by node on 24 August 2026. `doc/MENU_STRUCTURE.md` is the authority
 | Platform Overview | 12.1 Platform Overview | Built in R1.1 |
 | Organisation (Profile, Business Units, Teams) | 12.2 Organisation and Users | Gate 2 |
 | Users and Access (Users, Roles, Permissions, Access Reviews) | 12.2 Organisation and Users | Gate 2 |
-| Security (Authentication Policy, Session Policy, API Security, Secret References) | **partly missing - see 21.3** | Gate 3 |
+| Security (Security Overview, Authentication Policy, Session Policy, API Security, Secret References) | **BUILT in R1.3** | Gate 3, complete |
 | Audit (User Activity, Administrative, Security, Configuration) | 12.10 Governance, "Audit Logs" leaf | Gate 4 |
 | Data Protection | 12.11 Data Protection | Gate 4 |
 | Data Sovereignty | 12.12 Data Sovereignty | Gate 4 |
@@ -467,6 +467,7 @@ These are gaps between the two documents. None is fixed in R1.1, because none be
 
 | # | Gap | Detail | Needed by |
 |---|---|---|---|
+| M9 | Security Overview has no feature specification. DEC-001 created the leaf as part of the group's shape; no ADM feature says what it shows. Same shape as M7 | Built in R1.3 as a read-only roll-up over ADM-009 to ADM-012 (decision D5), which invents no policy. **The gap stays open**: a later requirement may say what the screen should be | Open, mitigated |
 | M1 | ~~No home for security policy screens~~ **RESOLVED** | DEC-001, approved 24 August 2026. A new top-level `Security` group holds ADM-009, ADM-010, ADM-011 and ADM-012. Secret References moved there from System Configuration, with no duplicate node. The group is authored in the rail now and renders as unbuilt; the screens are R1.3 | Resolved |
 | M2 | **Audit is one leaf, ADM wants four views** | MENU_STRUCTURE has a single "Audit Logs" leaf under Governance. ADM-013 asks for User Activity, Administrative Changes, Security Changes and Configuration Changes. These may be filters on one screen rather than four nodes, which is the cheaper answer, but it is a decision | Gate 4 |
 | M3 | ~~No Permissions node~~ **RESOLVED** | DEC-001. `Permissions` is now a first-class leaf under Organisation & Users, and the screen is built in R1.2 | Resolved |

@@ -21,7 +21,7 @@ use Illuminate\View\View;
  * that screen rather than duplicating its controls - the same filter-not-fork
  * rule the navigation follows.
  *
- * Gap M8 in the release plan stays open: a later requirement may say what this
+ * Gap M9 in the release plan stays open: a later requirement may say what this
  * screen should be. Until it does, this is the honest minimum.
  */
 class SecurityOverviewController extends Controller

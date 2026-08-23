@@ -45,4 +45,21 @@ Two things remain open, and neither is a technical gap. The Fabric side - the ap
 | Control-plane hosting geography | Confirmed before go-live | **Singapore** | **Confirmed** 25 August 2026 |
 | Backup geography | Confirmed before go-live | **Singapore** | **Confirmed** 25 August 2026 |
 | Replication outside the approved geography | None unless approved | **None** | **Confirmed** 25 August 2026 |
-| Applicable privacy regime | Determined before production acceptance | **Not determined** | **Open item.** Singapore hosting makes the PDPA the likely regime, but CLAUDE.md requires legal applicability to be confirmed rather than assumed by code |
+| Applicable privacy regime | Determined before production acceptance | **Singapore PDPA** | **Determined** 25 August 2026, DEC-002. This row said "not determined" until R1.3 found it stale: DEC-002 updated the sovereignty STANDARD and the security decisions register but not this table |
+
+## Release 1 gate 3 additions (R1.3)
+
+| SOV ID | What | Storage | Processing | Cross-geo | Note |
+|---|---|---|---|---|---|
+| SOV-009 | `security_policies` - authentication, session and API policy overrides | Singapore, control plane | Singapore | None | Configuration only. No customer data, no credential |
+| SOV-010 | `secret_references` - credential metadata | Singapore, control plane | Singapore | None | Records WHERE a credential is kept, never the credential. SemantIQ makes NO call to any provider named in a reference, so no value crosses any boundary in either direction |
+| SOV-011 | `sessions` - only if `SESSION_DRIVER` becomes `database` | Singapore, control plane | Singapore | None | Holds an IP address and a user agent, both personal data under the PDPA. Short-lived and cleared on expiry. **Not in use today**; the production driver is `file` |
+| SOV-012 | Microsoft Entra re-authentication round trip | None stored | Microsoft, wherever the customer tenant sits | **Inherent to federated identity** | The `prompt=login` round trip sends the person to their own directory. No SemantIQ data is sent, and **no additional Microsoft token is stored** to make it work - the round trip itself is the proof |
+
+Nothing in gate 3 introduces a cross-geo setting, and the existing cross-geo
+defaults remain OFF.
+
+**Carried into gate 4.** If `SESSION_DRIVER` is switched to `database`, SOV-011
+becomes live and `sessions` becomes a sixth table holding personal data. DEC-002's
+PDPA-01 access-and-correction scope must include it. Recorded here so gate 4
+inherits the constraint rather than rediscovering it.
