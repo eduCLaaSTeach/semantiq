@@ -1,0 +1,792 @@
+/* ===========================================================================
+ * CLaaS SemantIQ - design system
+ *
+ * Every value here is transcribed from
+ * .claude/reference-template/ui-and-ux-layout-template-shared.md section 4.
+ * That file is the source of truth: token names may adapt to the stack, token
+ * values may not change, and no hex is ever hardcoded outside this file.
+ *
+ * Both themes are fully defined. The two chromes are deliberately different
+ * colors - white against ink navy - so neither theme is the other with a filter.
+ * ======================================================================== */
+
+/* ---------------------------------------------------------------------------
+ * 1 - Fonts
+ *
+ * Montserrat for headings, Source Sans 3 for body, per section 4. Weight 300 is
+ * not loaded, so nothing can use it by accident.
+ * ------------------------------------------------------------------------ */
+
+/* Self-hosted, not fetched from Google at runtime.
+
+   The template allows either, and self-hosting is the right call for a control
+   plane: a sign-in page that reaches a third party before it can render its own
+   heading leaks a visit to every viewer's network, blocks first paint on a
+   service outside our control, and is the sort of outbound request an
+   air-gapped or policy-restricted customer refuses outright.
+
+   Latin and latin-ext subsets only. The weights below are the ones section 4
+   loads; weight 300 is deliberately absent so nothing can use it. Several
+   weights share one file because these are variable fonts. */
+
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/fonts/JTUSjIg1_i6t8kCHKm459Wdhyzbi.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/fonts/JTUSjIg1_i6t8kCHKm459Wlhyw.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/fonts/JTUSjIg1_i6t8kCHKm459Wdhyzbi.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/fonts/JTUSjIg1_i6t8kCHKm459Wlhyw.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url(/fonts/JTUSjIg1_i6t8kCHKm459Wdhyzbi.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url(/fonts/JTUSjIg1_i6t8kCHKm459Wlhyw.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/nwpStKy2OAdR1K-IwhWudF-R3wEaZfrc.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/fonts/nwpStKy2OAdR1K-IwhWudF-R3wEaZfrc.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/fonts/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/fonts/nwpStKy2OAdR1K-IwhWudF-R3wEaZfrc.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/fonts/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/fonts/nwpStKy2OAdR1K-IwhWudF-R3wEaZfrc.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/fonts/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---------------------------------------------------------------------------
+ * 2 - Brand palette
+ *
+ * The approved hues, named once. Nothing may introduce an off-palette color;
+ * a new tint derives from one of these and keeps the WCAG AA bar.
+ * ------------------------------------------------------------------------ */
+
+:root {
+    --brand-midnight-blue: #193E6B;
+    --brand-green-gold: #B3A125;
+    --brand-cadmium-violet: #7F3F98;
+    --brand-jelly-bean-blue: #448E9D;
+    --brand-avocado-green: #5F8025;
+    --brand-sunray: #E9AC53;
+    --brand-violet-red: #991547;
+    --brand-platinum-beige: #EEE7E0;
+    --brand-white: #FFFFFF;
+}
+
+/* ---------------------------------------------------------------------------
+ * 3 - Core tokens, light theme
+ *
+ * Declared on bare :root so light is the base. The dark blocks below redefine
+ * only what changes, which keeps the two themes from drifting apart.
+ * ------------------------------------------------------------------------ */
+
+:root {
+    --chrome: #FFFFFF;
+    --chrome-text: #223349;
+    --chrome-muted: #566779;
+    --chrome-hover: rgba(25, 62, 107, 0.07);
+    --chrome-edge: rgba(15, 25, 45, 0.14);
+
+    --canvas: #E8DFD0;
+    --card: #FFFFFF;
+    --card-border: #E8E2D8;
+    --card-border-strong: #D5CEC1;
+    --surface-hover: rgba(25, 62, 107, 0.06);
+    --divider: #E4DCCD;
+
+    --text: #1E2E42;
+    --text-muted: #4D5E75;
+
+    --accent: #193E6B;
+    --accent-hover: #142F52;
+    --accent-contrast: #FFFFFF;
+
+    --nav-active-bg: rgba(179, 161, 37, 0.16);
+    --nav-active-fg: #5C5010;
+    --nav-active-bar: #B3A125;
+
+    --filter-input-bg: #EFE8DB;
+
+    --soon-bg: #EFEAE0;
+    --soon-fg: #514A3B;
+
+    --alert-dot: #991547;
+    --tooltip-surface: #202C3E;
+
+    --selection: rgba(179, 161, 37, 0.35);
+
+    /* Status badge pairs - readable on this theme's card surface. */
+    --badge-neutral-bg: #F0EBE1;
+    --badge-neutral-fg: #514A3B;
+    --badge-success-bg: color-mix(in srgb, var(--brand-avocado-green) 16%, var(--card));
+    --badge-success-fg: #3A4E13;
+    --badge-warning-bg: color-mix(in srgb, var(--brand-sunray) 26%, var(--card));
+    --badge-warning-fg: #7A500C;
+    --badge-danger-bg: color-mix(in srgb, var(--brand-violet-red) 14%, var(--card));
+    --badge-danger-fg: #85113E;
+    --badge-info-bg: color-mix(in srgb, var(--brand-jelly-bean-blue) 18%, var(--card));
+    --badge-info-fg: #1E545F;
+    --badge-violet-bg: color-mix(in srgb, var(--brand-cadmium-violet) 15%, var(--card));
+    --badge-violet-fg: #5B2B6E;
+
+    /* Elevation. Cards rest flat: a 1px border and no shadow. */
+    --shadow-md: 0 2px 8px rgba(25, 40, 65, 0.08);
+    --shadow-lg: 0 8px 24px rgba(15, 25, 45, 0.14);
+
+    /* Type scale - the closed set of approved steps. No other size exists. */
+    --text-display: 24px;
+    --text-h1: 20px;
+    --text-h2: 18px;
+    --text-h3: 16px;
+    --text-h4: 15px;
+    --text-lead: 14px;
+    --text-body: 13px;
+    --text-small: 12px;
+    --text-xs: 11px;
+    --text-micro: 10px;
+
+    --font-heading: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+    /* Spacing - 4px base. */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 16px;
+    --space-4: 24px;
+    --space-5: 32px;
+    --space-6: 48px;
+    --space-7: 64px;
+
+    /* Shape. */
+    --radius-card: 12px;
+    --radius-control: 8px;
+    --radius-tab: 10px;
+    --radius-modal: 14px;
+    --radius-pill: 999px;
+
+    /* Controls. A button and the field beside it share one height. */
+    --control-height: 32px;
+    --control-height-small: 27px;
+    --control-height-large: 48px;
+
+    --topbar-height: 52px;
+}
+
+/* Dark theme, applied when the viewer's system asks for it and no explicit
+   light choice has been made. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+        --chrome: #080F1A;
+        --chrome-text: #E4EBF4;
+        --chrome-muted: #9AABC0;
+        --chrome-hover: rgba(255, 255, 255, 0.09);
+        --chrome-edge: rgba(0, 0, 0, 0.50);
+
+        --canvas: #1A2E46;
+        --card: #253E5D;
+        --card-border: rgba(255, 255, 255, 0.10);
+        --card-border-strong: rgba(255, 255, 255, 0.18);
+        --surface-hover: rgba(255, 255, 255, 0.07);
+        --divider: rgba(255, 255, 255, 0.13);
+
+        --text: #E9EFF6;
+        --text-muted: #A3B2C5;
+
+        --accent: #7FADE1;
+        --accent-hover: #93BBE8;
+        --accent-contrast: #0F1C2E;
+
+        --nav-active-bg: rgba(201, 182, 47, 0.22);
+        --nav-active-fg: #EBDD7E;
+        --nav-active-bar: #C9B62F;
+
+        --filter-input-bg: rgba(255, 255, 255, 0.08);
+
+        --soon-bg: rgba(255, 255, 255, 0.16);
+        --soon-fg: #DCE4F0;
+
+        --alert-dot: #F3AFC9;
+        --tooltip-surface: #2A3A52;
+
+        --badge-neutral-bg: rgba(255, 255, 255, 0.10);
+        --badge-neutral-fg: rgba(255, 255, 255, 0.80);
+        --badge-success-bg: color-mix(in srgb, var(--brand-avocado-green) 28%, var(--card));
+        --badge-success-fg: #CBE79B;
+        --badge-warning-bg: color-mix(in srgb, var(--brand-sunray) 30%, var(--card));
+        --badge-warning-fg: #F8DFAC;
+        --badge-danger-bg: color-mix(in srgb, var(--brand-violet-red) 32%, var(--card));
+        --badge-danger-fg: #F5B8CF;
+        --badge-info-bg: color-mix(in srgb, var(--brand-jelly-bean-blue) 30%, var(--card));
+        --badge-info-fg: #B4E3EC;
+        --badge-violet-bg: color-mix(in srgb, var(--brand-cadmium-violet) 30%, var(--card));
+        --badge-violet-fg: #DFBAEC;
+
+        --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.30);
+        --shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.45);
+    }
+}
+
+/* An explicit dark choice wins in both directions, so the switcher can override
+   the system preference rather than only agreeing with it. */
+:root[data-theme='dark'] {
+    --chrome: #080F1A;
+    --chrome-text: #E4EBF4;
+    --chrome-muted: #9AABC0;
+    --chrome-hover: rgba(255, 255, 255, 0.09);
+    --chrome-edge: rgba(0, 0, 0, 0.50);
+
+    --canvas: #1A2E46;
+    --card: #253E5D;
+    --card-border: rgba(255, 255, 255, 0.10);
+    --card-border-strong: rgba(255, 255, 255, 0.18);
+    --surface-hover: rgba(255, 255, 255, 0.07);
+    --divider: rgba(255, 255, 255, 0.13);
+
+    --text: #E9EFF6;
+    --text-muted: #A3B2C5;
+
+    --accent: #7FADE1;
+    --accent-hover: #93BBE8;
+    --accent-contrast: #0F1C2E;
+
+    --nav-active-bg: rgba(201, 182, 47, 0.22);
+    --nav-active-fg: #EBDD7E;
+    --nav-active-bar: #C9B62F;
+
+    --filter-input-bg: rgba(255, 255, 255, 0.08);
+
+    --soon-bg: rgba(255, 255, 255, 0.16);
+    --soon-fg: #DCE4F0;
+
+    --alert-dot: #F3AFC9;
+    --tooltip-surface: #2A3A52;
+
+    --badge-neutral-bg: rgba(255, 255, 255, 0.10);
+    --badge-neutral-fg: rgba(255, 255, 255, 0.80);
+    --badge-success-bg: color-mix(in srgb, var(--brand-avocado-green) 28%, var(--card));
+    --badge-success-fg: #CBE79B;
+    --badge-warning-bg: color-mix(in srgb, var(--brand-sunray) 30%, var(--card));
+    --badge-warning-fg: #F8DFAC;
+    --badge-danger-bg: color-mix(in srgb, var(--brand-violet-red) 32%, var(--card));
+    --badge-danger-fg: #F5B8CF;
+    --badge-info-bg: color-mix(in srgb, var(--brand-jelly-bean-blue) 30%, var(--card));
+    --badge-info-fg: #B4E3EC;
+    --badge-violet-bg: color-mix(in srgb, var(--brand-cadmium-violet) 30%, var(--card));
+    --badge-violet-fg: #DFBAEC;
+
+    --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.30);
+    --shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* ---------------------------------------------------------------------------
+ * 4 - Reset and base
+ * ------------------------------------------------------------------------ */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+/*
+ * The hidden attribute must win. The user-agent rule for it is only
+ * [hidden] { display: none }, so any author rule setting display on the same
+ * element beats it and the attribute silently stops working.
+ */
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+    font-family: var(--font-heading);
+    margin: 0;
+    color: var(--text);
+}
+
+h1 { font-size: var(--text-h1); font-weight: 700; }
+h2 { font-size: var(--text-h2); font-weight: 700; }
+h3 { font-size: var(--text-h3); font-weight: 600; }
+h4 { font-size: var(--text-h4); font-weight: 600; }
+
+p { margin: 0; }
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+a:hover { text-decoration: underline; }
+
+::selection { background: var(--selection); }
+
+/* Every interactive element carries the same ring. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+svg { fill: none; }
+
+/* ---------------------------------------------------------------------------
+ * 5 - Icons
+ *
+ * One registry, one style: 24px viewBox, 2px stroke, round caps and joins.
+ * Icons size by font-size rather than by scaling the SVG.
+ * ------------------------------------------------------------------------ */
+
+.icon {
+    width: 1em;
+    height: 1em;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * 6 - Buttons
+ *
+ * Exactly two looks exist and nothing else: the solid variant of the action's
+ * meaning, and the one neutral secondary look. Both share one geometry per size
+ * step - only fill, border and label color differ - so a button never gets
+ * resized or re-rounded to fit a layout.
+ * ------------------------------------------------------------------------ */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    height: var(--control-height);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-control);
+    border: 1px solid transparent;
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.btn .icon { font-size: 16px; }
+
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(1px); }
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Size steps. Large is the hero, empty-state and mobile-primary size. */
+.btn-small { height: var(--control-height-small); padding: 0 var(--space-2); font-size: var(--text-small); }
+.btn-large { height: var(--control-height-large); padding: 0 var(--space-4); font-size: var(--text-lead); }
+
+/* Look one: solid. One per action group, colored by what the action does. */
+.btn-solid {
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    border-color: var(--btn-bg);
+}
+
+.btn-solid:hover { background: var(--btn-bg-hover); border-color: var(--btn-bg-hover); }
+
+/*
+ * Primary follows the theme-aware accent rather than raw Midnight Blue, which
+ * section 4 names for primary buttons: #193E6B on a dark navy card is invisible.
+ */
+.btn-solid.btn-primary {
+    --btn-bg: var(--accent);
+    --btn-fg: var(--accent-contrast);
+    --btn-bg-hover: var(--accent-hover);
+}
+
+.btn-solid.btn-danger  { --btn-bg: #991547; --btn-fg: #FFFFFF; --btn-bg-hover: #7C1039; }
+.btn-solid.btn-warning { --btn-bg: #E9AC53; --btn-fg: #1E2E42; --btn-bg-hover: #DC9A38; }
+.btn-solid.btn-success { --btn-bg: #5F8025; --btn-fg: #FFFFFF; --btn-bg-hover: #4E6A1E; }
+.btn-solid.btn-accent  { --btn-bg: #B3A125; --btn-fg: #1E2E42; --btn-bg-hover: #9A8B1F; }
+
+/* Look two: the one neutral secondary, used by every other labeled action. */
+.btn-secondary {
+    background: var(--card);
+    color: var(--text);
+    border-color: var(--card-border-strong);
+}
+
+.btn-secondary:hover { background: var(--surface-hover); }
+
+/*
+ * A destructive secondary keeps the identical neutral shell and takes the
+ * theme-aware danger foreground on its icon and label only - never a different
+ * fill, border, height or radius. Danger is the only status a label carries.
+ */
+.btn-secondary.is-danger { color: var(--badge-danger-fg); }
+
+.btn-block { display: flex; width: 100%; }
+
+/* Loading swaps the label for a spinner at the same width and changes nothing
+   else, so a button never changes look because its state changed. */
+.btn[aria-busy='true'] .btn-label { visibility: hidden; }
+
+.btn-spinner {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: var(--radius-pill);
+    animation: btn-spin 0.6s linear infinite;
+}
+
+.btn { position: relative; }
+
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+/* Touch targets reach 44px on a coarse pointer rather than shrinking the label. */
+@media (pointer: coarse) {
+    .btn { min-height: 44px; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 7 - Fields
+ *
+ * A field is a visible associated label, the control, optional help text, and a
+ * reserved validation message slot. Placeholders are never labels. The slot is
+ * reserved so the layout does not jump when a message appears.
+ * ------------------------------------------------------------------------ */
+
+.field { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.field-label {
+    font-size: var(--text-small);
+    font-weight: 600;
+    color: var(--text);
+}
+
+.field-required {
+    color: var(--badge-danger-fg);
+    margin-left: 2px;
+}
+
+.input {
+    height: var(--control-height);
+    padding: 0 var(--space-2);
+    width: 100%;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--card-border-strong);
+    border-radius: var(--radius-control);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    transition: border-color 0.15s ease;
+}
+
+.input::placeholder { color: var(--text-muted); opacity: 0.75; }
+
+.input:hover { border-color: var(--accent); }
+
+/* Validation is error-only: no green borders, no checkmarks, no "looks good".
+   A passing field simply returns to rest. */
+.input[aria-invalid='true'] { border-color: var(--badge-danger-fg); }
+
+.field-help { font-size: var(--text-xs); color: var(--text-muted); }
+
+/* Reserved, so an appearing message cannot shift the fields below it.
+   line-height is pinned to the same value as the reserved height: left to the
+   inherited 1.5 the text renders 17px tall against a 16px slot and the card
+   still grows by a pixel per error, which is the jump this slot exists to
+   prevent. */
+.field-message {
+    min-height: 16px;
+    line-height: 16px;
+    font-size: var(--text-xs);
+    color: var(--badge-danger-fg);
+}
+
+.input-with-affix { position: relative; display: flex; }
+
+/* The sanctioned icon-only chrome: a reveal control on the field itself. */
+.input-affix {
+    position: absolute;
+    right: var(--space-1);
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-control);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.input-affix:hover { background: var(--surface-hover); color: var(--text); }
+.input-affix .icon { font-size: 16px; }
+.input-with-affix .input { padding-right: 34px; }
+
+/* ---------------------------------------------------------------------------
+ * 8 - Cards, badges, alerts
+ * ------------------------------------------------------------------------ */
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-card);
+    /* Flat at rest: a resting card never carries a shadow. */
+    box-shadow: none;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-small);
+    font-weight: 600;
+    line-height: 1.4;
+    background: var(--badge-neutral-bg);
+    color: var(--badge-neutral-fg);
+}
+
+.badge-success { background: var(--badge-success-bg); color: var(--badge-success-fg); }
+.badge-warning { background: var(--badge-warning-bg); color: var(--badge-warning-fg); }
+.badge-danger  { background: var(--badge-danger-bg);  color: var(--badge-danger-fg); }
+.badge-info    { background: var(--badge-info-bg);    color: var(--badge-info-fg); }
+.badge-violet  { background: var(--badge-violet-bg);  color: var(--badge-violet-fg); }
+
+/*
+ * The form-foot alert: one persistent message about the form as a whole, for an
+ * error belonging to no single field. Never a list of the field errors - those
+ * are already inline, and repeating them makes the reader track the same problem
+ * in two places.
+ */
+.alert {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-control);
+    font-size: var(--text-body);
+    background: var(--badge-danger-bg);
+    color: var(--badge-danger-fg);
+}
+
+.alert-success { background: var(--badge-success-bg); color: var(--badge-success-fg); }
+.alert-info    { background: var(--badge-info-bg);    color: var(--badge-info-fg); }
+
+.alert .icon { font-size: 16px; margin-top: 2px; }
+
+/* ---------------------------------------------------------------------------
+ * 9 - Auth screens
+ *
+ * Standalone centered card, no shell. Shares only the brand mark, the tokens and
+ * the fonts with the rest of the application.
+ * ------------------------------------------------------------------------ */
+
+.auth {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-3);
+    background: var(--canvas);
+}
+
+.auth-brand { display: flex; justify-content: center; }
+
+/* Wide wordmark, 22px tall as the shell dimensions fix it. */
+.auth-brand img { height: 22px; width: auto; }
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.auth-heading { display: flex; flex-direction: column; gap: var(--space-1); text-align: center; }
+
+.auth-tagline { font-size: var(--text-small); color: var(--text-muted); }
+
+.auth-form { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.auth-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+
+.checkbox { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-small); cursor: pointer; }
+
+.checkbox input {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* The divider between the SSO path and the credential path. */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--divider);
+}
+
+/* The trust footer, outside the card. */
+.auth-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1) var(--space-3);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.auth-footer a { color: var(--text-muted); text-decoration: underline; }
+.auth-footer a:hover { color: var(--text); }
+
+.visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * 10 - Motion preference
+ * ------------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
