@@ -34,6 +34,13 @@ use Illuminate\Support\Collection;
  */
 class SecurityPosture
 {
+    /**
+     * The four area statuses, memoised. See `areas()`.
+     *
+     * @var array<string, SecurityStatus>|null
+     */
+    private ?array $areas = null;
+
     public function __construct(
         private readonly SecurityPolicies $policies,
         private readonly SecurityCapabilities $capabilities,
@@ -388,14 +395,117 @@ class SecurityPosture
             ->get();
     }
 
+    /**
+     * The four areas by name, with the status of each.
+     *
+     * MEMOISED, and that is not only an efficiency point. `overall()` and
+     * `overallExplanation()` must be answers to the same question - a badge
+     * saying Warning beside a sentence saying "critical posture" is exactly the
+     * defect this method was added to fix - and reading both from one memo makes
+     * them incapable of disagreeing.
+     *
+     * `application()` runs the whole eight-control audit, so recomputing it
+     * three times per page load was also a real cost.
+     *
+     * @return array<string, SecurityStatus>
+     */
+    public function areas(): array
+    {
+        return $this->areas ??= [
+            'Authentication' => $this->authentication()['status'],
+            'Sessions' => $this->sessions()['status'],
+            'Application security' => $this->application()['status'],
+            'Secret references' => $this->secrets()['status'],
+        ];
+    }
+
     /** The worst of the four postures, which is the posture of the whole. */
     public function overall(): SecurityStatus
     {
-        return SecurityStatus::worst([
-            $this->authentication()['status'],
-            $this->sessions()['status'],
-            $this->application()['status'],
-            $this->secrets()['status'],
-        ]);
+        return SecurityStatus::worst(array_values($this->areas()));
+    }
+
+    /**
+     * Why the badge says what it says, in a sentence about THIS deployment.
+     *
+     * Derived from `areas()`, the same memo the badge is derived from. The
+     * sentence it replaces was fixed text - "One critical finding among four
+     * healthy areas is a critical posture" - which explained the RULE and read
+     * as a description of the STATE, so a Warning badge sat beside the word
+     * "critical". A static explanation of a calculated value will eventually
+     * contradict it; this one cannot.
+     */
+    public function overallExplanation(): string
+    {
+        $areas = $this->areas();
+        $worst = SecurityStatus::worst(array_values($areas));
+
+        $driving = array_keys(array_filter(
+            $areas,
+            static fn (SecurityStatus $status): bool => $status === $worst,
+        ));
+
+        $named = $this->readableList($driving);
+        $plural = count($driving) > 1;
+
+        return match ($worst) {
+            SecurityStatus::Healthy => 'All four areas below are healthy.',
+
+            SecurityStatus::Critical => $named.' '.($plural ? 'have' : 'has')
+                .' a critical finding. The worst of the four areas below sets the whole, so this stays critical '
+                .'until it is resolved however healthy the others are.',
+
+            SecurityStatus::Warning => $named.' '.($plural ? 'need' : 'needs')
+                .' attention. The worst of the four areas below sets the whole.',
+
+            SecurityStatus::NotVerified => $named.' could not be established, so this screen will not call the '
+                .'posture healthy. Something it cannot check is something nobody should be relying on.',
+
+            SecurityStatus::NotConfigured => $named.' '.($plural ? 'have' : 'has')
+                .' not been set up. Nothing is wrong, and nothing is protecting anything either.',
+
+            SecurityStatus::NotAvailable => $named.' '.($plural ? 'cannot' : 'cannot')
+                .' be applied on this deployment. The code is correct; the environment cannot support it.',
+        };
+    }
+
+    /**
+     * "Authentication", "Authentication and Sessions", "A, B and C".
+     *
+     * @param  list<string>  $names
+     */
+    private function readableList(array $names): string
+    {
+        if ($names === []) {
+            /* Unreachable while there are four areas, and a sentence is still
+             * better than an empty string if that ever changes. */
+            return 'No area';
+        }
+
+        if (count($names) === 1) {
+            return $names[0];
+        }
+
+        $last = array_pop($names);
+
+        return implode(', ', $names).' and '.$last;
+    }
+
+    /**
+     * How many credential references are being tracked at all.
+     *
+     * Its own question, separate from "how many are expiring". Zero tracked and
+     * zero expiring look identical to a count but mean opposite things: one is
+     * an estate under control, the other is an estate nobody is watching.
+     * Storage-safe, so it answers zero rather than throwing before the
+     * migration has run.
+     */
+    public function trackedReferenceCount(): int
+    {
+        if (! $this->storage->secretReferencesAreReady()) {
+            return 0;
+        }
+
+        return SecretReference::query()->active()->count();
     }
 }
