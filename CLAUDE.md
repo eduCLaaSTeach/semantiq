@@ -36,7 +36,7 @@ For customer-owned configuration, metadata, Fabric resource IDs, audit data and 
 7. `doc/reference/DATA_PROTECTION_SOVEREIGNTY_STANDARD.md`
 8. `doc/context/CONTEXT_INDEX.md` and the context registers relevant to the change
 9. Relevant entries in `doc/reference/SEMANTIQ_SRS_BASELINE.md`, `REQUIREMENT_TRACEABILITY.md`, `API_REGISTER.md`, and `HELP_TOPIC_INDEX.md`
-10. For UI work, `doc/design-system/ui-and-ux-layout-template-shared.md`
+10. For UI work, `.claude/reference-template/ui-and-ux-layout-template-shared.md`
 11. For AI/conversational work, `doc/reference/AI_CONVERSATIONAL_TECHNOLOGY_GUIDE.md`
 
 If a referenced file does not exist, say so. Do not invent its contents.
@@ -47,7 +47,7 @@ Use this precedence when documents disagree:
 
 1. Explicit user approval or an approved decision record for the current change.
 2. `CLAUDE.md` for repository execution, safety and phase-gate rules.
-3. `doc/design-system/ui-and-ux-layout-template-shared.md` for UI layout, structure, theme and brand rules.
+3. `.claude/reference-template/ui-and-ux-layout-template-shared.md` for UI layout, structure, theme and brand rules.
 4. `IMPLEMENTATION_STATUS.md` plus the active phase/master plan for implementation sequence.
 5. The formal SRS/reference documents for functional requirements.
 6. Existing code, migrations and tests for the implemented state, after verifying they are not stale or incorrect.
@@ -152,11 +152,11 @@ System/platform administrators do not automatically receive unrestricted Sales, 
 
 ## User Interface
 
-`doc/design-system/ui-and-ux-layout-template-shared.md` is the single authority for layout, structure and theme.
+`.claude/reference-template/ui-and-ux-layout-template-shared.md` is the single authority for layout, structure and theme.
 
 Read it before generating or changing a screen, component, layout or stylesheet. Do not introduce a second design system, theme, component-library skin or ad hoc visual language.
 
-Do not invent token values, colours, fonts, spacing steps, shell dimensions or icon styles. Never modify, recolour, regenerate or substitute the logo/favicon/brand assets in `doc/design-system/assets/`.
+Do not invent token values, colours, fonts, spacing steps, shell dimensions or icon styles. Never modify, recolour, regenerate or substitute the logo/favicon/brand assets in `.claude/reference-template/assets/`.
 
 Never ask about or offer alternative themes, colours, fonts, logos or favicons. Those are settled by the design-system authority. Only app-specific values requested by its App Definition may be raised. `BRAND_ASSETS_PATH` remains a developer/user decision and must not be chosen silently.
 
