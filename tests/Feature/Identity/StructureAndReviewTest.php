@@ -15,6 +15,7 @@ use App\Modules\Identity\Services\AccessReviewService;
 use App\Modules\Identity\Services\RoleRegistry;
 use App\Modules\Identity\Services\StructureRegistry;
 use App\Modules\Identity\Services\UserRegistry;
+use App\Modules\Identity\Support\OrganisationContext;
 use App\Modules\Platform\Enums\LifecycleStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
@@ -35,8 +36,24 @@ class StructureAndReviewTest extends TestCase
 
     private function admin(): User
     {
-        $user = User::query()->create(['name' => 'Ada Admin', 'email' => uniqid().'@example.test']);
-        $user->forceFill(['role' => Role::SystemAdmin])->save();
+        return $this->placed('Ada Admin', Role::SystemAdmin);
+    }
+
+    /**
+     * An account placed in the organisation currently in force.
+     *
+     * Placement is not incidental: `UserRegistry` refuses any mutation on a
+     * subject outside the current organisation, and both the registry and
+     * Microsoft sign-in place an account at creation, so an unplaced one is a
+     * state the application cannot produce.
+     */
+    private function placed(string $name, Role $role, ?string $email = null): User
+    {
+        $user = User::query()->create(['name' => $name, 'email' => $email ?? uniqid().'@example.test']);
+        $user->forceFill([
+            'role' => $role,
+            'organisation_id' => app(OrganisationContext::class)->currentId(),
+        ])->save();
 
         return $user->refresh();
     }
@@ -145,11 +162,10 @@ class StructureAndReviewTest extends TestCase
         $admin = $this->admin();
         $this->actingAs($admin);
 
-        $subject = User::query()->create(['name' => 'Sam', 'email' => 'sam@example.test']);
-        $subject->forceFill(['role' => Role::Analyst])->save();
+        $subject = $this->placed('Sam', Role::Analyst, 'sam@example.test');
 
         $role = app(RoleRegistry::class)->create('reviewer', 'Reviewer', Role::Analyst, null, $admin);
-        app(UserRegistry::class)->assignRole($subject->refresh(), $role, $admin);
+        app(UserRegistry::class)->assignRole($subject, $role, $admin);
         app(UserRegistry::class)->grantEntitlement($subject, BusinessDomain::Sales, $admin);
 
         $review = $this->reviews()->create('Q3 review', null, null, $admin);
@@ -187,9 +203,8 @@ class StructureAndReviewTest extends TestCase
         $admin = $this->admin();
         $this->actingAs($admin);
 
-        $subject = User::query()->create(['name' => 'Sam', 'email' => 'sam@example.test']);
-        $subject->forceFill(['role' => Role::Analyst])->save();
-        app(UserRegistry::class)->grantEntitlement($subject->refresh(), BusinessDomain::Sales, $admin);
+        $subject = $this->placed('Sam', Role::Analyst, 'sam@example.test');
+        app(UserRegistry::class)->grantEntitlement($subject, BusinessDomain::Sales, $admin);
 
         $review = $this->reviews()->create('Q3 review', null, null, $admin);
         $this->reviews()->open($review, $admin);
@@ -209,9 +224,8 @@ class StructureAndReviewTest extends TestCase
         $admin = $this->admin();
         $this->actingAs($admin);
 
-        $subject = User::query()->create(['name' => 'Sam', 'email' => 'sam@example.test']);
-        $subject->forceFill(['role' => Role::Analyst])->save();
-        app(UserRegistry::class)->grantEntitlement($subject->refresh(), BusinessDomain::Sales, $admin);
+        $subject = $this->placed('Sam', Role::Analyst, 'sam@example.test');
+        app(UserRegistry::class)->grantEntitlement($subject, BusinessDomain::Sales, $admin);
 
         $review = $this->reviews()->create('Q3 review', null, null, $admin);
         $this->reviews()->open($review, $admin);
@@ -237,9 +251,8 @@ class StructureAndReviewTest extends TestCase
         $admin = $this->admin();
         $this->actingAs($admin);
 
-        $subject = User::query()->create(['name' => 'Sam', 'email' => 'sam@example.test']);
-        $subject->forceFill(['role' => Role::Analyst])->save();
-        app(UserRegistry::class)->grantEntitlement($subject->refresh(), BusinessDomain::Sales, $admin);
+        $subject = $this->placed('Sam', Role::Analyst, 'sam@example.test');
+        app(UserRegistry::class)->grantEntitlement($subject, BusinessDomain::Sales, $admin);
 
         $review = $this->reviews()->create('Q3 review', null, null, $admin);
         $this->reviews()->open($review, $admin);
@@ -256,11 +269,10 @@ class StructureAndReviewTest extends TestCase
         $admin = $this->admin();
         $this->actingAs($admin);
 
-        $subject = User::query()->create(['name' => 'Sam', 'email' => 'sam@example.test']);
-        $subject->forceFill(['role' => Role::Analyst])->save();
+        $subject = $this->placed('Sam', Role::Analyst, 'sam@example.test');
 
         $role = app(RoleRegistry::class)->create('old_name', 'Old Name', Role::Analyst, null, $admin);
-        app(UserRegistry::class)->assignRole($subject->refresh(), $role, $admin);
+        app(UserRegistry::class)->assignRole($subject, $role, $admin);
 
         $review = $this->reviews()->create('Q3 review', null, null, $admin);
         $this->reviews()->open($review, $admin);
@@ -279,9 +291,8 @@ class StructureAndReviewTest extends TestCase
         $admin = $this->admin();
         $this->actingAs($admin);
 
-        $subject = User::query()->create(['name' => 'Sam', 'email' => 'sam@example.test']);
-        $subject->forceFill(['role' => Role::Analyst])->save();
-        app(UserRegistry::class)->grantEntitlement($subject->refresh(), BusinessDomain::People, $admin);
+        $subject = $this->placed('Sam', Role::Analyst, 'sam@example.test');
+        app(UserRegistry::class)->grantEntitlement($subject, BusinessDomain::People, $admin);
 
         $review = $this->reviews()->create('Q3 review', null, null, $admin);
         $this->reviews()->open($review, $admin);

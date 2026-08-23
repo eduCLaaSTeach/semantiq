@@ -9,6 +9,7 @@ use App\Enums\Role;
 use App\Models\DomainEntitlement;
 use App\Models\User;
 use App\Modules\Audit\Support\AuditLogger;
+use App\Modules\Identity\Exceptions\SubjectOutsideOrganisation;
 use App\Modules\Identity\Models\AccessRole;
 use App\Modules\Identity\Models\UserRole;
 use App\Modules\Identity\Policies\SystemAdministratorGuard;
@@ -26,6 +27,14 @@ use RuntimeException;
  * applier all come through here, because the rules below are the kind that get
  * forgotten exactly once and then cannot be un-forgotten:
  *
+ *  - VAL-ORG-SUBJECT-001. **Every operation on an EXISTING account first proves
+ *    that account belongs to the current organisation.** `users` deliberately
+ *    carries no global organisation scope - it is the authentication table, and
+ *    a fail-closed global scope there would mean nobody can sign in when the
+ *    context fails to resolve (SEC-DEC-022). That choice moves the whole burden
+ *    onto the write paths, and this is where it is discharged: in the service,
+ *    not the controller, so a console command, a queued job, a future API
+ *    endpoint and the access-review applier are all covered by the same line.
  *  - VAL-USER-LASTADMIN-001, delegated to `SystemAdministratorGuard`. Three
  *    separate paths can empty the System Administrator role, so the check lives
  *    in one place all three call.
@@ -115,6 +124,7 @@ class UserRegistry
      */
     public function update(User $subject, array $attributes, User $actor): User
     {
+        $this->assertInOrganisation($subject, 'user.update');
         $this->assertMayActOn($actor, $subject);
 
         $before = $this->summarise($subject);
@@ -167,6 +177,7 @@ class UserRegistry
      */
     public function changeTier(User $subject, Role $tier, User $actor, ?string $reason = null): User
     {
+        $this->assertInOrganisation($subject, 'user.tier.change');
         $this->assertMayActOn($actor, $subject);
         $this->assertMayGrantTier($actor, $tier);
 
@@ -204,6 +215,7 @@ class UserRegistry
      */
     public function changeStatus(User $subject, LifecycleStatus $status, User $actor, ?string $reason = null): User
     {
+        $this->assertInOrganisation($subject, 'user.status.change');
         $this->assertMayActOn($actor, $subject);
 
         if (! LifecycleStatus::isWithin($status->value, LifecycleStatus::forUser())) {
@@ -252,6 +264,10 @@ class UserRegistry
      */
     public function assignRole(User $subject, AccessRole $role, User $actor, ?string $reason = null): void
     {
+        $this->assertInOrganisation($subject, 'user.role.assign');
+        /* The ROLE as well as the subject. A role belonging to another customer
+         * would otherwise be attachable to one of ours by id. */
+        $this->assertRoleInOrganisation($role, 'user.role.assign');
         $this->assertMayActOn($actor, $subject);
         $this->assertMayGrantTier($actor, $role->tier);
 
@@ -290,6 +306,8 @@ class UserRegistry
      */
     public function removeRole(User $subject, AccessRole $role, User $actor, ?string $reason = null): void
     {
+        $this->assertInOrganisation($subject, 'user.role.remove');
+        $this->assertRoleInOrganisation($role, 'user.role.remove');
         $this->assertMayActOn($actor, $subject);
 
         $removed = UserRole::query()
@@ -326,6 +344,7 @@ class UserRegistry
      */
     public function grantEntitlement(User $subject, BusinessDomain $domain, User $actor, ?string $reason = null): void
     {
+        $this->assertInOrganisation($subject, 'user.entitlement.grant');
         $this->assertMayActOn($actor, $subject);
         $this->assertMayDelegate($actor, 'admin.entitlements.grant');
 
@@ -354,6 +373,7 @@ class UserRegistry
      */
     public function revokeEntitlement(User $subject, BusinessDomain $domain, User $actor, ?string $reason = null): void
     {
+        $this->assertInOrganisation($subject, 'user.entitlement.revoke');
         $this->assertMayActOn($actor, $subject);
         $this->assertMayDelegate($actor, 'admin.entitlements.grant');
 
@@ -374,6 +394,104 @@ class UserRegistry
             before: ['domain' => $domain->value],
             reason: $reason,
         );
+    }
+
+    /**
+     * Refuse an operation on an account belonging to another organisation.
+     *
+     * VAL-ORG-SUBJECT-001, and the reason this class is the authoritative place
+     * for it. Route-model binding resolves by primary key and knows nothing
+     * about tenancy; the ids are sequential integers; and `users` carries no
+     * global scope to catch it. Without this, a System Administrator in one
+     * organisation could disable, demote or re-entitle an account in another by
+     * supplying its id - which is exactly what happened before this method
+     * existed, proved by a test written to demonstrate it.
+     *
+     * FAILS CLOSED IN BOTH DIRECTIONS. An account with no organisation at all
+     * is refused as well as one belonging to somebody else: an unplaced account
+     * is not this organisation's to change, and treating "unknown owner" as
+     * "mine" is how a boundary check becomes a boundary hole. The one place an
+     * unplaced account is legitimate is sign-in, before an organisation has
+     * been resolved, and nothing here runs on that path.
+     *
+     * The DENIAL IS AUDITED before the exception is thrown. Somebody supplying
+     * another customer's id is the single most interesting thing that can
+     * happen to this application, and it must not be the one refusal that
+     * leaves no trace.
+     *
+     * @throws SubjectOutsideOrganisation
+     */
+    private function assertInOrganisation(User $subject, string $operation): void
+    {
+        $current = $this->organisations->currentId();
+
+        if ($current !== null && $subject->organisation_id === $current) {
+            return;
+        }
+
+        $this->audit->denied(
+            action: 'privileged.action.denied',
+            module: 'Identity',
+            resourceType: 'user',
+            resourceId: $subject->getKey(),
+            /* Names the operation, never the other organisation. A log line
+             * saying which customer owns which id is its own small leak. */
+            reason: 'Cross-organisation subject refused for "'.$operation.'".',
+        );
+
+        throw SubjectOutsideOrganisation::for($operation);
+    }
+
+    /**
+     * Refuse a role belonging to another organisation.
+     *
+     * A null owner is the SHARED built-in set - the six roles seeded one per
+     * tier - and is legitimate for every organisation. Anything else must
+     * belong to the current one.
+     *
+     * `AccessRole` does carry the global scope, so a foreign role cannot
+     * normally be loaded at all. This covers the case the scope cannot: a model
+     * instance loaded under a different context and handed in directly, which
+     * is precisely what a background job or a future API could do.
+     *
+     * @throws SubjectOutsideOrganisation
+     */
+    private function assertRoleInOrganisation(AccessRole $role, string $operation): void
+    {
+        $current = $this->organisations->currentId();
+
+        if ($role->organisation_id === null) {
+            return;
+        }
+
+        if ($current !== null && $role->organisation_id === $current) {
+            return;
+        }
+
+        $this->audit->denied(
+            action: 'privileged.action.denied',
+            module: 'Identity',
+            resourceType: 'role',
+            resourceId: $role->getKey(),
+            reason: 'Cross-organisation role refused for "'.$operation.'".',
+        );
+
+        throw SubjectOutsideOrganisation::for($operation);
+    }
+
+    /**
+     * Whether an account is one this organisation may act on.
+     *
+     * The same question `assertInOrganisation()` asks, without throwing, for a
+     * SCREEN deciding whether to offer a control. The write path still calls
+     * the asserting form, because a control that was never rendered is not an
+     * authorization boundary and a POST does not care what the page showed.
+     */
+    public function isInOrganisation(User $subject): bool
+    {
+        $current = $this->organisations->currentId();
+
+        return $current !== null && $subject->organisation_id === $current;
     }
 
     /**

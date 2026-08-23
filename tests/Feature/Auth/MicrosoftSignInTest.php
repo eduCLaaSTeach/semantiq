@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Auth;
 
+use App\Enums\Role;
 use App\Models\User;
+use App\Modules\Audit\Models\AuditEvent;
+use App\Modules\Identity\Support\OrganisationContext;
+use App\Modules\Platform\Enums\LifecycleStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -82,6 +87,148 @@ class MicrosoftSignInTest extends TestCase
             'state' => session('microsoft.state'),
             'nonce' => session('microsoft.nonce'),
         ];
+    }
+
+    /**
+     * An existing federated account in a given state, placed in this
+     * organisation, matching the object id the fake Microsoft returns.
+     */
+    private function federatedAccount(LifecycleStatus $status, ?string $accessEnd = null): User
+    {
+        $user = User::query()->create(['name' => 'Salil Mhatre', 'email' => 'salil@lithan.com']);
+        $user->forceFill([
+            'entra_object_id' => 'object-id-1',
+            'entra_tenant_id' => 'tenant-guid',
+            'authentication_source' => 'entra',
+            'role' => Role::Analyst,
+            'status' => $status,
+            'access_end' => $accessEnd,
+            'organisation_id' => app(OrganisationContext::class)->currentId(),
+        ])->save();
+
+        return $user->refresh();
+    }
+
+    /**
+     * Drive a full callback for an existing account and return the response.
+     */
+    private function signInAs(User $user): TestResponse
+    {
+        $session = $this->start();
+        $this->fakeMicrosoft($session['nonce']);
+
+        return $this->get('/auth/microsoft/callback?code=auth-code&state='.$session['state']);
+    }
+
+    /* ---- SEC-DEC-032: this path names the state, the credential form does not ---- */
+
+    #[Test]
+    public function a_disabled_account_is_told_that_its_access_was_disabled(): void
+    {
+        // Option 2, and the deliberate difference from the credential form.
+        // Microsoft has already proved who this is and this is their own
+        // account, so naming the state enumerates nothing - they can learn
+        // nothing about anybody but themselves.
+        $user = $this->federatedAccount(LifecycleStatus::Disabled);
+
+        $this->signInAs($user)
+            ->assertRedirect(route('sign-in'))
+            ->assertSessionHasErrors([
+                'form' => 'Your SemantIQ access has been disabled. Ask an administrator to restore it.',
+            ]);
+
+        $this->assertGuest();
+    }
+
+    #[Test]
+    public function an_expired_access_window_says_when_it_ended(): void
+    {
+        $ended = now()->subDays(3);
+        $user = $this->federatedAccount(LifecycleStatus::Active, $ended->toDateString());
+
+        // The date is the difference between somebody who knows what to ask
+        // for and somebody who opens a ticket saying "it does not work".
+        $this->signInAs($user)
+            ->assertRedirect(route('sign-in'))
+            ->assertSessionHasErrors([
+                'form' => 'Your access to SemantIQ ended on '.$ended->toFormattedDateString()
+                    .'. Ask an administrator to extend it.',
+            ]);
+
+        $this->assertGuest();
+    }
+
+    #[Test]
+    public function a_locked_account_is_told_it_is_locked(): void
+    {
+        $user = $this->federatedAccount(LifecycleStatus::Locked);
+
+        $this->signInAs($user)->assertSessionHasErrors([
+            'form' => 'Your SemantIQ account is locked. Ask an administrator to unlock it.',
+        ]);
+
+        $this->assertGuest();
+    }
+
+    #[Test]
+    public function the_refusal_still_names_no_other_account_and_no_internal_detail(): void
+    {
+        // What option 2 does NOT license: anything about somebody else, or any
+        // configuration detail. Only this person's own state is disclosed.
+        $user = $this->federatedAccount(LifecycleStatus::Disabled);
+        User::query()->create(['name' => 'Somebody Else', 'email' => 'other@example.test']);
+
+        $session = $this->start();
+        $this->fakeMicrosoft($session['nonce']);
+
+        // Followed through to the rendered page, so this asserts what the
+        // person actually SEES rather than what was flashed.
+        $page = $this->followingRedirects()
+            ->get('/auth/microsoft/callback?code=auth-code&state='.$session['state']);
+
+        $page->assertOk()->assertSee('Your SemantIQ access has been disabled');
+
+        foreach (['other@example.test', 'Somebody Else', 'tenant-guid', 'client-guid'] as $forbidden) {
+            $page->assertDontSee($forbidden);
+        }
+    }
+
+    #[Test]
+    public function the_refusal_is_audited_as_a_denial(): void
+    {
+        // The audit trail is not weakened by telling the person more. It is
+        // the same denial event either way.
+        $user = $this->federatedAccount(LifecycleStatus::Disabled);
+
+        $this->signInAs($user);
+
+        $event = AuditEvent::withoutOrganisationScope()
+            ->where('action', 'auth.login.failed')
+            ->where('outcome', 'denied')
+            ->firstOrFail();
+
+        $this->assertSame((string) $user->getKey(), $event->resource_id);
+        $this->assertStringContainsString('Disabled', (string) $event->reason);
+    }
+
+    #[Test]
+    public function an_account_created_by_microsoft_sign_in_is_placed_in_an_organisation(): void
+    {
+        // An unplaced account is unmanageable: every mutation in UserRegistry
+        // refuses a subject outside the current organisation, so an
+        // administrator could never disable or entitle somebody who arrived
+        // this way. This was the state of the flow until the tenancy guard
+        // exposed it.
+        $session = $this->start();
+        $this->fakeMicrosoft($session['nonce']);
+
+        $this->get('/auth/microsoft/callback?code=auth-code&state='.$session['state']);
+
+        $created = User::query()->where('entra_object_id', 'object-id-1')->firstOrFail();
+
+        $this->assertNotNull($created->organisation_id);
+        $this->assertSame(app(OrganisationContext::class)->currentId(), $created->organisation_id);
+        $this->assertSame('entra', $created->authentication_source);
     }
 
     #[Test]

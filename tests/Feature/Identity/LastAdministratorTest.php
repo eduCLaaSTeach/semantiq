@@ -8,6 +8,7 @@ use App\Enums\Role;
 use App\Models\User;
 use App\Modules\Identity\Policies\SystemAdministratorGuard;
 use App\Modules\Identity\Services\UserRegistry;
+use App\Modules\Identity\Support\OrganisationContext;
 use App\Modules\Platform\Enums\LifecycleStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -31,10 +32,24 @@ class LastAdministratorTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * An account placed in the organisation currently in force.
+     *
+     * Placement is not incidental to these tests. `UserRegistry` refuses any
+     * mutation on a subject outside the current organisation
+     * (VAL-ORG-SUBJECT-001), so an unplaced account is unmanageable - which is
+     * exactly what a real account looks like, because both the registry and
+     * Microsoft sign-in place one at creation. A helper that skipped it would
+     * be testing a state the application cannot produce.
+     */
     private function person(Role $role, LifecycleStatus $status = LifecycleStatus::Active): User
     {
         $user = User::query()->create(['name' => 'Test Person', 'email' => uniqid().'@example.test']);
-        $user->forceFill(['role' => $role, 'status' => $status])->save();
+        $user->forceFill([
+            'role' => $role,
+            'status' => $status,
+            'organisation_id' => app(OrganisationContext::class)->currentId(),
+        ])->save();
 
         return $user->refresh();
     }

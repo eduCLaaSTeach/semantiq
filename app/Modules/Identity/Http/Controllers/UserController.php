@@ -152,6 +152,8 @@ class UserController extends Controller
 
     public function update(Request $request, User $user): RedirectResponse
     {
+        $this->authorizeSubject($user);
+
         $validated = $this->validated($request, $user);
 
         /** @var User $actor */
@@ -171,6 +173,8 @@ class UserController extends Controller
      */
     public function changeTier(Request $request, User $user): RedirectResponse
     {
+        $this->authorizeSubject($user);
+
         $validated = $request->validate([
             'role' => ['required', 'string'],
             'reason' => ['nullable', 'string', 'max:200'],
@@ -199,6 +203,8 @@ class UserController extends Controller
      */
     public function changeStatus(Request $request, User $user): RedirectResponse
     {
+        $this->authorizeSubject($user);
+
         $validated = $request->validate([
             'status' => ['required', 'string'],
             'reason' => ['nullable', 'string', 'max:200'],
@@ -227,6 +233,8 @@ class UserController extends Controller
      */
     public function changeRole(Request $request, User $user): RedirectResponse
     {
+        $this->authorizeSubject($user);
+
         $validated = $request->validate([
             'role_id' => ['required', 'integer'],
             'operation' => ['required', 'string', 'in:assign,remove'],
@@ -263,6 +271,8 @@ class UserController extends Controller
      */
     public function changeEntitlement(Request $request, User $user): RedirectResponse
     {
+        $this->authorizeSubject($user);
+
         $validated = $request->validate([
             'domain' => ['required', 'string'],
             'operation' => ['required', 'string', 'in:grant,revoke'],
@@ -329,19 +339,30 @@ class UserController extends Controller
      * Refuse a subject outside the actor's authority, or outside their
      * organisation.
      *
-     * Route-model binding resolves by primary key and knows nothing about
-     * either boundary, so both are checked here. Without the organisation
-     * check, a guessed id would open another customer's account on a
-     * multi-tenant instance.
+     * Called by EVERY method that reads or writes an account, including the
+     * five mutation routes. Route-model binding resolves by primary key and
+     * knows nothing about either boundary, and the ids are sequential integers.
+     *
+     * THIS IS THE EARLY CHECK, NOT THE AUTHORITATIVE ONE. `UserRegistry`
+     * refuses a cross-organisation subject again on every write, because a
+     * console command, a queued job, a future API endpoint and the
+     * access-review applier never pass through this method at all. Having it
+     * here as well buys a clean 404 with no exception in the log, and costs one
+     * line. Removing it would be safe; removing the service check would not.
+     *
+     * 404 for the tenancy boundary and 403 for the authority one, deliberately.
+     * A 403 confirms the id exists and belongs to somebody; from this
+     * organisation's point of view another customer's account genuinely is not
+     * found, and saying so tells an id-probing attacker nothing.
      */
     private function authorizeSubject(User $subject): void
     {
         /** @var User $actor */
         $actor = Auth::user();
 
-        $inScope = $this->registry->query()->whereKey($subject->getKey())->exists();
-
-        abort_unless($inScope, 404);
+        /* Asked of the service, so "in this organisation" has one definition
+         * that the write path and the screen cannot drift apart on. */
+        abort_unless($this->registry->isInOrganisation($subject), 404);
         abort_unless($this->authorization->mayActOn($actor, $subject), 403, 'That account holds more authority than you do.');
     }
 

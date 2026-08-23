@@ -243,7 +243,7 @@ Plus `privileged.action.denied` on every refused route, refused delegation, refu
 | No escalation by direct route access | Posting the tier route asking for a tier above the actor's is refused and audited; assigning a higher role is refused; a role carrying a permission above its holder's tier is inert |
 | The last System Administrator | Three removal paths tested separately; inactive administrators excluded from the count |
 | Platform role never implies business data | `a_system_administrator_with_no_entitlement_reads_no_business_data`, plus a structural test that no permission key names a business domain |
-| Disabled users cannot authenticate | Both sign-in paths, plus the authorization layer, so a live session does not outlive the change |
+| Disabled users cannot authenticate | Both sign-in paths, plus the authorization layer, so a live session does not outlive the change. **The two paths word the refusal differently on purpose** - see section 10 |
 | Cross-organisation | Every new table behind the boundary; the user registry explicitly scoped; a guessed id 404s |
 | Every write route gated | A structural test walks the route table and fails on any ungated POST, PUT, PATCH or DELETE |
 | Mass assignment | `code`, `tier`, `is_system`, `organisation_id` and `permission_key` are all non-fillable and set explicitly |
@@ -289,4 +289,122 @@ DEC-001 approved and applied. `doc/MENU_STRUCTURE.md` updated, not worked around
 | Domain entitlement model exists | **Pass.** Separate table, separate route, separate audit event, and tests asserting neither dimension implies the other |
 | The last System Administrator cannot be removed | **Pass.** Three paths, one guard, tested separately |
 
-**Gate 2 is met.** R1.3 has not been started and needs review of this batch first.
+**Gate 2 was accepted subject to one security blocker, raised in review on 25 August 2026 and fixed in the same pull request. See section 10.**
+
+---
+
+## 10. Review fix - cross-organisation mutation boundary and sign-in disclosure
+
+**Raised by:** the product owner, in review of R1.2, 25 August 2026.
+**Fixed in:** PR #18, the same pull request. No separate branch and no separate PR.
+
+### 10.1 The blocker, and that it was real
+
+`users` deliberately carries no global organisation scope, because it is the
+authentication table and a fail-closed global scope there would mean nobody can
+sign in when the context fails to resolve (SEC-DEC-022). That choice moves the
+whole tenancy burden onto the paths that WRITE an account.
+
+R1.2 discharged that burden on the READ paths only. `UserController::show()` and
+`edit()` called `authorizeSubject()`; the five mutation routes did not, and
+`UserRegistry` had no organisation check at all.
+
+**The hole was verified before it was fixed.** A throwaway test was written to
+demonstrate it, and it succeeded: a System Administrator in one organisation
+disabled a Viewer in another by supplying that account's id, with a second
+administrator present so the last-administrator invariant could not be what
+refused. The probe was then deleted and replaced by the permanent tests below.
+
+### 10.2 What was changed
+
+| Change | Detail |
+|---|---|
+| `UserRegistry::assertInOrganisation()` | Called first by all seven mutations: `update`, `changeTier`, `changeStatus`, `assignRole`, `removeRole`, `grantEntitlement`, `revokeEntitlement`. **The service is authoritative** - console commands, queued jobs, future APIs and the access-review applier all pass through it |
+| `UserRegistry::assertRoleInOrganisation()` | The same hole from the other side: another organisation's role being attached to one of ours. A null owner is the shared built-in set and is allowed |
+| `SubjectOutsideOrganisation` | Extends `DomainException`, **not** `RuntimeException`, so no controller's existing catch block can swallow a tenancy violation into a friendly form error. Implements `HttpExceptionInterface` for a 404 |
+| `UserController::authorizeSubject()` | Now called by all five mutation routes as well, as the early check for a clean 404. It asks the service, so "in this organisation" has one definition |
+| `MicrosoftSignInController::resolve()` | **A second real bug the guard exposed:** SSO created accounts with no organisation, which under the new rule would make them permanently unmanageable. New accounts are now placed, and the sign-in is refused rather than creating an unowned account if no organisation can be resolved |
+
+**404, not 403**, following the convention already set by `authorizeSubject()`. A
+403 confirms the id exists and belongs to somebody; the ids are sequential
+integers, so from this organisation's point of view the record genuinely is not
+found and saying so tells an id-probing attacker nothing. SEC-DEC-034.
+
+**Fails closed in both directions.** An account with no organisation is refused
+as well as one belonging to somebody else.
+
+**Every refusal is audited** before the exception is thrown, and the audit reason
+names the operation but never the other organisation.
+
+### 10.3 Required tests, all present
+
+`tests/Feature/Identity/CrossOrganisationMutationTest.php`, 12 tests. In every
+one the attacker is a **System Administrator with a second administrator beside
+them**, and the victim is a plain Viewer, so no refusal can be explained by an
+insufficient tier, a missing permission or the last-administrator invariant.
+Organisation isolation is the only thing left to refuse the operation.
+
+| Operation | Direct service test | HTTP route test |
+|---|---|---|
+| Profile update | Yes | Yes |
+| Tier change | Yes | Yes |
+| Status change | Yes | Yes |
+| Role assignment | Yes | Yes |
+| Role removal | Yes | Yes |
+| Entitlement grant | Yes | Yes |
+| Entitlement revoke | Yes | Yes |
+
+Every test confirms all six required properties: the operation is refused; the
+target user is unchanged; roles are unchanged; entitlements are unchanged; no
+cross-organisation data is returned; and a denial audit event is produced.
+"Unchanged" is asserted against a full snapshot of the victim - name, email,
+role, status, type, organisation, placement, access window, roles and
+entitlements - not a single field.
+
+Three further tests: a role from another organisation cannot be attached to one
+of our accounts; an unplaced account is refused too; and **the same operations
+still succeed within one organisation**, so the guard cannot pass by having
+broken the feature.
+
+### 10.4 Microsoft sign-in disclosure, made explicit
+
+**Option 2 chosen and implemented**, as preferred in review.
+
+The credential form returns one identical sentence for a wrong password, an
+unknown address and a suspended account, because nobody has proved anything at
+that point and naming the state would be account enumeration.
+
+The Microsoft path names the person's own state - disabled, locked, expired, or
+the date their window ended - and who to ask. Microsoft has already
+authenticated them and it is their own account, so this enumerates nothing.
+
+**The earlier wording was wrong and has been corrected.** SEC-DEC-027 claimed
+the refusal was byte-identical without scoping that to the credential path, and
+the PR body repeated it. Both are corrected, and SEC-DEC-032 records the
+Microsoft decision.
+
+**The audit trail is unchanged.** The same `auth.login.failed` / `denied` event
+is written either way, and its reason may be fuller than the sentence shown.
+
+Five tests cover it, including one that follows the redirect and asserts the
+rendered page names no other account and no configuration value.
+
+### 10.5 Results after the fix
+
+```text
+php artisan test
+  tests: 261   passed: 261   assertions: 2299
+
+./vendor/bin/pint --test
+  result: passed
+```
+
+18 new tests since the blocker was raised (243 to 261).
+
+Browser verification re-run over the eleven gate 2 screens at 1440x900 and
+390x844 in both themes: no console error, no page error, no horizontal page
+overflow. No visual change was expected or seen - the fix is a service-layer
+guard and a message string.
+
+**Gate 2 is met.** R1.3 has not been started and needs review of this batch
+first.
