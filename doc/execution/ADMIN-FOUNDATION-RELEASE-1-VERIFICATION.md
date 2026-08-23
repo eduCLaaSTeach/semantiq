@@ -275,7 +275,9 @@ DEC-001 approved and applied. `doc/MENU_STRUCTURE.md` updated, not worked around
 | 3 | M2, M4, M5 menu gaps | Gates 4 and 5 |
 | 4 | Access Reviews are server-rendered, deviating from plan D4 | Recorded as D5. React remains planned for ADM-020 in gate 5 |
 | 5 | The Administrator read grants in the Release 1 matrix | Still not implemented. SEC-DEC-020 |
-| 6 | Control-plane hosting geography | **CLOSED 25 August 2026.** Server, backups and replication all confirmed Singapore-only. What remains is the **applicable privacy regime**, which is a legal determination and not a technical one - SEC-DEC-041 |
+| 6 | Control-plane hosting geography and privacy regime | **BOTH CLOSED 25 August 2026.** Server, backups and replication all Singapore-only; the **Singapore PDPA applies** (DEC-002) |
+| 12 | **PDPA obligations this application does not yet meet** | **Open, planned for gate 4.** No way to answer an access or correction request; no breach-notification workflow against a three-calendar-day deadline; the seven-year retention baseline needs a per-category basis rather than one number. DEC-002, SEC-DEC-042 |
+| 13 | `organisations.privacy_contact` is optional | **Open, product owner decision.** SEC-DEC-043 |
 | 7 | Scheduler cron entry not installed | **RESOLVED 25 August 2026.** The live Platform Overview reports Scheduler **Healthy, last run 1 minute ago** |
 | 8 | R1.2 migrations on production | **CONFIRMED RUN 25 August 2026.** `/admin` renders on the live site, and reaching it requires `users.status` and `user_roles`, both added by R1.2. The schema is level with the code |
 | 9 | **`QUEUE_CONNECTION=sync` in production** | **New, open.** The deploy's `.env` template sets it, so queued work runs inline in the web request. Harmless today because nothing is queued, but **ADM-022 Background Jobs in gate 6 needs a real queue driver and a worker**. Raise before gate 6, not during it |
