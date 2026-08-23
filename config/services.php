@@ -35,4 +35,24 @@ return [
         ],
     ],
 
+    'microsoft' => [
+
+        /*
+         * Microsoft Entra ID application registration.
+         *
+         * CLaaS SemantiQ holds no credential of its own for a federated person:
+         * identity is delegated entirely to Entra. All four values are set on
+         * the server and never in this repository.
+         *
+         * 'tenant' is the directory sign-in is issued against. Use a tenant GUID
+         * or a verified domain to pin sign-in to one organisation. 'common'
+         * accepts any Microsoft work, school or personal account, which is
+         * almost never what a control plane wants, so it is not defaulted.
+         */
+        'tenant' => env('MICROSOFT_TENANT_ID'),
+        'client_id' => env('MICROSOFT_CLIENT_ID'),
+        'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
+        'redirect' => env('MICROSOFT_REDIRECT_URI'),
+    ],
+
 ];

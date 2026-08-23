@@ -24,6 +24,13 @@
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="sqlite"/>
+        <!-- Pinned empty so the suite never picks up a developer's real Entra
+             app registration from .env. A test that passes locally and fails in
+             CI because of an environment file is worse than no test. -->
+        <env name="MICROSOFT_TENANT_ID" value=""/>
+        <env name="MICROSOFT_CLIENT_ID" value=""/>
+        <env name="MICROSOFT_CLIENT_SECRET" value=""/>
+        <env name="MICROSOFT_REDIRECT_URI" value=""/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>

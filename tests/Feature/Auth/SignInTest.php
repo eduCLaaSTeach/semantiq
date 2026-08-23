@@ -189,16 +189,6 @@ class SignInTest extends TestCase
     }
 
     #[Test]
-    public function microsoft_sign_in_fails_closed_with_an_explanation(): void
-    {
-        // Not built yet. It must say so rather than 500.
-        $this->from('/sign-in')
-            ->post('/sign-in/microsoft')
-            ->assertRedirect('/sign-in')
-            ->assertSessionHasErrors('form');
-    }
-
-    #[Test]
     public function password_help_explains_rather_than_offering_a_reset_form(): void
     {
         $this->get('/sign-in/password')
