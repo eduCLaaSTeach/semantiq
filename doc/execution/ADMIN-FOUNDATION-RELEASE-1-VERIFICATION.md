@@ -270,7 +270,7 @@ DEC-001 approved and applied. `doc/MENU_STRUCTURE.md` updated, not worked around
 
 | # | Item | Status |
 |---|---|---|
-| 1 | `audit_events` mass deletes bypass the model guard; the control is a database grant | **Open from R1.1.** Needs an approved production database change |
+| 1 | `audit_events` mass deletes bypass the model guard | **CLOSED 25 August 2026.** Two `BEFORE` triggers applied to production and proved - `UPDATE audit_events SET action = action LIMIT 1;` returns `#1644`. The privilege grant originally proposed could not express it: MySQL has no DENY. SEC-DEC-037 |
 | 2 | M7 Security Groups has no requirement | **Open.** Needs a requirement, not an implementation |
 | 3 | M2, M4, M5 menu gaps | Gates 4 and 5 |
 | 4 | Access Reviews are server-rendered, deviating from plan D4 | Recorded as D5. React remains planned for ADM-020 in gate 5 |
@@ -279,7 +279,8 @@ DEC-001 approved and applied. `doc/MENU_STRUCTURE.md` updated, not worked around
 | 7 | Scheduler cron entry not installed | **RESOLVED 25 August 2026.** The live Platform Overview reports Scheduler **Healthy, last run 1 minute ago** |
 | 8 | R1.2 migrations on production | **CONFIRMED RUN 25 August 2026.** `/admin` renders on the live site, and reaching it requires `users.status` and `user_roles`, both added by R1.2. The schema is level with the code |
 | 9 | **`QUEUE_CONNECTION=sync` in production** | **New, open.** The deploy's `.env` template sets it, so queued work runs inline in the web request. Harmless today because nothing is queued, but **ADM-022 Background Jobs in gate 6 needs a real queue driver and a worker**. Raise before gate 6, not during it |
-| 10 | `audit_events` append-only triggers | **Pending application.** SEC-DEC-037. The grant approach was withdrawn - MySQL has no DENY |
+| 10 | `audit_events` append-only triggers | **Applied and proved 25 August 2026.** SEC-DEC-037 |
+| 11 | **If `audit_events` is ever rebuilt, the triggers must be re-applied by hand** | **Active constraint.** They belong to the table, so a rollback takes them with it and a re-migrate does not bring them back. SEC-DEC-039 |
 
 ## 9. Result against the gate
 
