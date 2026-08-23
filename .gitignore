@@ -1,0 +1,49 @@
+# Secrets and local environment.
+#
+# First in the file, because nothing else here matters as much. The fresh
+# repository arrived without a .gitignore, which left a real .env holding a live
+# Microsoft client secret sitting untracked in the working tree, in a session
+# whose stop hook commits untracked files automatically. Nothing leaked, but the
+# gap between "untracked" and "committed" was one hook away.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+auth.json
+
+# Dependencies
+/vendor
+/node_modules
+
+# Build output
+/public/build
+/public/hot
+/public/storage
+
+# Laravel runtime. Regenerated on every boot and specific to one machine, so
+# committing any of it means committing another developer's cache.
+/storage/framework
+/storage/logs
+/storage/app/public
+/storage/pail
+/storage/inertia-devtools
+/bootstrap/cache/*.php
+
+# Local development databases. A dev SQLite file is real data on someone's
+# laptop, not schema; migrations are the source of truth for schema.
+*.sqlite
+*.sqlite-journal
+/database/*.sqlite
+
+# Tooling
+.phpunit.result.cache
+.phpunit.cache
+/.idea
+/.vscode
+/.fleet
+.DS_Store
+Thumbs.db
+
+# Machine-local agent state
+.claude/settings.local.json
