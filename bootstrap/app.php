@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnforceNavigationPolicy;
+use App\Modules\Platform\Http\Middleware\AssignCorrelationId;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -27,6 +28,15 @@ return Application::configure(basePath: dirname(__DIR__))
          */
         $middleware->alias([
             'policy' => EnforceNavigationPolicy::class,
+        ]);
+
+        /*
+         * Runs first, so anything that logs, audits or fails later in the
+         * request already has an id to quote. ADM-024 asks Diagnostics to show
+         * recent error correlation ids; this is where they come from.
+         */
+        $middleware->web(prepend: [
+            AssignCorrelationId::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

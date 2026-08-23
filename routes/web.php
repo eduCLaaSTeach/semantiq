@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Auth\MicrosoftSignInController;
 use App\Http\Controllers\Auth\SignInController;
-use App\Http\Controllers\Pages\AdminOverviewController;
 use App\Http\Controllers\Pages\HomeController;
+use App\Modules\Platform\Http\Controllers\DiagnosticsController;
+use App\Modules\Platform\Http\Controllers\FeatureFlagController;
+use App\Modules\Platform\Http\Controllers\PlatformOverviewController;
+use App\Modules\Platform\Http\Controllers\SystemConfigurationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -71,7 +74,30 @@ Route::middleware('auth')->group(function (): void {
      * typed URL. ROLE_MODEL.md section 5, and a named Phase 00 acceptance
      * criterion.
      */
-    Route::get('/admin', AdminOverviewController::class)
-        ->middleware('policy:system-admin')
-        ->name('admin.overview');
+    Route::middleware('policy:system-admin')->prefix('admin')->name('admin.')->group(function (): void {
+        /* ADM-001. The landing page: is the platform working, and what next. */
+        Route::get('/', PlatformOverviewController::class)->name('overview');
+
+        Route::prefix('system')->name('system.')->group(function (): void {
+            /*
+             * ADM-021. One pair of routes serves General Settings and
+             * Environment Settings; the category is a route segment checked
+             * against a closed list in the controller, never taken from the
+             * request body.
+             */
+            Route::get('/settings/{category}', [SystemConfigurationController::class, 'edit'])
+                ->name('settings');
+            Route::put('/settings/{category}', [SystemConfigurationController::class, 'update'])
+                ->name('settings.update');
+
+            /* ADM-021, feature flags. */
+            Route::get('/feature-flags', [FeatureFlagController::class, 'index'])
+                ->name('feature-flags');
+            Route::put('/feature-flags/{key}', [FeatureFlagController::class, 'update'])
+                ->name('feature-flags.update');
+
+            /* ADM-024. */
+            Route::get('/diagnostics', DiagnosticsController::class)->name('diagnostics');
+        });
+    });
 });

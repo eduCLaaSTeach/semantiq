@@ -60,8 +60,15 @@ ADM-006 lists five roles. `doc/ROLE_MODEL.md`, which `CLAUDE.md` names as the au
 **D2. Permissions layer on top of tiers.**
 ADM-007's stated purpose is granularity, not replacement. The tier stays the coarse gate; permission keys become the fine one. **Both must agree or the request is denied.** A tier maps to a default permission set, so nothing already tested changes behaviour.
 
-**D3. Administration is reshaped to the ADM tree for this release.**
-The live rail advertises Fabric Environment, Data Engineering and Semantic Intelligence, none of which this release builds. A rail promising what the product cannot do is worse than a short one. MENU_STRUCTURE's later groups return as their releases land. The four fixed clusters are untouched.
+**D3. REVISED 24 August 2026. The menu structure stands; the ADM tree is mapped onto it.**
+
+The original decision was to reshape Administration to the ADM section 2 tree, dropping the groups this release does not build. That has been reversed before any code was written, for two reasons.
+
+`CLAUDE.md` names `doc/MENU_STRUCTURE.md` as the functional navigation authority, and the tree already ships in full with unbuilt destinations rendered disabled and carrying a "Soon" pill. That is the design template's own answer to "how do we show what is coming", and it is better than deletion: an administrator can see the shape of the product, and nothing has to be re-added later.
+
+So Administration keeps all fifteen groups. ADM's own tree is reconciled against them by mapping, and the differences are highlighted rather than resolved silently - see section 21.
+
+The one exception is Platform Overview. Its eight menu children are all built and all visible on the one page, so leaving them in the rail with a "Soon" pill beside something that already exists would be a lie. It becomes a leaf, and section 21 records where each child landed.
 
 **D4. Blade for administrator CRUD; React where state is genuinely interactive.**
 Lists, forms and policy pages are the archetypes the design system already covers, work without JavaScript, and need no client state. React 19 is introduced for **Connection Test Centre** (ADM-020) and **Access Reviews** (ADM-008), where live results and multi-step state earn it, and later for Ask SemantIQ.
@@ -407,4 +414,80 @@ Every migration reversible and exercised `up`, `down`, `up` before it is propose
 
 ## 20. Approval
 
-Nothing in section 4 has been implemented. On approval I will build **R1.1 (Gate 1)**, open its pull request with evidence against that gate, and stop for review before R1.2.
+R1.1 was approved on 23 August 2026 and is built. R1.2 has not been started and needs review of R1.1 first.
+
+---
+
+## 21. Menu structure sync - ADM section 2 against MENU_STRUCTURE.md section 12
+
+Checked node by node on 24 August 2026. `doc/MENU_STRUCTURE.md` is the authority; the Release 1 specification's own navigation sketch is read as a working grouping for the administrator features, not as a replacement tree.
+
+### 21.1 Where each ADM group lands in the menu structure
+
+| ADM section 2 | MENU_STRUCTURE.md | Status |
+|---|---|---|
+| Platform Overview | 12.1 Platform Overview | Built in R1.1 |
+| Organisation (Profile, Business Units, Teams) | 12.2 Organisation and Users | Gate 2 |
+| Users and Access (Users, Roles, Permissions, Access Reviews) | 12.2 Organisation and Users | Gate 2 |
+| Security (Authentication Policy, Session Policy, API Security, Secret References) | **partly missing - see 21.3** | Gate 3 |
+| Audit (User Activity, Administrative, Security, Configuration) | 12.10 Governance, "Audit Logs" leaf | Gate 4 |
+| Data Protection | 12.11 Data Protection | Gate 4 |
+| Data Sovereignty | 12.12 Data Sovereignty | Gate 4 |
+| Integrations (Registry, Entra, API Configuration, Credential References, Connection Tests) | 12.15 System Configuration, plus 12.3 for Entra | Gate 5 |
+| System (Application Health, Background Jobs, Scheduler, Diagnostics, Configuration) | 12.15 System Configuration | Jobs and Scheduler gate 6; Diagnostics and Configuration built in R1.1 |
+
+### 21.2 Platform Overview - eight menu children, rendered as page sections
+
+MENU_STRUCTURE 12.1 lists eight children. None is dropped; none is a separate rail entry.
+
+| Menu child | Where it went |
+|---|---|
+| Setup Progress | "Setup progress" section, the ten-step journey |
+| Environment Health | "Health checks" section |
+| Security and Sovereignty Status | The Entra, data protection and sovereignty rows of the same health list |
+| Pending Actions | "Needs your attention" section |
+| Failed Automations | The failures list on Diagnostics, which is where the correlation ids to quote are |
+| Recent Changes | "Recent changes" section, read from `audit_events` |
+| Data Health | A journey step. There is no data estate to report on until the Fabric release builds one |
+| Intelligence Health | The same, for semantic intelligence |
+
+### 21.3 MISSING PARTS - highlighted, not resolved
+
+These are gaps between the two documents. None is fixed in R1.1, because none belongs to gate 1, and none should be closed by an implementer choosing a side. **Each needs a decision before its gate begins.**
+
+| # | Gap | Detail | Needed by |
+|---|---|---|---|
+| M1 | **No home for security policy screens** | ADM-009 Authentication Policy, ADM-010 Session Policy and ADM-011 API Security have no node anywhere in MENU_STRUCTURE section 12. Its Governance group (12.10) is about business governance, and System Configuration (12.15) is about application settings. Neither is right | Gate 3 |
+| M2 | **Audit is one leaf, ADM wants four views** | MENU_STRUCTURE has a single "Audit Logs" leaf under Governance. ADM-013 asks for User Activity, Administrative Changes, Security Changes and Configuration Changes. These may be filters on one screen rather than four nodes, which is the cheaper answer, but it is a decision | Gate 4 |
+| M3 | **No Permissions node** | MENU_STRUCTURE 12.2 lists Roles but not Permissions. ADM-007 needs a screen | Gate 2 |
+| M4 | **No Connection Tests node** | ADM-020 Connection Test Centre has no menu entry. 12.15 has "Integrations" only | Gate 5 |
+| M5 | **Entra appears in two places** | MENU_STRUCTURE puts "SSO and Entra Configuration" under Fabric Environment (12.3); ADM-018 puts Microsoft Entra under Integrations. One record, two plausible homes | Gate 5 |
+| M6 | **"Application Health" would duplicate Platform Overview** | ADM section 2 lists System > Application Health. ADM-001 already covers it and MENU_STRUCTURE has no such node. Treated as covered, and no duplicate node was added | Resolved in R1.1 |
+| M7 | **Security Groups has no feature** | MENU_STRUCTURE 12.2 lists "Security Groups". No ADM feature specifies it. It is presumably Entra group mapping, but nothing says so | Gate 2 |
+| M8 | **Context Registers has no feature** | MENU_STRUCTURE 12.15 lists "Context Registers". No ADM feature specifies what that screen shows | Gate 7 |
+
+### 21.4 What R1.1 changed in the navigation
+
+| Node | Before | After |
+|---|---|---|
+| Platform Overview | Group with eight "Soon" children | Leaf, route `admin.overview` |
+| System Configuration > General Settings | "Soon" | Route `admin.system.settings` with `category=general` |
+| System Configuration > Environment Settings | "Soon" | Route `admin.system.settings` with `category=environment` |
+| System Configuration > Feature Flags | "Soon" | Route `admin.system.feature-flags` |
+| System Configuration > Diagnostics | "Soon" | Route `admin.system.diagnostics` |
+
+Nothing else moved. No group was removed, no node was added, and the four fixed clusters are untouched.
+
+`tests/Feature/Shell/NavigationIntegrityTest.php` now enforces this both ways: every node names a declared policy and a registered icon, every node route resolves and generates a URL, and every `admin.*` GET route is reachable from the rail. A screen nobody can navigate to fails the suite, and so does a link to nothing.
+
+---
+
+## 22. Standing guardrails, agreed 23 August 2026
+
+Applied to R1.1 and to every change after it.
+
+1. **Sync with the menu structure.** Every change is checked against `doc/MENU_STRUCTURE.md`, and anything missing is highlighted rather than quietly decided. Section 21.3 is that list for this release.
+2. **Nothing left hanging.** No dead code, orphaned file, unused route, unreachable screen or half-wired feature. Three things were removed under this rule while building R1.1: an unused `remedyRoute` field on `HealthCheck` that nothing set, an empty `app/Workflows/Steps` directory left over from the repository wipe, and Laravel's skeleton `inspire` command.
+3. **Clear definitions in the code file.** Every class carries a docblock saying what it is for, what invariant it holds and what a reviewer must not break. Comments explain intent and consequence, not syntax.
+4. **Verified against security standards.** Each change states what it exposes, to whom, and what stops it exposing more. For R1.1 that is: no credential in a table, a log or a page; fail-closed organisation scope; an append-only trail; denials audited; every gate enforced at the route as well as in the rail.
+

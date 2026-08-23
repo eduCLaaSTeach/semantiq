@@ -1541,3 +1541,149 @@ svg { fill: none; }
 .journey-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
 .journey-name { font-size: var(--text-body); font-weight: 600; }
 .journey-meta { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-xs); color: var(--text-muted); }
+
+/* ---------------------------------------------------------------------------
+ * 13 - Administration
+ *
+ * The Simple table tier from the design template section 8: a short read-only
+ * list of about ten rows or fewer, with a header, rows and hover, and none of
+ * the sorting, filtering or pagination the Standard tier requires. Every list
+ * in Release 1 gate 1 - health checks, recent changes, recent failures, feature
+ * flags - is that shape.
+ *
+ * The template's look is kept exactly: a card with a 1px border and no resting
+ * shadow, 10px uppercase muted headers, 1px horizontal row dividers, a subtle
+ * hover, no vertical gridlines and no heavy borders.
+ * ------------------------------------------------------------------------ */
+
+/*
+ * The horizontal scroll container. On a narrow screen the table scrolls inside
+ * its own box rather than pushing the page sideways.
+ *
+ * `min-width: 0` is the load-bearing line. A flex item defaults to
+ * `min-width: auto`, so without it the card refuses to shrink below its widest
+ * child, the scroll container never gets narrower than the table, and the whole
+ * page scrolls sideways instead - taking the last columns off the screen
+ * entirely. Found by opening the page, not by a test.
+ */
+.table-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; }
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-body);
+}
+
+.data-table th {
+    padding: var(--space-2) var(--space-3);
+    text-align: left;
+    font-size: var(--text-micro);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--card-border);
+    white-space: nowrap;
+}
+
+.data-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--card-border);
+    vertical-align: top;
+}
+
+/* Every cell in the last row, not only the `td`s: a row header carries the
+   `th` border rule and would otherwise leave a line hanging under the table. */
+.data-table tbody tr:last-child > * { border-bottom: 0; }
+.data-table tbody tr:hover { background: var(--surface-hover); }
+
+/*
+ * Two column-width hints, so a table's widest content does not decide the
+ * layout by itself. Named rather than set inline, because a width chosen per
+ * page is a value nobody can find again.
+ *
+ * `col-primary` - the column naming what each row is about, when that name
+ *   carries a description with it. It takes the majority of the width so the
+ *   description wraps rather than squeezing itself into a ribbon.
+ * `col-label` - the same column when the name is short and the detail beside
+ *   it is the long part.
+ */
+.data-table .col-primary { width: 55%; }
+.data-table .col-label { width: 22%; }
+
+/*
+ * A row header - the cell naming the thing the row is about. It is a `th` for
+ * screen readers, but it is not a column header, so it drops the uppercase
+ * micro-label treatment and reads as ordinary emphasised body text. Without
+ * this the inherited letter-spacing makes every row label look mechanical.
+ */
+.data-table .cell-heading {
+    font-size: var(--text-body);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: normal;
+    color: var(--text);
+}
+
+/* Numbers, counts and timestamps read as columns rather than as ragged text. */
+.data-table .cell-numeric { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* The template forbids a blank cell. This is the muted placeholder that goes in
+   one instead, so "nothing here" never looks like "the page failed". */
+.cell-empty { color: var(--text-muted); }
+
+/*
+ * A secondary line under a cell's main value: what a check found, why a flag
+ * was changed. Kept muted and small so the column still scans on its first
+ * line.
+ *
+ * The width cap is what stops a long help sentence from dictating the column
+ * width and squeezing every other column off the table.
+ */
+.cell-note { display: block; max-width: 52ch; margin-top: 2px; font-size: var(--text-small); color: var(--text-muted); }
+
+/* A correlation id or other machine reference. Monospace because it is read
+   character by character and quoted to somebody else. */
+.cell-reference { font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace; font-size: var(--text-xs); }
+
+/* --- Page-hosted settings form ----------------------------------------- */
+
+/* The roomy page-form sizing from the template's forms section. One column,
+   because a settings form is read top to bottom rather than compared across. */
+.settings-form { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4); }
+.settings-fields { display: flex; flex-direction: column; gap: var(--space-3); max-width: 560px; }
+
+/* The form footer: the save action, and the one place a whole-form message
+   appears. Field errors stay inline where they belong. */
+.settings-foot { display: flex; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--card-border); }
+
+/* --- Vertical stack of cards ------------------------------------------- */
+
+/* Used by every administration page so the gap between panels is a token
+   rather than a margin invented per page. `min-width: 0` on the children for
+   the same reason as `.table-scroll` - see the note there. */
+.stack { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.stack > * { min-width: 0; }
+
+/* A card whose body is a full-bleed table or list: the heading needs the card's
+   padding, the body must not have it. */
+.card-head { padding: var(--space-3) var(--space-3) 0; }
+
+/* The list of things needing attention: a state pill, the check, its detail. */
+.attention-list { display: flex; flex-direction: column; gap: var(--space-2); list-style: none; }
+.attention-item { display: flex; align-items: flex-start; gap: var(--space-2); }
+.attention-name { font-weight: 600; }
+
+/* The per-row action form in a table cell: a reason and the button that uses it. */
+.row-form { display: flex; flex-direction: column; gap: var(--space-2); max-width: 260px; }
+
+/* --- Health summary ----------------------------------------------------- */
+
+/* The overall state, stated once at the top so the answer to "is it working"
+   does not have to be assembled from seven rows. */
+.health-summary { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); }
+.health-summary .icon { font-size: 24px; color: var(--text-muted); }
+.health-summary-text { display: flex; flex-direction: column; gap: 2px; }
+.health-summary-title { font-family: var(--font-heading); font-size: var(--text-h3); font-weight: 600; }
+.health-summary-note { font-size: var(--text-small); color: var(--text-muted); }
