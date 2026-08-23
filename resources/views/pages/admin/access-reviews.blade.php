@@ -17,6 +17,32 @@
     <div class="stack">
         @include('partials.form-status')
 
+        {{-- Why this screen exists, said on the screen.
+
+             Access accumulates. Somebody moves from Finance to Operations and
+             keeps Finance; a contractor finishes and keeps their role; a
+             temporary grant made during an incident is never taken back. Nobody
+             notices, because nothing breaks - the person simply keeps seeing
+             information they no longer need. An access review is the scheduled
+             moment somebody looks.
+
+             This panel was added because a reviewer asked what the screen was
+             for after reading the empty state. If the question gets asked, the
+             screen has not answered it. --}}
+        <div class="alert alert-info" role="note">
+            <svg class="icon" aria-hidden="true"><use href="#i-search-check"/></svg>
+            <span>
+                <strong>What this is for.</strong>
+                Access accumulates quietly - somebody changes team and keeps their old
+                domain, a contractor finishes and keeps their role, a grant made during an
+                incident is never taken back. Nothing breaks, so nobody notices. A review
+                takes a snapshot of who currently holds which additional roles and business
+                domains, asks a person to decide <em>keep</em> or <em>revoke</em> on each
+                one, and then carries out the revocations. Most organisations run one every
+                quarter.
+            </span>
+        </div>
+
         <section class="card panel" aria-labelledby="new-review">
             <div class="panel-head">
                 <h2 class="panel-title" id="new-review">
@@ -43,7 +69,14 @@
             </form>
             <p class="field-help">
                 A review starts as a draft. Opening it takes a snapshot of everyone's access at
-                that moment, and the snapshot is what gets reviewed.
+                that moment, and that snapshot is what gets reviewed - so a change made
+                afterwards does not quietly alter what was approved.
+            </p>
+            <p class="field-help">
+                Nothing is revoked until you decide every item and then apply the review. A
+                platform role is deliberately not reviewed here: changing somebody's role has
+                its own rules, including that the last System Administrator cannot be removed,
+                and a bulk decision screen would route around them.
             </p>
         </section>
 
@@ -52,9 +85,15 @@
                 <div class="empty">
                     <svg class="icon" aria-hidden="true"><use href="#i-search-check"/></svg>
                     <span class="empty-title">No reviews yet</span>
+                    {{-- An empty state says what will be here and what has to
+                         happen first. It should also say whether there is
+                         anything to review, because on a new instance the
+                         honest answer is usually "not yet". --}}
                     <span class="empty-note">
-                        An access review lists every additional role and business domain somebody
-                        holds, and asks whether they still need it.
+                        Start one above when people have accumulated access worth checking.
+                        On a new instance there is usually nothing to review yet - reviews
+                        cover additional roles and business domain access, and neither exists
+                        until you have granted some.
                     </span>
                 </div>
             @else

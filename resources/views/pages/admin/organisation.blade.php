@@ -76,10 +76,22 @@
 
                 <div class="field">
                     <label class="field-label" for="default_time_zone">Default time zone</label>
-                    <input class="input" type="text" id="default_time_zone" name="default_time_zone"
-                           value="{{ old('default_time_zone', $organisation->default_time_zone) }}"
-                           @error('default_time_zone') aria-invalid="true" aria-describedby="default_time_zone-message" @enderror>
-                    <p class="field-help">An IANA name such as Asia/Singapore. Stored data stays in UTC.</p>
+                    {{-- The same grouped select as the General Settings screen,
+                         from the same source, so the two cannot disagree about
+                         what a valid zone is. --}}
+                    <select class="input" id="default_time_zone" name="default_time_zone"
+                            @error('default_time_zone') aria-invalid="true" aria-describedby="default_time_zone-message" @enderror>
+                        <option value="">Not stated</option>
+                        @foreach (\App\Modules\Platform\Support\TimeZones::grouped() as $region => $zones)
+                            <optgroup label="{{ $region }}">
+                                @foreach ($zones as $identifier => $zoneLabel)
+                                    <option value="{{ $identifier }}"
+                                        @selected(old('default_time_zone', $organisation->default_time_zone) === $identifier)>{{ $zoneLabel }}</option>
+                                @endforeach
+                            </optgroup>
+                        @endforeach
+                    </select>
+                    <p class="field-help">Where this organisation works. Stored data stays in UTC.</p>
                     <p class="field-message" id="default_time_zone-message">@error('default_time_zone'){{ $message }}@enderror</p>
                 </div>
 

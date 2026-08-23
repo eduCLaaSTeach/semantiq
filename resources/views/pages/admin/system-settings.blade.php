@@ -70,7 +70,25 @@
                                 @endif
                             </label>
 
-                            @if ($type === \App\Modules\Platform\Enums\SettingType::Choice)
+                            @if ($type === \App\Modules\Platform\Enums\SettingType::TimeZone)
+                                {{-- Grouped by region, built from PHP's own tzdata
+                                     at render time so the list cannot drift. The
+                                     offset is shown because "Asia/Singapore"
+                                     means nothing to most people and
+                                     "UTC+08:00" means something to everyone. --}}
+                                <select class="input"
+                                        id="{{ $field }}"
+                                        name="settings[{{ $field }}]"
+                                        @error($errorKey) aria-invalid="true" aria-describedby="{{ $field }}-message" @enderror>
+                                    @foreach (\App\Modules\Platform\Support\TimeZones::grouped() as $region => $zones)
+                                        <optgroup label="{{ $region }}">
+                                            @foreach ($zones as $identifier => $zoneLabel)
+                                                <option value="{{ $identifier }}" @selected((string) $current === $identifier)>{{ $zoneLabel }}</option>
+                                            @endforeach
+                                        </optgroup>
+                                    @endforeach
+                                </select>
+                            @elseif ($type === \App\Modules\Platform\Enums\SettingType::Choice)
                                 <select class="input"
                                         id="{{ $field }}"
                                         name="settings[{{ $field }}]"

@@ -252,6 +252,56 @@ A phase verification report must include:
 
 Never report tests passed unless they were run.
 
+## Always Watch The Pipeline
+
+A pull request is not finished when it is opened, and a merge is not finished
+when it is merged.
+
+**On every pull request:** check its checks. Report the real conclusion, with the
+run link. If a check fails, read the job log and say what actually broke before
+proposing anything.
+
+**After every merge to `main`:** `main` is the production deploy trigger, so a
+merge starts a release. Check BOTH workflows on the merge commit - `CI` and
+`Deploy to cPanel (SSH)` - and then probe the live site. A green deploy means
+files arrived; it does not mean the application works.
+
+**The deploy workflow does NOT run migrations.** It ships code only. Every
+release that adds a migration therefore leaves the live database one release
+behind the live code until somebody runs `php artisan migrate --force` on the
+server, and in that window the screens touching the new tables fail. Say so
+explicitly in the completion report of any release containing a migration, name
+the screens at risk, and give the exact command. Running it on production
+remains the user's approval.
+
+Never report a deployment as successful on the strength of a green workflow
+alone.
+
+## Always Watch The Pipeline
+
+A pull request is not finished when it is opened, and a merge is not finished
+when it is merged.
+
+**On every pull request:** check its checks. Report the real conclusion, with the
+run link. If a check fails, read the job log and say what actually broke before
+proposing anything.
+
+**After every merge to `main`:** `main` is the production deploy trigger, so a
+merge starts a release. Check BOTH workflows on the merge commit - `CI` and
+`Deploy to cPanel (SSH)` - and then probe the live site. A green deploy means
+files arrived; it does not mean the application works.
+
+**The deploy workflow does NOT run migrations.** It ships code only. Every
+release that adds a migration therefore leaves the live database one release
+behind the live code until somebody runs `php artisan migrate --force` on the
+server, and in that window the screens touching the new tables fail. Say so
+explicitly in the completion report of any release containing a migration, name
+the screens at risk, and give the exact command. Running it on production
+remains the user's approval.
+
+Never report a deployment as successful on the strength of a green workflow
+alone.
+
 ## Mandatory Completion Report Format
 
 Every completed task must end with these four tables, in this order, every time.

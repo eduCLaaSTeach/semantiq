@@ -102,12 +102,18 @@ return [
 
         'app.default_time_zone' => [
             'category' => 'general',
-            'type' => SettingType::Text,
+            /*
+             * A grouped select built from PHP's own tzdata, not free text and
+             * not a Choice with a copied list. Free text accepted the right
+             * answer and rejected a typo with no hint at the wanted spelling; a
+             * copied list would be wrong the next time a country changed its
+             * rules. `timezone` still validates the post, because a select is
+             * not an authorization control.
+             */
+            'type' => SettingType::TimeZone,
             'default' => 'UTC',
             'label' => 'Default time zone',
             'help' => 'How dates are shown to people who have not chosen one. Stored data stays in UTC.',
-            /* `timezone` rather than a 400-entry choice list: the identifier set
-             * belongs to PHP and would drift the moment it were copied. */
             'rules' => ['required', 'timezone'],
             'editable' => Role::SystemAdmin,
             'audited' => true,
