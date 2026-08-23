@@ -127,3 +127,8 @@ document.addEventListener('submit', (event) => {
     spinner.className = 'btn-spinner';
     button.appendChild(spinner);
 });
+
+/* The shell's theme switcher writes the choice and announces it; applying it -
+   including swapping the per-theme logos and favicon - stays here, so there is
+   one place that knows how a theme is put on the page. */
+window.addEventListener('semantiq:theme', (event) => applyTheme(event.detail));

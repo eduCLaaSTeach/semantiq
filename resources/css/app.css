@@ -790,3 +790,653 @@ svg { fill: none; }
         scroll-behavior: auto !important;
     }
 }
+
+/* ===========================================================================
+ * 11 - Application shell
+ *
+ * The layout is ENFORCED by section 3: the rail is the left grid column
+ * spanning BOTH rows, so it is full height and owns the top-left corner, and
+ * the top bar spans only the main column - never full width above the rail.
+ * ======================================================================== */
+
+.app-shell {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--canvas);
+}
+
+.rail-container {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    position: relative;
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    background: var(--chrome);
+    color: var(--chrome-text);
+    border-right: 1px solid var(--divider);
+    box-shadow: 2px 0 10px var(--chrome-edge);
+    z-index: 2;
+    transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:root.rail-is-collapsed .rail-container { width: 56px; }
+
+.top-nav {
+    grid-column: 2;
+    grid-row: 1;
+    height: var(--topbar-height);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-3);
+    background: var(--chrome);
+    color: var(--chrome-text);
+    border-bottom: 1px solid var(--divider);
+    box-shadow: 0 2px 10px var(--chrome-edge);
+    z-index: 1;
+}
+
+.app-main {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    background: var(--canvas);
+    padding: var(--space-4);
+    scrollbar-width: none;
+}
+
+.app-main::-webkit-scrollbar { display: none; }
+
+/* --- Rail head ----------------------------------------------------------
+ * Exactly the top bar's height, so their bottom dividers form one continuous
+ * line. It is the home link and the shell's only collapse control.
+ * --------------------------------------------------------------------- */
+
+.rail-head {
+    position: relative;
+    height: var(--topbar-height);
+    flex: none;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-3);
+    border-bottom: 1px solid var(--divider);
+    background: none;
+    border-top: 0; border-left: 0; border-right: 0;
+    width: 100%;
+    cursor: pointer;
+    color: inherit;
+}
+
+:root.rail-is-collapsed .rail-head { padding: 0; justify-content: center; }
+
+/*
+ * Both marks are absolute overlays that cross-fade at fixed positions and
+ * reserve no layout box, so the collapsed rail stays centered and the mark
+ * never slides sideways as the width animates.
+ */
+.rail-mark {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rail-mark-wide { left: var(--space-3); opacity: 1; transition-delay: 0.24s; }
+.rail-mark-wide img { height: 22px; width: auto; display: block; }
+
+.rail-mark-short {
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 34px;
+    opacity: 0;
+    transition-delay: 0s;
+}
+
+.rail-mark-short img { width: 40px; height: 34px; object-fit: contain; display: block; }
+
+:root.rail-is-collapsed .rail-mark-wide { opacity: 0; transition-delay: 0s; }
+:root.rail-is-collapsed .rail-mark-short { opacity: 1; transition-delay: 0.24s; }
+
+/*
+ * The panel toggle. One glyph in both directions - never swapped for a chevron,
+ * which is a different control belonging to accordion groups.
+ */
+.rail-toggle {
+    position: absolute;
+    right: var(--space-2);
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-control);
+    color: var(--chrome-muted);
+    opacity: 1;
+    transition: opacity 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+    transition-delay: 0.24s;
+    pointer-events: none;
+}
+
+.rail-toggle .icon { font-size: 18px; }
+
+/*
+ * Collapsed: the expander overlays the SAME 40x34 slot as the short mark, on an
+ * opaque overlay, revealed on hover or keyboard focus of the brand block. It is
+ * defined unconditionally but invisible so it fades rather than hard-cuts.
+ */
+:root.rail-is-collapsed .rail-toggle {
+    right: auto;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 34px;
+    background: var(--chrome);
+    opacity: 0;
+    transition-delay: 0s;
+}
+
+:root.rail-is-collapsed .rail-head:hover .rail-toggle,
+:root.rail-is-collapsed .rail-head:focus-visible .rail-toggle { opacity: 1; }
+
+:root.rail-is-collapsed .rail-head:hover .rail-mark-short,
+:root.rail-is-collapsed .rail-head:focus-visible .rail-mark-short { opacity: 0; }
+
+/* --- Nav filter ---------------------------------------------------------
+ * Pinned with the brand block: only the nav list scrolls, so neither the logo
+ * nor the filter ever scrolls out of view. Its height is coupled to the width
+ * animation so vertical reflow rides along with the horizontal one.
+ * --------------------------------------------------------------------- */
+
+.rail-filter {
+    flex: none;
+    padding: var(--space-2) var(--space-3);
+    max-height: 52px;
+    overflow: hidden;
+    opacity: 1;
+    transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s ease 0.24s;
+}
+
+:root.rail-is-collapsed .rail-filter {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    transition-delay: 0s, 0s, 0s;
+}
+
+.rail-filter input {
+    width: 100%;
+    height: var(--control-height);
+    padding: 0 var(--space-2);
+    background: var(--filter-input-bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    color: var(--chrome-text);
+    font-family: var(--font-body);
+    font-size: var(--text-small);
+}
+
+.rail-filter input::placeholder { color: var(--chrome-muted); }
+
+/* --- Nav body: the only scrolling region in the rail -------------------- */
+
+.rail-nav {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--space-2) var(--space-2) var(--space-4);
+    scrollbar-width: none;
+}
+
+.rail-nav::-webkit-scrollbar { display: none; }
+
+.nav-cluster + .nav-cluster { margin-top: var(--space-3); }
+
+.nav-cluster-label {
+    padding: var(--space-2) var(--space-2) var(--space-1);
+    font-size: var(--text-micro);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--chrome-muted);
+    max-height: 28px;
+    overflow: hidden;
+    opacity: 1;
+    white-space: nowrap;
+    transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s ease 0.24s;
+}
+
+:root.rail-is-collapsed .nav-cluster-label {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    transition-delay: 0s, 0s, 0s;
+}
+
+/*
+ * One row shape for leaves and group headers alike. The icon keeps a consistent
+ * inset rather than re-centering when collapsed, which is what stops it sliding
+ * during the width animation.
+ */
+.nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    height: 36px;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--radius-control);
+    background: none;
+    color: var(--chrome-text);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.nav-item:hover { background: var(--chrome-hover); text-decoration: none; }
+
+.nav-item .icon { font-size: 18px; flex: none; }
+
+:root.rail-is-collapsed .nav-item .icon { font-size: 20px; }
+
+/* Labels, chevrons and pills hide by OPACITY while staying in flow. Taking them
+   out of flow is what produces the flash the template forbids. */
+.nav-label,
+.nav-chevron,
+.nav-soon {
+    opacity: 1;
+    transition: opacity 0.2s ease 0.24s;
+}
+
+:root.rail-is-collapsed .nav-label,
+:root.rail-is-collapsed .nav-chevron,
+:root.rail-is-collapsed .nav-soon {
+    opacity: 0;
+    transition-delay: 0s;
+    /* Dropped from the tab order too: opacity alone leaves a focus stop. */
+    visibility: hidden;
+}
+
+.nav-label { flex: 1; white-space: nowrap; overflow: hidden; }
+
+/* The active leaf: gold tint plus a 3px gold left bar. */
+.nav-item.is-active {
+    background: var(--nav-active-bg);
+    color: var(--nav-active-fg);
+    font-weight: 600;
+}
+
+.nav-item.is-active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--nav-active-bar);
+}
+
+/* Collapsed, the active item is a full rounded square in the active tint with
+   no left bar. */
+:root.rail-is-collapsed .nav-item.is-active::before { display: none; }
+
+/* An unbuilt destination stays visible, disabled, with its pill. Anything the
+   viewer cannot reach is absent instead - that happens server-side. */
+.nav-item[aria-disabled='true'] {
+    color: var(--chrome-muted);
+    cursor: default;
+}
+
+.nav-item[aria-disabled='true']:hover { background: none; }
+
+.nav-soon {
+    flex: none;
+    padding: 1px 6px;
+    border-radius: var(--radius-pill);
+    background: var(--soon-bg);
+    color: var(--soon-fg);
+    font-size: var(--text-micro);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* --- Top bar utilities -------------------------------------------------- */
+
+.app-name {
+    font-family: var(--font-heading);
+    font-size: var(--text-h3);
+    font-weight: 600;
+    color: var(--chrome-text);
+}
+
+.top-utils { display: flex; align-items: center; gap: var(--space-1); }
+
+/* A component primitive: neither of the two button looks, keeping the one its
+   own component defines. */
+.icon-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: none;
+    color: var(--chrome-muted);
+    cursor: pointer;
+}
+
+.icon-button:hover { background: var(--chrome-hover); color: var(--chrome-text); }
+.icon-button .icon { font-size: 20px; }
+
+.alert-dot {
+    position: absolute;
+    top: 7px;
+    right: 8px;
+    width: 7px;
+    height: 7px;
+    border-radius: var(--radius-pill);
+    background: var(--alert-dot);
+}
+
+.avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-small);
+    font-weight: 700;
+}
+
+/* --- Overlays -----------------------------------------------------------
+ * Toggled with display so the element leaves layout entirely, per section 3.
+ * --------------------------------------------------------------------- */
+
+.overlay-anchor { position: relative; }
+
+.popover {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    right: 0;
+    min-width: 260px;
+    padding: var(--space-2);
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-lg);
+    z-index: 20;
+}
+
+.menu-identity {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-2);
+    border: 0;
+    border-radius: var(--radius-control);
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.menu-identity:hover { background: var(--surface-hover); text-decoration: none; }
+
+/* A column, so the email sits BELOW the name as section 3 specifies. Left as
+   inline spans in a flex row they line up side by side and the row reads as one
+   run-on string. */
+.menu-identity-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.menu-identity-name { font-size: var(--text-body); font-weight: 600; }
+.menu-identity-email {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.menu-divider { height: 1px; margin: var(--space-2) 0; background: var(--divider); }
+
+.menu-section-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-micro);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.menu-section-label .icon { font-size: 14px; }
+
+.menu-action {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-2);
+    border: 0;
+    border-radius: var(--radius-control);
+    background: none;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+}
+
+.menu-action:hover { background: var(--surface-hover); }
+.menu-action .icon { font-size: 16px; }
+
+/* --- Theme switcher -----------------------------------------------------
+ * One connected segmented control filling the menu width in equal segments,
+ * split by thin dividers. Not detached buttons, not a list, not click-to-cycle.
+ * --------------------------------------------------------------------- */
+
+.theme-switch {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin: var(--space-1) var(--space-2) 0;
+    border: 1px solid var(--card-border-strong);
+    border-radius: var(--radius-control);
+    overflow: hidden;
+}
+
+.theme-option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    height: 30px;
+    border: 0;
+    border-left: 1px solid var(--card-border-strong);
+    background: var(--card);
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.theme-option:first-child { border-left: 0; }
+.theme-option:hover { background: var(--surface-hover); color: var(--text); }
+.theme-option .icon { font-size: 14px; }
+
+.theme-option[aria-pressed='true'] {
+    background: var(--accent);
+    color: var(--accent-contrast);
+}
+
+/* --- Page furniture ----------------------------------------------------- */
+
+.breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+    font-size: var(--text-small);
+    color: var(--text-muted);
+}
+
+.breadcrumb a { color: var(--text-muted); }
+.breadcrumb a:hover { color: var(--text); }
+.breadcrumb [aria-current='page'] { color: var(--text); font-weight: 600; }
+.breadcrumb .icon { font-size: 14px; }
+
+.page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+.page-title { display: flex; flex-direction: column; gap: var(--space-1); }
+.page-subtitle { font-size: var(--text-lead); color: var(--text-muted); }
+
+/* --- Toast host ---------------------------------------------------------
+ * Fixed, TOP RIGHT and nowhere else, offset below the 52px top bar so a toast
+ * never covers the top-bar utilities. One host holding both live regions,
+ * present from page load.
+ * --------------------------------------------------------------------- */
+
+.toast-host {
+    position: fixed;
+    top: calc(var(--topbar-height) + var(--space-2));
+    right: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    z-index: 30;
+    pointer-events: none;
+}
+
+.toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    min-width: 260px;
+    max-width: 380px;
+    padding: var(--space-2) var(--space-3);
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-lg);
+    font-size: var(--text-body);
+}
+
+/* --- Collapsed flyouts --------------------------------------------------
+ * Positioned fixed so they escape the nav list's clipped overflow.
+ * --------------------------------------------------------------------- */
+
+.flyout {
+    position: fixed;
+    min-width: 200px;
+    padding: var(--space-1);
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-lg);
+    z-index: 40;
+}
+
+.flyout-title {
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-micro);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+/* --- Responsive ---------------------------------------------------------
+ * The same collapsible rail at every breakpoint, so behaviour is consistent and
+ * the logo stays visible. CSS only; never JS for responsive layout.
+ * --------------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+    /*
+     * Below this width the rail is always the icon rail, whatever was persisted.
+     * The content rules are repeated rather than reused because the collapsed
+     * state is a class on the root and a media query cannot add one - and the
+     * template forbids using JS for responsive layout, which would be the only
+     * other way. Narrowing the rail without also hiding the labels would clip
+     * them mid-word, so these have to move together.
+     */
+    .rail-container { width: 56px; }
+    .rail-head { padding: 0; justify-content: center; }
+
+    .rail-mark-wide { opacity: 0; }
+    .rail-mark-short { opacity: 1; }
+
+    .rail-toggle {
+        right: auto;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 40px;
+        height: 34px;
+        background: var(--chrome);
+        opacity: 0;
+    }
+
+    .rail-head:hover .rail-toggle,
+    .rail-head:focus-visible .rail-toggle { opacity: 1; }
+    .rail-head:hover .rail-mark-short,
+    .rail-head:focus-visible .rail-mark-short { opacity: 0; }
+
+    .rail-filter,
+    .nav-cluster-label {
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        opacity: 0;
+    }
+
+    .nav-label,
+    .nav-chevron,
+    .nav-soon { opacity: 0; visibility: hidden; }
+
+    .nav-item .icon { font-size: 20px; }
+    .nav-item.is-active::before { display: none; }
+
+    .app-main { padding: var(--space-3); }
+    .page-header { flex-direction: column; }
+    .toast-host { left: var(--space-3); right: var(--space-3); }
+}

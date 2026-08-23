@@ -42,7 +42,13 @@ Route::post('/sign-out', [SignInController::class, 'signOut'])
     ->name('sign-out');
 
 /*
- * The signed-in landing page. A placeholder until the application shell is
- * built: it exists so the sign-in redirect has somewhere real to land.
+ * Signed-in routes. Every one of these renders inside the shell.
+ *
+ * The sidebar is filtered per person, but the sidebar is only the first of the
+ * gate layers: a route the viewer's tier cannot reach must also be refused
+ * here, or a guessed URL walks straight past the navigation.
  */
-Route::get('/', fn () => view('home'))->middleware('auth')->name('home');
+Route::middleware('auth')->group(function (): void {
+    Route::view('/', 'pages.dashboard')->name('dashboard');
+    Route::view('/profile', 'pages.profile')->name('profile');
+});
