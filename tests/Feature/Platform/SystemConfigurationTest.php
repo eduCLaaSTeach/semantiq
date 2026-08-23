@@ -77,6 +77,40 @@ class SystemConfigurationTest extends TestCase
     }
 
     #[Test]
+    public function the_time_zone_field_is_offered_as_a_list_rather_than_free_text(): void
+    {
+        // The change that prompted this: free text accepted the right answer
+        // and rejected a typo with no hint at the wanted spelling.
+        $this->actingAs($this->admin())
+            ->get('/admin/system/settings/general')
+            ->assertOk()
+            ->assertSee('Singapore (UTC+08:00)')
+            ->assertSee('<optgroup label="Asia">', false)
+            // UTC is the default and leads the list.
+            ->assertSee('<optgroup label="Coordinated Universal Time">', false);
+    }
+
+    #[Test]
+    public function a_time_zone_that_php_does_not_recognise_is_still_refused(): void
+    {
+        // A select removes the typo; it does not remove the crafted post, so
+        // the rule stays.
+        $this->actingAs($this->admin())
+            ->from('/admin/system/settings/general')
+            ->put('/admin/system/settings/general', [
+                'settings' => [
+                    'app__display_name' => 'SemantIQ',
+                    'app__support_contact' => '',
+                    'app__default_locale' => 'en',
+                    'app__default_time_zone' => 'Mars/Olympus',
+                    'app__pagination_default' => '25',
+                    'notifications__default_channel' => 'none',
+                ],
+            ])
+            ->assertSessionHasErrors('settings.app__default_time_zone');
+    }
+
+    #[Test]
     public function a_category_that_does_not_exist_is_a_404(): void
     {
         $this->actingAs($this->admin())

@@ -20,6 +20,20 @@ enum SettingType: string
     case Choice = 'choice';
 
     /**
+     * An IANA time zone identifier.
+     *
+     * Stored and cast exactly like `Text`; what the type adds is HOW IT IS
+     * OFFERED. It renders as a grouped select built from PHP's own tzdata at
+     * request time, so an administrator picks "Singapore (UTC+08:00)" instead
+     * of typing "Asia/Singapore" and discovering their typo later.
+     *
+     * Not a `Choice`, because a Choice carries a static list in the catalogue
+     * and this list belongs to PHP - a copied one would be wrong the next time
+     * a country changed its rules.
+     */
+    case TimeZone = 'time_zone';
+
+    /**
      * Turn a stored string into the declared type.
      *
      * A null or unparseable value returns null so the caller falls back to the
@@ -33,7 +47,7 @@ enum SettingType: string
         }
 
         return match ($this) {
-            self::Text, self::Choice => $stored,
+            self::Text, self::Choice, self::TimeZone => $stored,
             self::Integer => is_numeric($stored) ? (int) $stored : null,
             /* Only the two canonical forms this class writes are accepted.
              * Loose truthiness would read the string "false" as true. */
