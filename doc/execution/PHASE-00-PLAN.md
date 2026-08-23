@@ -1,177 +1,171 @@
-# Phase 00 Plan - Business Shell, Navigation Framework and Sign-In
+# Phase 00 Plan - Engineering Foundation and Business Experience Shell
 
-**Phase:** P00 - Engineering Foundation and Business Experience Shell
-**References:** `doc/phases/PHASE-00-UI-SHELL.md`, `doc/MENU_STRUCTURE.md` v1.1, `doc/ROLE_MODEL.md` v1.0, `.claude/reference-template/ui-and-ux-layout-template-shared.md`
-**Status:** AWAITING APPROVAL. The four blocking decisions below are answered; no work in section 6 has begun.
-
----
-
-## 1. Verified repository observations
-
-Observed by reading the repository at merge commit `0f5f9f0`, not assumed.
-
-| Item | Observed |
-|---|---|
-| Backend | Laravel 13.26.1, PHP 8.4 in this container, 8.5 on the deploy runner |
-| Frontend | Vite 8, no CSS framework. Tailwind was removed: the design template forbids a second design system |
-| React | NOT installed. Screens so far are server-rendered Blade |
-| Database | SQLite locally, MySQL on cPanel |
-| CI | `.github/workflows/ci.yml` runs Pint and PHPUnit on every pull request |
-| Deploy | `.github/workflows/deploy.yml`, push to `main`, live |
-| Tests | 50 passing, 185 assertions |
-
-### Already built and on this branch
-
-| Area | State |
-|---|---|
-| Design tokens | `resources/css/app.css`, section 4 transcribed, both themes, self-hosted fonts |
-| Sign-in screen | Archetype 5.7, credential path, throttling, session regeneration |
-| Microsoft Entra SSO | OIDC authorization code with PKCE, single-use state, nonce check. Unconfigured until server values are set |
-| Application shell | Rail, top bar, profile menu, theme switcher, breadcrumb, toast host, collapse |
-| Role tiers | Five template tiers on `users.role` |
-| Navigation gate | `app/Support/Navigation.php`, filter-not-fork, unknown policy denies |
-
-### Discrepancies found while reading
-
-1. **`CLAUDE.md` points at `doc/design-system/ui-and-ux-layout-template-shared.md`, which does not exist.** The template is at `.claude/reference-template/ui-and-ux-layout-template-shared.md`. Same file, wrong path, referenced in several places. Correcting the path is proposed in section 6.
-2. **`CLAUDE.md` states there is no `composer.json` or `package.json`.** That was true of `main`; both exist on this branch. It instructs the reader to re-verify, which is what this row records.
-3. **React 19 is named as the confirmed frontend baseline and is not installed.** Nothing built so far needs it. Raised as decision D5 below rather than resolved silently.
+**Reference:** P00-FND, `doc/phases/PHASE-00-FOUNDATION.md`, `doc/phases/PHASE-00-UI-SHELL.md`
+**Completion phrase (later, not now):** `CONFIRM PHASE 00 COMPLETE`
+**Status:** Batches A to F awaiting approval. Batch 0 is already merged and live.
 
 ---
 
-## 2. Conflicts between the authorities, and how they were settled
+## 1. Verified state
 
-`CLAUDE.md` requires that a material conflict stops implementation and is put to the user rather than decided quietly. Four were found. All four were answered on 23 August 2026.
+Read from the repository at `89c3cbd`, and probed against the live site, not recalled.
 
-### D1. Navigation shape - ANSWERED: map into the four clusters
+### Already built, merged and running in production
 
-The design template makes the four clusters an ENFORCED closed set in fixed order. `MENU_STRUCTURE.md` gives eight business top-level items plus an Administration entry holding fifteen groups. Different shapes for the same rail.
-
-Settled by mapping rather than by replacing either:
-
-| Cluster | Holds |
+| Requirement | Where |
 |---|---|
-| Workspace | Home, My Intelligence, Ask SemantIQ, Explore, Decisions & Alerts, Reports & Insights, My Workspace, Help |
-| Compliance | Governance, Data Protection, Data Sovereignty, Audit |
-| Application Administration | Organisation & Users, Data Sources, Data Engineering, Data Quality, Business Model, Semantic Intelligence, AI & Agents, Deployment, Monitoring |
-| System Administration | Platform Overview, Fabric Environment, System Configuration |
+| 4.1 Business shell navigation, all eight top-level items | `config/navigation.php`, 292 nodes |
+| 4.2 Administration boundary, fifteen groups, route-guarded | `EnforceNavigationPolicy`, live 403 confirmed |
+| 4.3 Role-aware Home with all nine card types | `pages/home.blade.php`, empty states |
+| 4.4 My Intelligence, entitlement-driven | `pages/intelligence.blade.php` |
+| 5.4 Role and domain-entitlement policy | `Role`, `BusinessDomain`, `DomainEntitlement` |
+| 5.12 CI, test and static-analysis gates | `.github/workflows/ci.yml`, 86 tests |
+| 5.13 Context registers, all six | `doc/context/` |
+| 9 Backend authorization, deny by default | `Navigation::allows()`, one rule for rail and route |
+| P00-UI-001, 002, 009 | Home, My Intelligence, Administration Landing |
+| Identity (Phase 01 scope, shipped early) | Entra OIDC with PKCE, live and working |
 
-Both documents are satisfied. The split also keeps the template's stated reason for a separate System Administration cluster intact: an administrator who can invite a colleague should not thereby hold every provider credential.
+### Required by this phase and absent
 
-### D2. Role model - ANSWERED: six tiers, Auditor as a flag, entitlements separate
-
-`ROLE_MODEL.md` names seven roles; the template defines five cumulative tiers. Auditor does not sit on a ladder at all - it is read-only yet sees compliance evidence, which cuts across tiers.
-
-| Tier | Rank | ROLE_MODEL role |
+| Section | Requirement | State |
 |---|---|---|
-| `system_admin` | 6 | System Administrator |
-| `admin` | 5 | Administrator |
-| `domain_owner` | 4 | Domain Owner |
-| `analyst` | 3 | Analyst / Collaborator |
-| `contributor` | 2 | Contributor |
-| `viewer` | 1 | Viewer |
+| 5.2 | Modular-monolith boundaries | **Absent.** Flat Laravel |
+| 5.3 | Organisation / tenant context | **Absent.** No `organisations` table, no scope |
+| 5.5 | WorkflowRun, AuditEvent, HelpTopic, external resource references | **Absent** |
+| 5.6 | Secret-provider abstraction | **Absent.** Entra values read straight from config |
+| 5.7 | Asynchronous workflow orchestration | **Absent.** No queue worker, no correlation IDs |
+| 5.8 | The ten status values | **Absent** |
+| 5.9 | Immutable audit capture | **Absent** |
+| 5.10 | Contextual Help framework | **Absent** |
+| 5.11 | Integration capability registry | **Absent** |
+| 10 | `DataProtectionProfile`, `VAL-SOV-GEO-001` | **Absent** |
+| 11 | Seven replaceable AI contracts | **Absent** |
+| 7 | P00-UI-003 to 008, 010, 011, 012 | **Absent.** Nine screens |
 
-Auditor becomes a capability flag on an account, not a rung. Business-domain entitlement stays the second dimension `ROLE_MODEL.md` requires: a tier alone never grants business data.
+Roughly two thirds of the phase remains.
 
-This extends the template's five tiers to six, which section 7 permits with a documented per-app reason. This plan is that record.
+---
 
-### D3. Tree scope - ANSWERED: the full tree, with Soon pills on everything unbuilt
+## 2. Decisions, answered 23 August 2026
 
-`MENU_STRUCTURE.md` section 15 puts the role-aware menu framework and the Administration boundary in Phase 00. Rendering the whole tree makes the product shape legible and genuinely exercises role filtering. Most of the rail will read `Soon`, which is the template's own treatment for a destination that exists but is not built.
+**D1. Home stays empty-state.** FOUNDATION 4.3 permits fixture metadata; UI-SHELL 3 forbids faking production insights. The stricter reading wins: nothing on Home can be mistaken for a real number. Cards say what will be there and what has to happen first.
 
-### D4. Application name - ANSWERED: SemantIQ
+**D2. New code lands in modules; existing code moves later.** Everything from Batch A onward sits under `app/Modules/`. Sign-in, shell and navigation move in their own change once the boundary is proven, rather than refactoring tested, live code alongside new work.
 
-The specification set uses SemantIQ throughout. `APP_NAME` changes from "CLaaS SemantiQ" to "SemantIQ".
+**D3. React 19 arrives with Ask SemantIQ, and only there.** That screen is the first with genuine client state. Server-rendered Blade keeps sign-in, navigation and the static shells, which do not need it. One shell, two rendering strategies, each where it earns its place.
+
+**D4. Seven fixed business domains.** Custom domains are recorded as deferred: a customer-defined domain needs a name, an owner and an approval story nobody has specified, and the entitlement table already accepts new rows without redesign.
 
 ### Settled by the precedence rule rather than by asking
 
-- **`PHASE-00-UI-SHELL.md` section 2 places Organisation context, a Global Ask entry and Help in the global header.** The template's top bar is ENFORCED as app name, notifications, theme switcher and profile menu, with no action buttons and no global search. The template wins, and `PHASE-00-UI-SHELL.md` section 11 says so itself. Ask SemantIQ and Help become navigation nodes. Organisation context is moot while one deployment serves one organisation; it belongs in the profile menu when it stops being.
-- **Depth.** Workspace to My Intelligence to Sales Intelligence to its leaves is two accordion levels, inside the three-level limit. No tab-strip overflow is required anywhere in the tree.
-
-### D5. React - OPEN, does not block this phase
-
-`CLAUDE.md` names React 19 as the confirmed frontend baseline. It is not installed, and nothing in this phase needs it: an auth screen and a navigation shell are better server-rendered, and every page here is placeholder content. Explore and Ask SemantIQ will want client state when they become real.
-
-Proposal: leave it out until a screen needs it, and add it then rather than carrying an unused framework. Raised for a decision, not assumed.
+- **`doc/design-system/` does not exist.** FOUNDATION 3 and 8 both name it. The template is at `.claude/reference-template/`. Correcting the phase documents' paths is part of Batch F rather than moving the file.
+- **Identity shipped before its phase.** Entra SSO is Phase 01 scope (`P01-IDN`) and is already live. Recorded in `IMPLEMENTATION_STATUS.md` as pre-gate work in Batch F. Nothing is marked confirmed that nobody confirmed.
 
 ---
 
-## 3. Scope of this phase
+## 3. Batches
 
-In: the sign-in screen (built), the business Home landing page, the full role-aware navigation tree, the Administration boundary, and route-level policy enforcement.
+Six changes, each independently reviewable, each its own pull request. The order is real dependency, not preference: nothing in B can be built without A's tables, and the screens in E display what B produces.
 
-Out: every domain page, Ask SemantIQ behaviour, Explore behaviour, any Microsoft Fabric call, any AI model or provider, and any real metric. `PHASE-00-UI-SHELL.md` section 3 is explicit that Phase 00 must not fake production insights.
+### Batch A - Tenancy and the configuration data model
+
+The spine. Everything else hangs from it.
+
+- `app/Modules/` established with the eight boundaries FOUNDATION 5.2 names.
+- `organisations` table, organisation context resolvable from a session **or** bound explicitly by a job.
+- A global scope that **fails closed**: no active organisation means no rows, never all rows.
+- `WorkflowRun`, `AuditEvent`, `HelpTopic`, `ExternalResource`, `DataProtectionProfile`.
+- The ten-state status model as an enum, mapped onto the design system's six badge roles.
+
+### Batch B - Foundation services
+
+- Secret-provider abstraction. No credential is stored in this phase; Phase 01 gets somewhere to put one that is not a config file.
+- Workflow orchestration: queued, resumable, correlation ID carried into every log line and audit row. No worker sleeps and no browser request is held.
+- Audit framework: append-only, hashes rather than payload copies.
+- Capability registry: whether a Microsoft operation is stable, preview or guided-only.
+- `VAL-SOV-GEO-001` server-side, with geographies unset and therefore blocking.
+
+### Batch C - AI contracts and Ask SemantIQ
+
+- The seven contracts from FOUNDATION 11: model provider, agent runtime, retrieval, tool/MCP, conversation store, evaluation, channel adapter. Interfaces only; **no model, no provider, no runtime**.
+- React 19 introduced, mounted inside the existing shell.
+- **P00-UI-003 Ask SemantIQ**: composer, domain indicator, suggested questions, history placeholder, the answer/visual/source layout contract, and every state.
+
+### Batch D - The remaining business shells
+
+**P00-UI-004** Explore, **005** Decisions & Alerts, **006** Reports & Insights, **007** My Workspace, **008** Help. Server-rendered, each covering success, empty, loading, validation, permission-denied, error and small-screen.
+
+### Batch E - Administration screens and contextual help
+
+- **P00-UI-010 Organisation Setup**, including the data-protection profile fields.
+- **P00-UI-011 Platform Help Centre**, plus contextual help opening from a real administrator screen, which is what the checklist actually asks to be demonstrated.
+- **P00-UI-012 Audit Log**: the first real list screen with sort, filter, pagination and URL state.
+- A sample long-running workflow that can be killed mid-run and resumes.
+
+### Batch F - Verification and reconciliation
+
+- All six context registers refreshed against what was built.
+- `IMPLEMENTATION_STATUS.md` records the Phase 01 irregularity honestly.
+- Phase-document path corrections.
+- `doc/execution/PHASE-00-VERIFICATION.md` with real evidence against the section 12 checklist.
 
 ---
 
 ## 4. Security and authorization
 
-`ROLE_MODEL.md` section 5 is unambiguous that menu visibility is convenience only. Four layers, all of which must agree:
+Four layers, all of which must agree:
 
-1. **Cluster and feature access** gates both the sidebar and the route.
-2. **Route policy.** Every route carries its policy. A business-only user typing an admin URL is denied, which is a named Phase 00 acceptance criterion.
-3. **Query scope** filters lists to the viewer's scope. Nothing queryable exists yet; the scope helper ships with the tier model.
-4. **Permanent-delete guard.** Nothing deletable exists yet.
+1. **Cluster and feature access** gates the rail and the route. Built.
+2. **Organisation scope**, failing closed. Batch A.
+3. **Domain entitlement**, independent of tier. Built.
+4. **Record policy and query scope** as entities arrive. Batches A and B.
 
-Domain entitlement is enforced alongside the tier from the start, because retrofitting a second dimension after screens assume one is the change this design exists to avoid.
+The claim tested hardest stays the one ROLE_MODEL.md 1 makes: a role alone never grants business data. A System Administrator holds no Sales figures without being entitled to Sales.
 
 ---
 
 ## 5. Data protection and sovereignty
 
-- **Classification:** Internal only. Account identity, role, entitlement and navigation state. No customer business data enters this phase.
-- **Storage and processing geography:** the control-plane database on cPanel. Its hosting geography is unconfirmed and is recorded as an open item rather than assumed.
-- **Cross-geo:** not applicable. Nothing is provisioned.
-- **Logging:** no credential, token or personal data beyond the account identity already stored.
+- **Classification:** Internal only. Organisation configuration, workflow state, audit metadata, entitlements. No customer business data enters the control plane this phase.
+- **Geographies:** unset. `VAL-SOV-GEO-001` returns BLOCKED for production activation while they are, because the absence of a value is a refusal and never a pass.
+- **Cross-geo:** all three flags default false.
+- **Logging:** credentials and tokens redacted; production payload capture off by default.
+- **Retention:** policy-driven from the profile, not constants in code.
+- **Open item:** the control-plane hosting geography is still unconfirmed and must be recorded before go-live.
 
 ---
 
-## 6. Work items
-
-| # | Item |
-|---|---|
-| W1 | Extend `Role` to six tiers, add the Auditor capability flag and the domain-entitlement dimension. Migration plus a reversible `down()` |
-| W2 | Rewrite `config/navigation.php` as the full tree from `MENU_STRUCTURE.md`, mapped per D1, every node carrying an icon and a policy |
-| W3 | Extend the icon registry to cover the tree, in the one fixed style |
-| W4 | Route-policy middleware, so a policy gates the route and not only the sidebar |
-| W5 | Business Home per the `PHASE-00-UI-SHELL.md` section 3 contract, in placeholder and empty states only |
-| W6 | Administration landing as the ten-step setup journey from section 8, statuses shown as not started |
-| W7 | Rename the application to SemantIQ |
-| W8 | Correct the `doc/design-system/` path references in `CLAUDE.md` |
-| W9 | Populate the six context registers for everything built |
-| W10 | `doc/execution/PHASE-00-VERIFICATION.md` with real evidence |
-
----
-
-## 7. Test strategy
+## 6. Test strategy
 
 | Layer | Coverage |
 |---|---|
-| Role tiers | Cumulative ordering; Auditor reaching compliance without gaining a tier; entitlement gating a domain independently of tier |
-| Navigation | Each tier sees its clusters and no others; inaccessible nodes ABSENT from the markup, not dimmed; empty groups and clusters dropped |
-| Route policy | A business-only account is denied an admin route by URL, not merely un-linked |
-| Home | Renders in every state the section 9 list names |
-| Regression | The existing 50 tests keep passing |
+| Tenancy | Two organisation fixtures; cross-organisation read, update and delete all denied; fails closed with no context |
+| Workflow | A run interrupted mid-flight resumes; the correlation ID survives the resume |
+| Audit | Every configuration change writes a row; no update or delete path exists |
+| Sovereignty | Each of the four verdicts; cross-geo denied by default; the check cannot be bypassed from the client |
+| Redaction | A token passed through a logged path never appears in the log |
+| Screens | Every state named in FOUNDATION 8, not only the happy path |
+| Regression | The 86 existing tests keep passing |
 
 Rendered in a browser in both themes and at 390px, as with the work so far.
 
 ---
 
-## 8. Rollback
+## 7. Rollback
 
-Every migration reversible and exercised. All changes additive; no table is dropped or renamed. Deployment rollback is a revert commit on `main`. The live database is untouched until a migration run is separately approved.
-
----
-
-## 9. Open items carried forward
-
-1. **The cPanel hosting geography is unconfirmed** and must be recorded before go-live rather than assumed.
-2. **No account is an administrator in production.** New accounts default to the lowest tier; the first System Administrator must be promoted directly in the database.
-3. **D5, React**, above.
-4. **Microsoft Entra is unconfigured** on the server, so the SSO button explains itself rather than working.
+Every migration reversible and exercised. All changes additive; nothing is dropped or renamed. Deployment rollback is a revert commit on `main`. Production migrations stay a separately approved action.
 
 ---
 
-## 10. Approval
+## 8. Open items carried forward
 
-Nothing in section 6 has been implemented. On approval I will build W1 to W10 and produce the verification report.
+1. Control-plane hosting geography unconfirmed.
+2. Approved storage and processing geographies unset; required before Phase 02 provisioning.
+3. Custom business domains deferred, per D4.
+4. Existing flat code moves into modules after Batch A proves the boundary, per D2.
+
+---
+
+## 9. Approval
+
+Nothing in section 3 has been implemented. On approval I will build Batch A and open its pull request, then stop for review before Batch B.
