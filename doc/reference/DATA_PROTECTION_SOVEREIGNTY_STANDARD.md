@@ -8,7 +8,7 @@
 
 - Current hosted deployment is single-customer per application instance, but organisation/tenant context remains mandatory for customer-owned configuration and audit metadata so future multi-tenant enablement does not weaken isolation.
 - The repository currently records a seven-year retention policy for operational data, audit/compliance logs and backups. Treat this as a configurable project-policy baseline, not a universal legal requirement or hard-coded constant.
-- No legal privacy regime has yet been formally determined in the repository. Apply privacy-by-design and sovereignty controls regardless, and require a legal/compliance decision before production acceptance where PDPA, GDPR or another regime may apply.
+- **The Singapore PDPA applies to this deployment**, confirmed 25 August 2026 (DEC-002). Apply privacy-by-design and sovereignty controls regardless of regime, and re-confirm applicability for any future customer whose hosting, sector or contracts differ. DEC-002 records four obligations the PDPA creates that this application does not yet meet: access and correction requests, breach notification within three calendar days, a per-category retention basis rather than one number, and a designated privacy contact that is currently optional.
 - Runtime application/database credentials remain server-side/secret-manager controlled. GitHub secrets are only for credentials actually needed by approved CI/CD workflows.
 
 
