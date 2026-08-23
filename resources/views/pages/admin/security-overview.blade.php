@@ -31,10 +31,11 @@
                     Security posture
                     <span class="{{ $overall->badgeClass() }}">{{ $overall->label() }}</span>
                 </span>
-                <span class="health-summary-note">
-                    The worst of the four areas below. One critical finding among four healthy areas
-                    is a critical posture.
-                </span>
+                {{-- Calculated from the same result as the badge above, not
+                     fixed text. The sentence this replaces explained the RULE
+                     and read as a description of the STATE, so a Warning badge
+                     sat beside the word "critical" in production. --}}
+                <span class="health-summary-note">{{ $overallExplanation }}</span>
             </div>
         </div>
 
@@ -149,13 +150,32 @@
                     <span class="empty-title">Cannot be checked yet</span>
                     <span class="empty-note">{{ $storageBlocker }}</span>
                 </div>
+            @elseif ($trackedCount === 0)
+                {{-- NOTHING IS TRACKED, which is not the same fact as "nothing
+                     is expiring" even though both produce an empty list. A
+                     green tick here told an administrator their credentials
+                     were fine while none of them was being watched at all - and
+                     this deployment certainly has a database password. Neutral
+                     icon and the catalogue's own label, so it can never drift
+                     back into reading as reassurance. --}}
+                <div class="empty">
+                    <svg class="icon" aria-hidden="true"><use href="#i-slash"/></svg>
+                    <span class="empty-title">{{ \App\Modules\Security\Enums\SecurityStatus::NotConfigured->label() }}</span>
+                    <span class="empty-note">
+                        No credential references are currently being tracked. Nothing will warn anybody
+                        before a credential lapses, because there is nothing recorded to warn about.
+                    </span>
+                </div>
             @elseif ($expiring->isEmpty())
+                {{-- Healthy is appropriate HERE and only here: something is
+                     being tracked, and none of it is near expiry. --}}
                 <div class="empty">
                     <svg class="icon" aria-hidden="true"><use href="#i-check-circle"/></svg>
                     <span class="empty-title">Nothing expiring in the next {{ \App\Modules\Security\Enums\SecretStatus::EXPIRY_HORIZON_DAYS }} days</span>
                     <span class="empty-note">
-                        This reflects the expiry dates recorded here. SemantIQ does not contact any provider
-                        to confirm them, so a credential nobody recorded will not appear.
+                        {{ $trackedCount }} {{ $trackedCount === 1 ? 'reference is' : 'references are' }} being
+                        tracked. This reflects the expiry dates recorded here - SemantIQ does not contact any
+                        provider to confirm them, so a credential nobody recorded will not appear.
                     </span>
                 </div>
             @else

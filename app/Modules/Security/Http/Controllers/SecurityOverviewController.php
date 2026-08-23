@@ -39,6 +39,12 @@ class SecurityOverviewController extends Controller
             'storageReady' => $storage->secretReferencesAreReady(),
             'storageBlocker' => $storage->blocker(),
             'overall' => $posture->overall(),
+            /* Read from the same memo as the badge, so the two cannot
+             * disagree - which they did, in production. */
+            'overallExplanation' => $posture->overallExplanation(),
+            /* "Nothing expiring" and "nothing tracked" are opposite facts that
+             * look identical to a count of expiring references. */
+            'trackedCount' => $posture->trackedReferenceCount(),
             'authentication' => $posture->authentication(),
             'sessions' => $posture->sessions(),
             'application' => $posture->application(),

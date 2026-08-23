@@ -842,3 +842,75 @@ same readiness fallback, or not be read from the request path at all. Gate 4's
 `data_protection_profiles` and gate 5's `integrations` are both candidates -
 whichever screens read them, if anything on the web middleware stack does, the
 same window applies.
+
+
+## 13. Gate 3 completion, and two defects found in production
+
+### The completion phrase
+
+**`CONFIRM R1.3 GATE 3 COMPLETE`**
+
+Set by the product owner on 23 August 2026. Gate 3's verification document had
+no completion phrase until this section, which was a gap in following
+`CLAUDE.md`'s own phase-gate protocol - step 7 asks for the exact phrase to be
+named in the phase document, and it was not.
+
+R1.3 stays `AWAITING_USER_CONFIRMATION` in `IMPLEMENTATION_STATUS.md` until all
+seven conditions listed there are met and the phrase is sent. Gate 4 stays
+`LOCKED` until then.
+
+### Two defects the product owner found on the live site
+
+Both were shipped in PR #21 and both are the same failure: a screen presenting a
+comforting state it had not earned. Neither was caught by 405 tests or by 25
+browser combinations, because both need real production data - or rather, the
+real production ABSENCE of data - to appear.
+
+**1. A green tick over an untracked estate.** With zero secret references, the
+Expiring Credentials panel showed a check icon and "Nothing expiring in the next
+30 days". True, and useless: nothing was expiring because nothing was being
+watched, and the deployment certainly has a database password. Zero tracked and
+zero expiring produce the same empty list and mean opposite things.
+
+The panel now distinguishes three cases rather than two: storage absent,
+nothing tracked, and nothing near expiry. Healthy is reported only in the third.
+
+**2. A fixed explanation beside a calculated badge.** The posture summary read
+"One critical finding among four healthy areas is a critical posture" - an
+explanation of the RULE that read as a description of the STATE. On the live
+site it sat beside a **Warning** badge, asserting a level the badge did not.
+
+The sentence is now derived from `SecurityPosture::areas()`, the same memoised
+result the badge is derived from, and names the areas that set the level:
+"Authentication and Sessions need attention." A static explanation of a
+calculated value will eventually contradict it; this one cannot.
+
+### Why the earlier verification did not catch either
+
+Worth stating rather than glossing, because the same gap will recur.
+
+Both defects need the **empty** production state. The browser verification ran
+against a seeded database with three secret references, so the panel took its
+populated branch and the posture reached Critical - the one state where the
+fixed sentence happened to be accurate. Seeding a database to demonstrate a
+screen hides exactly the states a fresh install starts in.
+
+**The rule this establishes:** browser verification of a new screen must include
+the state a customer sees on day one - nothing configured, nothing recorded -
+and not only the state that shows the feature working.
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| `php artisan test` | **413 tests, 2973 assertions, all passing.** 405 before, so 8 are new |
+| `./vendor/bin/pint` | Clean |
+| Nothing tracked reports Not Configured, never Healthy | `SecurityOverviewTest::nothing_tracked_reads_as_not_configured_and_never_as_healthy` |
+| Healthy returns once something IS tracked | `::healthy_returns_once_something_is_tracked_and_nothing_is_near_expiry` - the guard must refuse a false healthy, not every healthy |
+| A near-expiry reference still wins over both | `::a_tracked_reference_near_expiry_still_wins_over_both_states` |
+| The explanation never contradicts the badge | `::the_posture_explanation_never_contradicts_its_own_badge` - driven across four real postures, because one case would pass with the text hard-coded |
+| The explanation names the area responsible | `::the_posture_explanation_names_the_area_that_set_the_badge` and `::..._lists_several_areas_when_several_set_it` |
+| A fully healthy posture says so plainly | `::a_fully_healthy_posture_says_so_plainly` |
+| Badge and sentence share one memoised result | `::the_badge_and_the_sentence_come_from_one_memoised_result` |
+
+No migration, no schema change, no production configuration change.

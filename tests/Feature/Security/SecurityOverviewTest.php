@@ -74,6 +74,22 @@ class SecurityOverviewTest extends TestCase
         return app(SecurityPosture::class);
     }
 
+    /**
+     * Pin the two environment facts that are not the subject of a posture test.
+     *
+     * `APP_DEBUG` on makes the ADM-011 secret-safe-errors control warn, and the
+     * test suite's `array` session driver cannot enumerate sessions, so Sessions
+     * reports Not Available. Both are correct behaviour and neither is what a
+     * test about the EXPLANATION is trying to establish, so they are set to
+     * their production shape rather than asserted around.
+     */
+    private function pinEnvironmentToProductionShape(): void
+    {
+        config(['app.debug' => false, 'session.driver' => 'database']);
+
+        app()->forgetInstance(SecurityPosture::class);
+    }
+
     #[Test]
     public function the_screen_renders_every_section_the_gate_requires(): void
     {
@@ -265,6 +281,182 @@ class SecurityOverviewTest extends TestCase
         ] as $writeRoute) {
             $page->assertDontSee('action="'.route($writeRoute).'"', false);
         }
+    }
+
+    /* ---- The expiring-credentials panel --------------------------------- */
+
+    #[Test]
+    public function nothing_tracked_reads_as_not_configured_and_never_as_healthy(): void
+    {
+        // The defect this test exists for reached production. With zero
+        // references the panel showed a green tick and "Nothing expiring in the
+        // next 30 days" - true, and read as reassurance about an estate nobody
+        // was watching. Zero tracked and zero expiring produce the same empty
+        // list and mean opposite things.
+        $this->assertSame(0, $this->posture()->trackedReferenceCount());
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.security.overview'))
+            ->assertOk()
+            ->assertSee('Not Configured')
+            ->assertSee('No credential references are currently being tracked.')
+            /* Asserted on the WORDS, not the icon: the shell inlines the whole
+             * icon registry, so `i-check-circle` is in the markup of every page
+             * whether this panel uses it or not. */
+            ->assertDontSee('Nothing expiring in the next');
+    }
+
+    #[Test]
+    public function healthy_returns_once_something_is_tracked_and_nothing_is_near_expiry(): void
+    {
+        // The other half. The guard must refuse a FALSE healthy, not every
+        // healthy - without this the panel could report Not Configured forever
+        // and the test above would still pass.
+        $this->reference(['expires_on' => Carbon::today()->addYear()]);
+
+        $this->assertSame(1, $this->posture()->trackedReferenceCount());
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.security.overview'))
+            ->assertOk()
+            ->assertSee('Nothing expiring in the next 30 days')
+            ->assertSee('1 reference is being')
+            ->assertDontSee('No credential references are currently being tracked.');
+    }
+
+    #[Test]
+    public function a_tracked_reference_near_expiry_still_wins_over_both_states(): void
+    {
+        $this->reference(['name' => 'Lapsing soon', 'expires_on' => Carbon::today()->addDays(5)]);
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.security.overview'))
+            ->assertOk()
+            ->assertSee('Lapsing soon')
+            ->assertDontSee('Nothing expiring in the next')
+            ->assertDontSee('No credential references are currently being tracked.');
+    }
+
+    /* ---- The posture explanation ---------------------------------------- */
+
+    #[Test]
+    public function the_posture_explanation_never_contradicts_its_own_badge(): void
+    {
+        // The defect, stated as a property. The sentence beside the badge was
+        // fixed text explaining the RULE - "One critical finding among four
+        // healthy areas is a critical posture" - and read as a description of
+        // the STATE, so a Warning badge sat beside the word "critical" on the
+        // live site.
+        //
+        // Driven across four different real postures rather than one, because a
+        // single case would pass just as well with the text hard-coded to
+        // whatever that case happens to be.
+        $cases = [
+            'a weak authentication mode' => function (): void {
+                $this->withSecurityPolicy('sign_in.mode', AuthenticationMode::LocalOnly->value);
+            },
+            'an expired credential' => function (): void {
+                $this->reference(['name' => 'Expired one', 'expires_on' => Carbon::today()->subDay()]);
+            },
+            'a credential with no dates' => function (): void {
+                $this->reference(['name' => 'Untracked one']);
+            },
+            'nothing wrong at all' => function (): void {
+                $this->pinEnvironmentToProductionShape();
+                $this->withSecurityPolicy('sign_in.allowed_tenant_id', '11111111-1111-4111-8111-111111111111');
+                $this->withSecurityPolicy('sign_in.allowed_email_domains', 'contoso.com');
+                $this->reference(['name' => 'Healthy one', 'expires_on' => Carbon::today()->addYear()]);
+            },
+        ];
+
+        foreach ($cases as $label => $arrange) {
+            $arrange();
+
+            /* A fresh posture per case: it memoises, deliberately, so the badge
+             * and the sentence cannot disagree within one request. */
+            app()->forgetInstance(SecurityPosture::class);
+            $posture = app(SecurityPosture::class);
+
+            $badge = $posture->overall();
+            $explanation = $posture->overallExplanation();
+
+            foreach (SecurityStatus::cases() as $status) {
+                if ($status === $badge || $status === SecurityStatus::Healthy) {
+                    continue;
+                }
+
+                $this->assertStringNotContainsStringIgnoringCase(
+                    strtolower($status->label()),
+                    strtolower($explanation),
+                    $label.': the badge says '.$badge->label().' and the sentence says '.$status->label(),
+                );
+            }
+        }
+    }
+
+    #[Test]
+    public function the_posture_explanation_names_the_area_that_set_the_badge(): void
+    {
+        // Not just consistent - useful. "Warning" tells an administrator
+        // nothing about where to look.
+        $this->reference(['expires_on' => Carbon::today()->subDay()]);
+
+        $posture = $this->posture();
+
+        $this->assertSame(SecurityStatus::Critical, $posture->overall());
+        $this->assertStringContainsString('Secret references', $posture->overallExplanation());
+        $this->assertStringContainsString('critical finding', $posture->overallExplanation());
+    }
+
+    #[Test]
+    public function the_posture_explanation_lists_several_areas_when_several_set_it(): void
+    {
+        // Authentication warns by default (no tenant, no domain allow-list);
+        // the file session driver plus an unenforceable concurrency policy
+        // makes Sessions warn too.
+        $this->pinEnvironmentToProductionShape();
+        config(['session.driver' => 'file']);
+        $this->withSecurityPolicy('activity.concurrent_policy', ConcurrentSessionPolicy::Single->value);
+        $this->reference(['expires_on' => Carbon::today()->addYear()]);
+
+        app()->forgetInstance(SecurityPosture::class);
+        $posture = app(SecurityPosture::class);
+
+        $this->assertSame(SecurityStatus::Warning, $posture->overall());
+        $this->assertStringContainsString('Authentication and Sessions need attention', $posture->overallExplanation());
+    }
+
+    #[Test]
+    public function a_fully_healthy_posture_says_so_plainly(): void
+    {
+        $this->pinEnvironmentToProductionShape();
+        $this->withSecurityPolicy('sign_in.allowed_tenant_id', '11111111-1111-4111-8111-111111111111');
+        $this->withSecurityPolicy('sign_in.allowed_email_domains', 'contoso.com');
+        $this->reference(['expires_on' => Carbon::today()->addYear()]);
+
+        app()->forgetInstance(SecurityPosture::class);
+        $posture = app(SecurityPosture::class);
+
+        $this->assertSame(SecurityStatus::Healthy, $posture->overall());
+        $this->assertSame('All four areas below are healthy.', $posture->overallExplanation());
+    }
+
+    #[Test]
+    public function the_badge_and_the_sentence_come_from_one_memoised_result(): void
+    {
+        // The structural half. Reading both from `areas()` is what makes them
+        // incapable of disagreeing; recomputing would let a change land in one
+        // and not the other. It also stops the eight-control audit running
+        // three times per page load.
+        $posture = $this->posture();
+
+        $first = $posture->areas();
+        $this->assertSame($first, $posture->areas());
+
+        $this->assertSame(
+            SecurityStatus::worst(array_values($posture->areas())),
+            $posture->overall(),
+        );
     }
 
     #[Test]
