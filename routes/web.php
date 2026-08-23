@@ -17,6 +17,12 @@ use App\Modules\Platform\Http\Controllers\DiagnosticsController;
 use App\Modules\Platform\Http\Controllers\FeatureFlagController;
 use App\Modules\Platform\Http\Controllers\PlatformOverviewController;
 use App\Modules\Platform\Http\Controllers\SystemConfigurationController;
+use App\Modules\Security\Http\Controllers\ApiSecurityController;
+use App\Modules\Security\Http\Controllers\AuthenticationPolicyController;
+use App\Modules\Security\Http\Controllers\ReauthenticationController;
+use App\Modules\Security\Http\Controllers\SecretReferenceController;
+use App\Modules\Security\Http\Controllers\SecurityOverviewController;
+use App\Modules\Security\Http\Controllers\SessionPolicyController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -28,20 +34,6 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/sign-in', [SignInController::class, 'attempt'])->name('sign-in.attempt');
 
     /*
-     * Starting the flow is a POST so it carries CSRF protection: a GET would let
-     * any page on the internet bounce a visitor into a sign-in round trip.
-     */
-    Route::post('/sign-in/microsoft', [MicrosoftSignInController::class, 'redirect'])
-        ->name('sign-in.microsoft');
-
-    /*
-     * Microsoft returns here as a GET, and it cannot carry our CSRF token, so
-     * the single-use state parameter is what protects this leg instead.
-     */
-    Route::get('/auth/microsoft/callback', [MicrosoftSignInController::class, 'callback'])
-        ->name('sign-in.microsoft.callback');
-
-    /*
      * Password reset is deliberately not a form. Identity is federated, so a
      * directory account's password is reset in the directory and not here;
      * offering a reset form would imply this application holds a password it
@@ -49,6 +41,28 @@ Route::middleware('guest')->group(function (): void {
      */
     Route::view('/sign-in/password', 'auth.password-help')->name('password.request');
 });
+
+/*
+ * The Microsoft round trip. NOT inside the `guest` group, and that is a change
+ * made in Release 1 gate 3 rather than an oversight.
+ *
+ * ADM-010's re-authentication sends an ALREADY SIGNED-IN person back to Entra
+ * with `prompt=login`, and they return through this same callback. Under
+ * `guest` the framework would bounce them away before the controller ran, so
+ * the confirmation could never complete. Both legs therefore accept a guest and
+ * a signed-in person, and the controller decides which flow it is.
+ *
+ * What protected these routes before is unchanged and is not the `guest`
+ * middleware: starting the flow is a POST so it carries CSRF protection - a GET
+ * would let any page on the internet bounce a visitor into a sign-in round trip
+ * - and the callback is protected by the single-use `state` parameter, since
+ * Microsoft cannot carry our CSRF token back.
+ */
+Route::post('/sign-in/microsoft', [MicrosoftSignInController::class, 'redirect'])
+    ->name('sign-in.microsoft');
+
+Route::get('/auth/microsoft/callback', [MicrosoftSignInController::class, 'callback'])
+    ->name('sign-in.microsoft.callback');
 
 Route::post('/sign-out', [SignInController::class, 'signOut'])
     ->middleware('auth')
@@ -143,12 +157,20 @@ Route::middleware('auth')->group(function (): void {
          * granting a business domain are different decisions with different
          * consequences, and the trail has to be able to tell them apart.
          */
+        /*
+         * ADM-010 critical action. `confirm:tier_change` escalates itself to
+         * the System Administrator variant when the posted tier is that one -
+         * see ConfirmIdentity::resolve(). Named after `permission:` so
+         * authorization is settled first.
+         */
         Route::post('/users/{user}/tier', [UserController::class, 'changeTier'])
-            ->middleware('permission:admin.roles.assign')->name('users.tier');
+            ->middleware(['permission:admin.roles.assign', 'confirm:tier_change'])->name('users.tier');
         Route::post('/users/{user}/status', [UserController::class, 'changeStatus'])
             ->middleware('permission:admin.users.disable')->name('users.status');
+        /* ADM-010 critical action: assigning a role is role elevation by
+         * another name, since a role carries permissions. */
         Route::post('/users/{user}/roles', [UserController::class, 'changeRole'])
-            ->middleware('permission:admin.roles.assign')->name('users.roles');
+            ->middleware(['permission:admin.roles.assign', 'confirm:tier_change'])->name('users.roles');
         Route::post('/users/{user}/entitlements', [UserController::class, 'changeEntitlement'])
             ->middleware('permission:admin.entitlements.grant')->name('users.entitlements');
 
@@ -164,8 +186,10 @@ Route::middleware('auth')->group(function (): void {
             ->middleware('permission:admin.roles.manage')->name('roles.update');
         Route::get('/roles/{role}/permissions', [AccessRoleController::class, 'permissions'])
             ->middleware('permission:admin.roles.manage')->name('roles.permissions');
+        /* ADM-010 critical action: changing what a role may do widens
+         * everybody who holds it, which is the quietest elevation there is. */
         Route::put('/roles/{role}/permissions', [AccessRoleController::class, 'updatePermissions'])
-            ->middleware('permission:admin.roles.manage')->name('roles.permissions.update');
+            ->middleware(['permission:admin.roles.manage', 'confirm:tier_change'])->name('roles.permissions.update');
         Route::delete('/roles/{role}', [AccessRoleController::class, 'destroy'])
             ->middleware('permission:admin.roles.manage')->name('roles.destroy');
 
@@ -218,5 +242,95 @@ Route::middleware('auth')->group(function (): void {
             /* ADM-024. */
             Route::get('/diagnostics', DiagnosticsController::class)->name('diagnostics');
         });
+
+        /*
+         * Security - Release 1 gate 3, features ADM-009 to ADM-012.
+         *
+         * The route family DEC-001 settled in advance, unchanged. Gated by
+         * `permission:` as well as by the cluster's `policy:system-admin`, so
+         * the route boundary checks the SAME declared permission the rail node
+         * checks and a typed URL meets the same gate a hidden link would have.
+         *
+         * READ and WRITE are separate permissions on every screen. Seeing what
+         * the authentication policy says and being able to weaken it are
+         * different decisions, and a single `admin.security.manage` would have
+         * made them the same one.
+         *
+         * The secret screens name `admin.secrets.*` rather than
+         * `admin.security.*`: the credential map is protected separately from
+         * the policy switches, so a later decision to delegate policy reading
+         * cannot hand the map over with it.
+         */
+        Route::prefix('security')->name('security.')->group(function (): void {
+            Route::get('/', SecurityOverviewController::class)
+                ->middleware('permission:admin.security.view')->name('overview');
+
+            /* ADM-009. */
+            Route::get('/authentication', [AuthenticationPolicyController::class, 'edit'])
+                ->middleware('permission:admin.security.view')->name('authentication');
+            Route::put('/authentication', [AuthenticationPolicyController::class, 'update'])
+                ->middleware(['permission:admin.security.update', 'confirm:security_policy_change'])
+                ->name('authentication.update');
+
+            /* ADM-010. */
+            Route::get('/sessions', [SessionPolicyController::class, 'edit'])
+                ->middleware('permission:admin.security.view')->name('sessions');
+            Route::put('/sessions', [SessionPolicyController::class, 'update'])
+                ->middleware(['permission:admin.security.update', 'confirm:security_policy_change'])
+                ->name('sessions.update');
+
+            /*
+             * Ending somebody else's sessions. A POST rather than a DELETE
+             * because it is an action on a person rather than the removal of a
+             * resource, and it is refused outright when the session driver
+             * cannot enumerate - see SessionRegistry. The screen does not
+             * render the control at all in that case, and this route still
+             * refuses it, because a hidden control is not an access control.
+             */
+            Route::post('/sessions/revoke/{user}', [SessionPolicyController::class, 'revoke'])
+                ->middleware(['permission:admin.security.update', 'confirm:security_policy_change'])
+                ->name('sessions.revoke');
+
+            /* ADM-011. */
+            Route::get('/api', [ApiSecurityController::class, 'edit'])
+                ->middleware('permission:admin.security.view')->name('api');
+            Route::put('/api', [ApiSecurityController::class, 'update'])
+                ->middleware(['permission:admin.security.update', 'confirm:security_policy_change'])
+                ->name('api.update');
+
+            /* ADM-012. */
+            Route::get('/secrets', [SecretReferenceController::class, 'index'])
+                ->middleware('permission:admin.secrets.view')->name('secrets');
+            Route::get('/secrets/new', [SecretReferenceController::class, 'create'])
+                ->middleware('permission:admin.secrets.manage')->name('secrets.create');
+            Route::post('/secrets', [SecretReferenceController::class, 'store'])
+                ->middleware(['permission:admin.secrets.manage', 'confirm:secret_reference_change'])
+                ->name('secrets.store');
+            Route::get('/secrets/{secretReference}', [SecretReferenceController::class, 'edit'])
+                ->middleware('permission:admin.secrets.manage')->name('secrets.edit');
+            Route::put('/secrets/{secretReference}', [SecretReferenceController::class, 'update'])
+                ->middleware(['permission:admin.secrets.manage', 'confirm:secret_reference_change'])
+                ->name('secrets.update');
+            Route::post('/secrets/{secretReference}/retire', [SecretReferenceController::class, 'retire'])
+                ->middleware(['permission:admin.secrets.manage', 'confirm:secret_reference_change'])
+                ->name('secrets.retire');
+        });
     });
+
+    /*
+     * Proving who you are again, before a critical action. ADM-010.
+     *
+     * Outside the `policy:system-admin` group deliberately. A tier change is a
+     * critical action and an Administrator can make one, so gating the
+     * confirmation screen at System Administrator would let an Administrator
+     * reach the action and never reach the screen that unblocks it.
+     *
+     * It carries no permission of its own for the same reason: the permission
+     * belongs to the action being confirmed, and this screen only proves
+     * identity. It is behind `auth`, like everything in this group.
+     */
+    Route::get('/confirm-identity', [ReauthenticationController::class, 'show'])
+        ->name('reauthenticate');
+    Route::post('/confirm-identity', [ReauthenticationController::class, 'confirm'])
+        ->name('reauthenticate.confirm');
 });

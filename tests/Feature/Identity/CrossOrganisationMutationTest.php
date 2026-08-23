@@ -19,6 +19,7 @@ use App\Modules\Identity\Support\OrganisationContext;
 use App\Modules\Platform\Enums\LifecycleStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\ControlsSecurityPolicy;
 use Tests\TestCase;
 
 /**
@@ -43,7 +44,7 @@ use Tests\TestCase;
  */
 class CrossOrganisationMutationTest extends TestCase
 {
-    use RefreshDatabase;
+    use ControlsSecurityPolicy, RefreshDatabase;
 
     private Organisation $other;
 
@@ -349,7 +350,16 @@ class CrossOrganisationMutationTest extends TestCase
         ];
 
         foreach ($attempts as $label => [$verb, $url, $payload]) {
-            $response = $this->actingAs($this->attacker)->$verb($url, $payload);
+            /* A confirmed session, because a tier change and a role assignment
+             * are ADM-010 critical actions from gate 3 onwards. Without it the
+             * confirmation middleware redirects before the tenancy guard is
+             * reached, and this test would pass for the wrong reason - proving
+             * the confirmation prompt works rather than proving the boundary
+             * holds. A real attacker can confirm their own identity; the
+             * boundary is what has to stop them. */
+            $response = $this->actingAs($this->attacker)
+                ->withSession($this->confirmedIdentity())
+                ->$verb($url, $payload);
 
             /* 404, not 403: a 403 confirms the id exists and belongs to
              * somebody. From this organisation's point of view the record

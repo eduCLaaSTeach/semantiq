@@ -8,8 +8,13 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Audit\Enums\AuditOutcome;
 use App\Modules\Audit\Support\AuditLogger;
+use App\Modules\Audit\Support\Redaction;
 use App\Modules\Identity\Support\OrganisationContext;
 use App\Modules\Platform\Enums\LifecycleStatus;
+use App\Modules\Security\Exceptions\SelfProvisioningRefused;
+use App\Modules\Security\Support\AuthenticationGuard;
+use App\Modules\Security\Support\Reauthentication;
+use App\Modules\Security\Support\SecurityPolicies;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -61,15 +66,35 @@ class MicrosoftSignInController extends Controller
 
     private const REQUEST_TIMEOUT_SECONDS = 15;
 
+    /**
+     * Where to come back to after a re-authentication round trip, and the flag
+     * that says this is one. ADM-010.
+     */
+    private const REAUTH_KEY = 'microsoft.reauthenticating';
+
     public function __construct(
         private readonly AuditLogger $audit,
+        private readonly AuthenticationGuard $guard,
     ) {}
 
     /**
      * Start the flow: send the person to Microsoft.
+     *
+     * `$prompt` is `login` when this is a re-authentication for a critical
+     * action (ADM-010). It asks Entra to challenge the person again rather than
+     * silently reissuing from an existing directory session, which is the whole
+     * point of asking. Nothing extra is stored to achieve it: no additional
+     * token, no cached credential - the round trip IS the proof.
      */
     public function redirect(Request $request): RedirectResponse
     {
+        if (! $this->guard->offersFederatedSignIn()) {
+            return $this->fail(
+                'Microsoft sign-in is turned off by the current authentication policy. Use your email and password.',
+                'federated_sign_in_disabled',
+            );
+        }
+
         if (! $this->isConfigured()) {
             return $this->fail('Microsoft sign-in is not configured yet. Use your email and password, '
                 .'or ask an administrator to finish the Microsoft Entra setup.');
@@ -83,7 +108,18 @@ class MicrosoftSignInController extends Controller
         $request->session()->put(self::NONCE_KEY, $nonce);
         $request->session()->put(self::VERIFIER_KEY, $verifier);
 
-        $query = http_build_query([
+        /*
+         * A re-authentication is a normal sign-in with one extra parameter.
+         * `prompt=login` is standard OpenID Connect: it tells the provider to
+         * challenge the person rather than reuse an existing directory session.
+         * Without it, an attacker sitting at an unlocked machine confirms a
+         * critical action by being bounced straight back.
+         */
+        $reauthenticating = $request->boolean('reauthenticate') && Auth::check();
+
+        $request->session()->put(self::REAUTH_KEY, $reauthenticating);
+
+        $parameters = [
             'client_id' => config('services.microsoft.client_id'),
             'response_type' => 'code',
             'redirect_uri' => config('services.microsoft.redirect'),
@@ -93,9 +129,16 @@ class MicrosoftSignInController extends Controller
             'nonce' => $nonce,
             'code_challenge' => $this->challengeFor($verifier),
             'code_challenge_method' => 'S256',
-        ]);
+        ];
 
-        return redirect()->away($this->endpoint('authorize').'?'.$query);
+        if ($reauthenticating) {
+            $parameters['prompt'] = 'login';
+            /* Ask for this person specifically, so the challenge cannot be
+             * satisfied by signing in as somebody else entirely. */
+            $parameters['login_hint'] = (string) Auth::user()?->email;
+        }
+
+        return redirect()->away($this->endpoint('authorize').'?'.http_build_query($parameters));
     }
 
     /**
@@ -158,7 +201,58 @@ class MicrosoftSignInController extends Controller
                 return $this->fail('Sign-in could not be completed. Try again.', 'incomplete_profile');
             }
 
-            $user = $this->resolve($objectId, $email, (string) $name, $claims['tid'] ?? null);
+            /*
+             * ADM-009's allow-lists, checked BEFORE the account is touched.
+             * Doing it after would create or update a local row for somebody
+             * the policy is about to refuse, which is how a refused person ends
+             * up with an account.
+             */
+            $tenantId = is_string($claims['tid'] ?? null) ? $claims['tid'] : null;
+            $refusal = $this->guard->federatedRefusal($tenantId, $email);
+
+            if ($refusal !== null) {
+                $this->audit->record(
+                    action: 'auth.login.failed',
+                    module: 'Security',
+                    outcome: AuditOutcome::Denied,
+                    resourceType: 'user',
+                    reason: $refusal,
+                );
+
+                /*
+                 * Deliberately NOT the detailed disclosure SEC-DEC-032 allows.
+                 * That decision covers telling somebody the state of THEIR OWN
+                 * SemantIQ account. This refusal is about the directory and the
+                 * address they came from, and naming the allowed tenant or the
+                 * allowed domains would hand an outsider the shape of the
+                 * customer's own policy. SEC-DEC-045.
+                 */
+                return $this->fail(
+                    'This directory account cannot sign in to SemantIQ. Ask an administrator if you believe it should.',
+                    'outside_authentication_policy',
+                );
+            }
+
+            $user = $this->resolve($objectId, $email, (string) $name, $tenantId);
+        } catch (SelfProvisioningRefused) {
+            /*
+             * Caught before the generic handler below, so this gets a sentence
+             * somebody can act on rather than "something went wrong". It names
+             * no policy detail: what is disclosed is that they have no account
+             * here, which they can already tell.
+             */
+            $this->audit->record(
+                action: 'auth.login.failed',
+                module: 'Security',
+                outcome: AuditOutcome::Denied,
+                resourceType: 'user',
+                reason: 'No SemantIQ account exists for this directory account, and automatic account creation is off.',
+            );
+
+            return $this->fail(
+                'You do not have a SemantIQ account yet. Ask an administrator to create one for you.',
+                'self_provisioning_refused',
+            );
         } catch (\Throwable $exception) {
             /*
              * The reason is logged, never shown. A token exchange failure can
@@ -213,10 +307,69 @@ class MicrosoftSignInController extends Controller
             return $this->fail($this->accessDeniedMessage($user), 'account_not_active');
         }
 
-        Auth::login($user, remember: true);
+        $reauthenticating = (bool) $request->session()->pull(self::REAUTH_KEY, false);
+
+        /*
+         * A RE-AUTHENTICATION, not a sign-in. ADM-010.
+         *
+         * The person was already signed in; they were sent back to Entra with
+         * `prompt=login` to prove they are still at the keyboard. Two things
+         * follow from that.
+         *
+         * The account that came back must be the SAME account. Otherwise
+         * somebody could satisfy an administrator's confirmation prompt by
+         * signing in as themselves, and the confirmation would attach to the
+         * administrator's session.
+         *
+         * The session is NOT regenerated and `Auth::login` is not called again.
+         * The existing session continues; only the confirmation timestamp
+         * changes. Regenerating would end the very session being confirmed.
+         */
+        if ($reauthenticating) {
+            $current = Auth::user();
+
+            if (! $current instanceof User || $current->getKey() !== $user->getKey()) {
+                $this->audit->record(
+                    action: 'auth.reauthentication.failed',
+                    module: 'Security',
+                    outcome: AuditOutcome::Denied,
+                    resourceType: 'user',
+                    resourceId: $current instanceof User ? $current->getKey() : null,
+                    reason: 'The directory account that returned was not the account being confirmed.',
+                );
+
+                return $this->fail(
+                    'That confirmation was completed with a different account. Sign in again as yourself and retry.',
+                    'reauthentication_identity_mismatch',
+                );
+            }
+
+            app(Reauthentication::class)->confirm();
+
+            $this->audit->record(
+                action: 'auth.reauthentication.succeeded',
+                module: 'Security',
+                resourceType: 'user',
+                resourceId: $user->getKey(),
+                reason: 'Identity confirmed through a fresh Microsoft Entra sign-in.',
+            );
+
+            return redirect()->intended(route('home'));
+        }
+
+        /*
+         * `remember` follows ADM-010's remember-me policy rather than being
+         * hard-coded true. Zero days is the default, and a remembered federated
+         * sign-in that policy says should not persist is exactly the kind of
+         * quiet disagreement between a screen and the code that makes a policy
+         * worthless.
+         */
+        Auth::login($user, remember: app(SecurityPolicies::class)->number('activity.remember_me_days') > 0);
 
         // A session fixed before authentication must not become the signed-in one.
         $request->session()->regenerate();
+
+        app(Reauthentication::class)->confirm();
 
         $this->audit->record(
             action: 'auth.login.succeeded',
@@ -302,6 +455,21 @@ class MicrosoftSignInController extends Controller
          * owns.
          */
         if (! $user->exists) {
+            /*
+             * ADM-009's "Auto-create Users", and it is OFF by default.
+             *
+             * With it off, somebody who authenticates against the directory but
+             * has no SemantIQ account is refused rather than given one. That is
+             * the safer default because it keeps the decision about who gets an
+             * account with an administrator: a directory can contain every
+             * employee, every contractor and every guest of every partner
+             * organisation, and "authenticated" is not the same question as
+             * "should be able to use this".
+             */
+            if (! $this->guard->maySelfProvision()) {
+                throw new SelfProvisioningRefused;
+            }
+
             $organisationId = app(OrganisationContext::class)->currentId();
 
             if ($organisationId === null) {
@@ -448,7 +616,20 @@ class MicrosoftSignInController extends Controller
     private function fail(string $message, ?string $reason = null): RedirectResponse
     {
         if ($reason !== null) {
-            Log::warning('Microsoft sign-in failed', ['reason' => $reason]);
+            /* Scrubbed like any other string from outside: a token exchange
+             * error can quote the request it failed on, and that request
+             * carried the client secret. */
+            Log::warning('Microsoft sign-in failed', ['reason' => Redaction::scrub($reason)]);
+        }
+
+        /*
+         * A signed-in person whose RE-AUTHENTICATION failed is still signed in,
+         * and sending them to the sign-in screen would look like they had been
+         * signed out. They go back to the confirmation screen with the message
+         * instead, where trying again makes sense.
+         */
+        if (Auth::check()) {
+            return redirect()->route('reauthenticate')->withErrors(['form' => $message]);
         }
 
         return redirect()->route('sign-in')->withErrors(['form' => $message]);

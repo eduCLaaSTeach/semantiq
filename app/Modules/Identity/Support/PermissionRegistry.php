@@ -238,6 +238,29 @@ class PermissionRegistry
 
             /* ---- Audit, gate 1 ----------------------------------------- */
             $declare('Admin', 'audit', 'view', 'Read the audit trail.', Role::SystemAdmin),
+
+            /* ---- Security, gate 3 --------------------------------------
+             *
+             * All four sit at System Administrator, ceiling and auto-grant
+             * alike. Security policy is not delegated to the Administrator tier
+             * in this gate: SEC-DEC-020's open question about Administrator
+             * read grants stays open, and a gate that widens access while
+             * answering a different question is how access quietly grows.
+             *
+             * `admin.secrets.view` is deliberately as restricted as the write.
+             * The rows hold no secret, but a list of every credential this
+             * system depends on, where each lives and when it lapses, is a map
+             * for anybody attacking it - reading it is not the harmless half.
+             *
+             * Neither pair names a business domain. Seeing the security
+             * policies grants nothing in Sales, Finance or People; that remains
+             * a separate entitlement, checked separately.
+             */
+            $declare('Admin', 'security', 'view', 'See the security policies and how each control is behaving.', Role::SystemAdmin),
+            $declare('Admin', 'security', 'update', 'Change authentication, session and API security policy.', Role::SystemAdmin, PermissionRisk::High, true),
+
+            $declare('Admin', 'secrets', 'view', 'See where credentials are managed and when they lapse.', Role::SystemAdmin),
+            $declare('Admin', 'secrets', 'manage', 'Add, change and retire a pointer to a credential held elsewhere.', Role::SystemAdmin, PermissionRisk::High, true),
         );
     }
 }

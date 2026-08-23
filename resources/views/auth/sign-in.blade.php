@@ -14,6 +14,16 @@
     One solid button in the group, per section 8. The credential form's Sign in
     is therefore the neutral secondary look - not because it matters less on its
     own, but because a group may hold only one solid and Microsoft has it.
+
+    WHICH PATHS APPEAR is ADM-009's authentication mode, from Release 1 gate 3.
+    A way in that policy has turned off is ABSENT from this screen, not disabled
+    on it: a greyed-out password field invites somebody to ask for it back, and
+    an absent one says the decision has been made. The routes refuse
+    independently, because a control that is only hidden is not a control.
+
+    Where only one path remains, the divider goes with the other one and the
+    surviving form takes the solid button, so the screen never shows a divider
+    with nothing on one side of it.
 --}}
 @extends('layouts.auth')
 
@@ -35,6 +45,7 @@
             </div>
         @endif
 
+        @if ($offersFederatedSignIn)
         {{-- The single-sign-on path. --}}
         <form method="POST" action="{{ route('sign-in.microsoft') }}">
             @csrf
@@ -54,9 +65,13 @@
                 </span>
             </button>
         </form>
+        @endif
 
-        <div class="auth-divider">or</div>
+        @if ($offersFederatedSignIn && $offersCredentialForm)
+            <div class="auth-divider">or</div>
+        @endif
 
+        @if ($offersCredentialForm)
         {{-- The credential path. --}}
         <form method="POST" action="{{ route('sign-in.attempt') }}" class="auth-form" novalidate>
             @csrf
@@ -105,10 +120,17 @@
             </div>
 
             <div class="auth-row">
-                <label class="checkbox">
-                    <input type="checkbox" name="remember" value="1" @checked(old('remember'))>
-                    Keep me signed in
-                </label>
+                {{-- Only offered where ADM-010's remember-me policy is above
+                     zero days. A box that policy will ignore is a promise the
+                     application does not keep. --}}
+                @if (app(\App\Modules\Security\Support\SecurityPolicies::class)->number('activity.remember_me_days') > 0)
+                    <label class="checkbox">
+                        <input type="checkbox" name="remember" value="1" @checked(old('remember'))>
+                        Keep me signed in
+                    </label>
+                @else
+                    <span></span>
+                @endif
                 <a href="{{ route('password.request') }}" style="font-size:var(--text-small)">Forgot password?</a>
             </div>
 
@@ -123,14 +145,33 @@
                 </div>
             @enderror
 
-            {{-- Neutral secondary: the solid in this group belongs to Microsoft
-                 above. Submit is never greyed out - clicking it runs validation. --}}
-            <button type="submit" class="btn btn-secondary btn-block" data-async>
+            {{-- Neutral secondary while Microsoft is on the page, because a
+                 group may hold only one solid and Microsoft has it. When policy
+                 has removed the Microsoft path, this IS the group's only
+                 button and takes the solid. Submit is never greyed out -
+                 clicking it runs validation. --}}
+            <button type="submit"
+                    class="btn {{ $offersFederatedSignIn ? 'btn-secondary' : 'btn-solid btn-primary' }} btn-block"
+                    data-async>
                 <span class="btn-label" style="display:inline-flex;align-items:center;gap:8px">
                     <svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>
                     Sign in
                 </span>
             </button>
         </form>
+        @endif
+
+        {{-- Both paths turned off. Not a state anybody should reach - the
+             Authentication Policy screen warns before it can happen - but a
+             blank card with no explanation would be worse than saying so. --}}
+        @unless ($offersFederatedSignIn || $offersCredentialForm)
+            <div class="alert" role="alert">
+                <svg class="icon" aria-hidden="true"><use href="#i-alert-circle"/></svg>
+                <span>
+                    No way to sign in is currently available. The authentication policy has turned off
+                    every option. An administrator with server access will need to change it.
+                </span>
+            </div>
+        @endunless
     </div>
 @endsection
