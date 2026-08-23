@@ -1,13 +1,47 @@
-# cPanel front door. The document root is public_html and the application
-# files are deployed directly into it. A Laravel application must expose only
-# public/. This rule forwards every request to public/, where Laravel's real
-# front controller handles the request.
+# cPanel front door.
+#
+# The document root is public_html and the application is deployed directly
+# into it, so the whole tree - .env, vendor/, storage/, config/ - sits inside
+# the web root. Only Laravel's public/ directory is ever meant to be reachable.
+#
+# TWO independent guards, deliberately. The rewrite at the bottom sends every
+# request into public/, and the deny rules above it refuse the sensitive paths
+# outright. Either alone would do the job today; together, neither one failing
+# quietly exposes a credential. Defence in depth is worth a dozen lines when
+# what is behind the door is a database password and a Microsoft client secret.
 #
 # The configuration intentionally contains no RewriteBase, domain, or absolute
 # path, allowing the same file to work across domains and subdomains.
 
+# ---------------------------------------------------------------------------
+# Guard one: refuse the sensitive paths outright.
+# ---------------------------------------------------------------------------
+
+# Dotfiles, with ONE exception. .well-known must stay reachable: it carries the
+# ACME challenge that renews the TLS certificate, and blocking it breaks HTTPS
+# renewal silently, weeks later, in a way nobody connects back to this file.
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    RewriteRule ^\.well-known/ - [L]
+    RewriteRule (^|/)\. - [F,L]
+</IfModule>
+
+# Everything in the application tree that is not application output. Matched by
+# name rather than by directory, so a file moving does not quietly lose its
+# guard.
+<FilesMatch "(?i)^(\.env.*|composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml|vite\.config\.js|.*\.md|.*\.ya?ml|.*\.sqlite|.*\.log)$">
+    Require all denied
+</FilesMatch>
+
+# Directories that hold code, configuration, dependencies or runtime state.
+RedirectMatch 404 ^/(app|bootstrap|config|database|doc|resources|routes|storage|tests|vendor|deployment)(/|$)
+
+# ---------------------------------------------------------------------------
+# Guard two: forward everything else into public/, where Laravel's front
+# controller handles the request.
+# ---------------------------------------------------------------------------
+
+<IfModule mod_rewrite.c>
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
