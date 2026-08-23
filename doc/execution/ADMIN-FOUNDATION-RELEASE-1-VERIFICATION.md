@@ -725,3 +725,120 @@ Until `php artisan migrate --force` is run on the server, every Security screen
 will fail: the Overview, all three policy screens and Secret References all read
 tables that will not exist yet. The exact command and the screens at risk are in
 the completion report.
+
+## 12. Deployment order and release safety
+
+Added after a product-owner review of PR #21 found that gate 3 could not survive
+its own release. It is recorded here rather than in a commit message because it
+is a property of every future release that adds a table, not a one-off fix.
+
+### The problem, measured rather than assumed
+
+The deploy workflow ships code and does **not** run migrations. That is
+deliberate - a deployment that migrates a production database unattended is a
+deployment that can lose data - but it opens a window on every release that adds
+a table:
+
+```text
+code deployed  ->  migration not yet run  ->  the new tables do not exist
+```
+
+Gate 3's middleware runs on the **web** stack, not only on `/admin/security`.
+`SecurityHeaders` reads a policy on every single response and
+`EnforceSessionPolicy` reads two more, so the very first request after a deploy
+queried a table that did not exist.
+
+**The measured result: `GET /sign-in` returned 500.** Not the Security screens -
+the sign-in screen, so nobody could get in to notice. A test written to
+demonstrate it failed exactly that way before any fix was made.
+
+### How readiness is detected
+
+`App\Modules\Security\Support\SecurityStorage` asks one specific question -
+`Schema::hasTable()` - and answers only that.
+
+**It does not catch database exceptions.** Catching one and falling back would
+also swallow a broken connection, a permissions problem or a corrupt table, and
+report all three as "everything is fine, using defaults". Those must still fail
+loudly. The check is a schema question, not an error handler.
+
+The class is a container **singleton** and memoises per request, so the answer
+costs one schema query per table per request rather than one per consumer, on
+every response the application sends. `SecurityPolicies`, `SecurityCapabilities`,
+`AuthenticationGuard`, `Reauthentication` and `SessionRegistry` were registered
+as singletons in the same change, for the same reason.
+
+### What happens in the window
+
+| Path | Behaviour | Why |
+|---|---|---|
+| **Policy READ** | Falls back to the `config/security.php` default | Not a compromise: with no table there can be no override, so the catalogue default IS the value in force. The secure defaults stay authoritative |
+| **Policy WRITE** | Refused with `SecurityStorageNotInitialised`, before any other check runs | Accepting a write and discarding it would tell an administrator their security policy had changed when nothing had. Nothing is written and nothing is audited as though it might have been |
+| **Security headers** | Sent, using the catalogue defaults | A release window must not be a window with the headers switched off |
+| **Session policy** | Enforced, using the catalogue defaults | The idle timeout still ends a stale session. A window that silently suspended it would be a security regression dressed as resilience |
+| **Critical actions** | Still confirmed | Same reason |
+| **Secret References index** | A controlled "Migration required" state | **Deliberately NOT the empty state.** "No references recorded" says the store exists and is empty, which is a different and far more comforting fact than "we cannot tell you" |
+| **Secret References writes and detail pages** | Refused by the `security-storage` middleware, redirected to the index with the reason | Fails closed |
+| **Security Overview** | Renders. Secret posture reads **Not Verified**, and the storage gap is the first configuration gap listed | Gate 3 rule 9 |
+| **Expiring credentials panel** | "Cannot be checked yet" | It previously showed a green tick and "nothing expiring in the next 30 days" - a false healthy about the one thing on that page that can take an integration down, at exactly the moment the screen cannot see the data |
+| **Everything else** | Unaffected | Asserted screen by screen |
+
+### A second defect the fix exposed
+
+Four secret-reference routes carry a `{secretReference}` segment, and Laravel's
+`SubstituteBindings` lives in the **`web` middleware group**, which runs before
+any route-level middleware. An implicit model binding therefore queried
+`secret_references` *before* `security-storage` could refuse, and a typed URL
+during the window still returned a raw database error.
+
+The parameter is now a plain integer resolved inside the controller, matching
+how `sessions.revoke` already resolves its subject. Caught by the test that
+walks all five routes with the table dropped, not by review.
+
+### Evidence
+
+`tests/Feature/Security/DeploymentOrderTest.php`, 21 tests:
+
+| Area | Proved |
+|---|---|
+| Pre-migration | `/sign-in` renders AND a real sign-in completes; a guest redirect is normal; nine existing screens return 200; headers and session policy use the safe defaults; the idle timeout still ends a stale session; a critical action is still confirmed |
+| Screens | Overview, all three policy screens and the Secret References index render and explain themselves; the Save button and the New reference button are absent rather than disabled |
+| Writes | The service refuses with a controlled message quoting no SQL and no table name; nothing changes; nothing is audited; the form shows the message; all five secret write and detail routes are refused |
+| Round trip | pre-migration -> up -> gate 3 behaviour -> down -> safe again -> up, asserted end to end in one test |
+| Half-migrated | One table present and the other missing is handled independently, which is the state a failed migration leaves |
+| Detection | Readiness is a schema question; the answer is memoised; the services are singletons |
+
+Manual verification against a database with the gate 3 migrations rolled back,
+served on a real HTTP server and driven in Chromium in both themes:
+
+```text
+/sign-in                        200, with all five base headers and the report-only CSP
+/                               200
+/admin, /admin/users            200
+/admin/organisation             200
+/admin/system/diagnostics       200
+/admin/security                 200
+/admin/security/authentication  200
+/admin/security/sessions        200
+/admin/security/api             200
+/admin/security/secrets         200
+/admin/security/secrets/new     302 to the index, with the reason
+/admin/security/secrets/1       302 to the index, with the reason
+```
+
+Migration sequence run against a file database: up, down, up, down, up. Both
+migrations applied and rolled back cleanly five times.
+
+### What is deliberately NOT done
+
+**The deployment workflow is unchanged.** It still does not run migrations, and
+making it do so is an architecture change requiring separate approval. This work
+makes the application survive the window; it does not remove the window.
+
+### The rule this establishes for later gates
+
+Any release adding a table that request-path code reads must either carry the
+same readiness fallback, or not be read from the request path at all. Gate 4's
+`data_protection_profiles` and gate 5's `integrations` are both candidates -
+whichever screens read them, if anything on the web middleware stack does, the
+same window applies.

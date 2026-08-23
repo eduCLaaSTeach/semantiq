@@ -15,6 +15,7 @@ use App\Modules\Security\Exceptions\CredentialShapedValue;
 use App\Modules\Security\Http\Requests\StoreSecretReferenceRequest;
 use App\Modules\Security\Http\Requests\UpdateSecretReferenceRequest;
 use App\Modules\Security\Models\SecretReference;
+use App\Modules\Security\Support\SecurityStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -42,10 +43,30 @@ class SecretReferenceController extends Controller
 {
     public function __construct(
         private readonly AuditLogger $audit,
+        private readonly SecurityStorage $storage,
     ) {}
 
     public function index(): View
     {
+        /*
+         * The deployment window: code is live and the migration has not run.
+         * A CONTROLLED state, and deliberately NOT the empty state - "no secret
+         * references yet" would tell an administrator the store exists and is
+         * empty, which is a different and much more comforting fact than the
+         * truth. Every write route is refused by `security-storage` meanwhile.
+         */
+        if (! $this->storage->secretReferencesAreReady()) {
+            return view('pages.admin.secret-references', [
+                'storageReady' => false,
+                'storageBlocker' => $this->storage->blocker(),
+                'references' => collect(),
+                'expiringCount' => 0,
+                'rotationDueCount' => 0,
+                'untrackedCount' => 0,
+                'horizonDays' => SecretStatus::EXPIRY_HORIZON_DAYS,
+            ]);
+        }
+
         /*
          * The global organisation scope does the tenancy work here, so there is
          * no explicit `where` to forget. Ordered by expiry with the nulls last,
@@ -61,6 +82,8 @@ class SecretReferenceController extends Controller
             ->get();
 
         return view('pages.admin.secret-references', [
+            'storageReady' => true,
+            'storageBlocker' => null,
             'references' => $references,
             'expiringCount' => $references->filter(
                 fn (SecretReference $reference): bool => in_array(
@@ -127,13 +150,15 @@ class SecretReferenceController extends Controller
             ->with('status', 'Secret reference "'.$reference->name.'" saved. No credential value is stored.');
     }
 
-    public function edit(UserRegistry $registry, SecretReference $secretReference): View
+    public function edit(UserRegistry $registry, int $secretReference): View
     {
-        return view('pages.admin.secret-reference-form', $this->formData($registry, $secretReference));
+        return view('pages.admin.secret-reference-form', $this->formData($registry, $this->find($secretReference)));
     }
 
-    public function update(UpdateSecretReferenceRequest $request, SecretReference $secretReference): RedirectResponse
+    public function update(UpdateSecretReferenceRequest $request, int $secretReference): RedirectResponse
     {
+        $secretReference = $this->find($secretReference);
+
         /** @var User $actor */
         $actor = Auth::user();
 
@@ -173,8 +198,10 @@ class SecretReferenceController extends Controller
     /**
      * Take a reference out of use without losing it.
      */
-    public function retire(SecretReference $secretReference): RedirectResponse
+    public function retire(int $secretReference): RedirectResponse
     {
+        $secretReference = $this->find($secretReference);
+
         if ($secretReference->isRetired()) {
             return back()->with('status', 'That reference was already retired.');
         }
@@ -196,6 +223,30 @@ class SecretReferenceController extends Controller
         return redirect()
             ->route('admin.security.secrets')
             ->with('status', 'Secret reference "'.$secretReference->name.'" retired. The record is kept for the audit trail.');
+    }
+
+    /**
+     * One reference, or a 404.
+     *
+     * Resolved HERE rather than by an implicit route binding, because
+     * `SubstituteBindings` runs in the `web` middleware GROUP - before any
+     * route-level middleware - so a binding would query `secret_references`
+     * before `security-storage` could refuse, and a typed URL during a
+     * deployment window would return a raw database error.
+     *
+     * The global organisation scope does the tenancy work: a reference
+     * belonging to another customer is simply not found, which is the 404 that
+     * SEC-DEC-034 asks for rather than a 403 confirming the id exists.
+     */
+    private function find(int $id): SecretReference
+    {
+        $reference = SecretReference::query()->find($id);
+
+        if ($reference === null) {
+            abort(404);
+        }
+
+        return $reference;
     }
 
     /**

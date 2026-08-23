@@ -6,6 +6,7 @@ namespace App\Modules\Security\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Security\Exceptions\SecurityStorageNotInitialised;
 use App\Modules\Security\Http\Requests\UpdateSecurityPolicyRequest;
 use App\Modules\Security\Support\SecurityPolicies;
 use Illuminate\Http\RedirectResponse;
@@ -61,6 +62,15 @@ abstract class SecurityPolicyController extends Controller
 
         return [
             'screen' => $this->screen(),
+            /*
+             * The deployment window: code is live and the migration has not
+             * run. The VALUES on this screen are correct - with no table there
+             * can be no override, so the catalogue defaults are what is in
+             * force - but nothing can be changed, and the screen says so rather
+             * than letting somebody find out by pressing Save.
+             */
+            'storageReady' => $this->policies->storageIsReady(),
+            'storageBlocker' => $this->policies->storageBlocker(),
             'title' => $meta['title'] ?? 'Security',
             'subtitle' => $meta['subtitle'] ?? '',
             'feature' => $meta['feature'] ?? '',
@@ -86,6 +96,14 @@ abstract class SecurityPolicyController extends Controller
             foreach ($request->normalise() as $key => $value) {
                 $changed += $this->policies->set($key, $value, $actor, $request->reason()) ? 1 : 0;
             }
+        } catch (SecurityStorageNotInitialised $exception) {
+            /*
+             * Caught before the refusal handler below so the message is the
+             * controlled one rather than a validation-shaped error. Nothing was
+             * written and nothing was audited as though it might have been -
+             * the guard runs before any other check in `set()`.
+             */
+            return back()->withInput()->withErrors(['policies' => $exception->getMessage()]);
         } catch (InvalidArgumentException $exception) {
             /*
              * Thrown when a key is unknown or secret-bearing, a value is

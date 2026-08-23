@@ -39,6 +39,23 @@
     <div class="stack">
         @include('partials.form-status')
 
+        @unless ($storageReady)
+            {{-- The deployment window. The VALUES below are correct: with no
+                 table there can be no override, so the catalogue defaults are
+                 what is in force. What is not possible is changing them, and
+                 the screen says so rather than letting somebody find out by
+                 pressing Save. --}}
+            <div class="alert alert-warning" role="alert">
+                <svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <span>
+                    <strong>These values cannot be changed yet.</strong>
+                    {{ $storageBlocker }}
+                    The values shown below are the secure defaults built into this release, and they ARE
+                    what is currently in force.
+                </span>
+            </div>
+        @endunless
+
         {{-- ADM-009 context: what is actually possible on this deployment. --}}
         @isset($entraConfigured)
             @unless ($entraConfigured)
@@ -294,13 +311,22 @@
             </div>
 
             <div class="settings-foot">
-                <button type="submit" class="btn btn-solid btn-primary" data-async>
-                    <span class="btn-label">Save changes</span>
-                </button>
+                {{-- Absent, not disabled, while nothing can be saved. The route
+                     and the service refuse independently, so this is presentation
+                     rather than the control. --}}
+                @if ($storageReady)
+                    <button type="submit" class="btn btn-solid btn-primary" data-async>
+                        <span class="btn-label">Save changes</span>
+                    </button>
 
-                <span class="field-help">
-                    Every change here is recorded in the audit trail with your name, the old value and the new one.
-                </span>
+                    <span class="field-help">
+                        Every change here is recorded in the audit trail with your name, the old value and the new one.
+                    </span>
+                @else
+                    <span class="field-help">
+                        Saving is unavailable until the outstanding database migration has been run.
+                    </span>
+                @endif
             </div>
 
         </form>

@@ -10,6 +10,7 @@ use App\Modules\Audit\Support\AuditLogger;
 use App\Modules\Audit\Support\Redaction;
 use App\Modules\Identity\Support\OrganisationContext;
 use App\Modules\Security\Enums\PolicyValueType;
+use App\Modules\Security\Exceptions\SecurityStorageNotInitialised;
 use App\Modules\Security\Models\SecurityPolicy;
 use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
@@ -51,6 +52,22 @@ use InvalidArgumentException;
  *    `Redaction`. There is no unaudited path, and a change that fails still
  *    records the denial.
  *
+ * DEPLOYMENT ORDER. The deploy workflow ships code and does not run migrations,
+ * so there is a window in which this class exists and `security_policies` does
+ * not. `SecurityHeaders` reads a policy on EVERY response, so without a
+ * fallback the first request after a deploy takes the whole site down - sign-in
+ * included, so nobody can get in to notice. Measured, not guessed.
+ *
+ * The two halves are treated differently on purpose:
+ *
+ *   READS fall back to the catalogue default, which is not a compromise: with
+ *   no table there can be no override, so the default IS the value in force.
+ *   The secure defaults stay authoritative.
+ *
+ *   WRITES FAIL CLOSED with `SecurityStorageNotInitialised`. Accepting a write
+ *   and discarding it would tell an administrator their security policy had
+ *   changed when nothing had, which is worse than any error message.
+ *
  * WHAT THIS CLASS DOES NOT DO: enforce anything. It answers what the policy
  * says. `EnforceSessionPolicy`, `SecurityHeaders`, `SignInController` and
  * `SessionRegistry` are what act on the answer, and each of them is tested
@@ -65,6 +82,7 @@ class SecurityPolicies
         private readonly OrganisationContext $organisations,
         private readonly AuditLogger $audit,
         private readonly SecurityCapabilities $capabilities,
+        private readonly SecurityStorage $storage,
     ) {}
 
     /**
@@ -118,6 +136,17 @@ class SecurityPolicies
 
         $definition = $this->definition($key);
         $type = $definition['type'];
+
+        /*
+         * Before the migration has run there is no table, therefore no
+         * override, therefore the catalogue default is not a fallback - it is
+         * the answer. The check is a schema question, not a caught exception:
+         * a broken connection or a permissions problem must still fail loudly
+         * rather than be reported as "everything is fine, using defaults".
+         */
+        if (! $this->storage->policiesAreReady()) {
+            return $this->cache[$key] = $definition['default'];
+        }
 
         /*
          * The global scope already limits this to the current organisation's
@@ -210,6 +239,16 @@ class SecurityPolicies
     public function set(string $key, string|int|bool|null $value, User $actor, ?string $reason = null): bool
     {
         $definition = $this->definition($key);
+
+        /*
+         * Guard 0 - the storage exists. FIRST, before anything else is
+         * evaluated, so nothing about the change is audited as though it might
+         * have happened. Fails closed: see the class docblock for why a write
+         * cannot take the read path's fallback.
+         */
+        if (! $this->storage->policiesAreReady()) {
+            throw SecurityStorageNotInitialised::forWrite((string) ($definition['label'] ?? $key));
+        }
 
         /* Guard 2a - the key. */
         if (Redaction::isSensitiveKey($key)) {
@@ -311,6 +350,31 @@ class SecurityPolicies
         );
 
         return true;
+    }
+
+    /**
+     * Drop every memoised value.
+     *
+     * For tests that migrate or roll back mid-run. NOTHING IN THE APPLICATION
+     * CALLS IT: within a request the schema cannot change and a write already
+     * evicts its own key, so a caller reaching for this in application code
+     * would be working around a problem rather than fixing one.
+     */
+    public function forget(): void
+    {
+        $this->cache = [];
+    }
+
+    /** Whether policy can be CHANGED here yet, as opposed to only read. */
+    public function storageIsReady(): bool
+    {
+        return $this->storage->policiesAreReady();
+    }
+
+    /** Why policy cannot be changed yet, or null when it can. */
+    public function storageBlocker(): ?string
+    {
+        return $this->storage->policiesAreReady() ? null : $this->storage->blocker();
     }
 
     /**

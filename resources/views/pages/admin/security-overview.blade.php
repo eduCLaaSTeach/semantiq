@@ -139,7 +139,17 @@
                 </a>
             </div>
 
-            @if ($expiring->isEmpty())
+            @if (! $storageReady)
+                {{-- NOT the green tick below. "Nothing expiring" would be a
+                     false healthy about the one thing on this page that can
+                     take an integration down, at exactly the moment the screen
+                     cannot see the data. --}}
+                <div class="empty">
+                    <svg class="icon" aria-hidden="true"><use href="#i-slash"/></svg>
+                    <span class="empty-title">Cannot be checked yet</span>
+                    <span class="empty-note">{{ $storageBlocker }}</span>
+                </div>
+            @elseif ($expiring->isEmpty())
                 <div class="empty">
                     <svg class="icon" aria-hidden="true"><use href="#i-check-circle"/></svg>
                     <span class="empty-title">Nothing expiring in the next {{ \App\Modules\Security\Enums\SecretStatus::EXPIRY_HORIZON_DAYS }} days</span>

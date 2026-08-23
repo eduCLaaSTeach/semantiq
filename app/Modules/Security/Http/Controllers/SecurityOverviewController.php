@@ -6,6 +6,7 @@ namespace App\Modules\Security\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Security\Support\SecurityPosture;
+use App\Modules\Security\Support\SecurityStorage;
 use Illuminate\View\View;
 
 /**
@@ -26,9 +27,17 @@ use Illuminate\View\View;
  */
 class SecurityOverviewController extends Controller
 {
-    public function __invoke(SecurityPosture $posture): View
+    public function __invoke(SecurityPosture $posture, SecurityStorage $storage): View
     {
         return view('pages.admin.security-overview', [
+            /*
+             * Passed so the expiring-credentials panel can say it cannot answer
+             * rather than showing a green tick and "nothing expiring". During a
+             * deployment window that tick would be a false healthy about the
+             * one thing on this page that could take an integration down.
+             */
+            'storageReady' => $storage->secretReferencesAreReady(),
+            'storageBlocker' => $storage->blocker(),
             'overall' => $posture->overall(),
             'authentication' => $posture->authentication(),
             'sessions' => $posture->sessions(),

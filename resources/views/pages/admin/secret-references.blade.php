@@ -16,15 +16,35 @@
 @section('page-subtitle', 'Where the credentials this deployment depends on are kept, and when they lapse.')
 
 @section('page-action')
-    <a class="btn btn-solid btn-primary" href="{{ route('admin.security.secrets.create') }}">
-        <svg class="icon" aria-hidden="true"><use href="#i-plus-circle"/></svg>
-        <span class="btn-label">New reference</span>
-    </a>
+    {{-- Absent, not disabled, while the storage does not exist. A control that
+         cannot work must not be rendered as one - the same rule the Session
+         Policy screen follows for revocation. --}}
+    @if ($storageReady)
+        <a class="btn btn-solid btn-primary" href="{{ route('admin.security.secrets.create') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-plus-circle"/></svg>
+            <span class="btn-label">New reference</span>
+        </a>
+    @endif
 @endsection
 
 @section('content')
     <div class="stack">
         @include('partials.form-status')
+
+        @unless ($storageReady)
+            {{-- The deployment window: code is live, the migration has not run.
+                 Said outright rather than shown as an empty list, because "no
+                 references yet" would tell somebody the store exists and is
+                 empty - a different and far more comforting fact than the
+                 truth. --}}
+            <div class="alert alert-warning" role="alert">
+                <svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <span>
+                    <strong>Security storage has not been initialised.</strong>
+                    {{ $storageBlocker }}
+                </span>
+            </div>
+        @endunless
 
         <div class="alert alert-info" role="note">
             <svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>
@@ -67,7 +87,21 @@
                 </h2>
             </div>
 
-            @if ($references->isEmpty())
+            @if (! $storageReady)
+                {{-- A DIFFERENT empty state from the one below, on purpose.
+                     "None recorded yet" and "we cannot tell you what is
+                     recorded" are different facts and must not share a
+                     screen. --}}
+                <div class="empty">
+                    <svg class="icon" aria-hidden="true"><use href="#i-slash"/></svg>
+                    <span class="empty-title">Migration required</span>
+                    <span class="empty-note">
+                        This screen cannot show what credentials are being tracked, because the table that
+                        holds them has not been created yet. It is not empty - it does not exist. Adding or
+                        changing a reference is refused until the outstanding migrations have been run.
+                    </span>
+                </div>
+            @elseif ($references->isEmpty())
                 <div class="empty">
                     <svg class="icon" aria-hidden="true"><use href="#i-key"/></svg>
                     <span class="empty-title">No secret references yet</span>

@@ -301,18 +301,43 @@ Route::middleware('auth')->group(function (): void {
             /* ADM-012. */
             Route::get('/secrets', [SecretReferenceController::class, 'index'])
                 ->middleware('permission:admin.secrets.view')->name('secrets');
+            /*
+              * Everything below the index carries `security-storage`. The index
+              * itself does not: it renders a controlled "migration required"
+              * state, so an administrator who opens it during a deployment
+              * window is told what is happening rather than shown a wall.
+              */
             Route::get('/secrets/new', [SecretReferenceController::class, 'create'])
-                ->middleware('permission:admin.secrets.manage')->name('secrets.create');
+                ->middleware(['permission:admin.secrets.manage', 'security-storage'])->name('secrets.create');
             Route::post('/secrets', [SecretReferenceController::class, 'store'])
-                ->middleware(['permission:admin.secrets.manage', 'confirm:secret_reference_change'])
+                ->middleware(['permission:admin.secrets.manage', 'security-storage', 'confirm:secret_reference_change'])
                 ->name('secrets.store');
+            /*
+             * `{secretReference}` is a plain integer, resolved in the
+             * controller, and NOT an implicit model binding.
+             *
+             * Laravel's `SubstituteBindings` lives in the `web` middleware
+             * GROUP, which runs before any route-level middleware - so an
+             * implicit binding queries `secret_references` before
+             * `security-storage` gets a chance to refuse, and a typed URL
+             * during the deployment window returns a raw database error.
+             * Measured, not assumed: the test that walks these five routes with
+             * the table dropped caught it.
+             *
+             * Resolving in the controller also matches how `sessions.revoke`
+             * already handles a subject, and lets the organisation boundary be
+             * asked for explicitly rather than inherited from a binding.
+             */
             Route::get('/secrets/{secretReference}', [SecretReferenceController::class, 'edit'])
-                ->middleware('permission:admin.secrets.manage')->name('secrets.edit');
+                ->whereNumber('secretReference')
+                ->middleware(['permission:admin.secrets.manage', 'security-storage'])->name('secrets.edit');
             Route::put('/secrets/{secretReference}', [SecretReferenceController::class, 'update'])
-                ->middleware(['permission:admin.secrets.manage', 'confirm:secret_reference_change'])
+                ->whereNumber('secretReference')
+                ->middleware(['permission:admin.secrets.manage', 'security-storage', 'confirm:secret_reference_change'])
                 ->name('secrets.update');
             Route::post('/secrets/{secretReference}/retire', [SecretReferenceController::class, 'retire'])
-                ->middleware(['permission:admin.secrets.manage', 'confirm:secret_reference_change'])
+                ->whereNumber('secretReference')
+                ->middleware(['permission:admin.secrets.manage', 'security-storage', 'confirm:secret_reference_change'])
                 ->name('secrets.retire');
         });
     });

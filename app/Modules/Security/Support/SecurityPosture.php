@@ -38,6 +38,7 @@ class SecurityPosture
         private readonly SecurityPolicies $policies,
         private readonly SecurityCapabilities $capabilities,
         private readonly ApiSecurityAudit $controls,
+        private readonly SecurityStorage $storage,
     ) {}
 
     /**
@@ -189,6 +190,24 @@ class SecurityPosture
      */
     public function secrets(): array
     {
+        /*
+         * The deployment window. NOT the empty state below: "nothing recorded"
+         * says the store exists and is empty, which is a different and much
+         * more comforting fact than "we cannot tell you". Reported as
+         * NotVerified rather than NotConfigured because we genuinely do not
+         * know - gate 3 rule 9 - and because NotVerified draws attention while
+         * NotConfigured reads as a deliberate choice somebody made.
+         */
+        if (! $this->storage->secretReferencesAreReady()) {
+            return [
+                'status' => SecurityStatus::NotVerified,
+                'headline' => 'Storage not initialised',
+                'detail' => 'The table that holds secret references has not been created yet, so this cannot say '
+                    .'what credentials are being tracked.',
+                'notes' => [$this->storage->blocker()],
+            ];
+        }
+
         $references = SecretReference::query()->active()->get();
 
         if ($references->isEmpty()) {
@@ -246,6 +265,10 @@ class SecurityPosture
     /** References expiring within the horizon, or already expired. */
     public function expiringReferences(): Collection
     {
+        if (! $this->storage->secretReferencesAreReady()) {
+            return new Collection;
+        }
+
         return SecretReference::query()
             ->expiringWithin(SecretStatus::EXPIRY_HORIZON_DAYS)
             ->orderBy('expires_on')
@@ -255,6 +278,10 @@ class SecurityPosture
     /** References whose rotation date has arrived. */
     public function rotationDueReferences(): Collection
     {
+        if (! $this->storage->secretReferencesAreReady()) {
+            return new Collection;
+        }
+
         return SecretReference::query()
             ->rotationDue()
             ->orderBy('rotation_due_on')
@@ -301,6 +328,19 @@ class SecurityPosture
     {
         $gaps = [];
 
+        /*
+         * FIRST, because during a deployment window it is the only one that
+         * matters and it explains every other odd reading on the page.
+         */
+        if (! $this->storage->isReady()) {
+            $gaps[] = [
+                'title' => 'Security storage has not been initialised',
+                'detail' => $this->storage->blocker()
+                    .' Until then the secure defaults in code are what is in force, and no security policy or '
+                    .'secret reference can be changed.',
+            ];
+        }
+
         foreach (['tenant', 'client_id', 'client_secret', 'redirect'] as $key) {
             if (blank(config('services.microsoft.'.$key))) {
                 /* PRESENCE ONLY, never the value - SEC-DEC-017. */
@@ -321,7 +361,7 @@ class SecurityPosture
             ];
         }
 
-        if (SecretReference::query()->active()->count() === 0) {
+        if ($this->storage->secretReferencesAreReady() && SecretReference::query()->active()->count() === 0) {
             $gaps[] = [
                 'title' => 'No credentials are being tracked',
                 'detail' => 'This deployment depends on at least a database password and, once Entra is set up, a client secret. '

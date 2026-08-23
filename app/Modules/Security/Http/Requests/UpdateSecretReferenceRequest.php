@@ -23,6 +23,8 @@ class UpdateSecretReferenceRequest extends StoreSecretReferenceRequest
     {
         return Rule::unique('secret_references', 'name')
             ->where('organisation_id', app(OrganisationContext::class)->currentId())
-            ->ignore($this->route('secretReference'));
+            /* An integer now, not a model: the route parameter is a plain id
+             * so `security-storage` can refuse before anything is queried. */
+            ->ignore((int) $this->route('secretReference'));
     }
 }

@@ -6,6 +6,7 @@ use App\Modules\Platform\Http\Middleware\AssignCorrelationId;
 use App\Modules\Security\Http\Middleware\ConfirmIdentity;
 use App\Modules\Security\Http\Middleware\EnforceSessionPolicy;
 use App\Modules\Security\Http\Middleware\LimitRequestSize;
+use App\Modules\Security\Http\Middleware\RequireSecurityStorage;
 use App\Modules\Security\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -46,6 +47,13 @@ return Application::configure(basePath: dirname(__DIR__))
              * to prove themselves again.
              */
             'confirm' => ConfirmIdentity::class,
+            /*
+             * Release 1 gate 3, ADM-012. Refuses a secret-reference action
+             * before its table exists. Runs BEFORE implicit model binding,
+             * which is the whole reason it is a middleware - a check inside the
+             * controller would arrive after the query that fails.
+             */
+            'security-storage' => RequireSecurityStorage::class,
         ]);
 
         /*

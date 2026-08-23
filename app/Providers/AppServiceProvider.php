@@ -16,6 +16,12 @@ use App\Modules\Identity\Support\PermissionRegistry;
 use App\Modules\Platform\Support\FeatureFlags;
 use App\Modules\Platform\Support\HealthProbe;
 use App\Modules\Platform\Support\SystemSettings;
+use App\Modules\Security\Support\AuthenticationGuard;
+use App\Modules\Security\Support\Reauthentication;
+use App\Modules\Security\Support\SecurityCapabilities;
+use App\Modules\Security\Support\SecurityPolicies;
+use App\Modules\Security\Support\SecurityStorage;
+use App\Modules\Security\Support\SessionRegistry;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -66,6 +72,29 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(RoleRegistry::class);
         $this->app->singleton(StructureRegistry::class);
         $this->app->singleton(AccessReviewService::class);
+
+        /*
+         * Release 1 gate 3.
+         *
+         * SINGLETONS FOR A REASON THAT IS NOT ONLY TIDINESS. `SecurityStorage`
+         * answers "do the gate 3 tables exist yet" with a schema query, and
+         * `SecurityHeaders`, `EnforceSessionPolicy`, `ConfirmIdentity` and the
+         * controllers all need the answer on the same request. Registered as a
+         * singleton it costs ONE query per request; auto-wired fresh each time
+         * it would cost one per consumer, on every response the application
+         * sends.
+         *
+         * `SecurityPolicies` memoises resolved values for the same reason
+         * `SystemSettings` does: policy is read many times per request and
+         * changes rarely, and two instances could answer the same question
+         * differently after a write.
+         */
+        $this->app->singleton(SecurityStorage::class);
+        $this->app->singleton(SecurityCapabilities::class);
+        $this->app->singleton(SecurityPolicies::class);
+        $this->app->singleton(AuthenticationGuard::class);
+        $this->app->singleton(Reauthentication::class);
+        $this->app->singleton(SessionRegistry::class);
     }
 
     public function boot(): void
