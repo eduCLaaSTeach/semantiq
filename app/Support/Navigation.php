@@ -105,16 +105,22 @@ class Navigation
      * down rather than a separate back link. Only the leaf is a destination in
      * its own right; a group above it is a label, since a group has no page.
      *
-     * @return list<array{label: string, route: string|null, cluster: bool}>
+     * `$parameters` disambiguates two nodes sharing one route name. General
+     * Settings and Environment Settings are both `admin.system.settings` and
+     * differ only by their `category`, so matching on the name alone would put
+     * whichever came first in the config at the end of both trails.
+     *
+     * @param  array<string, scalar>  $parameters
+     * @return list<array{label: string, route: string|null, parameters: array<string, scalar>, cluster: bool}>
      */
-    public function trailFor(?User $user, string $routeName): array
+    public function trailFor(?User $user, string $routeName, array $parameters = []): array
     {
         foreach ($this->for($user) as $cluster => $nodes) {
-            $found = $this->descend($nodes, $routeName);
+            $found = $this->descend($nodes, $routeName, $parameters);
 
             if ($found !== null) {
                 return array_merge(
-                    [['label' => $cluster, 'route' => null, 'cluster' => true]],
+                    [['label' => $cluster, 'route' => null, 'parameters' => [], 'cluster' => true]],
                     $found,
                 );
             }
@@ -126,24 +132,35 @@ class Navigation
     /**
      * Depth-first search for the node owning a route, collecting the path to it.
      *
+     * A node matches when its route name matches AND every route parameter it
+     * declares matches the current request's. A node declaring no parameters
+     * matches on the name alone, which keeps every existing single-route node
+     * behaving exactly as before.
+     *
      * @param  list<array<string, mixed>>  $nodes
-     * @return list<array{label: string, route: string|null, cluster: bool}>|null
+     * @param  array<string, scalar>  $parameters
+     * @return list<array{label: string, route: string|null, parameters: array<string, scalar>, cluster: bool}>|null
      */
-    private function descend(array $nodes, string $routeName): ?array
+    private function descend(array $nodes, string $routeName, array $parameters): ?array
     {
         foreach ($nodes as $node) {
-            if (($node['route'] ?? null) === $routeName) {
-                return [['label' => $node['label'], 'route' => $node['route'], 'cluster' => false]];
+            if ($this->matches($node, $routeName, $parameters)) {
+                return [[
+                    'label' => $node['label'],
+                    'route' => $node['route'],
+                    'parameters' => (array) ($node['route_parameters'] ?? []),
+                    'cluster' => false,
+                ]];
             }
 
             $children = $node['children'] ?? null;
 
             if (is_array($children)) {
-                $deeper = $this->descend($children, $routeName);
+                $deeper = $this->descend($children, $routeName, $parameters);
 
                 if ($deeper !== null) {
                     return array_merge(
-                        [['label' => $node['label'], 'route' => null, 'cluster' => false]],
+                        [['label' => $node['label'], 'route' => null, 'parameters' => [], 'cluster' => false]],
                         $deeper,
                     );
                 }
@@ -151,6 +168,27 @@ class Navigation
         }
 
         return null;
+    }
+
+    /**
+     * Whether a node is the one currently being viewed.
+     *
+     * @param  array<string, mixed>  $node
+     * @param  array<string, scalar>  $parameters
+     */
+    public function matches(array $node, string $routeName, array $parameters): bool
+    {
+        if (($node['route'] ?? null) !== $routeName) {
+            return false;
+        }
+
+        foreach ((array) ($node['route_parameters'] ?? []) as $key => $value) {
+            if (($parameters[$key] ?? null) !== $value) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

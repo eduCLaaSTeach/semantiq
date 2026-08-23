@@ -2,7 +2,7 @@
 
 The authoritative map of storage and processing boundaries. No secrets, no customer data.
 
-**State at the end of Phase 00.** No Fabric resource is provisioned and no customer business data has entered the system, so most of this register is necessarily empty. The two things that are true today are recorded honestly rather than left blank.
+**State at the end of Release 1 gate 1 (R1.1).** No Fabric resource is provisioned and no customer business data has entered the system, so most of this register is necessarily empty. The two things that are true today are recorded honestly rather than left blank.
 
 ## Organisation policy summary
 
@@ -13,7 +13,7 @@ The authoritative map of storage and processing boundaries. No secrets, no custo
 | Approved storage geographies | Unset. Must be stated before Phase 02 provisioning |
 | Approved processing geographies | Unset. Must be stated before Phase 02 provisioning |
 | Cross-geo processing / storage / conversation history | No, all three. Default and not yet overridable |
-| Last reviewed | 2026-08-23 |
+| Last reviewed | 2026-08-24 |
 
 ## Data-flow register
 
@@ -23,6 +23,8 @@ The authoritative map of storage and processing boundaries. No secrets, no custo
 | SOV-002 | Control plane | `login.microsoftonline.com` | Authorization code, client credential, ID token / Confidential | Not stored by Microsoft on our behalf | Yes, inherent to federated identity | Accepted. No customer business data is sent |
 | SOV-003 | Microsoft Entra / Graph | `users` | Display name, work email, directory object id / Confidential, personal | Control plane | Same question as SOV-001 | Minimal by design: no group membership, no photo, no directory graph copy |
 | SOV-004 | Customer Fabric estate | Nothing | Business metrics and insights | Customer OneLake only | Not applicable | No data source exists in this phase |
+| SOV-005 | Administrator actions | `audit_events` | Actor identity, IP address, redacted change summaries / Internal, personal | cPanel MySQL, **geography unconfirmed** | Same question as SOV-001 | **Not verified.** Added in Release 1 gate 1. The rows are minimised by design - metadata and redacted summaries only, never a payload copy - but the IP address is personal data and inherits SOV-001's open question |
+| SOV-006 | Administrator configuration | `system_settings`, `feature_flags` | Non-secret configuration values / Internal | cPanel MySQL, **geography unconfirmed** | Same question as SOV-001 | **Not verified.** No credential and no customer data may be stored in either table, and the writer refuses a secret-bearing key |
 
 ## High-impact settings
 

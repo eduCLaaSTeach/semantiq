@@ -1428,53 +1428,24 @@ return [
         ],
 
         'System Administration' => [
+            /*
+             * MENU_STRUCTURE.md section 12.1 lists eight children under Platform
+             * Overview. All eight are now SECTIONS OF THE PAGE rather than rail
+             * entries, so this is a leaf.
+             *
+             * The reason is the "no unwanted parts hanging" rule: those eight
+             * are eight views of one question, they are all built and visible on
+             * the one page, and leaving them in the rail with a "Soon" pill
+             * beside something that already exists one click away would be a
+             * lie. The sync table in
+             * doc/execution/ADMIN-FOUNDATION-RELEASE-1-PLAN.md records where
+             * each one landed. Nothing from the menu structure is dropped.
+             */
             [
                 'label' => 'Platform Overview',
                 'icon' => 'i-list-check',
                 'route' => 'admin.overview',
                 'policy' => 'system-admin',
-                'children' => [
-                    [
-                        'label' => 'Setup Progress',
-                        'icon' => 'i-list-check',
-                        'policy' => 'system-admin',
-                    ],
-                    [
-                        'label' => 'Environment Health',
-                        'icon' => 'i-heart-pulse',
-                        'policy' => 'system-admin',
-                    ],
-                    [
-                        'label' => 'Data Health',
-                        'icon' => 'i-clipboard-check',
-                        'policy' => 'system-admin',
-                    ],
-                    [
-                        'label' => 'Intelligence Health',
-                        'icon' => 'i-sparkles',
-                        'policy' => 'system-admin',
-                    ],
-                    [
-                        'label' => 'Security & Sovereignty Status',
-                        'icon' => 'i-shield',
-                        'policy' => 'system-admin',
-                    ],
-                    [
-                        'label' => 'Pending Actions',
-                        'icon' => 'i-hourglass',
-                        'policy' => 'system-admin',
-                    ],
-                    [
-                        'label' => 'Failed Automations',
-                        'icon' => 'i-x-circle',
-                        'policy' => 'system-admin',
-                    ],
-                    [
-                        'label' => 'Recent Changes',
-                        'icon' => 'i-clock',
-                        'policy' => 'system-admin',
-                    ],
-                ],
             ],
             [
                 'label' => 'Fabric Environment',
@@ -1541,16 +1512,21 @@ return [
                     [
                         'label' => 'General Settings',
                         'icon' => 'i-sliders',
+                        'route' => 'admin.system.settings',
+                        'route_parameters' => ['category' => 'general'],
                         'policy' => 'system-admin',
                     ],
                     [
                         'label' => 'Environment Settings',
                         'icon' => 'i-sliders',
+                        'route' => 'admin.system.settings',
+                        'route_parameters' => ['category' => 'environment'],
                         'policy' => 'system-admin',
                     ],
                     [
                         'label' => 'Feature Flags',
                         'icon' => 'i-flag',
+                        'route' => 'admin.system.feature-flags',
                         'policy' => 'system-admin',
                     ],
                     [
@@ -1586,6 +1562,7 @@ return [
                     [
                         'label' => 'Diagnostics',
                         'icon' => 'i-heart-pulse',
+                        'route' => 'admin.system.diagnostics',
                         'policy' => 'system-admin',
                     ],
                 ],

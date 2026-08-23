@@ -5,7 +5,11 @@
     tells nobody anything. The trail IS the way back - there is never a separate
     back link anywhere in the application.
 --}}
-@php($trail = app(App\Support\Navigation::class)->trailFor(auth()->user(), request()->route()?->getName() ?? ''))
+@php($trail = app(App\Support\Navigation::class)->trailFor(
+    auth()->user(),
+    request()->route()?->getName() ?? '',
+    request()->route()?->parameters() ?? [],
+))
 
 @if (count($trail) > 2)
     <nav class="breadcrumb" aria-label="Breadcrumb">
@@ -17,7 +21,7 @@
             @if ($loop->last)
                 <span aria-current="page">{{ $crumb['label'] }}</span>
             @elseif ($crumb['route'])
-                <a href="{{ route($crumb['route']) }}">{{ $crumb['label'] }}</a>
+                <a href="{{ route($crumb['route'], $crumb['parameters'] ?? []) }}">{{ $crumb['label'] }}</a>
             @else
                 <span>{{ $crumb['label'] }}</span>
             @endif
