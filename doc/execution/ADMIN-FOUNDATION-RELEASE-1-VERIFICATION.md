@@ -414,3 +414,137 @@ guard and a message string.
 
 **Gate 2 is met.** R1.3 has not been started and needs review of this batch
 first.
+
+---
+
+# Appendix A - Rollback-safe proof of the audit DELETE trigger
+
+**Status: OUTSTANDING.** SEC-DEC-037's `BEFORE UPDATE` trigger was proved in
+production on 25 August 2026. The `BEFORE DELETE` trigger has NOT been proved,
+and it is the one that matters: a mass delete is the attack the append-only
+control exists to stop.
+
+**Do not run `DELETE FROM audit_events LIMIT 1;` against production.** If the
+trigger is missing or has stopped firing, that statement destroys a real audit
+record, and the record it destroys is evidence.
+
+This procedure proves the same thing without a real row ever being at risk. It
+inserts its own marker inside a transaction, tries to delete only that marker,
+and rolls the whole thing back. Either the trigger blocks the delete - which is
+the pass - or it does not, in which case only the marker was deleted and the
+rollback removes the marker too.
+
+It does not block production acceptance of gate 3. It DOES block go-live.
+
+## Step 0 - confirm rollback will actually work
+
+```sql
+SELECT ENGINE
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'audit_events';
+```
+
+**Expected: `InnoDB`.** If this returns `MyISAM`, STOP. MyISAM does not support
+transactions and the rollback in step 3 would do nothing, which would turn this
+safe procedure into the unsafe one.
+
+## Step 1 - confirm both triggers are still attached
+
+```sql
+SELECT TRIGGER_NAME, ACTION_TIMING, EVENT_MANIPULATION
+FROM information_schema.TRIGGERS
+WHERE TRIGGER_SCHEMA = DATABASE()
+  AND EVENT_OBJECT_TABLE = 'audit_events';
+```
+
+**Expected: two rows** - `audit_events_no_update` (BEFORE UPDATE) and
+`audit_events_no_delete` (BEFORE DELETE). If the DELETE trigger is absent, skip
+to "If the proof fails" below and recreate it before doing anything else.
+
+## Step 2 - record the count
+
+```sql
+SELECT COUNT(*) AS before_count FROM audit_events;
+```
+
+Write the number down. Step 4 compares against it.
+
+## Step 3 - the proof
+
+Paste all four statements into ONE phpMyAdmin SQL box and submit ONCE. Splitting
+them across submissions can put each on its own connection, and the transaction
+would not span them.
+
+```sql
+START TRANSACTION;
+
+INSERT INTO audit_events
+  (organisation_id, occurred_at, actor_user_id, actor_type, actor_label,
+   action, module, resource_type, resource_id, outcome,
+   before_summary, after_summary, reason, ip_address, correlation_id,
+   environment, created_at)
+VALUES
+  (NULL, UTC_TIMESTAMP(), NULL, 'system', 'trigger proof',
+   'audit.trigger.proof', 'Security', 'audit_events', 'delete-trigger-proof',
+   'succeeded', NULL, NULL,
+   'Rollback-safe proof of the BEFORE DELETE trigger. Never committed.',
+   NULL, NULL, 'production', UTC_TIMESTAMP());
+
+DELETE FROM audit_events WHERE action = 'audit.trigger.proof';
+
+ROLLBACK;
+```
+
+**Expected result - this is the PASS:**
+
+```text
+#1644 - audit_events is append only: rows cannot be deleted
+```
+
+phpMyAdmin stops at the failing statement and will not run the `ROLLBACK` that
+follows it. That is fine: the transaction was never committed, and MySQL rolls
+back an open transaction when the connection closes. Submit `ROLLBACK;` on its
+own anyway, so the state is closed deliberately rather than by timeout.
+
+## Step 4 - confirm nothing was left behind
+
+```sql
+SELECT COUNT(*) AS after_count FROM audit_events;
+SELECT COUNT(*) AS proof_rows FROM audit_events WHERE action = 'audit.trigger.proof';
+```
+
+**Expected:** `after_count` equals the number from step 2, and `proof_rows` is
+`0`. If `proof_rows` is not 0, the marker committed - delete it is not possible
+while the trigger stands, so drop the trigger, delete the marker, recreate the
+trigger, and re-run this appendix from step 1.
+
+## If the proof fails
+
+A failure here means step 3's `DELETE` **succeeded** with no `#1644`. The
+append-only guarantee is not in force at the database, and only the model hooks
+are protecting the trail - which SEC-DEC-021 already established do not fire on
+a mass delete.
+
+1. Run `ROLLBACK;` immediately.
+2. Run step 4 and confirm `proof_rows` is `0`.
+3. Recreate the trigger:
+
+```sql
+CREATE TRIGGER audit_events_no_delete
+BEFORE DELETE ON audit_events
+FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'audit_events is append only: rows cannot be deleted.';
+```
+
+4. Re-run this appendix from step 1.
+5. Record the gap in `doc/context/SECURITY_PRIVACY_DECISIONS.md` against
+   SEC-DEC-037, including how long the trigger was absent if that can be
+   established.
+
+## When to re-run this
+
+Per SEC-DEC-039, triggers belong to the table and do not survive it. Re-run this
+appendix after any operation that rebuilds `audit_events`, after any database
+credential rotation that recreates the application's database user
+(SEC-DEC-040), and as part of go-live acceptance.
