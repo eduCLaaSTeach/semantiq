@@ -46,7 +46,7 @@ class SignInTest extends TestCase
             ->assertOk()
             ->assertSee('Sign in with Microsoft')
             ->assertSee('Work email')
-            ->assertSee('CLaaS SemantiQ');
+            ->assertSee('SemantIQ');
     }
 
     #[Test]

@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\BusinessDomain;
 use App\Enums\Role;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -28,6 +30,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $entra_tenant_id
  * @property Carbon|null $last_signed_in_at
  * @property Role $role
+ * @property bool $is_auditor
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -46,7 +49,57 @@ class User extends Authenticatable
             'last_signed_in_at' => 'datetime',
             'password' => 'hashed',
             'role' => Role::class,
+            'is_auditor' => 'boolean',
         ];
+    }
+
+    /**
+     * The business domains this account may see.
+     */
+    public function domainEntitlements(): HasMany
+    {
+        return $this->hasMany(DomainEntitlement::class);
+    }
+
+    /**
+     * Whether this account may see a business domain.
+     *
+     * Deliberately independent of the tier. ROLE_MODEL.md section 1 is explicit
+     * that a role alone never grants business data, and section 4 spells out the
+     * consequence: a Platform Administrator holds no domains by default and
+     * sees only the technical data needed to operate the platform. Letting the
+     * top tier imply every domain would quietly undo that.
+     */
+    public function isEntitledTo(BusinessDomain $domain): bool
+    {
+        return $this->domainEntitlements()
+            ->where('domain', $domain->value)
+            ->exists();
+    }
+
+    /**
+     * Every domain this account may see, in the enum's own order so the
+     * interface does not reorder itself as entitlements are granted.
+     *
+     * @return list<BusinessDomain>
+     */
+    public function entitledDomains(): array
+    {
+        /*
+         * pluck() runs the model's casts, so this comes back as BusinessDomain
+         * instances rather than strings. Comparing them against ->value with a
+         * strict check silently matched nothing, and the symptom was a domain
+         * card grid that stayed empty for somebody who was properly entitled.
+         */
+        $held = $this->domainEntitlements()
+            ->pluck('domain')
+            ->map(fn (BusinessDomain|string $domain): string => $domain instanceof BusinessDomain ? $domain->value : $domain)
+            ->all();
+
+        return array_values(array_filter(
+            BusinessDomain::cases(),
+            fn (BusinessDomain $domain): bool => in_array($domain->value, $held, true),
+        ));
     }
 
     /**

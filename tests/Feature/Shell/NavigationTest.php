@@ -46,7 +46,7 @@ class NavigationTest extends TestCase
     {
         config()->set('navigation.clusters', [
             'Workspace' => [
-                ['label' => 'Dashboard', 'icon' => 'i-grid', 'route' => 'dashboard', 'policy' => 'workspace'],
+                ['label' => 'Dashboard', 'icon' => 'i-grid', 'route' => 'home', 'policy' => 'workspace'],
                 [
                     'label' => 'Sources', 'icon' => 'i-grid', 'policy' => 'workspace',
                     'children' => [

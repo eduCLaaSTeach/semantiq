@@ -5,32 +5,45 @@ declare(strict_types=1);
 namespace App\Enums;
 
 /**
- * The five-tier role baseline from the reference template, section 7.
+ * The platform role, as one cumulative tier ladder.
  *
- * Tiers are cumulative and ordered highest first: a System Administrator
- * satisfies every check an Administrator satisfies, and so on down. The backing
- * value is the template's tier code rather than the display label, so an
- * authorisation check reads the same here as it does in the specification and a
- * relabelling never becomes a data migration.
+ * Six tiers rather than the design template's five. The template permits
+ * extending the ladder for a documented per-app reason, and doc/ROLE_MODEL.md
+ * is that reason: it separates a Domain Owner, who approves a domain's KPIs,
+ * glossary and semantic definitions, from an Analyst, who explores and saves
+ * analysis inside domains somebody else approved. Collapsing the two onto one
+ * rung would make every approval check a special case.
  *
- * Labels are the template's own baseline names. The template says confirmed
- * labels live in the App Definition and are renamed only for a documented
- * per-app reason; this project has recorded none, so the baseline stands.
+ * Two things this enum deliberately does NOT model:
+ *
+ *  - **Auditor.** It reads audit trails and governance evidence while holding
+ *    no operational rights, so it is not a rung on a ladder at all - it sits
+ *    beside one. It is a capability flag on the account (`users.is_auditor`).
+ *    Making it a tier would either grant it operational power it must not have
+ *    or deny it the Compliance cluster it exists for.
+ *  - **Business-domain access.** ROLE_MODEL.md section 1 is explicit that a
+ *    role alone never grants business data. Domains are a separate dimension
+ *    (`domain_entitlements`), so a System Administrator holds no Sales or HR
+ *    data by virtue of being one.
+ *
+ * The backing value is the tier code and is persisted, so relabelling a role in
+ * the interface never becomes a data migration.
  */
 enum Role: string
 {
     case SystemAdmin = 'system_admin';
     case Admin = 'admin';
-    case Collaborator = 'team';
-    case Contributor = 'self';
-    case Viewer = 'self_view';
+    case DomainOwner = 'domain_owner';
+    case Analyst = 'analyst';
+    case Contributor = 'contributor';
+    case Viewer = 'viewer';
 
     /**
      * The tier a new account starts on.
      *
-     * Viewer, deliberately. Someone who authenticates against the directory but
-     * has never been given a role gets the least the system can give them and is
-     * promoted on purpose, rather than arriving with access nobody granted.
+     * Viewer. Someone who authenticates against the directory but has been
+     * granted nothing gets the least the system can give, and is promoted
+     * deliberately rather than arriving with access nobody decided on.
      */
     public static function default(): self
     {
@@ -42,32 +55,46 @@ enum Role: string
         return match ($this) {
             self::SystemAdmin => 'System Administrator',
             self::Admin => 'Administrator',
-            self::Collaborator => 'Collaborator',
+            self::DomainOwner => 'Domain Owner',
+            self::Analyst => 'Analyst',
             self::Contributor => 'Contributor',
             self::Viewer => 'Viewer',
         };
     }
 
     /**
-     * Rank within the cumulative order, higher meaning more authority.
+     * What this tier is for, in one line, for a role picker.
+     */
+    public function purpose(): string
+    {
+        return match ($this) {
+            self::SystemAdmin => 'Operates the SemantIQ platform itself.',
+            self::Admin => 'Administers the organisation and its data environment.',
+            self::DomainOwner => 'Owns a business intelligence domain and approves its definitions.',
+            self::Analyst => 'Explores and analyses approved business information.',
+            self::Contributor => 'Works with assigned insights, alerts and decisions.',
+            self::Viewer => 'Reads authorised business intelligence.',
+        };
+    }
+
+    /**
+     * Rank in the cumulative order, higher meaning more authority.
      *
-     * Comparison only, never persisted, so reordering the enum cannot silently
-     * change the meaning of a value already in the database.
+     * Comparison only, never persisted, so reordering the cases cannot change
+     * the meaning of a value already stored.
      */
     public function rank(): int
     {
         return match ($this) {
-            self::SystemAdmin => 5,
-            self::Admin => 4,
-            self::Collaborator => 3,
+            self::SystemAdmin => 6,
+            self::Admin => 5,
+            self::DomainOwner => 4,
+            self::Analyst => 3,
             self::Contributor => 2,
             self::Viewer => 1,
         };
     }
 
-    /**
-     * Whether this tier carries at least the authority of the given one.
-     */
     public function atLeast(self $minimum): bool
     {
         return $this->rank() >= $minimum->rank();

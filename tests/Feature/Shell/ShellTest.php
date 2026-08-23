@@ -35,8 +35,8 @@ class ShellTest extends TestCase
         $this->actingAs($this->personOn(Role::SystemAdmin))
             ->get('/')
             ->assertOk()
-            ->assertSee('CLaaS SemantiQ')
-            ->assertSee('Dashboard')
+            ->assertSee('SemantIQ')
+            ->assertSee('Home')
             // The rail owns the corner and the top bar spans only the main column.
             ->assertSee('rail-container', false)
             ->assertSee('top-nav', false)
@@ -76,7 +76,7 @@ class ShellTest extends TestCase
         $response->assertDontSee('System Administration')
             ->assertDontSee('Application Administration')
             ->assertDontSee('Compliance')
-            ->assertDontSee('Sign-in methods');
+            ->assertDontSee('Fabric Environment');
     }
 
     #[Test]
@@ -84,7 +84,7 @@ class ShellTest extends TestCase
     {
         $response = $this->actingAs($this->personOn(Role::SystemAdmin))->get('/');
 
-        $response->assertSee('Sign-in methods')
+        $response->assertSee('Fabric Environment')
             ->assertSee('aria-disabled="true"', false)
             ->assertSee('Soon');
     }

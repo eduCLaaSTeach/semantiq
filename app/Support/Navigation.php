@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Enums\BusinessDomain;
 use App\Enums\Role;
 use App\Models\User;
 
@@ -53,23 +54,48 @@ class Navigation
     /**
      * Whether this person may use a node tagged with the given policy.
      *
+     * Three things can be required, and ALL of them must hold:
+     *
+     *  1. A minimum tier.
+     *  2. Or, where the policy says so, the Auditor capability instead. An
+     *     auditor reads compliance evidence without holding the tier that
+     *     normally comes with it, which is the whole reason it is a flag
+     *     rather than a rung.
+     *  3. A business-domain entitlement, when the policy names a domain.
+     *     ROLE_MODEL.md section 1: a role alone never grants business data, so
+     *     a System Administrator sees no Sales figures without being entitled
+     *     to Sales - being the highest tier does not help.
+     *
      * An unknown policy denies. A node naming a policy that does not exist is a
      * mistake, and the safe reading of a mistake is no access: the alternative
      * turns a typo into a grant nobody notices until it matters.
      */
     public function allows(?User $user, ?string $policy): bool
     {
-        if ($user === null) {
+        if ($user === null || $policy === null) {
             return false;
         }
 
-        $minimum = config('navigation.policies.'.$policy);
+        $rule = config('navigation.policies.'.$policy);
 
-        if (! $minimum instanceof Role) {
+        if (! is_array($rule) || ! ($rule['min'] ?? null) instanceof Role) {
             return false;
         }
 
-        return $user->hasAtLeast($minimum);
+        $byTier = $user->hasAtLeast($rule['min']);
+        $byAudit = ($rule['or_auditor'] ?? false) === true && $user->is_auditor;
+
+        if (! $byTier && ! $byAudit) {
+            return false;
+        }
+
+        $domain = $rule['domain'] ?? null;
+
+        if ($domain instanceof BusinessDomain && ! $user->isEntitledTo($domain)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -147,12 +173,27 @@ class Navigation
             if (is_array($children)) {
                 $children = $this->filter($children, $user);
 
-                // A group whose children were all filtered away goes with them.
                 if ($children === []) {
-                    continue;
-                }
+                    /*
+                     * A pure group whose children were all filtered away goes
+                     * with them: a header opening onto nothing is worse than no
+                     * header.
+                     *
+                     * A node that is ALSO a page is different. My Intelligence
+                     * is the case: someone entitled to no domains loses every
+                     * child, but the page itself is exactly where they are told
+                     * that domains are granted separately. Dropping it would
+                     * delete the one screen that explains the empty rail. It
+                     * degrades to a leaf instead.
+                     */
+                    if (($node['route'] ?? null) === null) {
+                        continue;
+                    }
 
-                $node['children'] = $children;
+                    unset($node['children']);
+                } else {
+                    $node['children'] = $children;
+                }
             }
 
             $kept[] = $node;

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Auth\MicrosoftSignInController;
 use App\Http\Controllers\Auth\SignInController;
+use App\Http\Controllers\Pages\AdminOverviewController;
+use App\Http\Controllers\Pages\HomeController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -49,6 +51,27 @@ Route::post('/sign-out', [SignInController::class, 'signOut'])
  * here, or a guessed URL walks straight past the navigation.
  */
 Route::middleware('auth')->group(function (): void {
-    Route::view('/', 'pages.dashboard')->name('dashboard');
+    /*
+     * The business experience. Home is the landing page: a business user lands
+     * in business intelligence, never in Fabric setup.
+     */
+    Route::get('/', [HomeController::class, 'home'])
+        ->middleware('policy:workspace')
+        ->name('home');
+
+    Route::get('/intelligence', [HomeController::class, 'intelligence'])
+        ->middleware('policy:workspace')
+        ->name('intelligence');
+
     Route::view('/profile', 'pages.profile')->name('profile');
+
+    /*
+     * The privileged control plane. The policy is enforced HERE and not only in
+     * the sidebar: a filtered rail hides a link and does nothing at all about a
+     * typed URL. ROLE_MODEL.md section 5, and a named Phase 00 acceptance
+     * criterion.
+     */
+    Route::get('/admin', AdminOverviewController::class)
+        ->middleware('policy:system-admin')
+        ->name('admin.overview');
 });
