@@ -96,7 +96,17 @@ The invariant this gate exists for: **the last active System Administrator canno
 ### R1.3 - Gate 3, Security
 
 **Features:** ADM-009 Authentication Policy, ADM-010 Session Policy, ADM-011 API Security, ADM-012 Secret References.
-**Tables:** `security_policies`, `session_policies`, `secret_references`.
+**Tables:** `security_policies`, `secret_references`.
+
+**Detailed plan: `doc/execution/R1.3-GATE-3-SECURITY-PLAN.md`.** The two lines
+here were not enough to build from. Three of the four features turned out to
+have prerequisites this repository does not currently meet, and the detailed
+plan records five architectural decisions that had to be settled first.
+
+One of them changes this table list. `session_policies` is dropped: session
+policy and authentication policy are one key/value store with two screens over
+it, and splitting it by subject matter would double the machinery for nothing.
+Recorded as decision D1 rather than done silently.
 
 ### R1.4 - Gate 4, Governance
 
