@@ -312,6 +312,7 @@ Business help must use business terminology. Fabric-specific setup help belongs 
 Administration
 |-- Platform Overview
 |-- Organisation & Users
+|-- Security
 |-- Fabric Environment
 |-- Data Sources
 |-- Data Engineering
@@ -350,10 +351,17 @@ Organisation & Users
 |-- Teams
 |-- Users
 |-- Roles
+|-- Permissions
 |-- Domain Entitlements
 |-- Security Groups
 `-- Access Reviews
 ```
+
+`Permissions` was added by DEC-001, closing gap M3: ADM-007 requires the screen
+and this list did not carry it.
+
+`Security Groups` has no feature specifying what it shows. It stays in the tree
+as an unbuilt destination rather than being invented. Gap M7 remains open.
 
 ### 12.3 Fabric Environment
 
@@ -551,13 +559,43 @@ System Configuration
 |-- Environment Settings
 |-- Feature Flags
 |-- Integrations
-|-- Secret References
 |-- API Registry
 |-- Background Jobs
 |-- Scheduler
 |-- Context Registers
 `-- Diagnostics
 ```
+
+`Secret References` moved from here to Security (12.16) by DEC-001. It belongs
+with the policy screens that govern what this application will allow, not with
+the settings that describe how it is set up. There is no duplicate entry.
+
+### 12.16 Security
+
+```text
+Security
+|-- Security Overview
+|-- Authentication Policy
+|-- Session Policy
+|-- API Security
+`-- Secret References
+```
+
+Added by DEC-001, closing gap M1. This is the authoritative home for ADM-009
+Authentication Policy, ADM-010 Session Policy, ADM-011 API Security and ADM-012
+Secret References, none of which had a home in this document before.
+
+Route family:
+
+```text
+/admin/security
+/admin/security/authentication
+/admin/security/sessions
+/admin/security/api
+/admin/security/secrets
+```
+
+Implemented in Release 1 gate 3. The group renders as unbuilt until then.
 
 ## 13. Role-Aware Navigation Examples
 
@@ -630,6 +668,7 @@ Business menus as entitled, plus:
 Administration
   Platform Overview
   Organisation & Users
+  Security
   Fabric Environment
   Data Sources
   Data Engineering

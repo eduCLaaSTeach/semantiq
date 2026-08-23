@@ -457,13 +457,13 @@ These are gaps between the two documents. None is fixed in R1.1, because none be
 
 | # | Gap | Detail | Needed by |
 |---|---|---|---|
-| M1 | **No home for security policy screens** | ADM-009 Authentication Policy, ADM-010 Session Policy and ADM-011 API Security have no node anywhere in MENU_STRUCTURE section 12. Its Governance group (12.10) is about business governance, and System Configuration (12.15) is about application settings. Neither is right | Gate 3 |
+| M1 | ~~No home for security policy screens~~ **RESOLVED** | DEC-001, approved 24 August 2026. A new top-level `Security` group holds ADM-009, ADM-010, ADM-011 and ADM-012. Secret References moved there from System Configuration, with no duplicate node. The group is authored in the rail now and renders as unbuilt; the screens are R1.3 | Resolved |
 | M2 | **Audit is one leaf, ADM wants four views** | MENU_STRUCTURE has a single "Audit Logs" leaf under Governance. ADM-013 asks for User Activity, Administrative Changes, Security Changes and Configuration Changes. These may be filters on one screen rather than four nodes, which is the cheaper answer, but it is a decision | Gate 4 |
-| M3 | **No Permissions node** | MENU_STRUCTURE 12.2 lists Roles but not Permissions. ADM-007 needs a screen | Gate 2 |
+| M3 | ~~No Permissions node~~ **RESOLVED** | DEC-001. `Permissions` is now a first-class leaf under Organisation & Users, and the screen is built in R1.2 | Resolved |
 | M4 | **No Connection Tests node** | ADM-020 Connection Test Centre has no menu entry. 12.15 has "Integrations" only | Gate 5 |
 | M5 | **Entra appears in two places** | MENU_STRUCTURE puts "SSO and Entra Configuration" under Fabric Environment (12.3); ADM-018 puts Microsoft Entra under Integrations. One record, two plausible homes | Gate 5 |
 | M6 | **"Application Health" would duplicate Platform Overview** | ADM section 2 lists System > Application Health. ADM-001 already covers it and MENU_STRUCTURE has no such node. Treated as covered, and no duplicate node was added | Resolved in R1.1 |
-| M7 | **Security Groups has no feature** | MENU_STRUCTURE 12.2 lists "Security Groups". No ADM feature specifies it. It is presumably Entra group mapping, but nothing says so | Gate 2 |
+| M7 | **Security Groups has no feature** | MENU_STRUCTURE 12.2 lists "Security Groups". No ADM feature specifies it. It is presumably Entra group mapping, but nothing says so. **Confirmed still open at the end of R1.2**: the specification was re-read and defines nothing, so the node stays visibly deferred rather than being invented | Open. Needs a requirement, not an implementation |
 | M8 | **Context Registers has no feature** | MENU_STRUCTURE 12.15 lists "Context Registers". No ADM feature specifies what that screen shows | Gate 7 |
 
 ### 21.4 What R1.1 changed in the navigation
@@ -491,3 +491,45 @@ Applied to R1.1 and to every change after it.
 3. **Clear definitions in the code file.** Every class carries a docblock saying what it is for, what invariant it holds and what a reviewer must not break. Comments explain intent and consequence, not syntax.
 4. **Verified against security standards.** Each change states what it exposes, to whom, and what stops it exposing more. For R1.1 that is: no credential in a table, a log or a page; fail-closed organisation scope; an append-only trail; denials audited; every gate enforced at the route as well as in the rail.
 
+---
+
+## 23. Decisions taken during R1.2
+
+### D5. Access Reviews are server-rendered. This changes D4.
+
+D4 chose React for ADM-008, to hold a session's worth of decisions in client state before one submit. Building it out, that is the wrong shape for this particular screen.
+
+Every decision in an access review is an **auditable event**. Batching a session's decisions into one submit means the trail records who pressed the button rather than who decided what and when, and a browser closed mid-review loses every decision already made. Each decision therefore posts on its own and is audited as it is made. That is better evidence and more robust, and it avoids introducing a second runtime in the same change as the authorization core.
+
+**D4 still stands for ADM-020 Connection Test Centre in gate 5**, where the state genuinely is transient: a test runs, streams progress, and the result is not evidence anybody decides on. React is still unused in the repository as of R1.2.
+
+### D6. There is no `permissions` table. The catalogue is code.
+
+Section 29 lists `permissions` alongside `role_permissions`. Only the second is built.
+
+The permission catalogue lives in `App\Modules\Identity\Support\PermissionRegistry`, for the same reason the settings catalogue lives in `config/platform.php`: a permission an administrator can invent is not a permission, because nothing in the codebase checks a key that no line of code names. A row for `admin.invented.thing` would grant exactly nothing while appearing on screen as though it granted something.
+
+`role_permissions` stores the key as a string, validated against the registry both when written and when checked. `VAL-PERM-DENY-001` - an unknown key denies - is then structural rather than a rule somebody has to remember, and a permission removed from the code stops granting on deploy with no data migration.
+
+**Trade-off accepted:** no foreign key on `permission_key`, so a stale row can outlive its declaration. It is harmless, because a stale row denies.
+
+### D7. A permission has a ceiling AND an auto-grant tier. Found by a test.
+
+The first implementation gave each permission one `minimumTier`, used both as the ceiling and as the tier that holds it automatically. A test written for "a disabled role stops granting" failed, and the reason turned out to be structural: with those two the same, the effective set is `(defaults union roleGrants) intersect defaults`, which is always exactly the defaults. **An assigned role could never add anything. Roles were decoration.**
+
+A permission now declares:
+
+- `minimumTier` - the CEILING. Nobody below it holds it by any route.
+- `grantedFrom` - the tier that holds it AUTOMATICALLY, defaulting to the ceiling.
+
+Where `grantedFrom` is higher than `minimumTier` the permission is opt-in: a tier below the auto-grant tier can hold it only through a role. That gap is what makes the role table load-bearing.
+
+`admin.roles.manage` is the one opt-in permission in the shipped catalogue - ceiling Administrator, auto-granted from System Administrator. Editing what a role may do is how somebody quietly widens their own authority, so it is not something a tier carries automatically.
+
+### D8. `users` carries an explicit organisation scope, not a global one.
+
+Every other organisation-owned table uses the `BelongsToOrganisation` global scope, which fails closed. `users` does not, and the difference is deliberate.
+
+`users` is the authentication table: Laravel's user provider loads an account by id on every request. A global scope that fails closed there turns "no organisation context resolved" into "nobody in the world can sign in, including the administrator who would fix it". Fail-closed is the right default for reading data and the wrong one for the lookup that decides who you are.
+
+The boundary is enforced instead at every place that LISTS or ADMINISTERS accounts, through `User::scopeInCurrentOrganisation()`, which fails closed in exactly the same way. Recorded as SEC-DEC-022, and `CrossOrganisationTest` asserts one organisation cannot see another's accounts through the registry or reach one by id.

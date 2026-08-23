@@ -7,6 +7,7 @@ namespace App\Support;
 use App\Enums\BusinessDomain;
 use App\Enums\Role;
 use App\Models\User;
+use App\Modules\Identity\Support\Authorization;
 
 /**
  * Builds the sidebar for one person, and answers whether they may reach a node.
@@ -65,6 +66,12 @@ class Navigation
      *     ROLE_MODEL.md section 1: a role alone never grants business data, so
      *     a System Administrator sees no Sales figures without being entitled
      *     to Sales - being the highest tier does not help.
+     *  4. A PERMISSION, when the policy names one. Added in Release 1 gate 2.
+     *     The tier stays the coarse gate and the permission is the fine one,
+     *     and BOTH must hold - plan decision D2.
+     *
+     * A suspended account is refused everything here as well as at sign-in,
+     * because a live session can outlive the moment somebody was disabled.
      *
      * An unknown policy denies. A node naming a policy that does not exist is a
      * mistake, and the safe reading of a mistake is no access: the alternative
@@ -82,6 +89,15 @@ class Navigation
             return false;
         }
 
+        /*
+         * A disabled, locked or expired account reaches nothing, whatever its
+         * tier says. Checked before the tier so the answer does not depend on
+         * which rung they were standing on when they were suspended.
+         */
+        if (! $user->status->permitsAuthentication()) {
+            return false;
+        }
+
         $byTier = $user->hasAtLeast($rule['min']);
         $byAudit = ($rule['or_auditor'] ?? false) === true && $user->is_auditor;
 
@@ -92,6 +108,16 @@ class Navigation
         $domain = $rule['domain'] ?? null;
 
         if ($domain instanceof BusinessDomain && ! $user->isEntitledTo($domain)) {
+            return false;
+        }
+
+        /*
+         * The fine gate. An unknown permission denies inside Authorization for
+         * the same reason an unknown policy denies here.
+         */
+        $permission = $rule['permission'] ?? null;
+
+        if (is_string($permission) && ! app(Authorization::class)->allows($user, $permission)) {
             return false;
         }
 

@@ -652,6 +652,9 @@ svg { fill: none; }
     line-height: 1.4;
     background: var(--badge-neutral-bg);
     color: var(--badge-neutral-fg);
+    /* A pill never breaks mid-phrase. "No access" wrapping to "No / access" in
+       a narrow table column reads as two states rather than one. */
+    white-space: nowrap;
 }
 
 .badge-success { background: var(--badge-success-bg); color: var(--badge-success-fg); }
@@ -1687,3 +1690,70 @@ svg { fill: none; }
 .health-summary-text { display: flex; flex-direction: column; gap: 2px; }
 .health-summary-title { font-family: var(--font-heading); font-size: var(--text-h3); font-weight: 600; }
 .health-summary-note { font-size: var(--text-small); color: var(--text-muted); }
+
+/* --- Identity and access screens, Release 1 gate 2 ---------------------- */
+
+/* The search and filter bar above a list, per the design template's list /
+   index archetype. Its own row so the table below keeps the card's full width. */
+.list-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--card-border);
+}
+
+.list-toolbar .field { flex: 1 1 220px; max-width: 320px; gap: var(--space-1); }
+.list-toolbar .field-message { display: none; }
+
+/* Pagination. Numbered and canonical per the template; the current page is a
+   current-item marker rather than the group's solid action, so it never
+   competes with a real button on the page. */
+.pager { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); flex-wrap: wrap; }
+.pager-info { font-size: var(--text-small); color: var(--text-muted); }
+.pager-controls { display: flex; align-items: center; gap: var(--space-1); }
+
+/* A hierarchy rendered inside a table cell: an indent per level, drawn with a
+   rule rather than with whitespace so depth survives a narrow column. */
+.tree-indent { display: inline-block; border-left: 1px solid var(--card-border-strong); margin-right: var(--space-2); height: 1em; vertical-align: middle; }
+
+/* Two columns on a detail page: the record on the left, its access on the
+   right. Collapses to one column well before the shell's own breakpoint,
+   because two 300px columns are worse than one 620px column. */
+.detail-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+
+@media (min-width: 1100px) {
+    .detail-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+/* A definition list for a record's own fields. Label above value, because a
+   two-column dl wraps badly at every width worth supporting. */
+.record-list { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); }
+.record-row { display: flex; flex-direction: column; gap: 2px; }
+.record-label { font-size: var(--text-micro); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.record-value { font-size: var(--text-body); }
+
+/* One inline action form inside a panel: a select, an optional reason, a
+   button. Used by every access-granting control on the account screen. */
+.inline-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); padding: var(--space-3); }
+.inline-form .field { flex: 1 1 180px; gap: var(--space-1); }
+.inline-form .field-message { display: none; }
+
+/* The permission chooser: one block per module, checkboxes within. */
+.permission-module { padding: var(--space-3); border-bottom: 1px solid var(--card-border); }
+.permission-module:last-child { border-bottom: 0; }
+.permission-module-name { font-family: var(--font-heading); font-size: var(--text-h3); font-weight: 600; margin-bottom: var(--space-2); }
+.permission-choice { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--card-border); }
+.permission-choice:last-child { border-bottom: 0; }
+.permission-choice input { margin-top: 3px; }
+.permission-choice-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.permission-choice-name { font-size: var(--text-body); font-weight: 600; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+/* A permission the viewer cannot grant. Shown rather than hidden, with the
+   reason, so an administrator can see that it exists and why it is out of
+   reach instead of wondering whether the screen is broken. */
+.permission-choice.is-locked { opacity: 0.55; }
+
+/* A row of pills: the domains a person is entitled to, the roles they hold. */
+.pill-row { display: flex; flex-wrap: wrap; gap: var(--space-1); }

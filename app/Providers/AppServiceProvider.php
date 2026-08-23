@@ -5,7 +5,14 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Modules\Audit\Support\AuditLogger;
+use App\Modules\Identity\Policies\SystemAdministratorGuard;
+use App\Modules\Identity\Services\AccessReviewService;
+use App\Modules\Identity\Services\RoleRegistry;
+use App\Modules\Identity\Services\StructureRegistry;
+use App\Modules\Identity\Services\UserRegistry;
+use App\Modules\Identity\Support\Authorization;
 use App\Modules\Identity\Support\OrganisationContext;
+use App\Modules\Identity\Support\PermissionRegistry;
 use App\Modules\Platform\Support\FeatureFlags;
 use App\Modules\Platform\Support\HealthProbe;
 use App\Modules\Platform\Support\SystemSettings;
@@ -38,6 +45,27 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(SystemSettings::class);
         $this->app->singleton(FeatureFlags::class);
         $this->app->singleton(HealthProbe::class);
+
+        /*
+         * Release 1 gate 2.
+         *
+         * `PermissionRegistry` and `Authorization` are singletons because both
+         * memoise, and a second instance would answer an authorization
+         * question from a stale set - a screen showing access that the check
+         * would refuse, or worse, the other way round.
+         *
+         * The services and the guard are registered so they resolve the same
+         * organisation context, authorization and audit logger as everything
+         * else. A second audit logger would write to the same table but with a
+         * different correlation id.
+         */
+        $this->app->singleton(PermissionRegistry::class);
+        $this->app->singleton(Authorization::class);
+        $this->app->singleton(SystemAdministratorGuard::class);
+        $this->app->singleton(UserRegistry::class);
+        $this->app->singleton(RoleRegistry::class);
+        $this->app->singleton(StructureRegistry::class);
+        $this->app->singleton(AccessReviewService::class);
     }
 
     public function boot(): void

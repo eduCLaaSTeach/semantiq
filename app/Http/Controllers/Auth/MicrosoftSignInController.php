@@ -6,12 +6,17 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Audit\Enums\AuditOutcome;
+use App\Modules\Audit\Support\AuditLogger;
+use App\Modules\Identity\Support\OrganisationContext;
+use App\Modules\Platform\Enums\LifecycleStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 /**
  * Sign in with Microsoft Entra ID.
@@ -55,6 +60,10 @@ class MicrosoftSignInController extends Controller
     private const CONNECT_TIMEOUT_SECONDS = 5;
 
     private const REQUEST_TIMEOUT_SECONDS = 15;
+
+    public function __construct(
+        private readonly AuditLogger $audit,
+    ) {}
 
     /**
      * Start the flow: send the person to Microsoft.
@@ -162,10 +171,59 @@ class MicrosoftSignInController extends Controller
             );
         }
 
+        /*
+         * The directory proved who they are. Whether this application still
+         * lets them in is a separate question - VAL-USER-DISABLED-001 and
+         * VAL-USER-WINDOW-001 - and it is asked here rather than left to
+         * Entra, because disabling somebody in SemantIQ has to work even when
+         * their directory account is untouched.
+         *
+         * THIS PATH DELIBERATELY SAYS WHY, AND THE CREDENTIAL FORM DOES NOT.
+         * The two are not inconsistent; they are answering different questions
+         * (SEC-DEC-032).
+         *
+         * On the credential form, nobody has proved anything yet. Saying "that
+         * account is disabled" would confirm to an anonymous visitor that the
+         * address belongs to a real person here and tell them what happened to
+         * them - account enumeration, which is why that path returns one
+         * sentence for a wrong password, an unknown address and a suspended
+         * account alike.
+         *
+         * Here, Microsoft has ALREADY authenticated this person and this is
+         * their own account. Telling somebody the state of their own access
+         * enumerates nothing: they cannot learn anything about anyone but
+         * themselves, and the alternative sends a contractor whose access
+         * expired yesterday to a help desk to be told what the screen could
+         * have said. So the state is named, and the person is told who to ask.
+         *
+         * What is still withheld is anything about ANOTHER account, and any
+         * detail of why an administrator made the change. The reason recorded
+         * in the trail may be fuller than the sentence shown.
+         */
+        if (! $user->mayAuthenticate()) {
+            $this->audit->record(
+                action: 'auth.login.failed',
+                module: 'Security',
+                outcome: AuditOutcome::Denied,
+                resourceType: 'user',
+                resourceId: $user->getKey(),
+                reason: 'Account is '.$user->status->label().' or outside its access window.',
+            );
+
+            return $this->fail($this->accessDeniedMessage($user), 'account_not_active');
+        }
+
         Auth::login($user, remember: true);
 
         // A session fixed before authentication must not become the signed-in one.
         $request->session()->regenerate();
+
+        $this->audit->record(
+            action: 'auth.login.succeeded',
+            module: 'Security',
+            resourceType: 'user',
+            resourceId: $user->getKey(),
+        );
 
         return redirect()->intended('/');
     }
@@ -177,19 +235,83 @@ class MicrosoftSignInController extends Controller
      * an existing local account adoptable by the directory the first time that
      * person signs in with Microsoft, instead of colliding on the unique email.
      */
+    /**
+     * What to tell somebody Microsoft authenticated but SemantIQ will not admit.
+     *
+     * Names the actual state, per SEC-DEC-032. Their identity is proven and
+     * this is their own account, so this enumerates nothing - and "your access
+     * ended on the 3rd" is the difference between a person who knows what to
+     * ask for and a person who opens a support ticket saying "it does not work".
+     *
+     * Every branch ends with who to approach, because a message that states a
+     * problem and no next step is a message that generates a support call.
+     */
+    private function accessDeniedMessage(User $user): string
+    {
+        if ($user->accessWindowHasClosed()) {
+            return 'Your access to SemantIQ ended on '
+                .$user->access_end->toFormattedDateString()
+                .'. Ask an administrator to extend it.';
+        }
+
+        return match ($user->status) {
+            LifecycleStatus::Invited => 'Your SemantIQ account has not been activated yet. Ask an administrator to activate it.',
+            LifecycleStatus::Disabled => 'Your SemantIQ access has been disabled. Ask an administrator to restore it.',
+            LifecycleStatus::Locked => 'Your SemantIQ account is locked. Ask an administrator to unlock it.',
+            LifecycleStatus::Expired => 'Your SemantIQ access has expired. Ask an administrator to extend it.',
+            /* A state that permits authentication should never reach here. If
+             * it does, something is wrong with the check rather than with the
+             * account, and the generic sentence is the honest answer. */
+            default => 'Your access to SemantIQ is not currently active. Contact an administrator.',
+        };
+    }
+
     private function resolve(string $objectId, string $email, string $name, ?string $tenantId): User
     {
         $user = User::query()->where('entra_object_id', $objectId)->first()
             ?? User::query()->where('email', $email)->first()
             ?? new User;
 
-        $user->forceFill([
+        $attributes = [
             'name' => $name !== '' ? $name : $email,
             'email' => $email,
             'entra_object_id' => $objectId,
             'entra_tenant_id' => $tenantId,
+            'authentication_source' => 'entra',
             'last_signed_in_at' => now(),
-        ])->save();
+        ];
+
+        /*
+         * A NEW account must be PLACED in an organisation, and this is the only
+         * place in the application that creates one without an administrator
+         * present to say which.
+         *
+         * An unplaced account is unmanageable: every mutation in `UserRegistry`
+         * refuses a subject that does not belong to the current organisation
+         * (VAL-ORG-SUBJECT-001), so an administrator could never disable, place
+         * or entitle somebody who had signed in through Microsoft. That is not
+         * a theoretical gap - it was the state of this method until the guard
+         * exposed it.
+         *
+         * On the single-organisation deployment baseline the context resolves
+         * to the one active organisation, which is the right answer. On an
+         * instance holding more than one it deliberately resolves to nothing,
+         * because WHICH customer a new federated person belongs to is a real
+         * question and guessing it would put somebody in the wrong tenant. The
+         * caller refuses the sign-in rather than creating an account nobody
+         * owns.
+         */
+        if (! $user->exists) {
+            $organisationId = app(OrganisationContext::class)->currentId();
+
+            if ($organisationId === null) {
+                throw new RuntimeException('No organisation context: a new federated account cannot be placed.');
+            }
+
+            $attributes['organisation_id'] = $organisationId;
+        }
+
+        $user->forceFill($attributes)->save();
 
         return $user->refresh();
     }

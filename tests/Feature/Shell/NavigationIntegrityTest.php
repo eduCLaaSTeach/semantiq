@@ -6,6 +6,7 @@ namespace Tests\Feature\Shell;
 
 use App\Enums\Role;
 use App\Models\User;
+use App\Modules\Identity\Support\PermissionRegistry;
 use App\Support\Navigation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -134,11 +135,82 @@ class NavigationIntegrityTest extends TestCase
             }
 
             // The other half of "nothing hanging": a screen nobody can navigate
-            // to is as much a defect as a link to nothing. Anything genuinely
-            // reached only from another page would need an exception listed
-            // here, deliberately, rather than by omission.
-            $this->assertContains($name, $inRail, 'Route "'.$name.'" exists but nothing in the rail reaches it');
+            // to is as much a defect as a link to nothing.
+            //
+            // A screen is reachable if the rail points at it, OR if it is a
+            // DETAIL of a screen the rail points at - `admin.users.show` under
+            // `admin.users`. A create form or a record page belongs to its
+            // index and is reached from there, not from a rail entry of its
+            // own; giving every one its own node would be a rail nobody can
+            // read. What this still catches is the case that matters: a whole
+            // screen with no path to it from anywhere.
+            $reachable = in_array($name, $inRail, true)
+                || collect($inRail)->contains(fn (?string $parent): bool => $parent !== null && str_starts_with($name, $parent.'.'));
+
+            $this->assertTrue(
+                $reachable,
+                'Route "'.$name.'" exists but neither the rail nor any screen the rail reaches leads to it',
+            );
         }
+    }
+
+    #[Test]
+    public function every_permission_a_policy_names_is_declared(): void
+    {
+        $registry = app(PermissionRegistry::class);
+
+        foreach ((array) config('navigation.policies', []) as $policy => $rule) {
+            $permission = $rule['permission'] ?? null;
+
+            if ($permission === null) {
+                continue;
+            }
+
+            // An undeclared permission denies, so a typo here would silently
+            // remove a whole branch of the rail for everybody - and denial is
+            // exactly the failure nobody reports as a bug.
+            $this->assertTrue(
+                $registry->has($permission),
+                'Policy "'.$policy.'" names undeclared permission "'.$permission.'"',
+            );
+        }
+    }
+
+    #[Test]
+    public function a_rail_node_and_the_route_it_points_at_are_gated_alike(): void
+    {
+        // The drift this guards against: a node gated by one permission
+        // pointing at a route gated by another, so the rail offers a link that
+        // 403s - or, far worse, the rail hides a link to a route anyone can
+        // reach by typing it.
+        $mismatches = [];
+
+        $walk = function (array $nodes) use (&$walk, &$mismatches): void {
+            foreach ($nodes as $node) {
+                $routeName = $node['route'] ?? null;
+                $policy = $node['policy'] ?? null;
+                $nodePermission = config('navigation.policies.'.$policy.'.permission');
+
+                if ($routeName !== null && $nodePermission !== null) {
+                    $route = Route::getRoutes()->getByName($routeName);
+                    $middleware = $route === null ? [] : $route->gatherMiddleware();
+
+                    if (! in_array('permission:'.$nodePermission, $middleware, true)) {
+                        $mismatches[] = $routeName.' is offered under "'.$nodePermission.'" but its route does not enforce it';
+                    }
+                }
+
+                if (is_array($node['children'] ?? null)) {
+                    $walk($node['children']);
+                }
+            }
+        };
+
+        foreach ((array) config('navigation.clusters', []) as $nodes) {
+            $walk($nodes);
+        }
+
+        $this->assertSame([], $mismatches, implode('; ', $mismatches));
     }
 
     #[Test]

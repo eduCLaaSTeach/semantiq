@@ -48,6 +48,24 @@ return [
         'app-admin' => ['min' => Role::Admin],
         'system-admin' => ['min' => Role::SystemAdmin],
 
+        /*
+         * Release 1 gate 2. A policy may now name a PERMISSION as well as a
+         * tier, and both must hold - plan decision D2. The tier stays the
+         * coarse gate; the permission is the fine one.
+         *
+         * Every one of these is used by a rail node AND by the route that node
+         * points at, which is what keeps the two from drifting.
+         * NavigationIntegrityTest asserts the pairing holds.
+         */
+        'admin-organisation' => ['min' => Role::Admin, 'permission' => 'admin.organisation.view'],
+        'admin-business-units' => ['min' => Role::Admin, 'permission' => 'admin.business_units.view'],
+        'admin-teams' => ['min' => Role::Admin, 'permission' => 'admin.teams.view'],
+        'admin-users' => ['min' => Role::Admin, 'permission' => 'admin.users.view'],
+        'admin-roles' => ['min' => Role::Admin, 'permission' => 'admin.roles.view'],
+        'admin-permissions' => ['min' => Role::Admin, 'permission' => 'admin.permissions.view'],
+        'admin-entitlements' => ['min' => Role::Admin, 'permission' => 'admin.entitlements.view'],
+        'admin-access-reviews' => ['min' => Role::Admin, 'permission' => 'admin.access_reviews.view'],
+
         'domain-executive' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Executive],
         'domain-sales' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Sales],
         'domain-finance' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Finance],
@@ -955,32 +973,48 @@ return [
                     [
                         'label' => 'Organisation Profile',
                         'icon' => 'i-building',
-                        'policy' => 'app-admin',
+                        'route' => 'admin.organisation',
+                        'policy' => 'admin-organisation',
                     ],
                     [
                         'label' => 'Business Units',
                         'icon' => 'i-building',
-                        'policy' => 'app-admin',
+                        'route' => 'admin.business-units',
+                        'policy' => 'admin-business-units',
                     ],
                     [
                         'label' => 'Teams',
                         'icon' => 'i-users',
-                        'policy' => 'app-admin',
+                        'route' => 'admin.teams',
+                        'policy' => 'admin-teams',
                     ],
                     [
                         'label' => 'Users',
                         'icon' => 'i-users',
-                        'policy' => 'app-admin',
+                        'route' => 'admin.users',
+                        'policy' => 'admin-users',
                     ],
                     [
                         'label' => 'Roles',
                         'icon' => 'i-key',
-                        'policy' => 'app-admin',
+                        'route' => 'admin.roles',
+                        'policy' => 'admin-roles',
+                    ],
+                    /*
+                     * Added by DEC-001, closing gap M3. ADM-007 requires the
+                     * screen and MENU_STRUCTURE 12.2 did not carry it.
+                     */
+                    [
+                        'label' => 'Permissions',
+                        'icon' => 'i-shield',
+                        'route' => 'admin.permissions',
+                        'policy' => 'admin-permissions',
                     ],
                     [
                         'label' => 'Domain Entitlements',
                         'icon' => 'i-ticket',
-                        'policy' => 'app-admin',
+                        'route' => 'admin.entitlements',
+                        'policy' => 'admin-entitlements',
                     ],
                     [
                         'label' => 'Security Groups',
@@ -990,7 +1024,8 @@ return [
                     [
                         'label' => 'Access Reviews',
                         'icon' => 'i-search-check',
-                        'policy' => 'app-admin',
+                        'route' => 'admin.access-reviews',
+                        'policy' => 'admin-access-reviews',
                     ],
                 ],
             ],
@@ -1447,6 +1482,53 @@ return [
                 'route' => 'admin.overview',
                 'policy' => 'system-admin',
             ],
+            /*
+             * Added by DEC-001, closing gap M1. ADM-009 Authentication Policy,
+             * ADM-010 Session Policy, ADM-011 API Security and ADM-012 Secret
+             * References had no home anywhere in MENU_STRUCTURE section 12
+             * before this: Governance is business governance and System
+             * Configuration is application settings, and a security policy
+             * surface is neither.
+             *
+             * The group is authored now and every leaf renders as an unbuilt
+             * "Soon" destination, so the shape of the product is legible and
+             * the decision lives where navigation is authored. The screens
+             * themselves are gate 3, in R1.3. No route is named here, and
+             * NavigationIntegrityTest would fail if one were named without
+             * being registered.
+             */
+            [
+                'label' => 'Security',
+                'icon' => 'i-shield',
+                'policy' => 'system-admin',
+                'children' => [
+                    [
+                        'label' => 'Security Overview',
+                        'icon' => 'i-shield',
+                        'policy' => 'system-admin',
+                    ],
+                    [
+                        'label' => 'Authentication Policy',
+                        'icon' => 'i-fingerprint',
+                        'policy' => 'system-admin',
+                    ],
+                    [
+                        'label' => 'Session Policy',
+                        'icon' => 'i-clock',
+                        'policy' => 'system-admin',
+                    ],
+                    [
+                        'label' => 'API Security',
+                        'icon' => 'i-code',
+                        'policy' => 'system-admin',
+                    ],
+                    [
+                        'label' => 'Secret References',
+                        'icon' => 'i-lock',
+                        'policy' => 'system-admin',
+                    ],
+                ],
+            ],
             [
                 'label' => 'Fabric Environment',
                 'icon' => 'i-plug',
@@ -1534,11 +1616,15 @@ return [
                         'icon' => 'i-plug',
                         'policy' => 'system-admin',
                     ],
-                    [
-                        'label' => 'Secret References',
-                        'icon' => 'i-lock',
-                        'policy' => 'system-admin',
-                    ],
+                    /*
+                     * Secret References is deliberately absent here. DEC-001
+                     * moved it to the Security group above, because it belongs
+                     * with the policies that govern what this application will
+                     * allow rather than with the settings describing how it is
+                     * set up. Two paths to one screen is the duplicate-entry
+                     * problem filter-not-fork exists to prevent, so it lives in
+                     * one place only.
+                     */
                     [
                         'label' => 'API Registry',
                         'icon' => 'i-code',
