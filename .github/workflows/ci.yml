@@ -71,6 +71,22 @@ jobs:
           cp .env.example .env
           php artisan key:generate --no-interaction
 
+      # deploy.yml depends on files that live outside the application tree, so
+      # nothing in the test suite touches them. Deleting one is invisible until
+      # a deployment fails - which is exactly what happened when the repository
+      # was cleaned and deployment/public_html.htaccess went with it: seven
+      # consecutive deploys failed at the same step before anyone looked.
+      - name: Check the files deploy.yml depends on
+        run: |
+          missing=0
+          for f in deployment/public_html.htaccess; do
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f::Required by .github/workflows/deploy.yml but missing"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+
       - name: Check formatting
         run: vendor/bin/pint --test
 

@@ -1,0 +1,13 @@
+# cPanel front door. The document root is public_html and the application
+# files are deployed directly into it. A Laravel application must expose only
+# public/. This rule forwards every request to public/, where Laravel's real
+# front controller handles the request.
+#
+# The configuration intentionally contains no RewriteBase, domain, or absolute
+# path, allowing the same file to work across domains and subdomains.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
