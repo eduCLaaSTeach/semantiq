@@ -252,6 +252,48 @@ A phase verification report must include:
 
 Never report tests passed unless they were run.
 
+## Mandatory Completion Report Format
+
+Every completed task must end with these four tables, in this order, every time.
+No exceptions, no substitutions, and no prose summary in place of them. This
+applies to a one-line fix as much as to a release batch.
+
+### 1. Task completed
+
+What was actually built or changed. One row per deliverable. Include the pull
+request link when there is one.
+
+| # | Item | Detail | Status |
+
+### 2. Findings
+
+What was discovered while doing the work that the user did not already know:
+bugs found, design flaws corrected, spec conflicts, deviations from an approved
+decision, anything caught by a browser or a test that review would have missed.
+State the finding, where it came from and what was done about it. An empty
+Findings table is only honest when nothing was discovered; say so explicitly
+rather than omitting the table.
+
+| # | Finding | Where it came from | Action taken |
+
+### 3. Expected outcome
+
+What the user should now be able to see, do, or rely on, and how they can tell
+it is true. Written as observable results, never as intentions.
+
+| # | Expected outcome | How to confirm it |
+
+### 4. Detailed steps you need to perform
+
+Numbered, in order, with the exact command or click and the result to expect.
+Separate the steps that need the user's approval - anything touching `main`,
+production, the server or a database - from the steps that are safe to run.
+If there is nothing for the user to do, say that explicitly.
+
+| # | Step | Command or action | Expected result | Needs approval |
+
+Keep every table in plain ASCII, per the Writing Style rules below.
+
 ## Writing Style
 
 Use plain ASCII in committed Markdown/text, code comments, commit messages and pull-request text. No em dash, en dash, curly quotes or Unicode ellipsis. Use plain hyphens/quotes and ASCII punctuation.
