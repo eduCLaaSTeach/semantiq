@@ -2,7 +2,21 @@
 
 **Reference:** P00-FND, `doc/phases/PHASE-00-FOUNDATION.md`, `doc/phases/PHASE-00-UI-SHELL.md`
 **Completion phrase (later, not now):** `CONFIRM PHASE 00 COMPLETE`
-**Status:** Batches A to F awaiting approval. Batch 0 is already merged and live.
+**Status:** SUPERSEDED FOR SEQUENCING by `doc/execution/ADMIN-FOUNDATION-RELEASE-1-PLAN.md`.
+
+The gap analysis below stands and is still accurate. What changed is the ORDER.
+Administrator Foundation Release 1, added on 23 August 2026, requires the
+administrator platform to be complete and verified before Fabric provisioning,
+source onboarding, semantic intelligence, AI features or business-user modules
+are built. That reverses the batching proposed here, which put business shells
+ahead of the control plane.
+
+The engineering foundation this plan called Batches A and B is absorbed into
+Release 1 gates 1, 2, 3, 4 and 6. The business screens it called Batches C, D
+and E are explicitly deferred by that document and return after the Fabric
+Environment Release.
+
+Nothing here was implemented before the resequencing.
 
 ---
 
