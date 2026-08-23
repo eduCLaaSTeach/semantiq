@@ -6,10 +6,20 @@ namespace App\Models;
 
 use App\Enums\BusinessDomain;
 use App\Enums\Role;
+use App\Modules\Identity\Enums\UserType;
+use App\Modules\Identity\Models\AccessRole;
+use App\Modules\Identity\Models\BusinessUnit;
+use App\Modules\Identity\Models\Organisation;
+use App\Modules\Identity\Models\Team;
+use App\Modules\Identity\Support\OrganisationContext;
+use App\Modules\Platform\Enums\LifecycleStatus;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -31,6 +41,12 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $last_signed_in_at
  * @property Role $role
  * @property bool $is_auditor
+ * @property LifecycleStatus $status
+ * @property UserType $user_type
+ * @property string $authentication_source
+ * @property int|null $organisation_id
+ * @property Carbon|null $access_start
+ * @property Carbon|null $access_end
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -50,7 +66,140 @@ class User extends Authenticatable
             'password' => 'hashed',
             'role' => Role::class,
             'is_auditor' => 'boolean',
+            'status' => LifecycleStatus::class,
+            'user_type' => UserType::class,
+            'access_start' => 'date',
+            'access_end' => 'date',
         ];
+    }
+
+    /**
+     * Column defaults, mirrored so a freshly created model reports the same
+     * values the database would give it.
+     *
+     * Without this, `User::create([...])->status` is null until the row is
+     * reloaded, and a status check on a just-created account silently reads as
+     * "not active". The database defaults are the source of truth; these
+     * mirror them and a test asserts the two agree.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'status' => 'active',
+        'user_type' => 'internal',
+        'authentication_source' => 'local',
+        'is_auditor' => false,
+    ];
+
+    /**
+     * Limit a query to the organisation currently in force.
+     *
+     * EXPLICIT, WHERE EVERY OTHER SCOPED MODEL USES A GLOBAL SCOPE, and the
+     * difference is deliberate. `users` is the authentication table: Laravel's
+     * user provider loads an account by id on every single request, and a
+     * global scope that fails closed there would turn "no organisation context
+     * resolved" into "nobody in the world can sign in, including the
+     * administrator who would fix it". Fail-closed is the right default for
+     * reading data and the wrong one for the lookup that decides who you are.
+     *
+     * So the boundary is enforced at every place that LISTS or ADMINISTERS
+     * accounts, which is where cross-customer exposure would actually happen,
+     * and it is enforced by calling this. A test asserts one organisation
+     * cannot see another's accounts through the registry.
+     *
+     * Recorded as SEC-DEC-022.
+     */
+    public function scopeInCurrentOrganisation(Builder $query): Builder
+    {
+        $id = app(OrganisationContext::class)->currentId();
+
+        if ($id === null) {
+            /* No context, no rows - the same fail-closed answer the global
+             * scope gives elsewhere. Only the automatic application differs. */
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $scoped) use ($id): void {
+            $scoped->where('users.organisation_id', $id)
+                ->orWhereNull('users.organisation_id');
+        });
+    }
+
+    public function organisation(): BelongsTo
+    {
+        return $this->belongsTo(Organisation::class);
+    }
+
+    /** Scope, never permission. */
+    public function businessUnit(): BelongsTo
+    {
+        return $this->belongsTo(BusinessUnit::class);
+    }
+
+    /** Scope, never permission. */
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * The additional roles this account holds. ADM-005.
+     *
+     * Additive only within the primary tier's ceiling. Holding a role whose
+     * tier is higher than this account's own grants nothing - see
+     * `App\Modules\Identity\Support\Authorization`.
+     */
+    public function accessRoles(): BelongsToMany
+    {
+        return $this->belongsToMany(AccessRole::class, 'user_roles', 'user_id', 'role_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Whether this account may authenticate right now.
+     *
+     * Two independent reasons it might not, and BOTH are checked here so no
+     * sign-in path has to remember the second one:
+     *
+     *  - VAL-USER-DISABLED-001: the status must permit it. Disabled, locked,
+     *    expired and invited accounts may not sign in.
+     *  - VAL-USER-WINDOW-001: today must be inside the access window. A
+     *    contractor's access ending on a date is a promise the system keeps
+     *    without anybody remembering to.
+     *
+     * Deliberately says nothing about WHY. The caller shows one generic
+     * message, because a sign-in form that distinguishes "disabled" from
+     * "wrong password" is a form that confirms who works here.
+     */
+    public function mayAuthenticate(): bool
+    {
+        if (! $this->status->permitsAuthentication()) {
+            return false;
+        }
+
+        $today = Carbon::today();
+
+        if ($this->access_start !== null && $today->lt($this->access_start)) {
+            return false;
+        }
+
+        if ($this->access_end !== null && $today->gt($this->access_end)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Whether the access window has closed.
+     *
+     * Separate from `mayAuthenticate()` because it is the question a SCREEN
+     * asks - to show an account as expired - rather than the question a
+     * sign-in asks.
+     */
+    public function accessWindowHasClosed(): bool
+    {
+        return $this->access_end !== null && Carbon::today()->gt($this->access_end);
     }
 
     /**

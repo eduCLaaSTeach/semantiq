@@ -115,6 +115,47 @@ enum LifecycleStatus: string
     }
 
     /**
+     * The states an account may hold. ADM-005.
+     *
+     * `invited` is before first sign-in, `locked` is after too many failed
+     * attempts, `expired` is past the access window. Only `active` may
+     * authenticate - VAL-USER-DISABLED-001 and VAL-USER-WINDOW-001.
+     *
+     * @return list<self>
+     */
+    public static function forUser(): array
+    {
+        return [self::Invited, self::Active, self::Disabled, self::Locked, self::Expired];
+    }
+
+    /**
+     * The states a business unit, team or role may hold. ADM-003, ADM-004,
+     * ADM-006.
+     *
+     * The same narrow pair as an organisation: these are structures, not
+     * workflows. A disabled one accepts no new assignment but keeps every
+     * assignment it already has, so history stays auditable.
+     *
+     * @return list<self>
+     */
+    public static function forStructure(): array
+    {
+        return [self::Active, self::Disabled];
+    }
+
+    /**
+     * Whether an account in this state may sign in.
+     *
+     * The one place that question is answered. Both sign-in paths ask here
+     * rather than each comparing statuses, so a new non-authenticating state
+     * cannot be added without deciding this.
+     */
+    public function permitsAuthentication(): bool
+    {
+        return $this === self::Active;
+    }
+
+    /**
      * Whether a value is inside a given vocabulary.
      *
      * Takes the subset explicitly so the caller states which record family it

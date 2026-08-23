@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnforceNavigationPolicy;
+use App\Http\Middleware\EnforcePermission;
 use App\Modules\Platform\Http\Middleware\AssignCorrelationId;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -28,6 +29,12 @@ return Application::configure(basePath: dirname(__DIR__))
          */
         $middleware->alias([
             'policy' => EnforceNavigationPolicy::class,
+            /*
+             * The finer gate, added in Release 1 gate 2. `policy` checks the
+             * tier and the cluster; `permission` checks a specific declared
+             * permission. Routes that need both name both.
+             */
+            'permission' => EnforcePermission::class,
         ]);
 
         /*

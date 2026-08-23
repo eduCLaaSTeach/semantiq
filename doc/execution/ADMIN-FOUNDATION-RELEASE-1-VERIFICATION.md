@@ -154,3 +154,139 @@ The browser check now also asserts no horizontal page overflow at both widths, s
 deployment action for go-live and does not block gate 2.
 
 R1.2 has not been started. It needs review of this batch first.
+
+---
+
+# Gate 2 - Identity and Access (R1.2)
+
+**Date:** 25 August 2026
+**Batch:** R1.2
+**Features:** ADM-002 Organisation Profile, ADM-003 Business Units, ADM-004 Teams, ADM-005 User Registry, ADM-006 Roles, ADM-007 Permissions, ADM-008 Access Reviews
+**Gate 2 exit criteria (section 32):** a System Administrator exists, the User Registry works, roles work, permissions are enforced server-side, the domain entitlement model exists, and the last System Administrator cannot be removed.
+
+## 1. Automated tests
+
+```text
+php artisan test
+  tests: 243   passed: 243   assertions: 2201   duration: 5.3s
+
+./vendor/bin/pint --test
+  result: passed
+```
+
+Before this batch: 161 tests, 1747 assertions. **82 new tests.**
+
+| File | What it holds the line on |
+|---|---|
+| `tests/Feature/Identity/LastAdministratorTest.php` | All three removal paths refused separately - demote, disable, lock; a disabled or expired administrator does not count towards the total; promotion is not blocked; the route refuses and shows the reason |
+| `tests/Feature/Identity/AuthorizationTest.php` | Unknown key denies; tier defaults work with no role; **a role carrying a permission above its holder's tier grants nothing**; a role CAN add an opt-in permission; a disabled role grants nothing but keeps its assignments; a suspended account holds nothing; effective permissions are determinable; nobody delegates what they do not hold; nobody grants a tier above their own; **a System Administrator with no entitlement reads no business data**; a domain grant confers no platform authority; no permission key names a business domain |
+| `tests/Feature/Identity/UserRegistryTest.php` | Accounts start invited; email uniqueness; every non-active status refuses sign-in; the access window opens and closes by itself; a closed window expires an active account; the sign-in refusal is byte-identical to a wrong password; every access change is audited; a tier change and a domain grant are different events; no password reaches an audit summary |
+| `tests/Feature/Identity/RouteAuthorizationTest.php` | All eight screens refuse four business tiers by URL; an Administrator reaches all eight; **the rail and the route agree for all six tiers on all eight screens**; a suspended System Administrator is refused; every write route is gated; no escalation through the tier route or by assigning a higher role; another organisation's account 404s; refusals audited |
+| `tests/Feature/Identity/StructureAndReviewTest.php` | A unit cannot be its own parent nor sit under its own descendant; codes unique and normalised; a disabled unit takes no team; team reassignment is its own event; the snapshot is taken once; a review cannot complete while anything is undecided; applying revokes through `UserRegistry`; applying twice is safe; an item keeps its snapshot label after a rename; each decision audited as it is made; a primary tier is never reviewable |
+| `tests/Feature/Identity/CrossOrganisationTest.php` | Business units, teams and access reviews invisible across organisations; the user registry scoped despite `users` carrying no global scope; the administrator count does not borrow another organisation's; everything fails closed with no context; a route cannot reach another organisation's account by id |
+| `tests/Feature/Shell/NavigationIntegrityTest.php` (extended) | Every policy's permission is declared; **a rail node and the route it points at are gated by the same permission** |
+
+## 2. Migrations
+
+Nine, all additive, all exercised `up` then `down` then `up`:
+
+```text
+2026_08_25_090000_add_organisation_profile_to_organisations_table   ADM-002
+2026_08_25_090100_create_business_units_table                       ADM-003
+2026_08_25_090200_create_teams_table                                ADM-004
+2026_08_25_090300_create_roles_table                                ADM-006
+2026_08_25_090400_create_role_permissions_table                     ADM-007
+2026_08_25_090500_create_user_roles_table                           ADM-005
+2026_08_25_090600_add_identity_context_to_users_table               ADM-005
+2026_08_25_090700_create_access_reviews_table                       ADM-008
+2026_08_25_090800_create_access_review_items_table                  ADM-008
+2026_08_25_090900_seed_built_in_roles                               ADM-006
+```
+
+Nothing existing is dropped or renamed. Existing accounts are backfilled to the bootstrap organisation and stay active, so no one is locked out by the migration. The six built-in roles are seeded by migration rather than a seeder, because production runs `migrate --force` and never runs seeders.
+
+**Not yet run against production MySQL.** A production migration remains a separately approved action.
+
+## 3. Permissions introduced
+
+Twenty-one keys, all in `PermissionRegistry`. **There is no `permissions` table** - see plan D6.
+
+| Key | Ceiling | Auto-granted from | Risk |
+|---|---|---|---|
+| `admin.platform.view` | System Administrator | same | Normal |
+| `admin.system.view` / `.update` | System Administrator | same | Normal / Elevated |
+| `admin.organisation.view` / `.update` | Administrator | same | Normal / Elevated |
+| `admin.business_units.view` / `.manage` | Administrator | same | Normal |
+| `admin.teams.view` / `.manage` | Administrator | same | Normal |
+| `admin.users.view` / `.create` / `.update` / `.disable` | Administrator | same | Normal / Elevated / Elevated / High |
+| `admin.roles.view` | Administrator | same | Normal |
+| **`admin.roles.manage`** | Administrator | **System Administrator** | **High** |
+| `admin.roles.assign` | Administrator | same | High |
+| `admin.permissions.view` | Administrator | same | Normal |
+| `admin.entitlements.view` / `.grant` | Administrator | same | Normal / High |
+| `admin.access_reviews.view` / `.manage` | Administrator | same | Normal / Elevated |
+| `admin.audit.view` | System Administrator | same | Normal |
+
+`admin.roles.manage` is the only opt-in permission, and it is what makes the role table load-bearing - see plan D7.
+
+## 4. Audit events introduced
+
+`user.created`, `user.updated`, `user.disabled`, `user.unlocked`, `user.role.assigned`, `user.role.removed`, `user.entitlement.granted`, `user.entitlement.revoked`, `organisation.updated`, `business_unit.created`, `business_unit.updated`, `business_unit.disabled`, `team.created`, `team.updated`, `team.reassigned`, `role.created`, `role.updated`, `role.permissions_changed`, `role.deleted`, `access_review.created`, `access_review.opened`, `access_review.decided`, `access_review.completed`, `access_review.applied`, `access_review.cancelled`, `auth.login.succeeded`, `auth.login.failed`, `auth.logout`.
+
+Plus `privileged.action.denied` on every refused route, refused delegation, refused elevation and refused role change.
+
+## 5. Security checks
+
+| Control | Evidence |
+|---|---|
+| Permissions enforced server-side | Three layers - rail, route middleware, service - all asking one `Authorization::allows()`. A test asserts the rail and the route agree for every tier on every screen |
+| No escalation by direct route access | Posting the tier route asking for a tier above the actor's is refused and audited; assigning a higher role is refused; a role carrying a permission above its holder's tier is inert |
+| The last System Administrator | Three removal paths tested separately; inactive administrators excluded from the count |
+| Platform role never implies business data | `a_system_administrator_with_no_entitlement_reads_no_business_data`, plus a structural test that no permission key names a business domain |
+| Disabled users cannot authenticate | Both sign-in paths, plus the authorization layer, so a live session does not outlive the change |
+| Cross-organisation | Every new table behind the boundary; the user registry explicitly scoped; a guessed id 404s |
+| Every write route gated | A structural test walks the route table and fails on any ungated POST, PUT, PATCH or DELETE |
+| Mass assignment | `code`, `tier`, `is_system`, `organisation_id` and `permission_key` are all non-fillable and set explicitly |
+| Output escaping | Every Blade expression uses `{{ }}`. No raw output anywhere |
+
+## 6. Browser verification
+
+Headless Chromium, 1440x900 and 390x844, both themes. Eleven screens plus the role permission editor. No console error, no page error, **no horizontal page overflow at either width**.
+
+Two things the browser caught that the tests did not:
+
+1. **Badges wrapped mid-phrase** - "No access" rendering as "No / access" in a narrow column, which reads as two states rather than one. Fixed with `white-space: nowrap` on the pill.
+2. **The permission editor was a page of forty disabled checkboxes** for a role whose ceiling is below every declared permission, with no explanation. It now shows an empty state saying why.
+
+## 7. Menu structure
+
+DEC-001 approved and applied. `doc/MENU_STRUCTURE.md` updated, not worked around.
+
+- **M1 resolved.** New top-level `Security` group with five leaves, authored in the rail and rendering as unbuilt. Secret References moved there from System Configuration - **one node, verified programmatically**.
+- **M3 resolved.** `Permissions` is a first-class leaf and the screen is built.
+- **M7 still open.** The specification was re-read and defines nothing for Security Groups. The node stays visibly deferred rather than being invented.
+
+## 8. Known issues and items carried forward
+
+| # | Item | Status |
+|---|---|---|
+| 1 | `audit_events` mass deletes bypass the model guard; the control is a database grant | **Open from R1.1.** Needs an approved production database change |
+| 2 | M7 Security Groups has no requirement | **Open.** Needs a requirement, not an implementation |
+| 3 | M2, M4, M5 menu gaps | Gates 4 and 5 |
+| 4 | Access Reviews are server-rendered, deviating from plan D4 | Recorded as D5. React remains planned for ADM-020 in gate 5 |
+| 5 | The Administrator read grants in the Release 1 matrix | Still not implemented. SEC-DEC-020 |
+| 6 | Control-plane hosting geography unconfirmed | **Open from Phase 00.** Blocks go-live |
+| 7 | Scheduler cron entry not installed | **Open from R1.1** |
+
+## 9. Result against the gate
+
+| Gate 2 criterion | Result |
+|---|---|
+| System Administrator exists | **Pass.** Six built-in roles seeded by migration; the tier model is live and protected |
+| User Registry works | **Pass.** Create, edit, place, disable, lock, unlock, access windows, search, filter, pagination |
+| Roles work | **Pass.** Built-in and customer-defined, with a ceiling that cannot be raised and a permission editor that refuses delegation of what the actor lacks |
+| Permissions enforced server-side | **Pass.** Three layers, one implementation, with a test asserting they agree |
+| Domain entitlement model exists | **Pass.** Separate table, separate route, separate audit event, and tests asserting neither dimension implies the other |
+| The last System Administrator cannot be removed | **Pass.** Three paths, one guard, tested separately |
+
+**Gate 2 is met.** R1.3 has not been started and needs review of this batch first.

@@ -6,6 +6,8 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Audit\Enums\AuditOutcome;
+use App\Modules\Audit\Support\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -55,6 +57,10 @@ class MicrosoftSignInController extends Controller
     private const CONNECT_TIMEOUT_SECONDS = 5;
 
     private const REQUEST_TIMEOUT_SECONDS = 15;
+
+    public function __construct(
+        private readonly AuditLogger $audit,
+    ) {}
 
     /**
      * Start the flow: send the person to Microsoft.
@@ -162,10 +168,40 @@ class MicrosoftSignInController extends Controller
             );
         }
 
+        /*
+         * The directory proved who they are. Whether this application still
+         * lets them in is a separate question - VAL-USER-DISABLED-001 and
+         * VAL-USER-WINDOW-001 - and it is asked here rather than left to
+         * Entra, because disabling somebody in SemantIQ has to work even when
+         * their directory account is untouched.
+         */
+        if (! $user->mayAuthenticate()) {
+            $this->audit->record(
+                action: 'auth.login.failed',
+                module: 'Security',
+                outcome: AuditOutcome::Denied,
+                resourceType: 'user',
+                resourceId: $user->getKey(),
+                reason: 'Account is '.$user->status->label().' or outside its access window.',
+            );
+
+            return $this->fail(
+                'Your access to SemantIQ is not currently active. Contact an administrator.',
+                'account_not_active',
+            );
+        }
+
         Auth::login($user, remember: true);
 
         // A session fixed before authentication must not become the signed-in one.
         $request->session()->regenerate();
+
+        $this->audit->record(
+            action: 'auth.login.succeeded',
+            module: 'Security',
+            resourceType: 'user',
+            resourceId: $user->getKey(),
+        );
 
         return redirect()->intended('/');
     }
