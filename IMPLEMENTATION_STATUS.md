@@ -43,8 +43,8 @@ Gates are defined in `doc/execution/ADMIN-FOUNDATION-RELEASE-1-PLAN.md`.
 |---|---|---|---|---|---|
 | R1.1 | Gate 1 | Platform Foundation | `CONFIRMED` | Confirmed in the product owner's own words: "PR #17 / R1.1 has been reviewed and merged. Treat Gate 1 as complete." | PR #17, merged and live. Organisation scope, audit writer, system settings, feature flags, diagnostics |
 | R1.2 | Gate 2 | Identity & Access | `CONFIRMED` | Confirmed in the product owner's own words, after the cross-organisation fix: "Done merge." | PR #18, merged and live. Users, roles, permissions, entitlements, access reviews, the last-System-Administrator invariant |
-| R1.3 | Gate 3 | Security Foundation | `AWAITING_USER_CONFIRMATION` | Pending. **The phrase is `CONFIRM R1.3 GATE 3 COMPLETE`**, set by the product owner | PR #21, merged and live; migrations run on production. **Held open pending the follow-up PR that corrects two Security Overview defects.** See the conditions below |
-| R1.4 | Gate 4 | Data Protection, Sovereignty & PDPA | `LOCKED` | Phrase not yet set | ADM-013 to ADM-016, plus the three PDPA obligations DEC-002 traced and the required privacy contact (SEC-DEC-043) |
+| R1.3 | Gate 3 | Security Foundation | `CONFIRMED` | Received 23 August 2026: `CONFIRM R1.3 GATE 3 COMPLETE` | PR #21 and PR #22, both merged and live; migrations run on production. All seven conditions met |
+| R1.4 | Gate 4 | Data Protection, Sovereignty & PDPA | `READY_FOR_PLAN` | Phrase not yet set | ADM-013 to ADM-016, plus the three PDPA obligations DEC-002 traced and the required privacy contact (SEC-DEC-043). **Unlocked 23 August 2026 by the R1.3 confirmation. Needs a plan and approval before any code** |
 | R1.5 | Gate 5 | Integration Foundation | `LOCKED` | Phrase not yet set | ADM-017 to ADM-020. The gate the Fabric release depends on |
 | R1.6 | Gate 6 | Operations | `LOCKED` | Phrase not yet set | ADM-022, ADM-023. Needs a real queue driver and a worker: production runs `QUEUE_CONNECTION=sync` (CFG-QUEUE-001) |
 | R1.7 | Gate 7 | Verification | `LOCKED` | Phrase not yet set | ADM-025 Help framework, context registers refreshed, evidence against every gate |
@@ -55,22 +55,21 @@ convention existed, so their rows record what was actually said rather than a
 phrase invented afterwards - a fabricated confirmation is worse than an informal
 one. R1.4 onwards will be given a phrase when each gate reaches confirmation.
 
-### Conditions still open on R1.3
+### R1.3 conditions, all met
 
-Recorded here because the gate is technically accepted in production and is
-being held open for a named, finite list rather than an open question.
+Kept rather than deleted: what a gate was held open for is part of its record.
 
 | # | Condition | State |
 |---|---|---|
-| 1 | The Expiring Credentials panel must not report a healthy state when zero references are tracked | Fixed, in the follow-up PR |
-| 2 | The posture explanation must be derived from the same result as the badge | Fixed, in the follow-up PR |
-| 3 | Follow-up PR merged | Pending |
-| 4 | CI passes | Pending |
-| 5 | Deployment passes | Pending |
-| 6 | Live Security Overview verified | Pending |
-| 7 | User sends `CONFIRM R1.3 GATE 3 COMPLETE` | Pending |
+| 1 | The Expiring Credentials panel must not report a healthy state when zero references are tracked | Met, PR #22 |
+| 2 | The posture explanation must be derived from the same result as the badge | Met, PR #22 |
+| 3 | Follow-up PR merged | Met, `2135299` |
+| 4 | CI passes | Met, run 33 |
+| 5 | Deployment passes | Met, run 47 |
+| 6 | Live Security Overview verified | Met, by the product owner |
+| 7 | Product owner sends `CONFIRM R1.3 GATE 3 COMPLETE` | **Met, 23 August 2026** |
 
-Gate 4 stays `LOCKED` until all seven are met.
+Gate 4 moved from `LOCKED` to `READY_FOR_PLAN` on the strength of this.
 
 ### Release gate update rules
 
