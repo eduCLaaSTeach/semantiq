@@ -219,7 +219,7 @@ return [
             'type' => PolicyValueType::Integer,
             'default' => 120,
             'label' => 'Idle timeout, in minutes',
-            'help' => 'A session with no activity for this long is ended. Enforced on every request by EnforceSessionPolicy, not only by the cookie lifetime, so a stale session cannot outlive the policy.',
+            'help' => 'A session with no activity for this long is ended. Checked on every request rather than only by the browser cookie, so a stale session cannot outlive the policy.',
             'rules' => ['required', 'integer', 'min:5', 'max:1440'],
             'editable' => Role::SystemAdmin,
             'high_risk' => true,

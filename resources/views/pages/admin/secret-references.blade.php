@@ -83,7 +83,7 @@
                         <caption class="visually-hidden">Secret references, most urgent first</caption>
                         <thead>
                             <tr>
-                                <th scope="col" class="col-primary">Reference</th>
+                                <th scope="col" class="col-label">Reference</th>
                                 <th scope="col">State</th>
                                 <th scope="col">Where it is kept</th>
                                 <th scope="col">Environment</th>

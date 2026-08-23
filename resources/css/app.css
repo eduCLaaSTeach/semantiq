@@ -1659,7 +1659,14 @@ svg { fill: none; }
 
 /* The form footer: the save action, and the one place a whole-form message
    appears. Field errors stay inline where they belong. */
-.settings-foot { display: flex; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--card-border); }
+/*
+ * `flex-wrap` so the note beside the buttons drops onto its own line rather
+ * than being squeezed into a ribbon a few words wide. It only became visible
+ * on the first form with TWO buttons and a note, at 390px, in browser
+ * verification - the single-button screens had the same latent problem and
+ * simply had room. No new token; the gap already spaces a wrapped row.
+ */
+.settings-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--card-border); }
 
 /* --- Vertical stack of cards ------------------------------------------- */
 

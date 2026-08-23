@@ -128,7 +128,7 @@
                         <caption class="visually-hidden">Security controls and their current state</caption>
                         <thead>
                             <tr>
-                                <th scope="col" class="col-primary">Control</th>
+                                <th scope="col" class="col-label">Control</th>
                                 <th scope="col">State</th>
                                 <th scope="col">What was found</th>
                             </tr>
@@ -230,10 +230,17 @@
 
                         @if ($blocker !== null)
                             {{-- Stored, and not being applied. Said plainly
-                                 rather than implied by a disabled control. --}}
+                                 rather than implied by a disabled control.
+
+                                 SHORT, and the full explanation is in the
+                                 banner at the top of the screen. Repeating the
+                                 whole paragraph beside each affected field put
+                                 the same four sentences on the page four times,
+                                 which reads as nagging and trains people to
+                                 skip it. Found in browser verification. --}}
                             <p class="field-help">
                                 <span class="badge">Not Available</span>
-                                {{ $blocker }}
+                                Stored, but not being applied on this deployment. See the note at the top of this screen.
                             </p>
                         @endif
 
@@ -260,15 +267,22 @@
                 @endisset
 
                 <div class="field">
-                    <label class="field-label" for="reason">
-                        Reason for this change
-                        <span class="field-required" aria-hidden="true">*</span>
-                    </label>
+                    {{-- No required mark. The asterisk means "always required"
+                         everywhere else in this application, and this field is
+                         required only when a value marked "Needs a reason"
+                         actually changes. Marking it unconditionally would make
+                         the asterisk mean something different here than on
+                         every other screen. --}}
+                    <label class="field-label" for="reason">Reason for this change</label>
                     <textarea class="input"
                               id="reason"
                               name="reason"
                               rows="3"
-                              placeholder="What prompted this, so the next person knows what it was protecting against."
+                              {{-- Short. The long form of this sentence wrapped
+                                   to three lines at 390px and overflowed the
+                                   box; the full explanation is in the help text
+                                   underneath, where it has room. --}}
+                              placeholder="Why, in a sentence."
                               @error('reason') aria-invalid="true" aria-describedby="reason-message" @enderror>{{ old('reason') }}</textarea>
                     <p class="field-help">
                         Required for any field marked <span class="badge badge-warning">Needs a reason</span>.
@@ -322,7 +336,7 @@
                             <caption class="visually-hidden">Your live sessions</caption>
                             <thead>
                                 <tr>
-                                    <th scope="col" class="col-primary">Last active</th>
+                                    <th scope="col" class="col-label">Last active</th>
                                     <th scope="col">Network address</th>
                                     <th scope="col">Browser</th>
                                 </tr>

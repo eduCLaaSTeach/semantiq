@@ -54,7 +54,7 @@
                         <caption class="visually-hidden">Things that are not set up</caption>
                         <thead>
                             <tr>
-                                <th scope="col" class="col-primary">Gap</th>
+                                <th scope="col" class="col-label">Gap</th>
                                 <th scope="col">What it means</th>
                             </tr>
                         </thead>
@@ -83,7 +83,7 @@
                     <caption class="visually-hidden">Authentication, session, application and secret posture</caption>
                     <thead>
                         <tr>
-                            <th scope="col" class="col-primary">Area</th>
+                            <th scope="col" class="col-label">Area</th>
                             <th scope="col">State</th>
                             <th scope="col">Now</th>
                             <th scope="col">Notes</th>
@@ -154,7 +154,7 @@
                         <caption class="visually-hidden">Credentials expiring soon or already expired</caption>
                         <thead>
                             <tr>
-                                <th scope="col" class="col-primary">Reference</th>
+                                <th scope="col" class="col-label">Reference</th>
                                 <th scope="col">State</th>
                                 <th scope="col">Expires</th>
                                 <th scope="col">Owner</th>
@@ -192,7 +192,7 @@
                         <caption class="visually-hidden">Credentials whose rotation date has arrived</caption>
                         <thead>
                             <tr>
-                                <th scope="col" class="col-primary">Reference</th>
+                                <th scope="col" class="col-label">Reference</th>
                                 <th scope="col">Rotation due</th>
                                 <th scope="col">Owner</th>
                             </tr>
@@ -239,7 +239,7 @@
                         <caption class="visually-hidden">Findings across the four security areas</caption>
                         <thead>
                             <tr>
-                                <th scope="col" class="col-primary">Area</th>
+                                <th scope="col" class="col-label">Area</th>
                                 <th scope="col">Finding</th>
                             </tr>
                         </thead>
@@ -279,7 +279,7 @@
                         <caption class="visually-hidden">The most recent security audit events</caption>
                         <thead>
                             <tr>
-                                <th scope="col" class="col-primary">When</th>
+                                <th scope="col" class="col-label">When</th>
                                 <th scope="col">What</th>
                                 <th scope="col">Outcome</th>
                                 <th scope="col">Who</th>

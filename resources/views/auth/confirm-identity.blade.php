@@ -38,7 +38,8 @@
                     {{ $action->help() }}
                 @endif
                 Being signed in is not enough for this one - an unlocked machine is enough to be signed
-                in. One confirmation covers further critical actions for {{ $validMinutes }} minutes.
+                in. One confirmation covers further critical actions for {{ $validMinutes }}
+                {{ $validMinutes === 1 ? 'minute' : 'minutes' }}.
             </span>
         </div>
 

@@ -249,9 +249,12 @@ class ApiSecurityAudit
         $lockMinutes = $this->policies->number('sign_in.lock_minutes');
 
         $detail = sprintf(
-            'The credential form allows %d attempt(s) per address and network before a %d minute lockout. Sensitive endpoints allow %d requests a minute.',
+            'The credential form allows %d %s per address and network before a %d %s lockout. '
+            .'Sensitive endpoints allow %d requests a minute.',
             $threshold,
+            $threshold === 1 ? 'attempt' : 'attempts',
             $lockMinutes,
+            $lockMinutes === 1 ? 'minute' : 'minutes',
             $this->policies->number('api.sensitive_rate_limit_per_minute'),
         );
 

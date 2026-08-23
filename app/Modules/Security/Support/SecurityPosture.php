@@ -91,9 +91,11 @@ class SecurityPosture
             'status' => $status,
             'headline' => $mode->label(),
             'detail' => sprintf(
-                'Lockout after %d failed attempts for %d minute(s).',
-                $this->policies->number('sign_in.failed_attempt_threshold'),
-                $this->policies->number('sign_in.lock_minutes'),
+                'Lockout after %d failed %s for %d %s.',
+                $threshold = $this->policies->number('sign_in.failed_attempt_threshold'),
+                $threshold === 1 ? 'attempt' : 'attempts',
+                $lockMinutes = $this->policies->number('sign_in.lock_minutes'),
+                $lockMinutes === 1 ? 'minute' : 'minutes',
             ),
             'notes' => $notes,
         ];
@@ -204,16 +206,30 @@ class SecurityPosture
 
         $notes = [];
 
+        /*
+         * Singular and plural spelled out per state rather than bolted onto the
+         * noun. "1 reference have already expired" is what the shorter version
+         * produced, and a summary that cannot count to one does not inspire
+         * confidence in the rest of the numbers. Found in browser verification.
+         */
         foreach ([
-            [SecretStatus::Expired, 'have already expired'],
-            [SecretStatus::ExpiringSoon, 'expire within '.SecretStatus::EXPIRY_HORIZON_DAYS.' days'],
-            [SecretStatus::RotationDue, 'are due for rotation'],
-            [SecretStatus::Unknown, 'have no expiry or rotation date recorded, so nothing is tracking them'],
-        ] as [$state, $phrase]) {
+            [SecretStatus::Expired, 'has already expired', 'have already expired'],
+            [
+                SecretStatus::ExpiringSoon,
+                'expires within '.SecretStatus::EXPIRY_HORIZON_DAYS.' days',
+                'expire within '.SecretStatus::EXPIRY_HORIZON_DAYS.' days',
+            ],
+            [SecretStatus::RotationDue, 'is due for rotation', 'are due for rotation'],
+            [
+                SecretStatus::Unknown,
+                'has no expiry or rotation date recorded, so nothing is tracking it',
+                'have no expiry or rotation date recorded, so nothing is tracking them',
+            ],
+        ] as [$state, $singular, $plural]) {
             $count = $statuses->filter(static fn (SecretStatus $s): bool => $s === $state)->count();
 
             if ($count > 0) {
-                $notes[] = $count.' reference'.($count === 1 ? '' : 's').' '.$phrase.'.';
+                $notes[] = $count.' reference'.($count === 1 ? ' ' : 's ').($count === 1 ? $singular : $plural).'.';
             }
         }
 
