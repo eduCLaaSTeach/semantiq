@@ -139,6 +139,9 @@ jobs:
             --exclude "tests/" \
             --exclude "phpunit.xml" \
             --exclude "README.md" \
+            --exclude "doc/" \
+            --exclude ".claude/" \
+            --exclude "*.md" \
             --exclude ".editorconfig" \
             --exclude ".gitignore" \
             --exclude ".gitattributes" \
