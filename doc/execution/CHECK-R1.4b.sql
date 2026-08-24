@@ -90,10 +90,25 @@ WHERE TABLE_SCHEMA = DATABASE()
 
 SELECT
     '8. every identifier is legal' AS checkpoint,
-    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS verdict,
-    CONCAT(COUNT(*), ' index name(s) over 64 characters. This is what broke the first run.') AS detail
+    CASE WHEN COUNT(DISTINCT INDEX_NAME) = 0 THEN 'PASS' ELSE 'FAIL' END AS verdict,
+    CONCAT(COUNT(DISTINCT INDEX_NAME), ' index name(s) over 64 characters. This is what broke the first run.') AS detail
 FROM information_schema.STATISTICS
 WHERE TABLE_SCHEMA = DATABASE() AND CHAR_LENGTH(INDEX_NAME) > 64;
+
+-- COUNTING INDEXES: information_schema.STATISTICS HOLDS ONE ROW PER COLUMN.
+-- A two-column composite key returns TWO rows for ONE index. Every index check
+-- in this file therefore counts DISTINCT INDEX_NAME, never COUNT(*). Getting
+-- this wrong reports a correct schema as a failure, which is worse than no
+-- check at all: it sends somebody looking for a fault that is not there.
+SELECT
+    '8b. retention unique key created' AS checkpoint,
+    CASE WHEN COUNT(DISTINCT INDEX_NAME) = 1 THEN 'PASS' ELSE 'FAIL' END AS verdict,
+    CONCAT(COUNT(DISTINCT INDEX_NAME), ' index spanning ', COUNT(*),
+           ' column(s). Expected 1 index over 2 columns.') AS detail
+FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'retention_policies'
+  AND INDEX_NAME = 'retention_policies_org_category_unique';
 
 -- ----------------------------------------------------------------- audit rows
 -- Substitute the number from row 8 of CHECK-R1.4b-RECOVERY.sql.
