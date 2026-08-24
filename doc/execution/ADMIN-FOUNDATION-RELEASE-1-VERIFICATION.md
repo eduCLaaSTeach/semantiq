@@ -922,8 +922,9 @@ No migration, no schema change, no production configuration change.
 **Release:** PR #25, merged as `5787a645fbef484dd11c23d6def1eb5dc3d48b38`, 24 August 2026.
 **Features:** ADM-014 Data Protection Profile, ADM-015 Data Sovereignty Profile,
 the personal data category register, and the required structured privacy contact.
-**Status: functionally verified on production.** Awaiting the product owner's
-completion phrase.
+**Status: ACCEPTED by the product owner, 24 August 2026.** Verified on the live
+deployment by the product owner, not only by this session. Gate 4 as a whole
+remains open: R1.4b and R1.4c are not started.
 
 ### 14.1 Automated tests
 
@@ -1050,19 +1051,47 @@ read-only at the first approval.
 | 7 | Organisation isolation | **Met.** No governance row without an organisation |
 | 8 | Append-only audit intact | **Met.** Both triggers present |
 | 9 | Context registers match implementation | **Met.** Code, data, validation, configuration, sovereignty, and SEC-DEC-073 to SEC-DEC-077 |
-| 10 | Product owner confirmation phrase | **Outstanding** |
+| 10 | Product owner acceptance | **Met, 24 August 2026** |
 
-### 14.9 Confirmation phrase
+### 14.9 Acceptance
 
-R1.4a is complete when the product owner sends, exactly:
+**R1.4a is ACCEPTED.** Confirmed in the product owner's own words on
+24 August 2026:
 
 ```text
-CONFIRM R1.4a COMPLETE
+I formally accept R1.4a.
 ```
 
-Until then `IMPLEMENTATION_STATUS.md` is not advanced and R1.4b does not start.
+The product owner ran the verification themselves on the live deployment and
+listed what it confirmed: gate 4 tables present, structured privacy-contact
+columns present, legacy `privacy_contact` preserved, 7 active personal-data
+categories, Singapore storage, Singapore backup, no external replication,
+cross-geo switches off, organisation scoping intact, governance audit events
+present, audit triggers still present.
 
-### 14.10 A process finding, recorded because it cost the product owner time
+The seven categories were named individually: Access rights held, Account
+identity, Accountability contact, Activity record, Federated identity, Network
+identifier, Sign-in state.
+
+**The earlier sovereignty concern is closed.** The audit trail resolved it: the
+profile was `seeded` with `status = draft`, and `approved` separately by a human
+actor with a reason recorded. The data protection profile's creation and
+approval trace to explicit human actions in the same way. Nothing approved
+itself, and the code has no path that could - `ProfileStatus::Approved` is
+written in exactly two places, both inside `approve()`, both behind the System
+Administrator permission and a written reason.
+
+**No confirmation phrase was set for this batch.** R1.3 used one because it was
+a whole gate; R1.4a is a batch inside gate 4, and the product owner accepted it
+in plain words. Recorded as said rather than paraphrased into a phrase nobody
+sent.
+
+### 14.10 What acceptance does NOT cover
+
+**Gate 4 as a whole is NOT complete.** R1.4a is one of three batches. R1.4b and
+R1.4c are not started, and `IMPLEMENTATION_STATUS.md` keeps R1.4 open.
+
+### 14.11 A process finding, recorded because it cost the product owner time
 
 The first verification sheet printed `found` and `expected` and left the reader
 to compare them - and its expectations were written for an install nobody had
