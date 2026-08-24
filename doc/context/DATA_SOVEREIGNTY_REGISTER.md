@@ -63,3 +63,34 @@ defaults remain OFF.
 becomes live and `sessions` becomes a sixth table holding personal data. DEC-002's
 PDPA-01 access-and-correction scope must include it. Recorded here so gate 4
 inherits the constraint rather than rediscovering it.
+
+---
+
+## Release 1 gate 4, batch R1.4a
+
+| SOV ID | What | Storage | Processing | Cross-geo | Note |
+|---|---|---|---|---|---|
+| SOV-013 | `personal_data_categories` - the register of what personal data is held | Singapore, control plane | Singapore | None | **Describes** personal data; holds none. Seeded from a scan of the live schema |
+| SOV-014 | `data_protection_profiles` - the privacy position, versioned | Singapore, control plane | Singapore | None | Configuration and legal basis text. No customer data |
+| SOV-015 | `data_sovereignty_profiles` - the geography position, versioned | Singapore, control plane | Singapore | None | **This table is the record of the answers this register holds.** Seeded as a DRAFT from SEC-DEC-036 and never presented as approved |
+| SOV-016 | `organisations.privacy_contact_*` - the designated privacy contact | Singapore, control plane | Singapore | None | Personal data about a named individual: a name, an email address, optionally a phone number and a role |
+
+**R1.4a introduces no cross-geo setting and changes no geography.** What it adds
+is the place where a cross-geo decision would be RECORDED, and every switch on
+that record defaults to OFF at the catalogue and at the database column.
+
+**The seeded profile is a draft, not a position.** SEC-DEC-068. It carries the
+three facts SEC-DEC-036 confirmed - server Singapore, backups Singapore, no
+replication outside Singapore - so nobody retypes a verified fact, and it says so
+in its own `source_note`. Nothing downstream honours a draft, and the screen
+reads Not Configured until a person approves it. **Approving it on production is
+an outstanding action for the product owner, not something this batch does.**
+
+**Backups are asked about separately** and have their own column. A server's
+country is not its backups' country, and folding the two together would lose the
+distinction that made SEC-DEC-036 worth confirming three times.
+
+**Carried forward unchanged.** The `SESSION_DRIVER` constraint recorded above
+still stands, and now has a home: if `sessions` becomes live it belongs in the
+`authentication_state` category (DATA-022) whose `source_tables` already names
+it, so the R1.4c collector will find it without the register being edited.

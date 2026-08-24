@@ -682,6 +682,19 @@ svg { fill: none; }
 
 .alert-success { background: var(--badge-success-bg); color: var(--badge-success-fg); }
 .alert-info    { background: var(--badge-info-bg);    color: var(--badge-info-fg); }
+/*
+ * The warning variant was MISSING while seven screens already used
+ * `alert alert-warning`. Because the base `.alert` defaults to the danger
+ * palette, every one of those advisories rendered RED: "the migration has not
+ * run yet" and "three credentials expire this month" both looked like errors.
+ * An advisory that reads as a failure is either ignored or acted on in a panic,
+ * and neither is what it was written for.
+ *
+ * Invents nothing. It maps to the existing `--badge-warning-*` tokens, exactly
+ * as the two rules above map to their own, so the amber here is the same amber
+ * the warning badge already uses.
+ */
+.alert-warning { background: var(--badge-warning-bg); color: var(--badge-warning-fg); }
 
 .alert .icon { font-size: 16px; margin-top: 2px; }
 

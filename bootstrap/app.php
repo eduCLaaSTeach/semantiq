@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnforceNavigationPolicy;
 use App\Http\Middleware\EnforcePermission;
+use App\Modules\Governance\Http\Middleware\RequireGovernanceStorage;
 use App\Modules\Platform\Http\Middleware\AssignCorrelationId;
 use App\Modules\Security\Http\Middleware\ConfirmIdentity;
 use App\Modules\Security\Http\Middleware\EnforceSessionPolicy;
@@ -54,6 +55,14 @@ return Application::configure(basePath: dirname(__DIR__))
              * controller would arrive after the query that fails.
              */
             'security-storage' => RequireSecurityStorage::class,
+
+            /*
+             * Gate 4's equivalent, on the governance WRITE routes only. The
+             * read screens explain the state instead of being blocked, because
+             * an administrator opening one during a deployment window should be
+             * told what is happening. SEC-DEC-072.
+             */
+            'governance-storage' => RequireGovernanceStorage::class,
         ]);
 
         /*
