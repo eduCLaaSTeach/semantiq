@@ -113,6 +113,35 @@ Recorded as decision D1 rather than done silently.
 **Features:** ADM-013 Audit Log screen, ADM-014 Data Protection Profile, ADM-015 Data Sovereignty Profile, ADM-016 Sovereignty Exceptions.
 **Tables:** `data_protection_profiles`, `data_sovereignty_profiles`, `sovereignty_exceptions`.
 
+**Detailed plan: `doc/execution/R1.4-GATE-4-DATA-PROTECTION-PDPA-PLAN.md`.**
+Status: PLANNED, awaiting approval of decisions D1 to D13. No code written.
+
+The scope above is no longer the whole gate. The PDPA determination recorded in
+`doc/execution/decisions/DEC-002-pdpa-applies.md` was accepted, and the
+user approved absorbing its three gaps into this gate: PDPA-01 Personal Data
+Access and Correction, PDPA-02 Data Breach Assessment and Notification, PDPA-03
+Per-category Retention Policy, plus a required structured Privacy Contact on the
+organisation profile with a safe backfill for existing rows.
+
+That changes the table list. The detailed plan proposes **seven** new tables
+rather than three - the three above plus `personal_data_categories`,
+`privacy_requests`, `privacy_correction_notes` and `breach_assessments` - and one
+altered table (`organisations`, for the structured privacy contact). Recorded
+here as a pointer, not as a decision: the table list is settled when D1 to D13
+are.
+
+Four of those decisions change the shape of the gate and must be answered before
+any code: **D1** where PDPA-01 and PDPA-02 live in the menu (MENU_STRUCTURE has
+no home for either, the same gap as M1), **D2** whether an Auditor can read the
+audit log (`admin.audit.view` is declared at System Administrator, the rail
+admits auditors, and ROLE_MODEL says an Auditor reads the audit trail - three
+sources, three answers), **D3** whether there is a Governance Overview screen,
+and **D4** whether profiles are versioned or editable in place.
+
+The plan also recommends building this gate as **three PRs** (4a, 4b, 4c) rather
+than one. Gate 3 shipped as a single 9,664-line PR and both defects that reached
+production were in the last screen written.
+
 ### R1.5 - Gate 5, Integration
 
 **Features:** ADM-017 Integration Registry, ADM-018 Microsoft Entra Integration, ADM-019 API Configuration, ADM-020 Connection Test Centre.
