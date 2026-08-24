@@ -1,0 +1,58 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * What each table and column MEANS.
+ *
+ * The generator takes structure from the migrations and the live database.
+ * This file supplies the only part a machine cannot: intent. Every entry is
+ * written from the code that reads and writes the column, not from its name.
+ */
+
+return [
+
+    'tables' => [
+        'users' => ['module' => 'Identity', 'gate' => 'P00, R1.1, R1.2', 'purpose' => 'A person who can sign in. Carries the platform tier, the federated identity link, the organisation placement and the access window.', 'class' => 'Confidential', 'personal' => 'Yes - name, email, sign-in times', 'notes' => 'The ONLY scoped table with no global organisation scope. SEC-DEC-022: it is loaded by id on every request, and a fail-closed global scope there would mean nobody can sign in, including the administrator who would fix it. Tenancy is enforced explicitly by `User::scopeInCurrentOrganisation()` and by `UserRegistry::assertInOrganisation()` on every mutation.'],
+        'password_reset_tokens' => ['module' => 'Laravel', 'gate' => 'P00', 'purpose' => 'A short-lived token proving somebody can read an email address.', 'class' => 'Restricted', 'personal' => 'Yes - email address', 'notes' => 'Framework table. Held only while in use. In PDPA-01 scope as category `authentication_state`.'],
+        'sessions' => ['module' => 'Laravel', 'gate' => 'P00', 'purpose' => 'Server-side session state, WHEN the driver is `database`.', 'class' => 'Restricted', 'personal' => 'Yes - IP address and user agent', 'notes' => '**Not in use.** Production runs `SESSION_DRIVER=file` (SEC-DEC-049). The table exists; nothing writes to it. If the driver is ever switched, this becomes live personal data and PDPA-01 scope must include it.'],
+        'cache' => ['module' => 'Laravel', 'gate' => 'P00', 'purpose' => 'Framework cache store.', 'class' => 'Internal', 'personal' => 'Incidental', 'notes' => 'Framework table. Contents are whatever the application cached; treated as opaque and excluded from PDPA-01 because it is derived and expiring.'],
+        'cache_locks' => ['module' => 'Laravel', 'gate' => 'P00', 'purpose' => 'Atomic lock records for the cache store.', 'class' => 'Internal', 'personal' => 'No', 'notes' => 'Framework table.'],
+        'jobs' => ['module' => 'Laravel', 'gate' => 'P00', 'purpose' => 'Queued jobs awaiting a worker.', 'class' => 'Internal', 'personal' => 'Incidental', 'notes' => '**Not in use.** Production runs `QUEUE_CONNECTION=sync` (CFG-QUEUE-001), so jobs run inline and this table stays empty. Gate 6 changes that.'],
+        'job_batches' => ['module' => 'Laravel', 'gate' => 'P00', 'purpose' => 'Progress of a batch of queued jobs.', 'class' => 'Internal', 'personal' => 'No', 'notes' => '**Not in use.** See `jobs`.'],
+        'failed_jobs' => ['module' => 'Laravel', 'gate' => 'P00', 'purpose' => 'A job that threw, with its payload and stack trace.', 'class' => 'Internal', 'personal' => 'Incidental - a payload may contain anything', 'notes' => '**Not in use.** See `jobs`. When gate 6 activates the queue, payloads must be assumed to carry personal data.'],
+        'organisations' => ['module' => 'Identity', 'gate' => 'R1.1, R1.2, R1.4a', 'purpose' => 'The customer organisation that owns this instance. Every scoped record points at it.', 'class' => 'Internal', 'personal' => 'Yes - the three named contacts', 'notes' => 'One row today. The product stays multi-tenant-ready, so no code assumes there is only one. `code` is immutable once dependencies exist (VAL-ORG-CODE-001) and is deliberately not mass-assignable.'],
+        'domain_entitlements' => ['module' => 'Identity', 'gate' => 'P00', 'purpose' => 'One person\'s access to one business domain. **The second access dimension.**', 'class' => 'Confidential', 'personal' => 'Yes - it is about a person', 'notes' => 'ROLE_MODEL.md section 1: a platform role NEVER implies business data. A System Administrator with no row here reads no Finance figure. This table is what makes that true.'],
+        'audit_events' => ['module' => 'Audit', 'gate' => 'R1.1', 'purpose' => 'What happened, who did it, when, and why. The evidence trail.', 'class' => 'Restricted', 'personal' => 'Yes - actor identity and IP address', 'notes' => '**APPEND ONLY, enforced at the database.** Two triggers (`BEFORE UPDATE`, `BEFORE DELETE`) raise SQLSTATE 45000. Model hooks throw as well, but the triggers are the control: hooks do not fire on a mass delete, and MySQL has no DENY. SEC-DEC-037. If this table is ever rebuilt the triggers must be re-applied by hand (SEC-DEC-039).'],
+        'system_settings' => ['module' => 'Platform', 'gate' => 'R1.1', 'purpose' => 'Runtime configuration overrides. The catalogue in `config/platform.php` decides which keys exist.', 'class' => 'Internal', 'personal' => 'No', 'notes' => 'Overrides only - a key with no row reads its catalogue default, so a fresh install needs no seeder. `SystemSettings::set()` refuses a secret-bearing key outright.'],
+        'feature_flags' => ['module' => 'Platform', 'gate' => 'R1.1', 'purpose' => 'Capability switches. An undeclared flag reads OFF.', 'class' => 'Internal', 'personal' => 'No', 'notes' => 'A flag with a precondition refuses the unsafe direction rather than being switched blindly.'],
+        'business_units' => ['module' => 'Identity', 'gate' => 'R1.2', 'purpose' => 'The organisation\'s internal structure, as a hierarchy.', 'class' => 'Internal', 'personal' => 'Incidental - names a manager', 'notes' => '`parent_id` is self-referencing. Effective dating means a unit that closed stays readable rather than being deleted.'],
+        'teams' => ['module' => 'Identity', 'gate' => 'R1.2', 'purpose' => 'A team inside a business unit.', 'class' => 'Internal', 'personal' => 'Incidental - names a lead', 'notes' => ''],
+        'roles' => ['module' => 'Identity', 'gate' => 'R1.2', 'purpose' => 'A named bundle of permissions, assignable to people.', 'class' => 'Internal', 'personal' => 'No', 'notes' => 'Six built-in roles ship with `is_system = 1` and `organisation_id IS NULL`. They carry NO `role_permissions` rows: a built-in role derives its permissions from its tier at runtime. A custom role belongs to one organisation.'],
+        'role_permissions' => ['module' => 'Identity', 'gate' => 'R1.2', 'purpose' => 'Which declared permission keys a role carries.', 'class' => 'Internal', 'personal' => 'No', 'notes' => 'There is NO `permissions` table. The catalogue is code, in `PermissionRegistry` - a permission an administrator can invent is a permission nothing checks (SEC-DEC-028). A key here that no longer exists in the registry grants nothing.'],
+        'user_roles' => ['module' => 'Identity', 'gate' => 'R1.2', 'purpose' => 'Which roles a person has been assigned.', 'class' => 'Confidential', 'personal' => 'Yes - it is about a person', 'notes' => '**Cannot become a privilege-escalation path.** The tier ceiling is applied AFTER the union of tier defaults and role grants, so a role carrying a permission above its holder\'s tier is inert (SEC-DEC-023).'],
+        'access_reviews' => ['module' => 'Identity', 'gate' => 'R1.2', 'purpose' => 'A periodic examination of who holds what.', 'class' => 'Internal', 'personal' => 'Indirectly', 'notes' => 'Cannot be completed while any item is undecided: an ignored item is a finding, and folding it into the same shape as a finished one would hide exactly that (SEC-DEC-031).'],
+        'access_review_items' => ['module' => 'Identity', 'gate' => 'R1.2', 'purpose' => 'One thing being reviewed: a person\'s role, tier or entitlement, and the decision taken.', 'class' => 'Confidential', 'personal' => 'Yes - about a person', 'notes' => 'Revocations are applied through `UserRegistry`, never by direct delete - a bulk operation that bypasses the rules is how a bulk operation becomes the way around the rules (SEC-DEC-030).'],
+        'security_policies' => ['module' => 'Security', 'gate' => 'R1.3', 'purpose' => 'Authentication, session and API security policy overrides.', 'class' => 'Internal', 'personal' => 'No', 'notes' => 'Overrides only. Its own table rather than `system_settings` because every natural key for these features trips the audit redactor (SEC-DEC-046). Key prefixes are `sign_in.`, `activity.` and `api.` for the same reason - `auth.` and `session.` would be redacted out of their own audit trail.'],
+        'secret_references' => ['module' => 'Security', 'gate' => 'R1.3', 'purpose' => 'WHERE a credential is kept and when it lapses. **Never the credential.**', 'class' => 'Restricted', 'personal' => 'Incidental - names an owner', 'notes' => 'No column could hold a secret; the model refuses a credential-shaped string and the form request refuses one before that. Reading this list is as restricted as writing it: a map of every credential a system depends on is a target list (SEC-DEC-052).'],
+        'personal_data_categories' => ['module' => 'Governance', 'gate' => 'R1.4a', 'purpose' => 'What kinds of personal data this application holds about people, and where each kind lives.', 'class' => 'Internal', 'personal' => 'No - it DESCRIBES personal data, holds none', 'notes' => 'Seeded from a scan of the live schema, not a privacy template: personal data was found in 19 of 23 tables, not the five DEC-002 named. `source_tables` is the input to the R1.4c collector coverage test. Retired, never deleted.'],
+        'data_protection_profiles' => ['module' => 'Governance', 'gate' => 'R1.4a', 'purpose' => 'The organisation\'s stated privacy position, as immutable versions.', 'class' => 'Internal', 'personal' => 'No', 'notes' => '**Versioned.** An approved version refuses every update except supersession (SEC-DEC-065). A mutable row cannot answer "what was in force in March", which is what a regulator, an auditor and a breach assessment all ask. The two `*_basis` columns are compliance-owned and ship empty.'],
+        'data_sovereignty_profiles' => ['module' => 'Governance', 'gate' => 'R1.4a', 'purpose' => 'Where the organisation stores, processes and backs up its data, as immutable versions.', 'class' => 'Internal', 'personal' => 'No', 'notes' => '**Versioned**, same contract as ADM-014. Seeded as a DRAFT from the facts SEC-DEC-036 confirmed. Backups get their own column because backups routinely leave the country the server sits in - folding them into storage would lose the distinction that made the question worth asking three times.'],
+    ],
+
+    'columns' => [
+        /* Shared shapes, applied wherever the name appears. */
+        '*id' => 'Surrogate primary key. Auto-incrementing, never reused, never meaningful.',
+        '*organisation_id' => 'Which customer owns this row. The tenancy boundary. `BelongsToOrganisation` fills it at creation and fails closed when no context is resolved.',
+        '*created_at' => 'When the row was written.',
+        '*updated_at' => 'When the row last changed.',
+        '*created_by_user_id' => 'Who created it. Kept as `nullOnDelete` so the record survives the person leaving.',
+        '*updated_by_user_id' => 'Who last changed it. Same nullability reasoning.',
+        '*version' => 'Optimistic concurrency counter, or the version number of an immutable record - see the table notes.',
+        '*status' => 'Lifecycle state, from a codified list. Never free text.',
+        '*code' => 'Stable machine identifier. Not mass-assignable, because changing one silently breaks whatever resolves against it.',
+        '*name' => 'What a person calls this.',
+        '*description' => 'Free text, shown to a reader.',
+        '*reason' => 'Why a change was made. Required on high-risk changes so a later reviewer can judge them.',
+    ],
+];
