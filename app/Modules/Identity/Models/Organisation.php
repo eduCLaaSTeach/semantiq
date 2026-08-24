@@ -27,6 +27,11 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property LifecycleStatus $status
  * @property int $version
+ * @property string|null $privacy_contact
+ * @property string|null $privacy_contact_name
+ * @property string|null $privacy_contact_email
+ * @property string|null $privacy_contact_phone
+ * @property string|null $privacy_contact_role
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */

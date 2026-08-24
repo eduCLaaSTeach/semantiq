@@ -5,6 +5,9 @@ declare(strict_types=1);
 use App\Http\Controllers\Auth\MicrosoftSignInController;
 use App\Http\Controllers\Auth\SignInController;
 use App\Http\Controllers\Pages\HomeController;
+use App\Modules\Governance\Http\Controllers\DataProtectionProfileController;
+use App\Modules\Governance\Http\Controllers\PersonalDataCategoryController;
+use App\Modules\Governance\Http\Controllers\SovereigntyProfileController;
 use App\Modules\Identity\Http\Controllers\AccessReviewController;
 use App\Modules\Identity\Http\Controllers\AccessRoleController;
 use App\Modules\Identity\Http\Controllers\BusinessUnitController;
@@ -341,6 +344,81 @@ Route::middleware('auth')->group(function (): void {
                 ->name('secrets.retire');
         });
     });
+
+    /*
+     * Governance - Release 1 gate 4, batch R1.4a. Features ADM-014, ADM-015.
+     *
+     * A SEPARATE GROUP FROM `policy:app-admin`, and the cluster gate is
+     * `policy:compliance` rather than `policy:system-admin`. Decision D13,
+     * SEC-DEC-067: governance READ sits at Domain Owner, which is below
+     * Administrator, so neither existing group could hold these routes without
+     * either locking a Domain Owner out or widening a group that should not
+     * widen.
+     *
+     * Two gates on every route, as everywhere else in Administration: the
+     * cluster policy says whether this person belongs in Compliance at all, the
+     * `permission:` says whether they may do this specific thing. The permission
+     * named here is the SAME one the rail node names, so a typed URL meets the
+     * gate a hidden link would have. NavigationIntegrityTest asserts the pair.
+     *
+     * READ, MANAGE and APPROVE are three permissions, never two. Seeing the
+     * sovereignty position, drafting a change to it and blessing that change are
+     * three different decisions, and a single `admin.sovereignty.manage` would
+     * have made the last two the same one.
+     *
+     * `governance-storage` is on the WRITE routes only. The read screens render
+     * a controlled "migration required" state instead, so an administrator
+     * opening one during a deployment window is told what is happening rather
+     * than shown a wall. SEC-DEC-072.
+     *
+     * `confirm:` is deliberately absent. ADM-010's re-authentication applies to
+     * the critical actions gate 3 enumerated, and adding a new one is a change
+     * to `CriticalAction` that belongs with a decision rather than with a route.
+     * Approving a profile already requires a written reason, which is the
+     * control ROLE_MODEL section 6 asks for here.
+     */
+    Route::middleware('policy:compliance')->prefix('admin/governance')->name('admin.governance.')
+        ->group(function (): void {
+
+            /* ADM-014, the profile. */
+            Route::get('/data-protection', [DataProtectionProfileController::class, 'show'])
+                ->middleware('permission:admin.data_protection.view')->name('data-protection');
+            Route::put('/data-protection', [DataProtectionProfileController::class, 'update'])
+                ->middleware(['permission:admin.data_protection.manage', 'governance-storage'])
+                ->name('data-protection.update');
+            Route::post('/data-protection/approve', [DataProtectionProfileController::class, 'approve'])
+                ->middleware(['permission:admin.data_protection.approve', 'governance-storage'])
+                ->name('data-protection.approve');
+
+            /* ADM-014, the category register. */
+            Route::get('/personal-data', [PersonalDataCategoryController::class, 'index'])
+                ->middleware('permission:admin.data_protection.view')->name('personal-data');
+            /*
+             * `{category}` is a plain integer resolved in the controller, not an
+             * implicit model binding, for the reason SEC-DEC-058 records:
+             * `SubstituteBindings` runs in the `web` middleware GROUP, ahead of
+             * `governance-storage`, so a binding would query the table before
+             * the guard could refuse it.
+             */
+            Route::get('/personal-data/{category}', [PersonalDataCategoryController::class, 'edit'])
+                ->whereNumber('category')
+                ->middleware(['permission:admin.data_protection.manage', 'governance-storage'])
+                ->name('personal-data.edit');
+            Route::put('/personal-data/{category}', [PersonalDataCategoryController::class, 'update'])
+                ->whereNumber('category')
+                ->middleware(['permission:admin.data_protection.manage', 'governance-storage'])
+                ->name('personal-data.update');
+
+            /* ADM-015. */
+            Route::get('/sovereignty', [SovereigntyProfileController::class, 'show'])
+                ->middleware('permission:admin.sovereignty.view')->name('sovereignty');
+            Route::put('/sovereignty', [SovereigntyProfileController::class, 'update'])
+                ->middleware(['permission:admin.sovereignty.manage', 'governance-storage'])
+                ->name('sovereignty.update');
+            Route::post('/sovereignty/approve', [SovereigntyProfileController::class, 'approve'])
+                ->middleware(['permission:admin.sovereignty.approve', 'governance-storage'])
+                ->name('sovereignty.approve');
+        });
 
     /*
      * Proving who you are again, before a critical action. ADM-010.

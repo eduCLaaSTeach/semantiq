@@ -516,10 +516,16 @@ as applying. See `doc/execution/decisions/DEC-003-pdpa-navigation-homes.md`.
 The other leaves in this group remain unbuilt and render disabled with a Soon
 pill until a gate delivers them.
 
+Sovereignty Profile (ADM-015) was added to 12.12 by the same decision, for the
+same reason: the group listed eight aspects of sovereignty and had no node for
+the profile that answers four of them at once. Recorded as an amendment in
+DEC-003.
+
 ### 12.12 Data Sovereignty
 
 ```text
 Data Sovereignty
+|-- Sovereignty Profile
 |-- Approved Geographies
 |-- Storage Geography
 |-- Processing Geography

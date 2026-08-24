@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Modules\Audit\Support\AuditLogger;
+use App\Modules\Governance\Services\DataProtectionProfiles;
+use App\Modules\Governance\Services\PersonalDataCatalogue;
+use App\Modules\Governance\Services\SovereigntyProfiles;
+use App\Modules\Governance\Support\GovernanceStorage;
 use App\Modules\Identity\Policies\SystemAdministratorGuard;
 use App\Modules\Identity\Services\AccessReviewService;
 use App\Modules\Identity\Services\RoleRegistry;
@@ -95,6 +99,26 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AuthenticationGuard::class);
         $this->app->singleton(Reauthentication::class);
         $this->app->singleton(SessionRegistry::class);
+
+        /*
+         * Release 1 gate 4, batch R1.4a.
+         *
+         * `GovernanceStorage` is a singleton for the same reason
+         * `SecurityStorage` is: three screens and one middleware ask it whether
+         * the gate 4 tables exist, and without a singleton each would pay its
+         * own schema query on every request.
+         *
+         * The three services are singletons because each memoises nothing yet
+         * but reads the same profile repeatedly within one request - the
+         * controller for the form, the view for the badge, and the gap list for
+         * the warning. Two instances could answer the same question differently
+         * after a write, which for a versioned profile would mean a screen
+         * showing a draft it had just superseded.
+         */
+        $this->app->singleton(GovernanceStorage::class);
+        $this->app->singleton(DataProtectionProfiles::class);
+        $this->app->singleton(SovereigntyProfiles::class);
+        $this->app->singleton(PersonalDataCatalogue::class);
     }
 
     public function boot(): void

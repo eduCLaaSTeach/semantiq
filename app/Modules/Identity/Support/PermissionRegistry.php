@@ -261,6 +261,42 @@ class PermissionRegistry
 
             $declare('Admin', 'secrets', 'view', 'See where credentials are managed and when they lapse.', Role::SystemAdmin),
             $declare('Admin', 'secrets', 'manage', 'Add, change and retire a pointer to a credential held elsewhere.', Role::SystemAdmin, PermissionRisk::High, true),
+
+            /* ---- Governance, gate 4 batch R1.4a ----------------------- */
+
+            /*
+             * Decision D13, approved 24 August 2026, recorded as SEC-DEC-067.
+             * Governance authority splits three ways rather than sitting
+             * entirely at System Administrator the way gate 3 does:
+             *
+             *   READ     Domain Owner. A Domain Owner who cannot read the
+             *            privacy position governing their own domain will work
+             *            around it, and the position is a policy document, not
+             *            business data.
+             *   MANAGE   Administrator. Writing a draft.
+             *   APPROVE  System Administrator, and never the same permission as
+             *            manage. A person who can weaken a sovereignty profile
+             *            must not also be the person who blesses it.
+             *
+             * The services enforce the further separation the tier split cannot
+             * express: a requester never approves their own request.
+             *
+             * NONE OF THESE NAMES A BUSINESS DOMAIN. The gate 2 rule holds and
+             * is asserted by test: a Domain Owner who can read the sovereignty
+             * profile holds no Finance, Sales or People data by virtue of it.
+             *
+             * The Auditor capability approved as D2 is NOT declared here. It
+             * changes `Authorization` itself and lands in R1.4b with the audit
+             * log screen that needs it, so this batch leaves no half-wired
+             * capability behind.
+             */
+            $declare('Admin', 'data_protection', 'view', 'See the data protection profile and the personal data categories this organisation holds.', Role::DomainOwner),
+            $declare('Admin', 'data_protection', 'manage', 'Write a draft data protection profile and maintain the personal data categories.', Role::Admin, PermissionRisk::High, true),
+            $declare('Admin', 'data_protection', 'approve', 'Approve a data protection profile, making it the version in force.', Role::SystemAdmin, PermissionRisk::High, true),
+
+            $declare('Admin', 'sovereignty', 'view', 'See where this organisation stores and processes its data.', Role::DomainOwner),
+            $declare('Admin', 'sovereignty', 'manage', 'Write a draft data sovereignty profile.', Role::Admin, PermissionRisk::High, true),
+            $declare('Admin', 'sovereignty', 'approve', 'Approve a data sovereignty profile, including any position that permits data to cross a border.', Role::SystemAdmin, PermissionRisk::High, true),
         );
     }
 }

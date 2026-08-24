@@ -114,12 +114,69 @@
                     <p class="field-message" id="data_owner-message">@error('data_owner'){{ $message }}@enderror</p>
                 </div>
 
+                {{-- The privacy contact. SEC-DEC-043, resolved 24 August 2026.
+
+                     Four fields where there was one, and required where it was
+                     optional, because the Singapore PDPA expects a designated
+                     contact to be reachable and one free-text box could hold a
+                     name with no way to reach the person.
+
+                     The banner below appears only where the required parts are
+                     still missing, so an organisation saved before this change
+                     is told what it now needs BEFORE the save fails rather than
+                     by the save failing. --}}
+                @if ($privacyContactIncomplete)
+                    <div class="alert alert-warning" role="alert">
+                        <svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                        <span>
+                            <strong>The privacy contact is incomplete.</strong>
+                            A designated contact with a name and an email address is now required.
+                            @if ($organisation->privacy_contact)
+                                This organisation records
+                                <strong>{{ $organisation->privacy_contact }}</strong> from before the
+                                field was split up. Check the name below is right and add an email address.
+                            @else
+                                Nothing is recorded yet.
+                            @endif
+                            Saving this profile will ask for both.
+                        </span>
+                    </div>
+                @endif
+
                 <div class="field">
-                    <label class="field-label" for="privacy_contact">Privacy contact</label>
-                    <input class="input" type="text" id="privacy_contact" name="privacy_contact"
-                           value="{{ old('privacy_contact', $organisation->privacy_contact) }}">
-                    <p class="field-help">Who to reach about a privacy question. A name or a role.</p>
-                    <p class="field-message" id="privacy_contact-message">@error('privacy_contact'){{ $message }}@enderror</p>
+                    <label class="field-label" for="privacy_contact_name">Privacy contact name <span class="field-required" aria-hidden="true">*</span></label>
+                    <input class="input" type="text" id="privacy_contact_name" name="privacy_contact_name" required
+                           value="{{ old('privacy_contact_name', $organisation->privacy_contact_name) }}"
+                           @error('privacy_contact_name') aria-invalid="true" aria-describedby="privacy_contact_name-message" @enderror>
+                    <p class="field-help">The person or role designated to answer privacy questions. A name or a job title, never a login or a key.</p>
+                    <p class="field-message" id="privacy_contact_name-message">@error('privacy_contact_name'){{ $message }}@enderror</p>
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="privacy_contact_email">Privacy contact email <span class="field-required" aria-hidden="true">*</span></label>
+                    <input class="input" type="email" id="privacy_contact_email" name="privacy_contact_email" required
+                           value="{{ old('privacy_contact_email', $organisation->privacy_contact_email) }}"
+                           @error('privacy_contact_email') aria-invalid="true" aria-describedby="privacy_contact_email-message" @enderror>
+                    <p class="field-help">Where a data subject or a regulator can reach that person. This address appears in privacy correspondence, so a shared mailbox is usually better than one person's inbox.</p>
+                    <p class="field-message" id="privacy_contact_email-message">@error('privacy_contact_email'){{ $message }}@enderror</p>
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="privacy_contact_phone">Privacy contact phone</label>
+                    <input class="input" type="text" id="privacy_contact_phone" name="privacy_contact_phone"
+                           value="{{ old('privacy_contact_phone', $organisation->privacy_contact_phone) }}"
+                           @error('privacy_contact_phone') aria-invalid="true" aria-describedby="privacy_contact_phone-message" @enderror>
+                    <p class="field-help">Optional.</p>
+                    <p class="field-message" id="privacy_contact_phone-message">@error('privacy_contact_phone'){{ $message }}@enderror</p>
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="privacy_contact_role">Privacy or DPO role or title</label>
+                    <input class="input" type="text" id="privacy_contact_role" name="privacy_contact_role"
+                           value="{{ old('privacy_contact_role', $organisation->privacy_contact_role) }}"
+                           @error('privacy_contact_role') aria-invalid="true" aria-describedby="privacy_contact_role-message" @enderror>
+                    <p class="field-help">Optional. For example Data Protection Officer.</p>
+                    <p class="field-message" id="privacy_contact_role-message">@error('privacy_contact_role'){{ $message }}@enderror</p>
                 </div>
 
                 <div class="field">

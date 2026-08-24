@@ -81,6 +81,27 @@ return [
         'admin-security' => ['min' => Role::SystemAdmin, 'permission' => 'admin.security.view'],
         'admin-secrets' => ['min' => Role::SystemAdmin, 'permission' => 'admin.secrets.view'],
 
+        /*
+         * Release 1 gate 4, batch R1.4a. Decision D13, SEC-DEC-067: governance
+         * READ sits at Domain Owner, which is lower than gate 3's blanket
+         * System Administrator and is deliberate - a policy document a Domain
+         * Owner cannot read is a policy document they will work around.
+         *
+         * NO `or_auditor` HERE YET, on purpose. The Compliance cluster's own
+         * `compliance` policy admits an Auditor, but `Authorization` has no
+         * Auditor concept until R1.4b builds it (decision D2). Declaring
+         * `or_auditor` now would let an Auditor past the tier gate only to be
+         * refused by the permission - a node that appears and then denies. It
+         * is added in the same change that teaches the authorization layer to
+         * honour it.
+         *
+         * The permission named is the one the ROUTE names, so a typed URL meets
+         * the same gate a hidden link would have. NavigationIntegrityTest
+         * asserts the pairing.
+         */
+        'admin-data-protection' => ['min' => Role::DomainOwner, 'permission' => 'admin.data_protection.view'],
+        'admin-sovereignty' => ['min' => Role::DomainOwner, 'permission' => 'admin.sovereignty.view'],
+
         'domain-executive' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Executive],
         'domain-sales' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Sales],
         'domain-finance' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Finance],
@@ -886,11 +907,30 @@ return [
                     [
                         'label' => 'Data Protection Profile',
                         'icon' => 'i-shield',
-                        'policy' => 'compliance',
+                        'route' => 'admin.governance.data-protection',
+                        'policy' => 'admin-data-protection',
                     ],
                     [
                         'label' => 'Personal / Sensitive Data',
                         'icon' => 'i-lock',
+                        'route' => 'admin.governance.personal-data',
+                        'policy' => 'admin-data-protection',
+                    ],
+                    /*
+                     * DEC-003, approved 24 August 2026. Neither PDPA-01 nor
+                     * PDPA-02 had a home anywhere in MENU_STRUCTURE - the same
+                     * gap DEC-001 recorded as M1 in gate 3. Both are authored
+                     * now and render disabled with a Soon pill; the screens
+                     * behind them are R1.4c.
+                     */
+                    [
+                        'label' => 'Privacy Requests',
+                        'icon' => 'i-inbox',
+                        'policy' => 'compliance',
+                    ],
+                    [
+                        'label' => 'Breach Register',
+                        'icon' => 'i-alert-octagon',
                         'policy' => 'compliance',
                     ],
                     [
@@ -930,6 +970,26 @@ return [
                 'icon' => 'i-globe',
                 'policy' => 'compliance',
                 'children' => [
+                    /*
+                     * ADM-015 had NO leaf in MENU_STRUCTURE 12.12. The group
+                     * lists eight aspects - Storage Geography, Processing
+                     * Geography, AI Processing Geography, Cross-Geo Controls
+                     * and four more - but no node for the profile that answers
+                     * four of them at once.
+                     *
+                     * This is the same class of gap DEC-003 resolved for
+                     * PDPA-01 and PDPA-02, and it is resolved the same way: one
+                     * leaf, named for what the screen is, at the top of the
+                     * group. Recorded as an amendment in DEC-003 rather than
+                     * decided silently. The eight aspect leaves are unchanged
+                     * and stay unbuilt.
+                     */
+                    [
+                        'label' => 'Sovereignty Profile',
+                        'icon' => 'i-globe',
+                        'route' => 'admin.governance.sovereignty',
+                        'policy' => 'admin-sovereignty',
+                    ],
                     [
                         'label' => 'Approved Geographies',
                         'icon' => 'i-globe',

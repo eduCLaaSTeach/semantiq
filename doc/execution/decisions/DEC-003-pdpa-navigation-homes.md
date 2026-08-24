@@ -68,6 +68,40 @@ position. A privacy request and a breach are events with their own lifecycle,
 their own deadlines and their own audit trail. Folding an event register into a
 settings screen is how the register becomes invisible.
 
+## Amendment, same date: ADM-015 also had no leaf
+
+Found while wiring R1.4a, after this decision was written.
+
+`doc/MENU_STRUCTURE.md` section 12.12 Data Sovereignty lists eight aspects -
+Approved Geographies, Storage Geography, Processing Geography, AI Processing
+Geography, Cross-Geo Controls, Network Route, Exceptions and Evidence - and has
+**no node for ADM-015 Data Sovereignty Profile**, the screen that answers four
+of those eight at once.
+
+This is the same class of gap as the two above, and it is resolved the same way:
+
+```text
+Compliance
+`-- Data Sovereignty
+    |-- Sovereignty Profile        ADM-015   <- NEW
+    |-- Approved Geographies       unbuilt
+    |-- Storage Geography          unbuilt
+    |-- ...unchanged leaves stay unbuilt
+```
+
+The alternative considered and rejected was pointing the four aspect leaves at
+one screen. Four navigation nodes landing on the same page is not navigation, it
+is four names for one thing, and the breadcrumb could not tell which one the
+reader came in through.
+
+The eight aspect leaves are unchanged and stay unbuilt. This adds one node; it
+does not promise the rest of the group.
+
+**This amendment was not in the approved D1 text.** It is recorded here rather
+than applied silently, and it can be reversed: the screen would then need a
+different home, because a screen with a route and no navigation node is the
+"unwanted parts left hanging" failure.
+
 ## Consequences
 
 - Two new navigation leaves, each disabled with a Soon pill until gate 4c
