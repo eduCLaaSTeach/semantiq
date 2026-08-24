@@ -100,9 +100,25 @@ return new class extends Migration
 
             $table->timestamps();
 
-            /* One policy per category. Two would mean two answers to one
-             * question. */
-            $table->unique(['organisation_id', 'personal_data_category_id']);
+            /*
+             * One policy per category. Two would mean two answers to one
+             * question.
+             *
+             * THE INDEX NAME IS EXPLICIT BECAUSE THE GENERATED ONE IS ILLEGAL.
+             * Laravel would name this
+             * `retention_policies_organisation_id_personal_data_category_id_unique`,
+             * which is 67 characters. MySQL rejects any identifier over 64 with
+             * error 1059, so this migration failed on the live database while
+             * passing locally: SQLite does not enforce the limit, so no local
+             * run and no test in the suite could have caught it.
+             * `MigrationIdentifierLengthTest` now computes every generated
+             * identifier and fails above 64, so this class of defect cannot
+             * reach a MySQL server again.
+             */
+            $table->unique(
+                ['organisation_id', 'personal_data_category_id'],
+                'retention_policies_org_category_unique'
+            );
             $table->index(['organisation_id', 'status']);
             $table->index(['organisation_id', 'next_review_on']);
         });
