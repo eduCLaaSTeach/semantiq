@@ -914,3 +914,163 @@ and not only the state that shows the feature working.
 | Badge and sentence share one memoised result | `::the_badge_and_the_sentence_come_from_one_memoised_result` |
 
 No migration, no schema change, no production configuration change.
+
+---
+
+## 14. Gate 4 batch R1.4a, verified in production
+
+**Release:** PR #25, merged as `5787a645fbef484dd11c23d6def1eb5dc3d48b38`, 24 August 2026.
+**Features:** ADM-014 Data Protection Profile, ADM-015 Data Sovereignty Profile,
+the personal data category register, and the required structured privacy contact.
+**Status: functionally verified on production.** Awaiting the product owner's
+completion phrase.
+
+### 14.1 Automated tests
+
+| What | Result |
+|---|---|
+| Full suite | **469 tests, 3368 assertions, all passing** |
+| New in this batch | 56 |
+| Pint | Clean |
+| CI on the merge commit | `CI` run 40, success. Run 32707594007 |
+
+The 56 new tests cover the versioning contract, the seed, the access boundary,
+the deployment-order round trip, the redactor naming check over every new key,
+and the privacy contact.
+
+### 14.2 Deployment
+
+| Step | Result |
+|---|---|
+| `Deploy to cPanel (SSH)` | Run 50, **success**. Run 32707594152 |
+| Live probe, unauthenticated | `/sign-in` 200. Every protected route 302 to sign-in. No 500, no 404 on a declared route |
+| Pre-migration behaviour | Verified against the merged commit with the four tables absent: all seven screens 200, both governance writes refused with a redirect, and nothing written |
+| Production migration | Run by the product owner as a separately approved action. Exactly the four R1.4a migrations, no unexpected migration |
+
+### 14.3 The four screens, post-migration
+
+Confirmed by the product owner on the live site, 24 August 2026.
+
+| Screen | Result |
+|---|---|
+| Data Protection Profile | Works. Version 1 created, saved and approved |
+| Personal / Sensitive Data | Works. **7 categories seeded**, each naming real tables: `users`, `audit_events`, `organisations`, `user_roles`, `domain_entitlements`, `access_reviews`, `access_review_items`, `password_reset_tokens`, `sessions` |
+| Sovereignty Profile | Works. Seeded as a draft, then approved |
+| Organisation Profile | Works. The four structured privacy contact fields are present |
+
+### 14.4 Database evidence
+
+`CHECK-R1.4a.sql`, read-only, run against production. **14 of 14 PASS.**
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Gate 4 tables exist | PASS |
+| 2 | Privacy contact fields added | PASS |
+| 3 | Old privacy contact field kept | PASS |
+| 4 | Personal data categories seeded | PASS |
+| 5 | Every category names a table | PASS |
+| 6 | Sovereignty profile exists | PASS |
+| 7 | Storage geography is Singapore | PASS |
+| 8 | Backup geography is Singapore | PASS |
+| 9 | External replication is none | PASS |
+| 10 | No cross-geo switch is turned on | PASS |
+| 11 | At most one approved version of each profile | PASS |
+| 12 | Every governance row has an organisation | PASS |
+| 13 | Governance changes are being audited | PASS |
+| 14 | Audit trail is still append-only | PASS |
+
+### 14.5 Audit evidence
+
+Five governance events, all attributed, in order:
+
+```text
+08:48:25  governance.sovereignty_profile.seeded       status draft, version 1
+08:49:00  governance.sovereignty_profile.approved     reason recorded
+08:50:27  governance.data_protection_profile.created  version 1
+08:50:27  governance.data_protection_profile.updated
+08:50:37  governance.data_protection_profile.approved reason recorded
+```
+
+**The summaries hold real values, not `[redacted]`** - `"backup_geography": "sg"`,
+`"applicable_regime": "Singapore PDPA"`, `"status": "draft"`. That is SEC-DEC-044's
+naming discipline working on live data. Gate 3 shipped two keys that failed this
+and both were caught by tests; gate 4's were checked before they were written and
+are asserted by `GovernanceCatalogueTest`.
+
+Both `audit_events` triggers survived the release untouched, as intended:
+R1.4a's only `audit_events` interaction is writing rows.
+
+### 14.6 The approved sovereignty position
+
+| Field | Value in force |
+|---|---|
+| Storage geography | Singapore |
+| Processing geography | Singapore |
+| AI processing geography | Not determined |
+| Backup geography | Singapore |
+| External replication | None |
+| Cross-geo storage / processing / AI / conversation history | All off |
+| Version | 1, approved 24 August 2026, immutable |
+
+The three values SEC-DEC-036 confirmed separately are now recorded as an
+**approved** position rather than a decision record, which is what ADM-015 was
+for. SEC-DEC-068's draft-only constraint is discharged: the seed was created as a
+draft, the screen reported Not Configured until a person approved it, and a
+person did.
+
+### 14.7 What is deliberately incomplete
+
+Both approved versions carry empty compliance-owned fields:
+
+| Version | Empty field | Why |
+|---|---|---|
+| Sovereignty v1 | `evidence_reference`, `ai_processing_geography` | No evidence pointer supplied; no AI service provisioned yet |
+| Data protection v1 | `regime_basis`, `breach_notification_basis` | Legal reasoning. Engineering does not write it, by the standing rule |
+
+**This is the design working, not a defect.** The screens showed the gaps before
+approval, approving with gaps is permitted - a partial position recorded honestly
+beats none - and the gaps stay visible afterwards.
+
+Both are correctable without a rollback: filling them in and approving writes
+version 2 and supersedes version 1, which stays readable as the record of what
+was in force on 24 August 2026. That path exists only because SEC-DEC-074 was
+found and fixed in this batch; before it, the sovereignty screen went permanently
+read-only at the first approval.
+
+### 14.8 Exit criteria
+
+| # | Criterion | Result |
+|---|---|---|
+| 1 | Automated tests pass | **Met.** 469 tests |
+| 2 | CI and deploy green on the merge commit | **Met** |
+| 3 | Pre-migration state safe on every screen | **Met.** No 500; writes fail closed |
+| 4 | Migration applies cleanly, nothing unexpected | **Met.** Exactly four |
+| 5 | Day-one browser verification, empty state included | **Met.** Both locally and on production |
+| 6 | No false Healthy state | **Met.** Not Configured and Migration required used correctly |
+| 7 | Organisation isolation | **Met.** No governance row without an organisation |
+| 8 | Append-only audit intact | **Met.** Both triggers present |
+| 9 | Context registers match implementation | **Met.** Code, data, validation, configuration, sovereignty, and SEC-DEC-073 to SEC-DEC-077 |
+| 10 | Product owner confirmation phrase | **Outstanding** |
+
+### 14.9 Confirmation phrase
+
+R1.4a is complete when the product owner sends, exactly:
+
+```text
+CONFIRM R1.4a COMPLETE
+```
+
+Until then `IMPLEMENTATION_STATUS.md` is not advanced and R1.4b does not start.
+
+### 14.10 A process finding, recorded because it cost the product owner time
+
+The first verification sheet printed `found` and `expected` and left the reader
+to compare them - and its expectations were written for an install nobody had
+used. The product owner had already approved both profiles, correctly and within
+their authority, so two rows read as **FAIL** on a system that was working.
+
+The replacement, `CHECK-R1.4a.sql`, computes a verdict per row - `PASS`,
+`ACTION NEEDED` or `FAIL` - and states the action. It treats approved, draft and
+untouched as equally valid. **Every future verification sheet uses this shape.**
+A check that requires interpretation is a check that produces false alarms, and a
+false alarm on a governance screen costs more than the check saves.
