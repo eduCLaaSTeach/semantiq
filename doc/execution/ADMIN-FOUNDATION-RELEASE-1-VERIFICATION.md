@@ -1269,6 +1269,36 @@ R1.4c is not started and `IMPLEMENTATION_STATUS.md` keeps R1.4 open.
 
 ### 15.8 Acceptance
 
-**Not yet accepted.** The product owner has confirmed the migration output, the
-post-check results and all three live screens. The acceptance decision for R1.4b
-is theirs and has not been given at the time of writing.
+**R1.4b is ACCEPTED.** Confirmed in the product owner's own words on
+24 August 2026, after they ran the migration, the post-check and all three
+screens on the live deployment themselves:
+
+```
+I formally accept R1.4b.
+```
+
+The final production evidence they recorded with that acceptance:
+
+| Area | Evidence |
+| --- | --- |
+| Retention | 7 categories; all compliance-owned values `Not Configured`; no false retention claim |
+| Sovereignty Exceptions | approved sovereignty position shown; no exception in force |
+| Audit Logs | live; five presets available |
+| Audit integrity | 2 append-only triggers present; `audit_events` 19 rows before and 19 after |
+| Migration recovery | failed retention migration repaired via PR #27; **no rollback used**; permanent MySQL identifier-length guard added |
+
+**No confirmation phrase was set for this batch**, for the same reason as
+R1.4a: a phrase belongs to a whole gate, and R1.4b is a batch inside gate 4.
+Recorded as said rather than paraphrased.
+
+### 15.9 Gate 4 batch status after this acceptance
+
+| Batch | State |
+| --- | --- |
+| R1.4a profiles and privacy contact | **ACCEPTED** 24 August 2026 |
+| R1.4b auditor capability, exceptions, retention, audit log | **ACCEPTED** 24 August 2026 |
+| R1.4c privacy requests, breach register, governance overview | **NOT STARTED** |
+| **R1.4 Gate 4 overall** | **IN PROGRESS** |
+
+`IMPLEMENTATION_STATUS.md` keeps R1.4 open. Two of three batches accepted does
+not unlock gate 5.
