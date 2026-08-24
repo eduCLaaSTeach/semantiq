@@ -13,7 +13,7 @@ Nothing here is inferred from a column name.
 
 Column-level detail is in [DATA_DICTIONARY.md](DATA_DICTIONARY.md).
 
-Covers 26 tables, 286 columns, 57 foreign keys.
+Covers 28 tables, 327 columns, 69 foreign keys.
 
 ---
 
@@ -47,8 +47,8 @@ explicitly instead, on every read path and every mutation.
 
 | Anchor | Foreign keys pointing at it | What that means |
 |---|---|---|
-| `organisations` | 13 | The tenancy boundary. Cascade on delete: removing a customer removes their data |
-| `users` | 35 | Attribution. Almost all null on delete: the record survives the person |
+| `organisations` | 15 | The tenancy boundary. Cascade on delete: removing a customer removes their data |
+| `users` | 43 | Attribution. Almost all null on delete: the record survives the person |
 
 ---
 
@@ -411,6 +411,26 @@ erDiagram
         bigint created_by_user_id FK
         bigint updated_by_user_id FK
     }
+    retention_policies {
+        bigint id PK
+        bigint organisation_id FK
+        bigint personal_data_category_id FK
+        varchar status
+        bigint approved_by_user_id FK
+        bigint created_by_user_id FK
+        bigint updated_by_user_id FK
+    }
+    sovereignty_exceptions {
+        bigint id PK
+        bigint organisation_id FK
+        bigint data_sovereignty_profile_id FK
+        varchar status
+        bigint requested_by_user_id FK
+        bigint decided_by_user_id FK
+        bigint revoked_by_user_id FK
+        bigint created_by_user_id FK
+        bigint updated_by_user_id FK
+    }
     users {
         bigint id PK
         varchar name
@@ -441,6 +461,18 @@ erDiagram
     users |o--o{ personal_data_categories : "updated_by_user_id"
     users |o--o{ personal_data_categories : "created_by_user_id"
     organisations ||--o{ personal_data_categories : "organisation_id"
+    users |o--o{ retention_policies : "updated_by_user_id"
+    users |o--o{ retention_policies : "created_by_user_id"
+    users |o--o{ retention_policies : "approved_by_user_id"
+    personal_data_categories ||--o{ retention_policies : "personal_data_category_id"
+    organisations ||--o{ retention_policies : "organisation_id"
+    users |o--o{ sovereignty_exceptions : "updated_by_user_id"
+    users |o--o{ sovereignty_exceptions : "created_by_user_id"
+    users |o--o{ sovereignty_exceptions : "revoked_by_user_id"
+    users |o--o{ sovereignty_exceptions : "decided_by_user_id"
+    users |o--o{ sovereignty_exceptions : "requested_by_user_id"
+    data_sovereignty_profiles |o--o{ sovereignty_exceptions : "data_sovereignty_profile_id"
+    organisations ||--o{ sovereignty_exceptions : "organisation_id"
 ```
 
 | From | Column | To | On delete | Why |
@@ -458,6 +490,18 @@ erDiagram
 | `personal_data_categories` | `updated_by_user_id` | `users` | set null | Attribution. The record outlives the person |
 | `personal_data_categories` | `created_by_user_id` | `users` | set null | Attribution. The record outlives the person |
 | `personal_data_categories` | `organisation_id` | `organisations` | cascade | Tenancy. Removing a customer removes their data |
+| `retention_policies` | `updated_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `retention_policies` | `created_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `retention_policies` | `approved_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `retention_policies` | `personal_data_category_id` | `personal_data_categories` | cascade | Ownership |
+| `retention_policies` | `organisation_id` | `organisations` | cascade | Tenancy. Removing a customer removes their data |
+| `sovereignty_exceptions` | `updated_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `sovereignty_exceptions` | `created_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `sovereignty_exceptions` | `revoked_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `sovereignty_exceptions` | `decided_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `sovereignty_exceptions` | `requested_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `sovereignty_exceptions` | `data_sovereignty_profile_id` | `data_sovereignty_profiles` | set null | Ownership |
+| `sovereignty_exceptions` | `organisation_id` | `organisations` | cascade | Tenancy. Removing a customer removes their data |
 
 **The two profile tables are VERSION tables, not settings tables.**
 `superseded_by_id` is self-referencing: version 2 points back at the version 1
@@ -472,7 +516,7 @@ input to the R1.4c collector coverage test.
 
 ## 7. Every foreign key
 
-All 57 of them, read from the live database.
+All 69 of them, read from the live database.
 
 | From | Column | To | On delete |
 |---|---|---|---|
@@ -509,6 +553,11 @@ All 57 of them, read from the live database.
 | `personal_data_categories` | `created_by_user_id` | `users` | set null |
 | `personal_data_categories` | `organisation_id` | `organisations` | cascade |
 | `personal_data_categories` | `updated_by_user_id` | `users` | set null |
+| `retention_policies` | `approved_by_user_id` | `users` | set null |
+| `retention_policies` | `created_by_user_id` | `users` | set null |
+| `retention_policies` | `organisation_id` | `organisations` | cascade |
+| `retention_policies` | `personal_data_category_id` | `personal_data_categories` | cascade |
+| `retention_policies` | `updated_by_user_id` | `users` | set null |
 | `role_permissions` | `granted_by_user_id` | `users` | set null |
 | `role_permissions` | `role_id` | `roles` | cascade |
 | `roles` | `created_by_user_id` | `users` | set null |
@@ -520,6 +569,13 @@ All 57 of them, read from the live database.
 | `secret_references` | `updated_by_user_id` | `users` | set null |
 | `security_policies` | `organisation_id` | `organisations` | cascade |
 | `security_policies` | `updated_by_user_id` | `users` | set null |
+| `sovereignty_exceptions` | `created_by_user_id` | `users` | set null |
+| `sovereignty_exceptions` | `data_sovereignty_profile_id` | `data_sovereignty_profiles` | set null |
+| `sovereignty_exceptions` | `decided_by_user_id` | `users` | set null |
+| `sovereignty_exceptions` | `organisation_id` | `organisations` | cascade |
+| `sovereignty_exceptions` | `requested_by_user_id` | `users` | set null |
+| `sovereignty_exceptions` | `revoked_by_user_id` | `users` | set null |
+| `sovereignty_exceptions` | `updated_by_user_id` | `users` | set null |
 | `system_settings` | `organisation_id` | `organisations` | cascade |
 | `system_settings` | `updated_by_user_id` | `users` | set null |
 | `teams` | `business_unit_id` | `business_units` | restrict |

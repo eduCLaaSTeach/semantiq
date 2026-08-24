@@ -7,8 +7,10 @@ namespace App\Modules\Governance\Support;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Whether the gate 4 tables exist yet. Features ADM-014, ADM-015 and the
- * personal data category register.
+ * Whether the gate 4 tables exist yet.
+ *
+ * Covers R1.4a - ADM-014, ADM-015 and the personal data category register - and
+ * R1.4b, which adds sovereignty exceptions and retention policies.
  *
  * THE PROBLEM THIS SOLVES is the one gate 3 met in production. The deploy
  * workflow ships code and does NOT run migrations, so every release opens a
@@ -72,12 +74,32 @@ class GovernanceStorage
         return $this->tableExists('data_sovereignty_profiles');
     }
 
-    /** Whether every table this batch introduces exists. */
+    /** Whether `sovereignty_exceptions` exists yet. Gate 4 batch R1.4b. */
+    public function exceptionsAreReady(): bool
+    {
+        return $this->tableExists('sovereignty_exceptions');
+    }
+
+    /** Whether `retention_policies` exists yet. Gate 4 batch R1.4b. */
+    public function retentionIsReady(): bool
+    {
+        return $this->tableExists('retention_policies');
+    }
+
+    /**
+     * Whether every governance table exists.
+     *
+     * Used by the write middleware, which is why it is an AND across all of
+     * them: a governance write that half-succeeded because one table happened
+     * to exist would be worse than one refused outright.
+     */
     public function isReady(): bool
     {
         return $this->categoriesAreReady()
             && $this->dataProtectionIsReady()
-            && $this->sovereigntyIsReady();
+            && $this->sovereigntyIsReady()
+            && $this->exceptionsAreReady()
+            && $this->retentionIsReady();
     }
 
     /**
@@ -94,9 +116,9 @@ class GovernanceStorage
     public function blocker(): string
     {
         return 'The database migration for the Data Protection release has not been run on this '
-            .'deployment yet, so the data protection profile, the sovereignty profile and the personal '
-            .'data categories cannot be read or changed. An administrator with server access needs to '
-            .'run the outstanding migrations.';
+            .'deployment yet, so the governance profiles, personal data categories, retention policies '
+            .'and sovereignty exceptions cannot be read or changed. An administrator with server access '
+            .'needs to run the outstanding migrations.';
     }
 
     /**

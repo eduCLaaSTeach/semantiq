@@ -5,8 +5,11 @@ declare(strict_types=1);
 use App\Http\Controllers\Auth\MicrosoftSignInController;
 use App\Http\Controllers\Auth\SignInController;
 use App\Http\Controllers\Pages\HomeController;
+use App\Modules\Governance\Http\Controllers\AuditLogController;
 use App\Modules\Governance\Http\Controllers\DataProtectionProfileController;
 use App\Modules\Governance\Http\Controllers\PersonalDataCategoryController;
+use App\Modules\Governance\Http\Controllers\RetentionPolicyController;
+use App\Modules\Governance\Http\Controllers\SovereigntyExceptionController;
 use App\Modules\Governance\Http\Controllers\SovereigntyProfileController;
 use App\Modules\Identity\Http\Controllers\AccessReviewController;
 use App\Modules\Identity\Http\Controllers\AccessRoleController;
@@ -418,6 +421,84 @@ Route::middleware('auth')->group(function (): void {
             Route::post('/sovereignty/approve', [SovereigntyProfileController::class, 'approve'])
                 ->middleware(['permission:admin.sovereignty.approve', 'governance-storage'])
                 ->name('sovereignty.approve');
+
+            /*
+             * ADM-016 Sovereignty Exceptions. Gate 4 batch R1.4b.
+             *
+             * `request` and `approve` are separate permissions at separate
+             * tiers, and the SERVICE additionally refuses an approval by the
+             * person who raised the request - a control the tier split cannot
+             * express, because a System Administrator holds both.
+             *
+             * Approving and rejecting share one route and one permission. They
+             * are two outcomes of one decision, and separating them would let
+             * somebody hold the power to say yes without the power to say no,
+             * which is not a reviewer.
+             *
+             * `confirm:` is deliberately absent, as on the R1.4a routes.
+             * ADM-010's re-authentication applies to the critical actions gate
+             * 3 enumerated, and adding one is a change to `CriticalAction` that
+             * belongs with its own decision rather than with a route. The
+             * control ROLE_MODEL section 6 asks for here is present: a written
+             * reason on every decision, plus separation of duties.
+             */
+            Route::get('/exceptions', [SovereigntyExceptionController::class, 'index'])
+                ->middleware('permission:admin.sovereignty_exceptions.view')->name('exceptions');
+            Route::post('/exceptions', [SovereigntyExceptionController::class, 'store'])
+                ->middleware(['permission:admin.sovereignty_exceptions.request', 'governance-storage'])
+                ->name('exceptions.store');
+            Route::post('/exceptions/{exception}/decide', [SovereigntyExceptionController::class, 'decide'])
+                ->whereNumber('exception')
+                ->middleware(['permission:admin.sovereignty_exceptions.approve', 'governance-storage'])
+                ->name('exceptions.decide');
+            Route::post('/exceptions/{exception}/revoke', [SovereigntyExceptionController::class, 'revoke'])
+                ->whereNumber('exception')
+                ->middleware(['permission:admin.sovereignty_exceptions.approve', 'governance-storage'])
+                ->name('exceptions.revoke');
+
+            /*
+             * PDPA-03 Retention. Gate 4 batch R1.4b.
+             *
+             * There is NO delete route and no route that executes anything.
+             * SEC-DEC-038. These screens write policy down; nothing sweeps,
+             * nothing schedules and nothing removes data.
+             *
+             * `{category}` is a plain integer resolved in the controller, per
+             * SEC-DEC-058.
+             */
+            Route::get('/retention', [RetentionPolicyController::class, 'index'])
+                ->middleware('permission:admin.retention.view')->name('retention');
+            Route::get('/retention/{category}', [RetentionPolicyController::class, 'edit'])
+                ->whereNumber('category')
+                ->middleware(['permission:admin.retention.manage', 'governance-storage'])
+                ->name('retention.edit');
+            Route::put('/retention/{category}', [RetentionPolicyController::class, 'update'])
+                ->whereNumber('category')
+                ->middleware(['permission:admin.retention.manage', 'governance-storage'])
+                ->name('retention.update');
+            Route::post('/retention/{category}/approve', [RetentionPolicyController::class, 'approve'])
+                ->whereNumber('category')
+                ->middleware(['permission:admin.retention.manage', 'governance-storage'])
+                ->name('retention.approve');
+
+            /*
+             * ADM-013 Audit Log. Gate 4 batch R1.4b, DEC-004.
+             *
+             * ONE route, read only. The four functional views are `?view=`
+             * presets over the same table, not four routes - so a future
+             * Governance Overview links to `/audit-logs?view=security` rather
+             * than the product maintaining four parallel screens.
+             *
+             * No `governance-storage`: `audit_events` has existed since gate 1,
+             * so there is no deployment window in which it is missing.
+             *
+             * `admin.audit.view_network` is NOT named here. It is not an
+             * access gate for the screen - it decides which COLUMNS the query
+             * selects, which `AuditLogQuery` owns. Naming it on the route would
+             * lock out every reader who is allowed the trail but not the IP.
+             */
+            Route::get('/audit-logs', AuditLogController::class)
+                ->middleware('permission:admin.audit.view')->name('audit');
         });
 
     /*

@@ -19,7 +19,7 @@ the part worth reading.
 
 Types are shown as **MySQL** produces them, because production is MySQL.
 
-Covers 26 tables, 286 columns, 57 foreign keys.
+Covers 28 tables, 327 columns, 69 foreign keys.
 
 ---
 
@@ -59,7 +59,7 @@ be worse than showing a departed account.
 
 **Security** - [secret_references](#secret-references), [security_policies](#security-policies)
 
-**Governance** - [data_protection_profiles](#data-protection-profiles), [data_sovereignty_profiles](#data-sovereignty-profiles), [personal_data_categories](#personal-data-categories)
+**Governance** - [data_protection_profiles](#data-protection-profiles), [data_sovereignty_profiles](#data-sovereignty-profiles), [personal_data_categories](#personal-data-categories), [retention_policies](#retention-policies), [sovereignty_exceptions](#sovereignty-exceptions)
 
 **Laravel** - [cache](#cache), [cache_locks](#cache-locks), [failed_jobs](#failed-jobs), [job_batches](#job-batches), [jobs](#jobs), [password_reset_tokens](#password-reset-tokens), [sessions](#sessions)
 
@@ -626,6 +626,81 @@ Seeded from a scan of the live schema, not a privacy template: personal data was
 | `contains_sensitive` | `tinyint(1)` | - | `0` | - | Whether it includes data most regimes treat with extra care - health, finances, biometrics. **A different question from classification**: one is harm, the other is kind. |
 | `source_tables` | `json` | yes | - | - | JSON list of the tables this category lives in. **The input to the R1.4c collector coverage test**, which fails when a schema table is claimed by no category and named in no exclusion list. |
 | `status` | `varchar(16)` | - | `active` | - | Lifecycle state, from a codified list. Never free text. |
+| `created_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who created it. Kept as `nullOnDelete` so the record survives the person leaving. |
+| `updated_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who last changed it. Same nullability reasoning. |
+| `created_at` | `timestamp` | yes | - | - | When the row was written. |
+| `updated_at` | `timestamp` | yes | - | - | When the row last changed. |
+
+## `retention_policies`
+
+How long one category of personal data is kept, on what basis, from what event, and what happens at the end.
+
+| | |
+|---|---|
+| **Module** | Governance |
+| **Introduced** | R1.4b |
+| **Classification** | Internal |
+| **Personal data** | No - it describes how personal data is treated |
+| **Columns** | 18 |
+
+**This table stores policy and executes nothing.** There is no sweep, no job and no deletion path anywhere in gate 4 (SEC-DEC-038). A filled-in row means somebody wrote down an intention and, once approved, that a human agreed it - not that anything acts on it. Every screen says so, because a table full of periods reads as protection, and reading it that way is how an organisation believes it is compliant while nothing happens. **It replaces one blanket seven-year number**, which DEC-002 traced to a gap: the PDPA expects a stated basis per category. **Three columns are compliance-owned and ship empty** - `retention_months`, `basis` and `lawful_basis` are judgements about law, and null means Not Configured, never "forever" and never seven years.
+
+| Column | Type | Null | Default | Points at | What it means |
+|---|---|---|---|---|---|
+| **id** | `bigint unsigned AUTO_INCREMENT` | - | - | - | Surrogate primary key. Auto-incrementing, never reused, never meaningful. |
+| `organisation_id` | `bigint unsigned` | - | - | `organisations.id (cascade)` | Which customer owns this row. The tenancy boundary. `BelongsToOrganisation` fills it at creation and fails closed when no context is resolved. |
+| `personal_data_category_id` | `bigint unsigned` | - | - | `personal_data_categories.id (cascade)` | Which category this policy governs. One policy per category: two would be two answers to one question. |
+| `retention_months` | `smallint unsigned` | yes | - | - | How long, in months. **NULL means Not Configured** - never "forever", and never the seven years this repository once applied to everything. Compliance-owned; SemantIQ ships it empty. |
+| `basis` | `text` | yes | - | - | Why that long - the obligation, guidance or contract it comes from. **Compliance-owned and ships empty.** A plausible sentence written by software would be a compliance claim nobody made. |
+| `lawful_basis` | `varchar(190)` | yes | - | - | Which legal ground the data is held under. Also compliance-owned, also empty. |
+| `start_event` | `varchar(64)` | yes | - | - | **When the clock starts.** Without this a period is unusable: "three years" from account closure and from record creation are different dates, often years apart. |
+| `disposal_action` | `varchar(32)` | yes | - | - | What happens at the end - review, anonymise, archive, delete, retain. **Recorded as an intention. Nothing in SemantIQ carries it out.** |
+| `owner` | `varchar(190)` | yes | - | - | Who is accountable for this category. A name or a job title, never a login or a key. |
+| `exception_rule` | `text` | yes | - | - | Anything overriding the period - a legal hold, a dispute, a regulatory obligation. Free text because the shape of an exception is not knowable in advance; its existence is what the screen surfaces. |
+| `next_review_on` | `date` | yes | - | - | When somebody should look again. The screen flags it once the date passes, derived on read. Nothing else happens. |
+| `status` | `varchar(16)` | - | `draft` | - | Lifecycle state, from a codified list. Never free text. |
+| `approved_at` | `timestamp` | yes | - | - | When a person agreed the period. **Approving switches nothing on.** Editing afterwards returns the policy to draft, because a period that changed after approval is not the period anybody approved. |
+| `approved_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who agreed it. |
+| `created_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who created it. Kept as `nullOnDelete` so the record survives the person leaving. |
+| `updated_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who last changed it. Same nullability reasoning. |
+| `created_at` | `timestamp` | yes | - | - | When the row was written. |
+| `updated_at` | `timestamp` | yes | - | - | When the row last changed. |
+
+## `sovereignty_exceptions`
+
+A recorded, approved, time-bounded departure from the approved sovereignty profile.
+
+| | |
+|---|---|
+| **Module** | Governance |
+| **Introduced** | R1.4b |
+| **Classification** | Internal |
+| **Personal data** | Incidental - names a requester and an approver |
+| **Columns** | 23 |
+
+**The exception never touches the profile.** It sits beside it. An exception that edited `data_sovereignty_profiles` would make the approved position a lie, and a year later would be indistinguishable from somebody having approved a weaker position outright. **Separation of duties is enforced in the service, not by the tier split** - a System Administrator holds both `.request` and `.approve`, so nothing in the permission model stops them deciding their own request, and a person agreeing with themselves is not an approval (SEC-DEC-067). **Expiry is derived, never stored**: `status` records what a person decided, and whether an approved exception is still in force is a question about today's date answered on read, so one lapses at midnight with nothing needing to run (SEC-DEC-069).
+
+| Column | Type | Null | Default | Points at | What it means |
+|---|---|---|---|---|---|
+| **id** | `bigint unsigned AUTO_INCREMENT` | - | - | - | Surrogate primary key. Auto-incrementing, never reused, never meaningful. |
+| `organisation_id` | `bigint unsigned` | - | - | `organisations.id (cascade)` | Which customer owns this row. The tenancy boundary. `BelongsToOrganisation` fills it at creation and fails closed when no context is resolved. |
+| `data_sovereignty_profile_id` | `bigint unsigned` | yes | - | `data_sovereignty_profiles.id (set null)` | Which approved profile version this departs from, captured at request time. Comparing against whatever is current later would misread an exception raised against version 1 as though it had been raised against version 3. |
+| `title` | `varchar(190)` | - | - | - | What the exception is, in a line somebody scanning a list will understand. |
+| `justification` | `text` | - | - | - | Why it is unavoidable and what was tried instead. **The whole basis on which data is allowed to leave its geography**, and what a reviewer weighs. |
+| `aspect` | `varchar(32)` | - | - | - | Which aspect of the profile it departs from - storage, processing, AI processing, backup, replication. A closed list, because an exception to "some stuff" cannot be reviewed or compared against the profile. |
+| `requested_geography` | `varchar(32)` | yes | - | - | Where the data would go. **Named `requested_`, never `authorised_`** - `auth` is an audit-redactor fragment and the value would be stored as `[redacted]` for exactly the change an auditor came to read. |
+| `scope_note` | `text` | yes | - | - | Which data, and how much. An exception scoped to everything is not an exception. |
+| `starts_on` | `date` | yes | - | - | When it begins. Null means from the moment of approval. |
+| `ends_on` | `date` | - | - | - | **Required.** An exception with no end date is a permanent change to the sovereignty position wearing the word "exception". It stops applying on this date by itself, computed on read, with nothing needing to run. |
+| `status` | `varchar(16)` | - | `requested` | - | Lifecycle state, from a codified list. Never free text. |
+| `requested_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who raised it. Compared against the approver, because a requester never approves their own request. |
+| `requested_at` | `timestamp` | yes | - | - | When it was raised. |
+| `decided_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who approved or rejected it. **The service refuses to write this equal to `requested_by_user_id`** - the control the tier split cannot express, since a System Administrator holds both permissions. |
+| `decided_at` | `timestamp` | yes | - | - | When it was decided. |
+| `decision_note` | `text` | yes | - | - | Why it was approved or rejected. Required. |
+| `revoked_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who ended it early. **A different act from rejection**: revoking ends something that was in force, rejecting refuses something that never was, and the trail has to tell them apart. |
+| `revoked_at` | `timestamp` | yes | - | - | When it was revoked. Takes effect immediately - the next request sees it gone. |
+| `revocation_reason` | `text` | yes | - | - | Why it was ended early. Required. |
 | `created_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who created it. Kept as `nullOnDelete` so the record survives the person leaving. |
 | `updated_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who last changed it. Same nullability reasoning. |
 | `created_at` | `timestamp` | yes | - | - | When the row was written. |

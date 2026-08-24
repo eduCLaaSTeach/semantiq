@@ -87,20 +87,24 @@ return [
          * System Administrator and is deliberate - a policy document a Domain
          * Owner cannot read is a policy document they will work around.
          *
-         * NO `or_auditor` HERE YET, on purpose. The Compliance cluster's own
-         * `compliance` policy admits an Auditor, but `Authorization` has no
-         * Auditor concept until R1.4b builds it (decision D2). Declaring
-         * `or_auditor` now would let an Auditor past the tier gate only to be
-         * refused by the permission - a node that appears and then denies. It
-         * is added in the same change that teaches the authorization layer to
-         * honour it.
+         * `or_auditor` was deliberately ABSENT in R1.4a, because `Authorization`
+         * had no Auditor concept and a rail that admitted an Auditor only for
+         * the permission to refuse them is a node that appears and then denies.
+         * **R1.4b added both halves in one change**, so the rail and the
+         * authorization layer agree.
          *
          * The permission named is the one the ROUTE names, so a typed URL meets
          * the same gate a hidden link would have. NavigationIntegrityTest
          * asserts the pairing.
          */
-        'admin-data-protection' => ['min' => Role::DomainOwner, 'permission' => 'admin.data_protection.view'],
-        'admin-sovereignty' => ['min' => Role::DomainOwner, 'permission' => 'admin.sovereignty.view'],
+        'admin-data-protection' => ['min' => Role::DomainOwner, 'or_auditor' => true, 'permission' => 'admin.data_protection.view'],
+        'admin-sovereignty' => ['min' => Role::DomainOwner, 'or_auditor' => true, 'permission' => 'admin.sovereignty.view'],
+
+        /* Gate 4 batch R1.4b. Read at Domain Owner or an Auditor; the write
+         * halves are checked by the route's own `permission:` middleware. */
+        'admin-retention' => ['min' => Role::DomainOwner, 'or_auditor' => true, 'permission' => 'admin.retention.view'],
+        'admin-sovereignty-exceptions' => ['min' => Role::DomainOwner, 'or_auditor' => true, 'permission' => 'admin.sovereignty_exceptions.view'],
+        'admin-audit' => ['min' => Role::DomainOwner, 'or_auditor' => true, 'permission' => 'admin.audit.view'],
 
         'domain-executive' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Executive],
         'domain-sales' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Sales],
@@ -946,7 +950,8 @@ return [
                     [
                         'label' => 'Retention',
                         'icon' => 'i-refresh',
-                        'policy' => 'compliance',
+                        'route' => 'admin.governance.retention',
+                        'policy' => 'admin-retention',
                     ],
                     [
                         'label' => 'Minimisation',
@@ -1023,7 +1028,8 @@ return [
                     [
                         'label' => 'Exceptions',
                         'icon' => 'i-alert-octagon',
-                        'policy' => 'compliance',
+                        'route' => 'admin.governance.exceptions',
+                        'policy' => 'admin-sovereignty-exceptions',
                     ],
                     [
                         'label' => 'Evidence',
@@ -1032,10 +1038,25 @@ return [
                     ],
                 ],
             ],
+            /*
+             * ADM-013. DEC-004, approved 24 August 2026: ONE screen with four
+             * filter presets, not four leaves. The views differ only in which
+             * `module` and `action` values they show, and four nodes onto one
+             * table would be four names for one thing.
+             *
+             * A top-level leaf in COMPLIANCE, although MENU_STRUCTURE 12.14
+             * originally listed it under Monitoring. Monitoring sits behind
+             * `app-admin` at Administrator tier, and an Auditor is frequently a
+             * Viewer - so that placement would have put the audit log behind a
+             * tier that locks out the one role ROLE_MODEL.md says exists to
+             * read it. MENU_STRUCTURE is updated to match rather than left to
+             * differ quietly.
+             */
             [
                 'label' => 'Audit Logs',
                 'icon' => 'i-list-check',
-                'policy' => 'compliance',
+                'route' => 'admin.governance.audit',
+                'policy' => 'admin-audit',
             ],
         ],
 

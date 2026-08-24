@@ -242,6 +242,103 @@ return [
     ],
 
     /*
+    | ADM-016. Which aspect of the sovereignty profile an exception departs
+    | from. A closed list, because an exception to "some stuff" cannot be
+    | reviewed, reported on, or compared against the profile it departs from.
+    */
+    'exception_aspects' => [
+        'storage' => 'Storage geography',
+        'processing' => 'Processing geography',
+        'ai_processing' => 'AI processing geography',
+        'backup' => 'Backup geography',
+        'replication' => 'Replication outside the geography',
+        'other' => 'Something else, described in the scope note',
+    ],
+
+    /*
+    | PDPA-03. WHEN THE RETENTION CLOCK STARTS.
+    |
+    | Without this a period is unusable. "Three years" from what? Account
+    | closure, last activity, record creation and contract end are four
+    | different dates and produce four different answers, and the difference
+    | between them is often years.
+    */
+    'retention_start_events' => [
+        'record_created' => 'When the record was created',
+        'last_activity' => 'The last time the person used SemantIQ',
+        'account_closed' => 'When the account was closed',
+        'relationship_ended' => 'When the relationship with the person ended',
+        'contract_ended' => 'When the governing contract ended',
+        'event_occurred' => 'When the event the record describes occurred',
+    ],
+
+    /*
+    | PDPA-03. What happens when the period runs out.
+    |
+    | Deletion is one option among several, and it is deliberately not the
+    | default. Anonymising keeps the analytical value without keeping the
+    | person; archiving moves it out of reach without destroying it; review
+    | means somebody looks before anything happens.
+    |
+    | NOTHING IN GATE 4 EXECUTES ANY OF THESE. SEC-DEC-038. The column records
+    | an intention.
+    */
+    'retention_disposal_actions' => [
+        'review' => 'Review, then decide',
+        'anonymise' => 'Anonymise, keeping no link to a person',
+        'archive' => 'Archive out of the working system',
+        'delete' => 'Delete',
+        'retain' => 'Retain, under a stated obligation',
+    ],
+
+    /*
+    | ADM-013. The four functional views, as FILTER PRESETS over one table.
+    | DEC-004, approved 24 August 2026.
+    |
+    | Each preset is a set of filters, not a screen and not a query of its own.
+    | `modules` and `action_prefixes` narrow; an empty list means no narrowing
+    | on that dimension.
+    |
+    | THE PRESETS MUST NOT PARTITION THE TABLE. A reader who picks the wrong one
+    | must still be able to find an event by widening to All Events, so the
+    | presets deliberately overlap rather than carving the trail into four
+    | disjoint pieces. `AuditLogTest` asserts every event appears under All
+    | Events.
+    */
+    'audit_views' => [
+        'all' => [
+            'label' => 'All Events',
+            'help' => 'Everything recorded, newest first.',
+            'modules' => [],
+            'action_prefixes' => [],
+        ],
+        'user_activity' => [
+            'label' => 'User Activity',
+            'help' => 'Who signed in, who was refused, and what happened to their session.',
+            'modules' => [],
+            'action_prefixes' => ['auth.', 'user.'],
+        ],
+        'administrative' => [
+            'label' => 'Administrative Changes',
+            'help' => 'Changes to organisations, people, roles, permissions and entitlements.',
+            'modules' => ['Identity'],
+            'action_prefixes' => [],
+        ],
+        'security' => [
+            'label' => 'Security Changes',
+            'help' => 'Authentication and session policy, API security, and credential references.',
+            'modules' => ['Security'],
+            'action_prefixes' => [],
+        ],
+        'configuration' => [
+            'label' => 'Configuration Changes',
+            'help' => 'Platform settings, feature flags and governance policy.',
+            'modules' => ['Platform', 'Governance'],
+            'action_prefixes' => [],
+        ],
+    ],
+
+    /*
     | The classification each category may carry, and what each one means to
     | somebody choosing between them. A codified list rather than free text, per
     | CLAUDE.md's schema rules.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Identity\Support;
 
 use App\Enums\Role;
+use InvalidArgumentException;
 
 /**
  * One declared permission. Feature ADM-007.
@@ -52,7 +53,43 @@ readonly class Permission
          * behaves the way every permission did before the field existed.
          */
         public ?Role $grantedFrom = null,
-    ) {}
+        /*
+         * THE AUDITOR CAPABILITY. Decision D2, approved 24 August 2026,
+         * recorded as SEC-DEC-062.
+         *
+         * When true, an account carrying `users.is_auditor` holds this
+         * permission whatever their tier says. `ROLE_MODEL.md` describes an
+         * Auditor as somebody who reads the audit trail and reviews governance
+         * evidence without operating the platform, and before this field the
+         * authorization layer had no way to express that: `is_auditor` was
+         * understood by `Navigation` and by nothing else, so the rail was the
+         * only thing standing between a typed URL and the trail. CLAUDE.md is
+         * explicit that hiding a menu item is never authorization.
+         *
+         * IT IS ALLOWED ON READ PERMISSIONS ONLY, and `PermissionRegistry`
+         * refuses to construct one that is not. An Auditor reviews; they do not
+         * manage, request or approve.
+         *
+         * IT GRANTS ONE SPECIFIC PERMISSION AND NOTHING ELSE. It does not raise
+         * the tier ceiling, so it cannot become a route to authority in general,
+         * and it says nothing about business-domain entitlement - an Auditor who
+         * can read the audit log still holds no Finance figure.
+         */
+        public bool $orAuditor = false,
+    ) {
+        if ($this->orAuditor && ! $this->isRead()) {
+            /*
+             * A construction-time refusal rather than a test, because a write
+             * permission carrying the auditor flag would hand an Auditor the
+             * ability to change what they are supposed to be reviewing. That
+             * must be impossible to declare, not merely caught later.
+             */
+            throw new InvalidArgumentException(
+                "The permission `{$this->key}` declares orAuditor on a `{$this->action}` action. "
+                .'The Auditor capability is allowed on read permissions only.'
+            );
+        }
+    }
 
     /**
      * The tier that holds this automatically.

@@ -563,9 +563,35 @@ Monitoring
 |-- Semantic Health
 |-- AI Quality
 |-- Security Alerts
-|-- Audit Logs
 `-- Usage & Adoption
 ```
+
+Audit Logs was listed here and has moved to the Compliance cluster by DEC-004,
+approved 24 August 2026. Monitoring sits behind the Application Administration
+policy at Administrator tier, and an Auditor - the one role ROLE_MODEL.md says
+exists to read the audit trail - is frequently a Viewer. Leaving it here would
+have put the audit log behind a tier that locks out its intended reader. See
+section 12.16.
+
+### 12.16 Audit Logs
+
+```text
+Audit Logs
+|-- All Events
+|-- User Activity
+|-- Administrative Changes
+|-- Security Changes
+`-- Configuration Changes
+```
+
+**One screen, not five.** These are system filter presets over the same
+`audit_events` table, selected on the page rather than navigated to. DEC-004
+records why: four navigation nodes onto one table would be four names for one
+thing, and a preset can be refined with the ordinary filters while a separate
+screen cannot.
+
+It sits as a top-level leaf in the Compliance cluster, alongside Governance,
+Data Protection and Data Sovereignty.
 
 ### 12.15 System Configuration
 
