@@ -113,6 +113,40 @@ Recorded as decision D1 rather than done silently.
 **Features:** ADM-013 Audit Log screen, ADM-014 Data Protection Profile, ADM-015 Data Sovereignty Profile, ADM-016 Sovereignty Exceptions.
 **Tables:** `data_protection_profiles`, `data_sovereignty_profiles`, `sovereignty_exceptions`.
 
+**Detailed plan: `doc/execution/R1.4-GATE-4-DATA-PROTECTION-PDPA-PLAN.md`.**
+Status: **APPROVED 24 August 2026.** All thirteen decisions settled and recorded
+as SEC-DEC-062 to SEC-DEC-072, with the navigation change as DEC-003. Building
+as three PRs: R1.4a, then R1.4b, then R1.4c, with review and approval between
+each.
+
+The scope above is no longer the whole gate. The PDPA determination recorded in
+`doc/execution/decisions/DEC-002-pdpa-applies.md` was accepted, and the
+user approved absorbing its three gaps into this gate: PDPA-01 Personal Data
+Access and Correction, PDPA-02 Data Breach Assessment and Notification, PDPA-03
+Per-category Retention Policy, plus a required structured Privacy Contact on the
+organisation profile with a safe backfill for existing rows.
+
+That changes the table list. The detailed plan proposes **seven** new tables
+rather than three - the three above plus `personal_data_categories`,
+`privacy_requests`, `privacy_correction_notes` and `breach_assessments` - and one
+altered table (`organisations`, for the structured privacy contact). Recorded
+here as a pointer, not as a decision: the table list is settled when D1 to D13
+are.
+
+Four of those decisions changed the shape of the gate, and all four were
+approved: **D1** Privacy Requests and Breach Register get homes under Compliance
+/ Data Protection (DEC-003, and `doc/MENU_STRUCTURE.md` 12.11 updated with
+them); **D2** an Auditor may read the audit log, and the authorization layer is
+extended with an explicit Auditor capability rather than the rail being left to
+carry it (SEC-DEC-062 - this modifies gate 2's authorization core and is treated
+as security-critical); **D3** a read-only Governance Overview is built; **D4**
+profiles are versioned and immutable once approved (SEC-DEC-065).
+
+The gate is built as **three PRs** - R1.4a, R1.4b, R1.4c - not one. Gate 3
+shipped as a single 9,664-line PR and both defects that reached production were
+in the last screen written. Each batch needs its own PR, CI, review, deployment
+verification and approval before the next starts.
+
 ### R1.5 - Gate 5, Integration
 
 **Features:** ADM-017 Integration Registry, ADM-018 Microsoft Entra Integration, ADM-019 API Configuration, ADM-020 Connection Test Centre.

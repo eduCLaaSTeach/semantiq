@@ -498,6 +498,8 @@ Governance
 Data Protection
 |-- Data Protection Profile
 |-- Personal / Sensitive Data
+|-- Privacy Requests
+|-- Breach Register
 |-- Sensitivity Labels
 |-- DLP Policies
 |-- Retention
@@ -505,6 +507,14 @@ Data Protection
 |-- Export Policy
 `-- Exceptions
 ```
+
+Privacy Requests (PDPA-01) and Breach Register (PDPA-02) were added by DEC-003,
+approved 24 August 2026. Before that this group had no home for either
+obligation, which `doc/execution/decisions/DEC-002-pdpa-applies.md` had traced
+as applying. See `doc/execution/decisions/DEC-003-pdpa-navigation-homes.md`.
+
+The other leaves in this group remain unbuilt and render disabled with a Soon
+pill until a gate delivers them.
 
 ### 12.12 Data Sovereignty
 
