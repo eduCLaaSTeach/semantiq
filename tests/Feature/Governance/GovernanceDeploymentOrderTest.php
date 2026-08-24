@@ -7,6 +7,8 @@ namespace Tests\Feature\Governance;
 use App\Enums\Role;
 use App\Models\User;
 use App\Modules\Governance\Exceptions\GovernanceStorageNotInitialised;
+use App\Modules\Governance\Models\RetentionPolicy;
+use App\Modules\Governance\Models\SovereigntyException;
 use App\Modules\Governance\Services\DataProtectionProfiles;
 use App\Modules\Governance\Services\PersonalDataCatalogue;
 use App\Modules\Governance\Services\SovereigntyProfiles;
@@ -61,6 +63,10 @@ class GovernanceDeploymentOrderTest extends TestCase
      */
     private function undoTheGateFourMigrations(): void
     {
+        /* R1.4b first: these carry foreign keys into the R1.4a tables. */
+        Schema::dropIfExists('sovereignty_exceptions');
+        Schema::dropIfExists('retention_policies');
+
         Schema::dropIfExists('data_protection_profiles');
         Schema::dropIfExists('data_sovereignty_profiles');
         Schema::dropIfExists('personal_data_categories');
@@ -82,7 +88,27 @@ class GovernanceDeploymentOrderTest extends TestCase
             ]);
         });
 
-        DB::table('migrations')->where('migration', 'like', '2026_08_27_%')->delete();
+        /*
+         * The two audit indexes go too. R1.4b's third migration ALTERS an
+         * existing table rather than creating one, and forgetting it here would
+         * leave the indexes in place while the ledger says they are not - so
+         * `migrate` would try to create them again and fail on a duplicate.
+         *
+         * Exactly the shape of bug the privacy-contact columns caused in R1.4a,
+         * and caught the same way: by running the round trip rather than only
+         * the down leg.
+         */
+        Schema::table('audit_events', function (Blueprint $table) {
+            $table->dropIndex('audit_events_org_module_occurred_index');
+            $table->dropIndex('audit_events_org_outcome_occurred_index');
+        });
+
+        DB::table('migrations')
+            ->where(function ($q) {
+                $q->where('migration', 'like', '2026_08_27_%')
+                    ->orWhere('migration', 'like', '2026_08_28_%');
+            })
+            ->delete();
 
         app(GovernanceStorage::class)->forget();
     }
@@ -269,6 +295,99 @@ class GovernanceDeploymentOrderTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('The privacy contact is incomplete');
+    }
+
+    #[Test]
+    public function the_r1_4b_screens_survive_the_window_too(): void
+    {
+        /*
+         * Sovereignty exceptions and retention are register screens, so they
+         * report Migration required rather than an empty list. An empty
+         * exceptions list during a deployment window would say "the approved
+         * position applies without exception", which is a reassuring claim the
+         * screen cannot actually make.
+         */
+        $this->undoTheGateFourMigrations();
+
+        $actor = $this->actor();
+
+        foreach ([
+            'admin.governance.exceptions',
+            'admin.governance.retention',
+        ] as $route) {
+            $response = $this->actingAs($actor)->get(route($route));
+
+            $response->assertOk();
+            $response->assertSee('Migration required');
+        }
+    }
+
+    #[Test]
+    public function the_exceptions_screen_does_not_claim_there_are_no_exceptions(): void
+    {
+        /* The specific false-reassurance this screen could give. */
+        $this->undoTheGateFourMigrations();
+
+        $this->actingAs($this->actor())
+            ->get(route('admin.governance.exceptions'))
+            ->assertOk()
+            ->assertDontSee('No exceptions have been requested')
+            ->assertDontSee('applies without exception');
+    }
+
+    #[Test]
+    public function the_retention_screen_never_stops_saying_it_deletes_nothing(): void
+    {
+        /*
+         * The sentence that stops a retention table reading as protection has
+         * to be there in EVERY state, including the one where the table does
+         * not exist - otherwise the only time it is missing is the only time
+         * somebody might assume the sweep already ran.
+         */
+        $this->undoTheGateFourMigrations();
+
+        $this->actingAs($this->actor())
+            ->get(route('admin.governance.retention'))
+            ->assertOk()
+            ->assertSee('does not delete anything');
+    }
+
+    #[Test]
+    public function the_audit_log_works_with_every_gate_four_table_absent(): void
+    {
+        /*
+         * `audit_events` has existed since gate 1, so ADM-013 has no deployment
+         * window of its own - and it must not acquire one by depending on a
+         * gate 4 table. The two indexes R1.4b adds make it fast; their absence
+         * would make it slow, never broken.
+         */
+        $this->undoTheGateFourMigrations();
+
+        $this->actingAs($this->actor())
+            ->get(route('admin.governance.audit'))
+            ->assertOk();
+    }
+
+    #[Test]
+    public function every_r1_4b_write_is_refused_during_the_window(): void
+    {
+        $this->undoTheGateFourMigrations();
+
+        $actor = $this->actor();
+
+        $this->actingAs($actor)
+            ->post(route('admin.governance.exceptions.store'), [
+                'title' => 'Should not be written',
+                'justification' => 'A justification long enough to pass validation on its own.',
+                'aspect' => 'backup',
+                'ends_on' => now()->addDays(30)->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $this->runTheOutstandingMigrations();
+
+        $this->assertSame(0, SovereigntyException::query()->count());
+        $this->assertSame(0, RetentionPolicy::query()->count());
     }
 
     #[Test]

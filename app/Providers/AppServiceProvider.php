@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Modules\Audit\Support\AuditLogger;
+use App\Modules\Audit\Support\AuditLogQuery;
 use App\Modules\Governance\Services\DataProtectionProfiles;
 use App\Modules\Governance\Services\PersonalDataCatalogue;
+use App\Modules\Governance\Services\RetentionPolicies;
+use App\Modules\Governance\Services\SovereigntyExceptions;
 use App\Modules\Governance\Services\SovereigntyProfiles;
 use App\Modules\Governance\Support\GovernanceStorage;
 use App\Modules\Identity\Policies\SystemAdministratorGuard;
@@ -119,6 +122,22 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(DataProtectionProfiles::class);
         $this->app->singleton(SovereigntyProfiles::class);
         $this->app->singleton(PersonalDataCatalogue::class);
+
+        /*
+         * Gate 4 batch R1.4b. Singletons for the same reason as R1.4a's: each
+         * is read repeatedly within one request - the screen, the counts and
+         * the warnings all ask - and two instances could answer the same
+         * question differently after a write.
+         *
+         * `AuditLogQuery` is a singleton because it resolves the network
+         * permission, and the controller asks it twice: once to build the
+         * column list and once to tell the view whether to render the column.
+         * Two instances could disagree, and the disagreement would be a column
+         * header over data that was never selected.
+         */
+        $this->app->singleton(SovereigntyExceptions::class);
+        $this->app->singleton(RetentionPolicies::class);
+        $this->app->singleton(AuditLogQuery::class);
     }
 
     public function boot(): void

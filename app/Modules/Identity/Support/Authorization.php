@@ -71,13 +71,33 @@ class Authorization
             return false;
         }
 
-        /* 3. The tier ceiling. Nothing raises it. */
-        if (! $user->hasAtLeast($definition->minimumTier)) {
+        /*
+         * 3. The tier ceiling. Nothing raises it.
+         *
+         * The ONE documented way past it is the Auditor capability, and it is
+         * not a raise: it admits a specific declared read permission and
+         * changes nothing else about what this account may do. Decision D2,
+         * SEC-DEC-062. `Permission` refuses to be constructed with `orAuditor`
+         * on anything but a read action, so this branch cannot reach a write.
+         */
+        if (! $user->hasAtLeast($definition->minimumTier) && ! $this->auditorHolds($user, $definition)) {
             return false;
         }
 
         /* 4. And it must actually be granted. */
         return in_array($permission, $this->effectiveFor($user), true);
+    }
+
+    /**
+     * Whether the Auditor capability admits this specific permission.
+     *
+     * Two conditions, both required: the account carries the flag, and the
+     * permission declares it. Neither alone is enough, which is what stops the
+     * capability from being a general widening.
+     */
+    private function auditorHolds(User $user, Permission $definition): bool
+    {
+        return $user->is_auditor && $definition->orAuditor;
     }
 
     /**
@@ -124,6 +144,30 @@ class Authorization
         $ceiling = $this->registry->ceilingFor($user->role);
 
         $effective = array_values(array_unique(array_intersect($granted, $ceiling)));
+
+        /*
+         * THE AUDITOR CAPABILITY, added AFTER the ceiling has been applied.
+         * Decision D2, SEC-DEC-062.
+         *
+         * Deliberately outside the intersection. An Auditor is frequently a
+         * Viewer, so every one of these permissions sits above their ceiling
+         * and intersecting would discard all of them - which is the whole
+         * reason `is_auditor` could not be expressed here before.
+         *
+         * What keeps that safe is the narrowness of what it adds: only
+         * permissions that DECLARE `orAuditor`, and `Permission` refuses to be
+         * constructed with that flag on anything but a read action. So this
+         * cannot admit a write no matter what a future catalogue entry says.
+         *
+         * It adds nothing at all for an account without the flag, which is
+         * every account by default.
+         */
+        if ($user->is_auditor) {
+            $effective = array_values(array_unique(array_merge(
+                $effective,
+                $this->registry->auditorReadableKeys(),
+            )));
+        }
 
         sort($effective);
 

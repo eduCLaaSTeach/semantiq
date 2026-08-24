@@ -43,6 +43,9 @@ class PermissionRegistry
     /** Memoised per tier. */
     private array $ceilings = [];
 
+    /** @var list<string>|null */
+    private ?array $auditorReadable = null;
+
     /**
      * Every declared permission, keyed by its key.
      *
@@ -130,6 +133,26 @@ class PermissionRegistry
     }
 
     /**
+     * Every permission the Auditor capability admits.
+     *
+     * Decision D2, SEC-DEC-062. `Authorization` merges these in AFTER the tier
+     * ceiling, because an Auditor is frequently a Viewer and intersecting would
+     * discard every one of them.
+     *
+     * Memoised like `defaultsFor()` and `ceilingFor()`: the catalogue is code
+     * and cannot change within a request.
+     *
+     * @return list<string>
+     */
+    public function auditorReadableKeys(): array
+    {
+        return $this->auditorReadable ??= array_keys(array_filter(
+            $this->all(),
+            static fn (Permission $permission): bool => $permission->orAuditor,
+        ));
+    }
+
+    /**
      * Reject a key nothing declares.
      *
      * Used on every WRITE - assigning a permission to a role - where silence
@@ -176,6 +199,7 @@ class PermissionRegistry
             PermissionRisk $risk = PermissionRisk::Normal,
             bool $requiresAudit = false,
             ?Role $grantedFrom = null,
+            bool $orAuditor = false,
         ): array {
             $key = strtolower($module).'.'.$resource.'.'.$action;
 
@@ -189,6 +213,7 @@ class PermissionRegistry
                 risk: $risk,
                 requiresAudit: $requiresAudit,
                 grantedFrom: $grantedFrom,
+                orAuditor: $orAuditor,
             )];
         };
 
@@ -236,8 +261,56 @@ class PermissionRegistry
             $declare('Admin', 'access_reviews', 'view', 'See access reviews and their decisions.', Role::Admin),
             $declare('Admin', 'access_reviews', 'manage', 'Open a review, decide its items and apply the result.', Role::Admin, PermissionRisk::Elevated, true),
 
-            /* ---- Audit, gate 1 ----------------------------------------- */
-            $declare('Admin', 'audit', 'view', 'Read the audit trail.', Role::SystemAdmin),
+            /* ---- Audit, gate 1, WIDENED in gate 4 batch R1.4b ----------- */
+
+            /*
+             * `admin.audit.view` moves from System Administrator to Domain
+             * Owner, and gains the Auditor capability. Decision D2, approved
+             * 24 August 2026, SEC-DEC-062.
+             *
+             * Three sources used to disagree about who may read the trail:
+             * this line said System Administrator, the navigation rail admitted
+             * the Compliance cluster at Domain Owner or Auditor, and
+             * ROLE_MODEL.md says an Auditor reads the audit trail. The rail was
+             * therefore the only thing standing between a typed URL and the
+             * trail, which CLAUDE.md is explicit is never authorization.
+             *
+             * `ROLE_MODEL.md` was treated as the authority and the code moved to
+             * meet it, rather than the document being narrowed to meet the code.
+             */
+            $declare('Admin', 'audit', 'view', 'Read the audit trail.', Role::DomainOwner, PermissionRisk::Normal, false, Role::SystemAdmin, true),
+
+            /*
+             * The network identifier is a SEPARATE permission at System
+             * Administrator. Decision D8, SEC-DEC-063.
+             *
+             * An IP address is personal data and is rarely what an audit reader
+             * actually needs. Bundling it into `admin.audit.view` would mean the
+             * Auditor capability just created hands out network identifiers as a
+             * side effect of reading the trail. `orAuditor` is deliberately
+             * FALSE here.
+             */
+            $declare('Admin', 'audit', 'view_network', 'See the IP address and user agent recorded against an audit event.', Role::SystemAdmin, PermissionRisk::Elevated),
+
+            /* ---- Governance, gate 4 batch R1.4b ------------------------- */
+
+            /*
+             * Retention and sovereignty exceptions follow the D13 split that
+             * R1.4a established: read at Domain Owner, manage at Administrator,
+             * high-risk approve at System Administrator.
+             *
+             * `orAuditor` on the two READ permissions and on nothing else. An
+             * Auditor reviews governance evidence; they do not write it, request
+             * it or bless it. `Permission` refuses to be constructed with the
+             * flag on a write action, so this is enforced rather than merely
+             * observed.
+             */
+            $declare('Admin', 'retention', 'view', 'See how long each category of personal data is kept, and on what basis.', Role::DomainOwner, PermissionRisk::Normal, false, null, true),
+            $declare('Admin', 'retention', 'manage', 'Set the retention period, basis and disposal action for a category.', Role::Admin, PermissionRisk::High, true),
+
+            $declare('Admin', 'sovereignty_exceptions', 'view', 'See recorded departures from the approved sovereignty profile.', Role::DomainOwner, PermissionRisk::Normal, false, null, true),
+            $declare('Admin', 'sovereignty_exceptions', 'request', 'Ask for a time-bounded exception to the approved sovereignty profile.', Role::Admin, PermissionRisk::Elevated, true),
+            $declare('Admin', 'sovereignty_exceptions', 'approve', 'Approve, reject or revoke a sovereignty exception. Never available to its requester.', Role::SystemAdmin, PermissionRisk::High, true),
 
             /* ---- Security, gate 3 --------------------------------------
              *
@@ -285,16 +358,22 @@ class PermissionRegistry
              * is asserted by test: a Domain Owner who can read the sovereignty
              * profile holds no Finance, Sales or People data by virtue of it.
              *
-             * The Auditor capability approved as D2 is NOT declared here. It
-             * changes `Authorization` itself and lands in R1.4b with the audit
-             * log screen that needs it, so this batch leaves no half-wired
-             * capability behind.
+             * The Auditor capability approved as D2 was NOT declared here in
+             * R1.4a - it changes `Authorization` itself, and a flag the
+             * authorization layer could not honour would have been a node that
+             * appears and then denies. **R1.4b added it**, on the two READ
+             * permissions only.
+             *
+             * `ROLE_MODEL.md` section 2 lists "review data-protection and
+             * sovereignty evidence" among an Auditor's capabilities, alongside
+             * reading the audit trail. Leaving these two off would have met the
+             * document by half.
              */
-            $declare('Admin', 'data_protection', 'view', 'See the data protection profile and the personal data categories this organisation holds.', Role::DomainOwner),
+            $declare('Admin', 'data_protection', 'view', 'See the data protection profile and the personal data categories this organisation holds.', Role::DomainOwner, PermissionRisk::Normal, false, null, true),
             $declare('Admin', 'data_protection', 'manage', 'Write a draft data protection profile and maintain the personal data categories.', Role::Admin, PermissionRisk::High, true),
             $declare('Admin', 'data_protection', 'approve', 'Approve a data protection profile, making it the version in force.', Role::SystemAdmin, PermissionRisk::High, true),
 
-            $declare('Admin', 'sovereignty', 'view', 'See where this organisation stores and processes its data.', Role::DomainOwner),
+            $declare('Admin', 'sovereignty', 'view', 'See where this organisation stores and processes its data.', Role::DomainOwner, PermissionRisk::Normal, false, null, true),
             $declare('Admin', 'sovereignty', 'manage', 'Write a draft data sovereignty profile.', Role::Admin, PermissionRisk::High, true),
             $declare('Admin', 'sovereignty', 'approve', 'Approve a data sovereignty profile, including any position that permits data to cross a border.', Role::SystemAdmin, PermissionRisk::High, true),
         );

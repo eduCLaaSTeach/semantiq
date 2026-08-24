@@ -79,12 +79,27 @@ inherits the constraint rather than rediscovering it.
 is the place where a cross-geo decision would be RECORDED, and every switch on
 that record defaults to OFF at the catalogue and at the database column.
 
-**The seeded profile is a draft, not a position.** SEC-DEC-068. It carries the
-three facts SEC-DEC-036 confirmed - server Singapore, backups Singapore, no
-replication outside Singapore - so nobody retypes a verified fact, and it says so
-in its own `source_note`. Nothing downstream honours a draft, and the screen
-reads Not Configured until a person approves it. **Approving it on production is
-an outstanding action for the product owner, not something this batch does.**
+**The seeded profile was a draft, and is now APPROVED.** SEC-DEC-068 is
+discharged. It was created as a draft carrying the three facts SEC-DEC-036
+confirmed - server Singapore, backups Singapore, no replication outside
+Singapore - so nobody retyped a verified fact, and it said so in its own
+`source_note`. The screen read Not Configured until a person approved it, and the
+product owner approved it on production on 24 August 2026 with a stated reason.
+
+**The position now in force, version 1, immutable:**
+
+| Question | Answer |
+|---|---|
+| Storage geography | Singapore |
+| Processing geography | Singapore |
+| AI processing geography | Not determined - no AI service provisioned |
+| Backup geography | Singapore |
+| External replication | None |
+| Cross-geo storage, processing, AI, conversation history | All off |
+
+Two fields are deliberately empty: `evidence_reference`, and the AI geography.
+Filling them in writes version 2 and supersedes version 1, which stays readable
+as the record of what was in force on 24 August 2026.
 
 **Backups are asked about separately** and have their own column. A server's
 country is not its backups' country, and folding the two together would lose the

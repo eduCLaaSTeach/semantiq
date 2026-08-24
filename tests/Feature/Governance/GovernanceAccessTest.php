@@ -30,10 +30,11 @@ use Tests\TestCase;
  * grants business data, and a Domain Owner who can read the sovereignty profile
  * must still hold no Finance figure.
  *
- * THE AUDITOR IS ABSENT FROM THESE TESTS ON PURPOSE. Decision D2 extends the
- * authorization layer with an Auditor capability, and it lands in R1.4b with
- * the audit log screen that needs it. Asserting an Auditor's access here would
- * be asserting behaviour this batch deliberately does not have.
+ * THE AUDITOR ARRIVED IN R1.4b. Decision D2 extended the authorization layer
+ * with the capability, and the governance reads now admit it. The capability
+ * itself is covered by `AuditorCapabilityTest`; what is asserted here is the
+ * shape of the GOVERNANCE catalogue - reads admit an Auditor, writes never do -
+ * so a later governance permission cannot pick the flag up by accident.
  */
 class GovernanceAccessTest extends TestCase
 {
@@ -203,20 +204,47 @@ class GovernanceAccessTest extends TestCase
     }
 
     #[Test]
-    public function no_governance_permission_carries_the_auditor_capability_yet(): void
+    public function the_auditor_capability_is_on_governance_reads_and_on_no_governance_write(): void
     {
         /*
-         * Guards the batch boundary. Decision D2's Auditor capability belongs to
-         * R1.4b, and a half-declared `orAuditor` here would be a capability the
-         * authorization layer cannot honour - a node that appears and then
-         * denies. When R1.4b lands, this test is REPLACED by its positive
-         * counterpart rather than deleted.
+         * The positive counterpart of the R1.4a batch-boundary guard, which
+         * asserted that NO permission carried `orAuditor` while `Authorization`
+         * could not honour it. R1.4b built both halves in one change, so this
+         * now asserts the shape of what was added rather than its absence.
+         *
+         * The capability belongs on governance READS - `ROLE_MODEL.md` section
+         * 2 lists reviewing data-protection and sovereignty evidence among an
+         * Auditor's capabilities - and on no governance write. An Auditor
+         * reviews; they do not draft, request or approve.
+         *
+         * `AuditorCapabilityTest` covers the capability itself. This one guards
+         * the governance catalogue specifically, so a later governance
+         * permission cannot pick the flag up by accident.
          */
-        foreach (app(PermissionRegistry::class)->all() as $permission) {
-            $this->assertFalse(
-                property_exists($permission, 'orAuditor') && $permission->orAuditor === true,
-                'An Auditor capability is declared before the authorization layer can honour it.'
-            );
+        $governanceReads = [];
+        $governanceWrites = [];
+
+        foreach (app(PermissionRegistry::class)->all() as $key => $permission) {
+            if (! str_contains($key, 'data_protection') && ! str_contains($key, 'sovereignty')
+                && ! str_contains($key, 'retention')) {
+                continue;
+            }
+
+            if ($permission->isRead()) {
+                $governanceReads[$key] = $permission->orAuditor;
+            } else {
+                $governanceWrites[$key] = $permission->orAuditor;
+            }
+        }
+
+        $this->assertNotEmpty($governanceReads);
+
+        foreach ($governanceReads as $key => $carries) {
+            $this->assertTrue($carries, "The governance read `{$key}` does not admit an Auditor.");
+        }
+
+        foreach ($governanceWrites as $key => $carries) {
+            $this->assertFalse($carries, "The governance write `{$key}` admits an Auditor.");
         }
     }
 }
