@@ -74,6 +74,59 @@ class PrivacyRequest extends Model
         return $this->identity_verified_at !== null;
     }
 
+    /**
+     * Why this response cannot be released yet, or null when it can.
+     *
+     * SEPARATION OF DUTIES IS ENFORCED IN THE SERVICE, NOT BY THE PERMISSION.
+     * A System Administrator holds both `.manage` and `.release`, so the tier
+     * split alone stops nobody from assembling a response, reviewing their own
+     * work and then authorising its disclosure. Two permissions held by one
+     * person are one person.
+     *
+     * This method exists so the SCREEN CAN SAY WHY rather than silently hiding
+     * the button. A control that vanishes without explanation reads as a bug,
+     * and the person who needs to act cannot tell what to do next.
+     *
+     * `null` means releasable BY THIS ACTOR. The service re-checks; this is for
+     * rendering.
+     */
+    public function releaseBlockedBecause(?User $actor): ?string
+    {
+        if (! $this->isIdentityVerified()) {
+            return 'The requester has not been identified yet. Nothing may be collected, let alone released.';
+        }
+
+        if ($this->assembled_at === null) {
+            return 'Nothing has been collected yet. Run the collection first.';
+        }
+
+        if ($this->reviewed_at === null || $this->reviewed_by_user_id === null) {
+            return 'Nobody has reviewed the assembled response yet. A response must be read by a person '
+                .'before it can be authorised to leave SemantIQ.';
+        }
+
+        if ($actor === null) {
+            return 'Sign in to release a response.';
+        }
+
+        if ($actor->getKey() === $this->reviewed_by_user_id) {
+            return 'You reviewed this response, so you cannot also authorise its disclosure. Somebody else '
+                .'must release it - one person agreeing with themselves is not a second pair of eyes.';
+        }
+
+        if ($this->assembled_by_user_id !== null && $actor->getKey() === $this->assembled_by_user_id) {
+            return 'You assembled this response, so you cannot also authorise its disclosure. Somebody else '
+                .'must release it.';
+        }
+
+        return null;
+    }
+
+    public function canBeReleasedBy(?User $actor): bool
+    {
+        return $this->releaseBlockedBecause($actor) === null;
+    }
+
     public function isOpen(): bool
     {
         return ! $this->status->isTerminal();
@@ -180,6 +233,11 @@ class PrivacyRequest extends Model
     public function identityVerifiedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'identity_verified_by_user_id');
+    }
+
+    public function assembledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assembled_by_user_id');
     }
 
     public function reviewedBy(): BelongsTo

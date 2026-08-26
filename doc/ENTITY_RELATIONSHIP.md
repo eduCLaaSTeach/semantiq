@@ -13,7 +13,7 @@ Nothing here is inferred from a column name.
 
 Column-level detail is in [DATA_DICTIONARY.md](DATA_DICTIONARY.md).
 
-Covers 31 tables, 382 columns, 83 foreign keys.
+Covers 31 tables, 383 columns, 84 foreign keys.
 
 ---
 
@@ -48,7 +48,7 @@ explicitly instead, on every read path and every mutation.
 | Anchor | Foreign keys pointing at it | What that means |
 |---|---|---|
 | `organisations` | 18 | The tenancy boundary. Cascade on delete: removing a customer removes their data |
-| `users` | 51 | Attribution. Almost all null on delete: the record survives the person |
+| `users` | 52 | Attribution. Almost all null on delete: the record survives the person |
 
 ---
 
@@ -430,10 +430,10 @@ erDiagram
         varchar status
         bigint subject_user_id FK
         bigint identity_verified_by_user_id FK
+        bigint assembled_by_user_id FK
         bigint reviewed_by_user_id FK
         bigint released_by_user_id FK
         bigint created_by_user_id FK
-        bigint updated_by_user_id FK
     }
     retention_policies {
         bigint id PK
@@ -502,6 +502,7 @@ erDiagram
     users |o--o{ privacy_requests : "created_by_user_id"
     users |o--o{ privacy_requests : "released_by_user_id"
     users |o--o{ privacy_requests : "reviewed_by_user_id"
+    users |o--o{ privacy_requests : "assembled_by_user_id"
     users |o--o{ privacy_requests : "identity_verified_by_user_id"
     users |o--o{ privacy_requests : "subject_user_id"
     organisations ||--o{ privacy_requests : "organisation_id"
@@ -545,6 +546,7 @@ erDiagram
 | `privacy_requests` | `created_by_user_id` | `users` | set null | Attribution. The record outlives the person |
 | `privacy_requests` | `released_by_user_id` | `users` | set null | Attribution. The record outlives the person |
 | `privacy_requests` | `reviewed_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `privacy_requests` | `assembled_by_user_id` | `users` | set null | Attribution. The record outlives the person |
 | `privacy_requests` | `identity_verified_by_user_id` | `users` | set null | Attribution. The record outlives the person |
 | `privacy_requests` | `subject_user_id` | `users` | set null | Points at a person |
 | `privacy_requests` | `organisation_id` | `organisations` | cascade | Tenancy. Removing a customer removes their data |
@@ -574,7 +576,7 @@ input to the R1.4c collector coverage test.
 
 ## 7. Every foreign key
 
-All 83 of them, read from the live database.
+All 84 of them, read from the live database.
 
 | From | Column | To | On delete |
 |---|---|---|---|
@@ -618,6 +620,7 @@ All 83 of them, read from the live database.
 | `privacy_correction_notes` | `privacy_request_id` | `privacy_requests` | cascade |
 | `privacy_request_records` | `organisation_id` | `organisations` | cascade |
 | `privacy_request_records` | `privacy_request_id` | `privacy_requests` | cascade |
+| `privacy_requests` | `assembled_by_user_id` | `users` | set null |
 | `privacy_requests` | `created_by_user_id` | `users` | set null |
 | `privacy_requests` | `identity_verified_by_user_id` | `users` | set null |
 | `privacy_requests` | `organisation_id` | `organisations` | cascade |

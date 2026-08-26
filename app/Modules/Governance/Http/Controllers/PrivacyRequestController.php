@@ -83,6 +83,14 @@ class PrivacyRequestController extends Controller
             'mayManage' => $this->authorization->allows($reader, 'admin.privacy_requests.manage'),
             'mayRelease' => $this->authorization->allows($reader, 'admin.privacy_requests.release'),
             'request' => $model,
+            /*
+             * Why release is unavailable, so the screen can SAY SO rather than
+             * hide the button. A control that vanishes without explanation
+             * reads as a bug, and the person who needs to act cannot tell what
+             * to do next - here the answer is usually "somebody else has to do
+             * this", which nobody can guess from an absent button.
+             */
+            'releaseBlocker' => $model->releaseBlockedBecause($reader),
             'records' => $model->records()->orderBy('band')->orderBy('source_table')->get(),
             'notes' => $this->notes->forRequest($model),
             'methods' => $this->requests->verificationMethods(),

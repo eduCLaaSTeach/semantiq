@@ -19,7 +19,7 @@ the part worth reading.
 
 Types are shown as **MySQL** produces them, because production is MySQL.
 
-Covers 31 tables, 382 columns, 83 foreign keys.
+Covers 31 tables, 383 columns, 84 foreign keys.
 
 ---
 
@@ -701,7 +701,7 @@ A request from a person about the personal data held about them, and its lifecyc
 | **Introduced** | R1.4c-i |
 | **Classification** | Confidential |
 | **Personal data** | YES - it identifies the requester directly, by name and email |
-| **Columns** | 29 |
+| **Columns** | 30 |
 
 **The subject need not have an account.** `subject_user_id` is nullable by decision D6, and the name and email are held on this row independently: a contractor whose account was deleted still has personal data in `audit_events`, and the PDPA does not stop applying because the account did. **That is also the obvious attack** - assemble a stranger's data by asserting you are them - so `identity_verified_at` gates everything downstream, and the service refuses to collect without it independently of the status. **`due_at` is frozen, not derived.** It is written once at verification. A deadline recomputed from a policy somebody later edited would silently move a date a person is being held to. **No file is ever produced** (D9): `evidence_reference` records how a human delivered the response outside SemantIQ.
 
@@ -723,6 +723,7 @@ A request from a person about the personal data held about them, and its lifecyc
 | `identity_verification_method` | `varchar(64)` | yes | - | - | From the codified list in `config/governance.php`, so "how was this person identified" is comparable across requests rather than a sentence somebody typed. |
 | `identity_verification_note` | `text` | yes | - | - | What was actually checked. Required. "Verified" without this is somebody's word for it. |
 | `assembled_at` | `timestamp` | yes | - | - | When collection last ran. Re-running replaces the records wholesale rather than appending, so a response never mixes what was true then with what is true now. |
+| `assembled_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who ran the collection. **Recorded so separation of duties can be enforced against the person who actually did the work, not against a permission tier.** A System Administrator holds both `.manage` and `.release`, so the tier split alone stopped nobody from assembling a response and then authorising its own disclosure. The service compares this and `reviewed_by_user_id` against the releaser. |
 | `reviewed_at` | `timestamp` | yes | - | - | When a reviewer went through the assembled response. |
 | `reviewed_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who reviewed it. |
 | `decision` | `varchar(16)` | yes | - | - | released or refused. Refusal is a lawful outcome, not a failure. |

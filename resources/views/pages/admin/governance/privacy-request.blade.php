@@ -376,7 +376,52 @@
             </section>
         @endif
 
-        {{-- Step three. Release, refuse or close. --}}
+        {{-- Step two and a half. Somebody has to read it. --}}
+        @if ($request->isOpen() && $request->isIdentityVerified() && $request->assembled_at && $mayManage)
+            <section class="card" aria-labelledby="review-heading">
+                <div class="card-header">
+                    <h2 class="card-title" id="review-heading">
+                        <svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg>
+                        Review
+                    </h2>
+                    @if ($request->reviewed_at)
+                        <span class="badge badge-success">Reviewed</span>
+                    @else
+                        <span class="badge badge-warning">Not reviewed</span>
+                    @endif
+                </div>
+
+                @if ($request->reviewed_at)
+                    <p class="card-note">
+                        Reviewed {{ $request->reviewed_at->format('j M Y') }}. Whoever authorises the
+                        release must be somebody other than the reviewer.
+                    </p>
+                @else
+                    <p class="card-note">
+                        A response cannot be released until a person has read it. Recording your review here
+                        means you will <strong>not</strong> be able to authorise the release yourself - that
+                        is the point of the step.
+                    </p>
+
+                    <form method="POST"
+                          action="{{ route('admin.governance.privacy-requests.review', $request->getKey()) }}">
+                        @csrf
+                        <div class="form-actions">
+                            <button class="btn btn-outline" type="submit">Record my review</button>
+                        </div>
+                    </form>
+                @endif
+            </section>
+        @endif
+
+        {{--
+            Step three. Release, refuse or close.
+
+            THE SECTION RENDERS EVEN WHEN RELEASE IS BLOCKED, and says why.
+            Hiding the control would leave the reader guessing, and the reason
+            is usually "somebody else has to do this" - which nobody can infer
+            from an absent button.
+        --}}
         @if ($request->isOpen() && $request->isIdentityVerified() && $mayRelease)
             <section class="card" aria-labelledby="decide-heading">
                 <div class="card-header">
@@ -387,10 +432,19 @@
                 </div>
 
                 <p class="card-note">
-                    Authorising a disclosure is a different act from assembling one, which is why it sits
-                    behind its own permission. This is the last point at which a mistake can be caught.
+                    Authorising a disclosure is a different act from assembling or reviewing one. This is the
+                    last point at which a mistake can be caught, so it is deliberately not the same person.
                 </p>
 
+                @if ($releaseBlocker)
+                    <div class="alert alert-warning" role="alert">
+                        <svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                        <span>
+                            <strong>You cannot release this response.</strong>
+                            {{ $releaseBlocker }}
+                        </span>
+                    </div>
+                @else
                 <form class="settings-form" method="POST"
                       action="{{ route('admin.governance.privacy-requests.release', $request->getKey()) }}">
                     @csrf
@@ -408,7 +462,11 @@
                         <button class="btn btn-solid btn-primary" type="submit">Release the response</button>
                     </div>
                 </form>
+                @endif
 
+                {{-- Refusal is NOT gated on a second person: it discloses
+                     nothing, and the control exists to stop a disclosure
+                     happening on one person's say-so. --}}
                 <form class="settings-form" method="POST"
                       action="{{ route('admin.governance.privacy-requests.refuse', $request->getKey()) }}">
                     @csrf

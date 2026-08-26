@@ -237,7 +237,12 @@ class DisclosureTreatmentTest extends TestCase
 
         $request = $service->verifyIdentity($request, $actor, 'signed_in_session', 'Signed in.');
         $request = $service->assemble($request, $actor);
-        $service->release($request, $actor, 'Handed over in person.');
+        $request = $service->markReviewed($request, $actor);
+
+        /* A SECOND PERSON RELEASES. The person who assembled and reviewed a
+         * response cannot authorise its own disclosure, so a test that used one
+         * actor here would be exercising a path the application refuses. */
+        $service->release($request, $this->personOn(Role::SystemAdmin), 'Handed over in person.');
 
         Queue::assertNothingPushed();
         Mail::assertNothingSent();

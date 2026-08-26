@@ -180,6 +180,9 @@ final class PrivacyRequests
 
         $request->forceFill([
             'assembled_at' => now()->utc(),
+            /* Recorded so separation of duties can be enforced against the
+             * person who actually ran the collection, not against a tier. */
+            'assembled_by_user_id' => $actor->getKey(),
             'updated_by_user_id' => $actor->getKey(),
         ])->save();
 
@@ -222,12 +225,46 @@ final class PrivacyRequests
     }
 
     /**
-     * Authorise disclosure. A different act from assembling one, which is why
-     * it sits behind its own permission at System Administrator.
+     * Authorise disclosure.
+     *
+     * A DIFFERENT ACT FROM ASSEMBLING OR REVIEWING ONE, AND ENFORCED HERE
+     * RATHER THAN BY THE PERMISSION.
+     *
+     * The permission split was never sufficient on its own. A System
+     * Administrator holds `.manage` AND `.release`, so nothing in the
+     * permission model stopped one person receiving a request, verifying the
+     * identity, assembling the response, and then authorising its own
+     * disclosure. Two permissions held by one person are one person, and a
+     * separation of duties that only exists in the tier table is a separation
+     * of duties that does not exist.
+     *
+     * Four conditions, all server-side, all refused with a reason:
+     *
+     *   1. the response has actually been reviewed  (`reviewed_at`)
+     *   2. by an identified person                  (`reviewed_by_user_id`)
+     *   3. who is not the person releasing it
+     *   4. and the releaser did not assemble it either
+     *
+     * Condition 4 goes beyond the minimum because `assembled_by_user_id` is
+     * recorded: if the reviewer and assembler are the same person, requiring
+     * only `reviewer != releaser` would still be two people, but requiring both
+     * closes the case where a third party reviews work that the releaser
+     * assembled and then rubber-stamps it back to them.
+     *
+     * REFUSAL IS NOT GATED THE SAME WAY, deliberately. A refusal discloses
+     * nothing - the risk this control exists for is releasing somebody's
+     * personal data on one person's say-so, and refusing does the opposite.
+     * Refusal still requires `.release` and a written reason.
      */
     public function release(PrivacyRequest $request, User $actor, string $evidenceReference): PrivacyRequest
     {
         $this->assertWritable();
+
+        $blocker = $request->releaseBlockedBecause($actor);
+
+        if ($blocker !== null) {
+            throw new RuntimeException($blocker);
+        }
 
         if (trim($evidenceReference) === '') {
             throw new RuntimeException(
@@ -249,7 +286,14 @@ final class PrivacyRequests
             module: 'Governance',
             resourceType: 'privacy_request',
             resourceId: $request->getKey(),
-            after: ['evidence_reference' => $evidenceReference],
+            after: [
+                'evidence_reference' => $evidenceReference,
+                /* Both parties recorded on the release event, so an audit
+                 * reader can see the separation held without joining back to
+                 * the request row. */
+                'reviewed_by_user_id' => $request->reviewed_by_user_id,
+                'released_by_user_id' => $actor->getKey(),
+            ],
         );
 
         return $this->moveTo($request, PrivacyRequestStatus::Responded, $actor);

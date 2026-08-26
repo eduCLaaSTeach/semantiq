@@ -92,6 +92,18 @@ return new class extends Migration
 
             $table->timestamp('assembled_at')->nullable();
 
+            /*
+             * WHO RAN THE COLLECTION. Recorded so that separation of duties can
+             * be enforced against the person who actually did the work, not
+             * merely against a permission tier.
+             *
+             * A System Administrator holds BOTH `.manage` and `.release`, so the
+             * tier split alone stops nobody from assembling a response and then
+             * authorising its own disclosure. The service compares this column
+             * and `reviewed_by_user_id` against the releaser and refuses.
+             */
+            $table->foreignId('assembled_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+
             $table->timestamp('reviewed_at')->nullable();
             $table->foreignId('reviewed_by_user_id')->nullable()->constrained('users')->nullOnDelete();
 

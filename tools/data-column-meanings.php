@@ -237,4 +237,6 @@ return [
      * and a reader finding them should not have to guess. */
     'failed_jobs.queue' => 'Which queue the job was on when it failed. Framework column.',
     'failed_jobs.payload' => 'The serialised job. **May incidentally contain personal data** if a queued job ever carried any, which is why `failed_jobs` is named in the privacy exclusion register as a known incidental surface rather than silently ignored. Empty on this deployment.',
+
+    'privacy_requests.assembled_by_user_id' => 'Who ran the collection. **Recorded so separation of duties can be enforced against the person who actually did the work, not against a permission tier.** A System Administrator holds both `.manage` and `.release`, so the tier split alone stopped nobody from assembling a response and then authorising its own disclosure. The service compares this and `reviewed_by_user_id` against the releaser.',
 ];

@@ -156,8 +156,9 @@ class PrivacyRequestTest extends TestCase
         $actor = $this->personOn(Role::SystemAdmin);
         $service = app(PrivacyRequests::class);
 
-        $request = $this->throughToRelease($service, $actor);
-        $request = $service->close($request, $actor);
+        $other = $this->personOn(Role::SystemAdmin);
+        $request = $this->throughToRelease($service, $actor, $other);
+        $request = $service->close($request, $other);
 
         $this->assertSame(PrivacyRequestStatus::Closed, $request->status);
         $this->assertSame([], $request->status->allowedNext());
@@ -436,12 +437,172 @@ class PrivacyRequestTest extends TestCase
         );
     }
 
-    private function throughToRelease(PrivacyRequests $service, User $actor): PrivacyRequest
+    /**
+     * Carry a request all the way to released, USING TWO DISTINCT PEOPLE.
+     *
+     * The earlier version drove the whole lifecycle with one System
+     * Administrator and never called `markReviewed()`. That is exactly how the
+     * separation-of-duties defect stayed invisible: the helper proved the happy
+     * path was reachable by one person, and every test that used it agreed. **A
+     * test helper that takes the forbidden shortcut hides the control it is
+     * meant to exercise.**
+     */
+    private function throughToRelease(PrivacyRequests $service, User $handler, User $releaser): PrivacyRequest
     {
-        $request = $service->receive($this->aRequest(), $actor);
-        $request = $service->verifyIdentity($request, $actor, 'in_person', 'Passport sighted.');
-        $request = $service->assemble($request, $actor);
+        $request = $service->receive($this->aRequest(), $handler);
+        $request = $service->verifyIdentity($request, $handler, 'in_person', 'Passport sighted.');
+        $request = $service->assemble($request, $handler);
+        $request = $service->markReviewed($request, $handler);
 
-        return $service->release($request, $actor, 'Handed over in person on 26 August.');
+        return $service->release($request, $releaser, 'Handed over in person on 26 August.');
+    }
+
+    /* ------------------------------------------------ separation of duties */
+
+    #[Test]
+    public function a_response_cannot_be_released_before_it_is_reviewed(): void
+    {
+        $handler = $this->personOn(Role::SystemAdmin);
+        $releaser = $this->personOn(Role::SystemAdmin);
+        $service = app(PrivacyRequests::class);
+
+        $request = $service->receive($this->aRequest(), $handler);
+        $request = $service->verifyIdentity($request, $handler, 'in_person', 'Passport sighted.');
+        $request = $service->assemble($request, $handler);
+
+        $this->assertNull($request->reviewed_at);
+
+        $this->expectExceptionMessage('Nobody has reviewed the assembled response yet');
+        $service->release($request, $releaser, 'Posted.');
+    }
+
+    #[Test]
+    public function the_reviewer_cannot_also_release(): void
+    {
+        $person = $this->personOn(Role::SystemAdmin);
+        $service = app(PrivacyRequests::class);
+
+        $request = $service->receive($this->aRequest(), $person);
+        $request = $service->verifyIdentity($request, $person, 'in_person', 'Passport sighted.');
+        $request = $service->assemble($request, $person);
+        $request = $service->markReviewed($request, $person);
+
+        $this->assertSame($person->getKey(), $request->reviewed_by_user_id);
+
+        $this->expectExceptionMessage('You reviewed this response');
+        $service->release($request, $person, 'Posted.');
+    }
+
+    #[Test]
+    public function the_assembler_cannot_release_even_when_somebody_else_reviewed(): void
+    {
+        $assembler = $this->personOn(Role::SystemAdmin);
+        $reviewer = $this->personOn(Role::SystemAdmin);
+        $service = app(PrivacyRequests::class);
+
+        $request = $service->receive($this->aRequest(), $assembler);
+        $request = $service->verifyIdentity($request, $assembler, 'in_person', 'Passport sighted.');
+        $request = $service->assemble($request, $assembler);
+        $request = $service->markReviewed($request, $reviewer);
+
+        $this->expectExceptionMessage('You assembled this response');
+        $service->release($request, $assembler, 'Posted.');
+    }
+
+    #[Test]
+    public function a_different_reviewer_and_releaser_succeeds(): void
+    {
+        $handler = $this->personOn(Role::SystemAdmin);
+        $releaser = $this->personOn(Role::SystemAdmin);
+
+        $request = $this->throughToRelease(app(PrivacyRequests::class), $handler, $releaser);
+
+        $this->assertSame(PrivacyRequestStatus::Responded, $request->status);
+        $this->assertSame($releaser->getKey(), $request->released_by_user_id);
+        $this->assertSame($handler->getKey(), $request->reviewed_by_user_id);
+        $this->assertNotSame($request->reviewed_by_user_id, $request->released_by_user_id);
+    }
+
+    /**
+     * The rule lives in the service, so a typed POST meets it too. The UI
+     * hiding a button is convenience; this is the control.
+     */
+    #[Test]
+    public function a_typed_post_cannot_bypass_the_separation_of_duties(): void
+    {
+        $person = $this->personOn(Role::SystemAdmin);
+        $service = app(PrivacyRequests::class);
+
+        $request = $service->receive($this->aRequest(), $person);
+        $request = $service->verifyIdentity($request, $person, 'in_person', 'Passport sighted.');
+        $request = $service->assemble($request, $person);
+        $request = $service->markReviewed($request, $person);
+
+        $this->withoutExceptionHandling__safely(function () use ($person, $request): void {
+            $this->actingAs($person)->post(
+                '/admin/governance/privacy-requests/'.$request->getKey().'/release',
+                ['evidence_reference' => 'Posted by hand.'],
+            );
+        });
+
+        $request->refresh();
+
+        $this->assertNull(
+            $request->released_at,
+            'the response was released despite the reviewer being the releaser',
+        );
+        $this->assertNotSame(PrivacyRequestStatus::Responded, $request->status);
+    }
+
+    /**
+     * The screen must SAY why, not merely hide the button.
+     */
+    #[Test]
+    public function the_screen_explains_why_release_is_unavailable(): void
+    {
+        $person = $this->personOn(Role::SystemAdmin);
+        $service = app(PrivacyRequests::class);
+
+        $request = $service->receive($this->aRequest(), $person);
+        $request = $service->verifyIdentity($request, $person, 'in_person', 'Passport sighted.');
+        $request = $service->assemble($request, $person);
+        $request = $service->markReviewed($request, $person);
+
+        $html = $this->actingAs($person)
+            ->get('/admin/governance/privacy-requests/'.$request->getKey())
+            ->getContent();
+
+        $this->assertStringContainsString('You cannot release this response', $html);
+        $this->assertStringContainsString('You reviewed this response', $html);
+    }
+
+    #[Test]
+    public function who_assembled_the_response_is_recorded(): void
+    {
+        $handler = $this->personOn(Role::SystemAdmin);
+        $service = app(PrivacyRequests::class);
+
+        $request = $service->receive($this->aRequest(), $handler);
+        $request = $service->verifyIdentity($request, $handler, 'in_person', 'Passport sighted.');
+        $request = $service->assemble($request, $handler);
+
+        $this->assertSame(
+            $handler->getKey(),
+            $request->assembled_by_user_id,
+            'without this the separation can only be enforced against a permission tier',
+        );
+    }
+
+    /**
+     * Run a request that is expected to fail, without caring how the framework
+     * surfaces the refusal - what matters is that nothing was released.
+     */
+    private function withoutExceptionHandling__safely(callable $call): void
+    {
+        try {
+            $call();
+        } catch (\Throwable) {
+            // The refusal is the point; the transport is not.
+        }
     }
 }
