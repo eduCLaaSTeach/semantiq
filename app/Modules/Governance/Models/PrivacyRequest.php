@@ -92,6 +92,22 @@ class PrivacyRequest extends Model
      */
     public function releaseBlockedBecause(?User $actor): ?string
     {
+        /*
+         * ALREADY ANSWERED IS A BLOCKER, not a repeat.
+         *
+         * `moveTo()` returns early when a request is already in the state
+         * being asked for, so a second release of an already-released request
+         * reached the writes and REPLACED `released_at`, `released_by_user_id`
+         * and `evidence_reference` without the state machine ever objecting.
+         * Who authorised a disclosure and when is the whole evidential value
+         * of this row, and it must not be quietly overwritten by anybody who
+         * clicks twice. SEC-DEC-088.
+         */
+        if ($this->decision !== null || $this->released_at !== null) {
+            return 'This request has already been answered. The decision, who made it and when are part '
+                .'of the record and are not overwritten. Raise a new request if something further is needed.';
+        }
+
         if (! $this->isIdentityVerified()) {
             return 'The requester has not been identified yet. Nothing may be collected, let alone released.';
         }

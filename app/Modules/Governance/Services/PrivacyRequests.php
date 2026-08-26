@@ -381,6 +381,16 @@ final class PrivacyRequests
     {
         $this->assertWritable();
 
+        /* Same reasoning as the release guard: `moveTo()` returns early on a
+         * same-state move, so without this a second refusal would replace the
+         * recorded reason for the first one. */
+        if ($request->decision !== null) {
+            throw new RuntimeException(
+                'This request has already been answered. The decision and its reason are part of the '
+                .'record and are not overwritten. Raise a new request if something further is needed.'
+            );
+        }
+
         if (trim($reason) === '') {
             throw new RuntimeException(
                 'A refusal must record why. Refusing is lawful; refusing without a stated reason is not '
@@ -412,6 +422,15 @@ final class PrivacyRequests
     public function close(PrivacyRequest $request, User $actor): PrivacyRequest
     {
         $this->assertWritable();
+
+        /* Closing twice would move `closed_at` to the second click. The date a
+         * request was finished is quoted to the person and to a regulator. */
+        if ($request->closed_at !== null || $request->status === PrivacyRequestStatus::Closed) {
+            throw new RuntimeException(
+                'This request is already closed. The date it was closed is part of the record and is not '
+                .'moved. Reopen by raising a new request.'
+            );
+        }
 
         $this->assertCanMoveTo($request->status, PrivacyRequestStatus::Closed);
 

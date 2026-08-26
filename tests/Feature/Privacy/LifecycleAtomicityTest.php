@@ -293,4 +293,100 @@ class LifecycleAtomicityTest extends TestCase
         $this->assertSame($releasedByBefore, $fresh->released_by_user_id);
         $this->assertSame($eventsBefore, $this->countEvents('governance.privacy_request.released'));
     }
+
+    #[Test]
+    public function a_refused_lifecycle_action_returns_the_reason_to_the_screen(): void
+    {
+        $handler = $this->personOn(Role::SystemAdmin);
+        $releaser = $this->personOn(Role::SystemAdmin);
+
+        $request = $this->aClosedRequestWithEvidence($handler, $releaser);
+
+        /* Somebody acting on a stale page: the request was closed while they
+         * were reading it. That must explain itself, not produce a 500. */
+        $response = $this->actingAs($releaser)
+            ->from('/admin/governance/privacy-requests/'.$request->getKey())
+            ->post('/admin/governance/privacy-requests/'.$request->getKey().'/close');
+
+        $response->assertRedirect('/admin/governance/privacy-requests/'.$request->getKey());
+        $response->assertSessionHasErrors('form');
+
+        $message = (string) session('errors')->get('form')[0];
+
+        $this->assertStringContainsString('already closed', $message);
+    }
+
+    /* ------------------------------------- a recorded decision is not moved */
+
+    #[Test]
+    public function a_second_release_does_not_overwrite_the_first(): void
+    {
+        $handler = $this->personOn(Role::SystemAdmin);
+        $releaser = $this->personOn(Role::SystemAdmin);
+        $third = $this->personOn(Role::SystemAdmin);
+
+        $service = app(PrivacyRequests::class);
+
+        $request = $service->receive($this->aRequest(), $handler);
+        $request = $service->verifyIdentity($request, $handler, 'in_person', 'Passport sighted.');
+        $request = $service->assemble($request, $handler);
+        $request = $service->markReviewed($request, $handler);
+        $request = $service->release($request, $releaser, 'Handed over in person.');
+
+        /* Still `responded`, so `moveTo()` would return early on a same-state
+         * move and never object. Only the explicit guard stops this. */
+        $this->assertSame(PrivacyRequestStatus::Responded, $request->status);
+
+        $releasedAt = $request->released_at?->toIso8601String();
+
+        $this->refused(fn () => $service->release($request, $third, 'Posted again by somebody else.'));
+
+        $fresh = PrivacyRequest::query()->findOrFail($request->getKey());
+
+        $this->assertSame('Handed over in person.', $fresh->evidence_reference);
+        $this->assertSame($releaser->getKey(), $fresh->released_by_user_id);
+        $this->assertSame($releasedAt, $fresh->released_at?->toIso8601String());
+        $this->assertSame(1, $this->countEvents('governance.privacy_request.released'));
+    }
+
+    #[Test]
+    public function a_second_close_does_not_move_the_closing_date(): void
+    {
+        $handler = $this->personOn(Role::SystemAdmin);
+        $releaser = $this->personOn(Role::SystemAdmin);
+
+        $request = $this->aClosedRequestWithEvidence($handler, $releaser);
+        $closedAt = $request->closed_at?->toIso8601String();
+
+        $this->refused(fn () => app(PrivacyRequests::class)->close($request, $handler));
+
+        $fresh = PrivacyRequest::query()->findOrFail($request->getKey());
+
+        $this->assertSame($closedAt, $fresh->closed_at?->toIso8601String());
+        $this->assertSame(1, $this->countEvents('governance.privacy_request.closed'));
+    }
+
+    #[Test]
+    public function a_refusal_does_not_overwrite_a_recorded_decision(): void
+    {
+        $handler = $this->personOn(Role::SystemAdmin);
+        $releaser = $this->personOn(Role::SystemAdmin);
+
+        $service = app(PrivacyRequests::class);
+
+        $request = $service->receive($this->aRequest(), $handler);
+        $request = $service->verifyIdentity($request, $handler, 'in_person', 'Passport sighted.');
+        $request = $service->assemble($request, $handler);
+        $request = $service->markReviewed($request, $handler);
+        $request = $service->refuse($request, $releaser, 'Held under a legal exemption.');
+
+        $this->assertSame(PrivacyRequestStatus::Refused, $request->status);
+
+        $this->refused(fn () => $service->refuse($request, $releaser, 'A different reason entirely.'));
+
+        $fresh = PrivacyRequest::query()->findOrFail($request->getKey());
+
+        $this->assertSame('Held under a legal exemption.', $fresh->decision_reason);
+        $this->assertSame(1, $this->countEvents('governance.privacy_request.refused'));
+    }
 }

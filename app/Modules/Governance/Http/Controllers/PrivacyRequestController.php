@@ -19,6 +19,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use RuntimeException;
 
 /**
  * PDPA-01 Privacy Requests.
@@ -29,6 +30,15 @@ use Illuminate\View\View;
  * `privacy_requests` before the storage guard or the permission check could
  * refuse, and a typed URL during a deployment window would return a raw
  * database error instead of an explanation. SEC-DEC-058.
+ *
+ * A REFUSED LIFECYCLE ACTION RETURNS THE PERSON TO THE SCREEN WITH THE REASON,
+ * following the convention every other governance controller already uses. The
+ * service refuses an illegal transition by throwing, and the messages it throws
+ * are written for a reader rather than as error codes, so showing them is both
+ * the kindest and the most accurate thing to do. Letting the exception escape
+ * would render a stack trace for what is simply somebody acting on a stale
+ * page - two administrators with the same request open, and the second one
+ * clicks Close after the first already did. SEC-DEC-088.
  *
  * NO EXPORT, NO DOWNLOAD, NO FILE. There is deliberately no action here that
  * produces one. The response is read on screen and delivered by a person
@@ -136,7 +146,11 @@ class PrivacyRequestController extends Controller
             'note' => ['required', 'string', 'max:2000'],
         ]);
 
-        $this->requests->verifyIdentity($model, $this->actor(), $validated['method'], $validated['note']);
+        try {
+            $this->requests->verifyIdentity($model, $this->actor(), $validated['method'], $validated['note']);
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['form' => $e->getMessage()])->withInput();
+        }
 
         return back()->with('status', 'Identity verified. The response deadline is now fixed and collection '
             .'may run.');
@@ -146,7 +160,11 @@ class PrivacyRequestController extends Controller
     {
         $model = $this->find($request);
 
-        $this->requests->assemble($model, $this->actor());
+        try {
+            $this->requests->assemble($model, $this->actor());
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['form' => $e->getMessage()]);
+        }
 
         return back()->with('status', 'Collection complete. Review what may be disclosed before releasing '
             .'anything.');
@@ -156,7 +174,11 @@ class PrivacyRequestController extends Controller
     {
         $model = $this->find($request);
 
-        $this->requests->markReviewed($model, $this->actor());
+        try {
+            $this->requests->markReviewed($model, $this->actor());
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['form' => $e->getMessage()]);
+        }
 
         return back()->with('status', 'Recorded as reviewed.');
     }
@@ -169,7 +191,11 @@ class PrivacyRequestController extends Controller
             'evidence_reference' => ['required', 'string', 'max:190'],
         ]);
 
-        $this->requests->release($model, $this->actor(), $validated['evidence_reference']);
+        try {
+            $this->requests->release($model, $this->actor(), $validated['evidence_reference']);
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['form' => $e->getMessage()])->withInput();
+        }
 
         return back()->with('status', 'Released. SemantIQ sent nothing itself - the reference you recorded '
             .'is the evidence of delivery.');
@@ -183,7 +209,11 @@ class PrivacyRequestController extends Controller
             'reason' => ['required', 'string', 'max:2000'],
         ]);
 
-        $this->requests->refuse($model, $this->actor(), $validated['reason']);
+        try {
+            $this->requests->refuse($model, $this->actor(), $validated['reason']);
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['form' => $e->getMessage()])->withInput();
+        }
 
         return back()->with('status', 'Refused, with the reason recorded.');
     }
@@ -192,7 +222,11 @@ class PrivacyRequestController extends Controller
     {
         $model = $this->find($request);
 
-        $this->requests->close($model, $this->actor());
+        try {
+            $this->requests->close($model, $this->actor());
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['form' => $e->getMessage()]);
+        }
 
         return back()->with('status', 'Closed. Reopen by raising a new request.');
     }
