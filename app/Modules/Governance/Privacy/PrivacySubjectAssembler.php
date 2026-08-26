@@ -9,6 +9,8 @@ use App\Modules\Audit\Support\AuditLogger;
 use App\Modules\Governance\Enums\DisclosureTreatment;
 use App\Modules\Governance\Models\PrivacyRequest;
 use App\Modules\Governance\Models\PrivacyRequestRecord;
+use App\Modules\Identity\Support\Authorization;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -35,6 +37,7 @@ final class PrivacySubjectAssembler
     public function __construct(
         private readonly CollectorCatalogue $catalogue,
         private readonly AuditLogger $audit,
+        private readonly Authorization $authorization,
     ) {}
 
     /**
@@ -123,6 +126,8 @@ final class PrivacySubjectAssembler
             return $record;
         }
 
+        $this->assertReviewerIsTheAuthenticatedActor($reviewer);
+
         $widening = $to->isWiderThan($from);
 
         if ($widening) {
@@ -136,7 +141,7 @@ final class PrivacySubjectAssembler
             );
         }
 
-        return DB::transaction(function () use ($record, $from, $to, $note, $approver, $widening): PrivacyRequestRecord {
+        return DB::transaction(function () use ($record, $from, $to, $reviewer, $note, $approver, $widening): PrivacyRequestRecord {
             /*
              * A widened item still carries no detail payload unless it was
              * collected with one. Widening cannot conjure data that was never
@@ -169,6 +174,10 @@ final class PrivacySubjectAssembler
                 before: ['treatment' => $from->value],
                 after: [
                     'request_reference' => $record->request?->reference,
+                    /* Written explicitly rather than left to the actor column.
+                     * The two are now forced to agree, and the row says so
+                     * without a reader having to know that they are. */
+                    'reviewer_user_id' => $reviewer->getKey(),
                     'record_id' => $record->getKey(),
                     'source_table' => $record->source_table,
                     'band' => $record->band->value,
@@ -184,6 +193,68 @@ final class PrivacySubjectAssembler
         });
     }
 
+    /**
+     * The person named as reviewer must be the person who is signed in.
+     *
+     * WHY THIS IS A SERVICE CONCERN AND NOT A CONTROLLER ONE. This method took
+     * a `User $reviewer` while `AuditLogger` derives its actor from
+     * `Auth::user()`, and nothing made them the same person. A caller could
+     * pass Alice as the reviewer while Charlie was signed in: the decision
+     * evaluated against Alice's authority, the event attributed to Charlie,
+     * each half correct on its own and the pair worthless as evidence.
+     *
+     * A public method is callable, and the next caller may be a console
+     * command, a queued job or a controller written by somebody who never read
+     * this file. Every one of those bypasses a controller check. So the
+     * agreement is established here. Invariant 12a, SEC-DEC-091.
+     *
+     * There is deliberately no "acting on behalf of" path. Changing what a
+     * privacy response discloses is an interactive decision by a named person,
+     * and an unauthenticated context has no such person to name.
+     */
+    private function assertReviewerIsTheAuthenticatedActor(User $reviewer): void
+    {
+        $actor = Auth::user();
+
+        if ($actor === null) {
+            throw new RuntimeException(
+                'Changing what a response discloses is a decision by a named person, so it cannot be '
+                .'done without one signed in. There is no unattended path for this.'
+            );
+        }
+
+        if ($actor->getAuthIdentifier() !== $reviewer->getKey()) {
+            throw new RuntimeException(
+                'The reviewer of a disclosure change must be the person making it. Recording somebody '
+                .'else as the reviewer would put one name on the decision and another on the audit '
+                .'event, and neither could then be shown to be the true one.'
+            );
+        }
+
+        if (! $this->authorization->allows($reviewer, 'admin.privacy_requests.manage')) {
+            throw new RuntimeException(
+                'You are not authorised to change what a privacy response discloses.'
+            );
+        }
+    }
+
+    /**
+     * A second approver must be a different person AND allowed to decide.
+     *
+     * "A SECOND PERSON" AND "A SECOND PERSON WHO MAY DECIDE THIS" ARE DIFFERENT
+     * RULES, and only the second one is a control. This method previously
+     * required an approver that was merely non-null and not the reviewer, which
+     * **a Viewer satisfied** - so the safeguard on the one direction that can
+     * expose somebody who never asked for anything could be met by any account
+     * in the organisation.
+     *
+     * The permission asked for is `admin.privacy_requests.release`, not
+     * `.manage`: widening what leaves SemantIQ is a disclosure decision, and it
+     * belongs at the same System Administrator ceiling already approved for
+     * release itself (SEC-DEC-083). Asked through `Authorization`, never by
+     * comparing a role name - one implementation is what stops navigation, the
+     * route middleware and service rules drifting apart.
+     */
     private function assertSecondApproverIsValid(User $reviewer, ?User $approver): void
     {
         if ($approver === null) {
@@ -197,6 +268,13 @@ final class PrivacySubjectAssembler
             throw new RuntimeException(
                 'The second approver for a widening must not be the reviewer who proposed it. One person '
                 .'approving their own widening is one person deciding, whatever the record says.'
+            );
+        }
+
+        if (! $this->authorization->allows($approver, 'admin.privacy_requests.release')) {
+            throw new RuntimeException(
+                'The second approver for a widening must be authorised to release a response. A second '
+                .'pair of eyes that is not allowed to make the decision is not a second pair of eyes.'
             );
         }
     }

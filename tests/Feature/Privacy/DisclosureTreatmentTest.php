@@ -14,6 +14,7 @@ use App\Modules\Governance\Models\PrivacyRequestRecord;
 use App\Modules\Governance\Privacy\CollectedItem;
 use App\Modules\Governance\Privacy\PrivacySubjectAssembler;
 use App\Modules\Governance\Services\PrivacyRequests;
+use App\Modules\Identity\Support\Authorization;
 use App\Modules\Identity\Support\OrganisationContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -80,6 +81,23 @@ class DisclosureTreatmentTest extends TestCase
         Event::listen('eloquent.creating: '.AuditEvent::class, function (): void {
             throw new RuntimeException('audit storage is unavailable');
         });
+    }
+
+    /**
+     * A reviewer who is actually signed in.
+     *
+     * `retreat()` requires the named reviewer to BE the authenticated actor, so
+     * a helper that returns a user without signing them in would make every
+     * test here exercise a path the application refuses. Creating and
+     * authenticating together is what stops that being forgotten.
+     */
+    private function signedInReviewer(Role $role = Role::SystemAdmin): User
+    {
+        $reviewer = $this->personOn($role);
+
+        $this->actingAs($reviewer);
+
+        return $reviewer;
     }
 
     private function treatmentEvents(): int
@@ -177,7 +195,7 @@ class DisclosureTreatmentTest extends TestCase
     public function narrowing_needs_only_the_reviewer(): void
     {
         $record = $this->aRecord();
-        $reviewer = $this->personOn(Role::SystemAdmin);
+        $reviewer = $this->signedInReviewer();
 
         $updated = app(PrivacySubjectAssembler::class)->retreat(
             $record,
@@ -194,7 +212,7 @@ class DisclosureTreatmentTest extends TestCase
     public function widening_without_a_second_approver_is_refused(): void
     {
         $record = $this->aRecord();
-        $reviewer = $this->personOn(Role::SystemAdmin);
+        $reviewer = $this->signedInReviewer();
 
         $before = $this->snapshot($record);
         $events = $this->treatmentEvents();
@@ -217,7 +235,7 @@ class DisclosureTreatmentTest extends TestCase
     public function the_second_approver_cannot_be_the_reviewer(): void
     {
         $record = $this->aRecord();
-        $reviewer = $this->personOn(Role::SystemAdmin);
+        $reviewer = $this->signedInReviewer();
 
         $before = $this->snapshot($record);
         $events = $this->treatmentEvents();
@@ -234,13 +252,163 @@ class DisclosureTreatmentTest extends TestCase
         $this->assertSame($events, $this->treatmentEvents());
     }
 
+    /* ------------------ the reviewer is the authenticated actor (12a) */
+
+    #[Test]
+    public function a_reviewer_who_is_not_the_authenticated_actor_is_refused(): void
+    {
+        $record = $this->aRecord();
+
+        $alice = $this->personOn(Role::SystemAdmin);
+        $charlie = $this->personOn(Role::SystemAdmin);
+
+        /* Charlie is signed in and names Alice as the reviewer. Both hold
+         * every permission, so nothing about authority refuses this - only
+         * the identity check does. Without it the decision would be weighed
+         * against Alice and the audit event attributed to Charlie. */
+        $this->actingAs($charlie);
+
+        $before = $this->snapshot($record);
+
+        $exception = $this->refused(fn () => app(PrivacySubjectAssembler::class)->retreat(
+            $record,
+            DisclosureTreatment::Exclude,
+            $alice,
+            'Recorded against somebody who is not here.',
+        ));
+
+        $this->assertStringContainsString('must be the person making it', $exception->getMessage());
+        $this->assertTreatmentUnchanged($record, $before);
+        $this->assertSame(0, $this->treatmentEvents());
+    }
+
+    #[Test]
+    public function an_unauthenticated_treatment_change_is_refused(): void
+    {
+        $record = $this->aRecord();
+        $reviewer = $this->personOn(Role::SystemAdmin);
+
+        /* Deliberately NOT signed in - a console command or a queued job. */
+        $before = $this->snapshot($record);
+
+        $this->refused(fn () => app(PrivacySubjectAssembler::class)->retreat(
+            $record,
+            DisclosureTreatment::Exclude,
+            $reviewer,
+            'An unattended caller.',
+        ));
+
+        $this->assertTreatmentUnchanged($record, $before);
+        $this->assertSame(0, $this->treatmentEvents());
+    }
+
+    #[Test]
+    public function a_reviewer_without_manage_is_refused(): void
+    {
+        $record = $this->aRecord();
+
+        /* A Viewer is genuinely signed in and genuinely is who they say they
+         * are. Identity is not authority. */
+        $reviewer = $this->signedInReviewer(Role::Viewer);
+
+        $before = $this->snapshot($record);
+
+        $this->refused(fn () => app(PrivacySubjectAssembler::class)->retreat(
+            $record,
+            DisclosureTreatment::Exclude,
+            $reviewer,
+            'Narrowing looks harmless, but it is still a disclosure decision.',
+        ));
+
+        $this->assertTreatmentUnchanged($record, $before);
+        $this->assertSame(0, $this->treatmentEvents());
+    }
+
+    /* ---------------- the second approver must be authorized (12b) */
+
+    #[Test]
+    public function a_viewer_cannot_be_the_second_approver(): void
+    {
+        $record = $this->aRecord();
+        $reviewer = $this->signedInReviewer();
+        $approver = $this->personOn(Role::Viewer);
+
+        $before = $this->snapshot($record);
+
+        $exception = $this->refused(fn () => app(PrivacySubjectAssembler::class)->retreat(
+            $record,
+            DisclosureTreatment::Include,
+            $reviewer,
+            'A second name on the form is not a second decision.',
+            $approver,
+        ));
+
+        $this->assertStringContainsString('authorised to release', $exception->getMessage());
+        $this->assertTreatmentUnchanged($record, $before);
+        $this->assertSame(0, $this->treatmentEvents());
+    }
+
+    #[Test]
+    public function an_administrator_without_release_cannot_be_the_second_approver(): void
+    {
+        $record = $this->aRecord();
+        $reviewer = $this->signedInReviewer();
+
+        /* An Administrator may MANAGE privacy requests and may not RELEASE
+         * one - SEC-DEC-083 puts release at the System Administrator ceiling.
+         * Approving a widening is a disclosure decision, so it sits at the
+         * same ceiling, and this is the case that proves the two permissions
+         * are genuinely being told apart rather than one standing in for the
+         * other. */
+        $approver = $this->personOn(Role::Admin);
+
+        $this->assertTrue(
+            app(Authorization::class)
+                ->allows($approver, 'admin.privacy_requests.manage'),
+            'the premise of this test is an approver who can manage but not release',
+        );
+
+        $before = $this->snapshot($record);
+
+        $this->refused(fn () => app(PrivacySubjectAssembler::class)->retreat(
+            $record,
+            DisclosureTreatment::Include,
+            $reviewer,
+            'Close, but not the ceiling this decision sits at.',
+            $approver,
+        ));
+
+        $this->assertTreatmentUnchanged($record, $before);
+        $this->assertSame(0, $this->treatmentEvents());
+    }
+
+    #[Test]
+    public function an_authorized_system_administrator_may_be_the_second_approver(): void
+    {
+        $record = $this->aRecord();
+        $reviewer = $this->signedInReviewer();
+        $approver = $this->personOn(Role::SystemAdmin);
+
+        $updated = app(PrivacySubjectAssembler::class)->retreat(
+            $record,
+            DisclosureTreatment::Include,
+            $reviewer,
+            'Reviewed the underlying row; it names nobody else.',
+            $approver,
+        );
+
+        $this->assertSame(DisclosureTreatment::Include, $updated->treatment);
+        $this->assertSame('widened', $updated->reviewer_action);
+        $this->assertSame(1, $this->treatmentEvents());
+    }
+
     /* ------------------------- a treatment change is evidence-critical (12) */
 
     #[Test]
     public function a_failed_audit_on_narrowing_leaves_the_treatment_unchanged(): void
     {
         $record = $this->aRecord();
-        $reviewer = $this->personOn(Role::SystemAdmin);
+        $reviewer = $this->signedInReviewer();
 
         $before = $this->snapshot($record);
 
@@ -265,7 +433,7 @@ class DisclosureTreatmentTest extends TestCase
     public function a_failed_audit_on_widening_leaves_the_treatment_unchanged(): void
     {
         $record = $this->aRecord();
-        $reviewer = $this->personOn(Role::SystemAdmin);
+        $reviewer = $this->signedInReviewer();
         $approver = $this->personOn(Role::SystemAdmin);
 
         $before = $this->snapshot($record);
@@ -292,7 +460,7 @@ class DisclosureTreatmentTest extends TestCase
     public function a_treatment_change_is_recorded_without_any_collected_personal_data(): void
     {
         $record = $this->aRecord();
-        $reviewer = $this->personOn(Role::SystemAdmin);
+        $reviewer = $this->signedInReviewer();
         $approver = $this->personOn(Role::SystemAdmin);
 
         $summary = $record->summary;
@@ -330,19 +498,25 @@ class DisclosureTreatmentTest extends TestCase
         /* What it DOES carry: the shape of the decision, and both parties. */
         $after = (array) $event->after_summary;
 
-        $this->assertSame('describe', ((array) $event->before_summary)['treatment']);
-        $this->assertSame('include', $after['treatment']);
-        $this->assertSame('widened', $after['reviewer_action']);
+        $this->assertSame('describe', ((array) $event->before_summary)['treatment'], 'previous treatment');
+        $this->assertSame('include', $after['treatment'], 'new treatment');
+        $this->assertSame('widened', $after['reviewer_action'], 'direction');
+        $this->assertSame($record->source_table, $after['source_table'], 'source table');
+        $this->assertSame($record->getKey(), $after['record_id'], 'record id');
+
+        /* Both parties, by id. The reviewer is written explicitly AND is the
+         * audit actor, because the two are now forced to agree. */
+        $this->assertSame($reviewer->getKey(), $after['reviewer_user_id'], 'reviewer identity');
+        $this->assertSame($reviewer->getKey(), $event->actor_user_id, 'audit actor matches the reviewer');
         $this->assertTrue($after['second_approval_present']);
-        $this->assertSame($approver->getKey(), $after['second_approver_user_id']);
-        $this->assertArrayHasKey('source_table', $after);
+        $this->assertSame($approver->getKey(), $after['second_approver_user_id'], 'approver identity');
     }
 
     #[Test]
     public function widening_with_a_genuine_second_approver_is_recorded_as_widened(): void
     {
         $record = $this->aRecord();
-        $reviewer = $this->personOn(Role::SystemAdmin);
+        $reviewer = $this->signedInReviewer();
         $approver = $this->personOn(Role::SystemAdmin);
 
         $updated = app(PrivacySubjectAssembler::class)->retreat(
@@ -362,7 +536,7 @@ class DisclosureTreatmentTest extends TestCase
     public function a_change_of_treatment_must_record_why(): void
     {
         $record = $this->aRecord();
-        $reviewer = $this->personOn(Role::SystemAdmin);
+        $reviewer = $this->signedInReviewer();
 
         $this->expectException(RuntimeException::class);
 
@@ -388,7 +562,7 @@ class DisclosureTreatmentTest extends TestCase
         $updated = app(PrivacySubjectAssembler::class)->retreat(
             $record,
             DisclosureTreatment::Include,
-            $this->personOn(Role::SystemAdmin),
+            $this->signedInReviewer(),
             'Checked the underlying rows.',
             $this->personOn(Role::SystemAdmin),
         );
