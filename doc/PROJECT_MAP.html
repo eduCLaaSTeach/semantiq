@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  SemantIQ - Administrator Foundation Map
+  ======================================================================
+  A standalone orientation page. Open it in any browser by double-clicking
+  it; it needs no server, no build step and no network except Google Fonts,
+  which falls back cleanly to system faces when offline.
+
+  THIS IS A SNAPSHOT, NOT A DASHBOARD. Nothing here reads the repository at
+  runtime. It states what was true on the date in the footer, at the commit
+  named there. Regenerate it when that stops being true - the prompt that
+  produces it lives in doc/prompts/ORIENTATION_MAP_PROMPT.md.
+
+  It renders in light or dark according to the reader's system setting.
+  ======================================================================
+-->
+<title>Administrator Foundation Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+
+</head>
+<body>
+<style>
+  html { -webkit-text-size-adjust: 100%; }
+  body, h1, h2, h3, p, ul, li, figure { margin: 0; padding: 0; }
+  ul { list-style: none; }
+
+  /* ---------------------------------------------------------------------
+     Palette derived from the application's own identity: the navy rail,
+     the warm sand canvas, the olive-gold of the logo mark. Neutrals carry
+     a navy bias so they sit with the ink rather than beside it.
+     --------------------------------------------------------------------- */
+  :root {
+    --ground:      #F1EBE0;
+    --surface:     #FFFFFF;
+    --surface-sunk:#E9E1D4;
+    --ink:         #16243D;
+    --ink-soft:    #46536B;
+    --ink-faint:   #78829A;
+    --rule:        #D6CCBB;
+    --rule-firm:   #BFB3A0;
+    --accent:      #8A7519;
+    --accent-soft: #EFE4C4;
+    --done:        #2E6A4E;
+    --done-soft:   #DCEAE0;
+    --now:         #2B5C8A;
+    --now-soft:    #DBE6F1;
+    --locked:      #8A8577;
+    --locked-soft: #E4DFD4;
+    --shadow:      0 1px 2px rgba(22,36,61,.06), 0 8px 24px -12px rgba(22,36,61,.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0F1724;
+      --surface:     #16202F;
+      --surface-sunk:#1D2839;
+      --ink:         #E7EDF6;
+      --ink-soft:    #A3B0C4;
+      --ink-faint:   #7A8698;
+      --rule:        #2A3648;
+      --rule-firm:   #3B4A60;
+      --accent:      #D6BC5A;
+      --accent-soft: #33301E;
+      --done:        #6FBF95;
+      --done-soft:   #1B2E27;
+      --now:         #7FB3E0;
+      --now-soft:    #16293C;
+      --locked:      #7E8798;
+      --locked-soft: #202938;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0F1724;
+    --surface:     #16202F;
+    --surface-sunk:#1D2839;
+    --ink:         #E7EDF6;
+    --ink-soft:    #A3B0C4;
+    --ink-faint:   #7A8698;
+    --rule:        #2A3648;
+    --rule-firm:   #3B4A60;
+    --accent:      #D6BC5A;
+    --accent-soft: #33301E;
+    --done:        #6FBF95;
+    --done-soft:   #1B2E27;
+    --now:         #7FB3E0;
+    --now-soft:    #16293C;
+    --locked:      #7E8798;
+    --locked-soft: #202938;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1.1rem, 4vw, 2.5rem) 5rem;
+  }
+
+  /* ---- type ---- */
+  h1, h2, h3 { font-family: "IBM Plex Serif", Georgia, serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2rem, 5.2vw, 3rem); font-weight: 700; line-height: 1.1; letter-spacing: -.015em; }
+  h2 { font-size: clamp(1.35rem, 3vw, 1.7rem); font-weight: 600; line-height: 1.2; }
+  h3 { font-size: 1.05rem; font-weight: 600; line-height: 1.3; }
+  p  { margin: 0; max-width: 66ch; }
+  .lede { font-size: clamp(1.05rem, 2.2vw, 1.2rem); color: var(--ink-soft); }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .72rem;
+    font-weight: 500;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .86em; }
+  code {
+    background: var(--surface-sunk);
+    padding: .1em .38em;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+
+  /* ---- structure ---- */
+  header.masthead { display: flex; flex-direction: column; gap: 1rem; }
+
+  .rule-heavy { height: 3px; background: var(--ink); margin: 2.2rem 0 0; }
+
+  section { margin-top: clamp(2.75rem, 6vw, 4rem); display: flex; flex-direction: column; gap: 1.25rem; }
+  .section-head { display: flex; flex-direction: column; gap: .45rem; }
+
+  /* ---- the answer box ---- */
+  .answer {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--accent);
+    border-radius: 4px;
+    padding: 1.4rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+    box-shadow: var(--shadow);
+  }
+  .answer p { max-width: 62ch; }
+
+  /* ---- progress ---- */
+  .progress {
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1.15rem 1.3rem;
+  }
+  .progress-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .progress-count {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .progress-count span { color: var(--ink-faint); font-weight: 400; }
+  .track { display: flex; gap: 3px; height: 12px; }
+  .track i {
+    flex: 1;
+    border-radius: 2px;
+    background: var(--locked-soft);
+    border: 1px solid var(--rule);
+  }
+  .track i.is-done { background: var(--done); border-color: var(--done); }
+  .track i.is-part {
+    border-color: var(--now);
+    background: linear-gradient(90deg, var(--now) 0 66%, var(--now-soft) 66% 100%);
+  }
+
+  /* ---- gate ladder ---- */
+  .ladder { display: flex; flex-direction: column; }
+
+  .gate {
+    display: grid;
+    grid-template-columns: 2.6rem 1fr;
+    gap: 0 1.1rem;
+    position: relative;
+    padding-bottom: 1.5rem;
+  }
+  .gate:last-child { padding-bottom: 0; }
+
+  /* the spine */
+  .gate::before {
+    content: "";
+    position: absolute;
+    left: 1.28rem;
+    top: 2.4rem;
+    bottom: -.1rem;
+    width: 2px;
+    background: var(--rule-firm);
+  }
+  .gate:last-child::before { display: none; }
+  .gate.is-locked::before { background: repeating-linear-gradient(180deg, var(--rule-firm) 0 4px, transparent 4px 9px); }
+
+  .marker {
+    width: 2.6rem;
+    height: 2.4rem;
+    display: grid;
+    place-items: center;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .78rem;
+    font-weight: 600;
+    position: relative;
+    z-index: 1;
+  }
+  .marker b {
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--surface);
+    border: 2px solid var(--rule-firm);
+    color: var(--ink-faint);
+  }
+  .gate.is-done .marker b { background: var(--done); border-color: var(--done); color: #fff; }
+  .gate.is-now  .marker b { background: var(--surface); border-color: var(--now); color: var(--now); box-shadow: 0 0 0 4px var(--now-soft); }
+
+  .gate-body {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    padding-bottom: .3rem;
+  }
+  .gate-title { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+  .gate-title h3 { font-family: "IBM Plex Sans", sans-serif; font-size: 1.06rem; font-weight: 600; }
+  .gate-ref {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .78rem;
+    color: var(--ink-faint);
+  }
+  .gate-what { color: var(--ink-soft); font-size: .95rem; max-width: 60ch; }
+  .gate.is-locked .gate-title h3 { color: var(--ink-soft); }
+
+  .pill {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    padding: .18rem .5rem;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .pill.done   { background: var(--done-soft);   color: var(--done); }
+  .pill.now    { background: var(--now-soft);    color: var(--now); }
+  .pill.locked { background: var(--locked-soft); color: var(--locked); }
+
+  .gate-note {
+    font-size: .88rem;
+    color: var(--ink-faint);
+    border-left: 2px solid var(--rule-firm);
+    padding-left: .7rem;
+    max-width: 58ch;
+  }
+
+  /* batches inside the current gate */
+  .batches {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    margin-top: .55rem;
+    background: var(--now-soft);
+    border-radius: 4px;
+    padding: .8rem .9rem;
+  }
+  .batch { display: flex; align-items: baseline; gap: .6rem; font-size: .9rem; flex-wrap: wrap; }
+  .batch .mono { color: var(--ink-soft); min-width: 3.4rem; }
+  .batch em { font-style: normal; color: var(--ink-soft); }
+
+  /* ---- config split ---- */
+  .split { display: grid; gap: 1.1rem; grid-template-columns: 1fr; }
+  @media (min-width: 46rem) { .split { grid-template-columns: 1.35fr 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1.15rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+  }
+  .card.muted { background: var(--surface-sunk); border-color: var(--rule); }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; }
+  .card-head h3 { font-family: "IBM Plex Sans", sans-serif; font-size: .98rem; }
+  .count {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .8rem;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .filelist { display: flex; flex-direction: column; gap: .55rem; margin: 0; padding: 0; list-style: none; }
+  .filelist li { display: flex; flex-direction: column; gap: .12rem; }
+  .filelist .fname {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .84rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .filelist .fwhat { font-size: .85rem; color: var(--ink-soft); }
+
+  .stocklist {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .82rem;
+    color: var(--ink-faint);
+    line-height: 2;
+    word-spacing: .1em;
+  }
+
+  /* ---- plain table ---- */
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+  th, td { text-align: left; padding: .62rem .75rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .7rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 500;
+    border-bottom-color: var(--rule-firm);
+  }
+  td:first-child { white-space: nowrap; }
+
+  /* ---- open items ---- */
+  .open { display: flex; flex-direction: column; gap: .9rem; }
+  .open-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .2rem .8rem;
+    align-items: baseline;
+  }
+  .open-item .dot {
+    width: .5rem; height: .5rem; border-radius: 50%;
+    background: var(--accent);
+    transform: translateY(-.15rem);
+  }
+  .open-item .dot.blocker { background: var(--now); }
+  .open-item p { font-size: .93rem; color: var(--ink-soft); }
+  .open-item strong { color: var(--ink); font-weight: 600; }
+
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--rule);
+    font-size: .82rem;
+    color: var(--ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem 1.4rem;
+  }
+  footer .mono { color: var(--ink-soft); }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">SemantIQ &middot; Administrator Foundation Release 1</div>
+    <h1>What you are actually building</h1>
+    <p class="lede">
+      One release, seven gates, five config files that are yours. Everything else
+      is scaffolding you can ignore.
+    </p>
+    <div class="rule-heavy"></div>
+  </header>
+
+  <section>
+    <div class="answer">
+      <p>
+        <strong>SemantIQ is two products in one application.</strong> Business
+        people get Decision Intelligence &mdash; Sales, Finance, Ask SemantIQ &mdash;
+        and never learn the word &ldquo;Fabric&rdquo;. Administrators get a control
+        plane that automates Microsoft Fabric on their behalf.
+      </p>
+      <p>
+        <strong>This release is the control plane&rsquo;s backbone.</strong> It is not
+        the product a customer logs in to use. It is the plumbing everything else
+        stands on: who can sign in, who may do what, what gets recorded, and what
+        data you hold and where it lives.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Where you are</div>
+      <h2>Three gates confirmed, one nearly done, three to go</h2>
+    </div>
+
+    <div class="progress">
+      <div class="progress-top">
+        <div class="progress-count">3<span>&thinsp;&frac23; of 7 gates</span></div>
+        <div class="count">a little past halfway</div>
+      </div>
+      <div class="track" role="img" aria-label="Three gates confirmed, gate four two thirds complete, three gates locked">
+        <i class="is-done"></i><i class="is-done"></i><i class="is-done"></i><i class="is-part"></i><i></i><i></i><i></i>
+      </div>
+    </div>
+
+    <div class="ladder">
+
+      <div class="gate is-done">
+        <div class="marker"><b>1</b></div>
+        <div class="gate-body">
+          <div class="gate-title">
+            <h3>Platform Foundation</h3>
+            <span class="gate-ref">R1.1</span>
+            <span class="pill done">Confirmed</span>
+          </div>
+          <p class="gate-what">
+            Organisation scope, the audit trail, system settings, feature flags,
+            diagnostics.
+          </p>
+        </div>
+      </div>
+
+      <div class="gate is-done">
+        <div class="marker"><b>2</b></div>
+        <div class="gate-body">
+          <div class="gate-title">
+            <h3>Identity &amp; Access</h3>
+            <span class="gate-ref">R1.2</span>
+            <span class="pill done">Confirmed</span>
+          </div>
+          <p class="gate-what">
+            Users, roles, permissions, business-domain entitlements, access reviews.
+          </p>
+          <p class="gate-note">
+            The rule that matters: a role alone never grants business data. Access is
+            platform tier <em>and</em> domain entitlement, both required.
+          </p>
+        </div>
+      </div>
+
+      <div class="gate is-done">
+        <div class="marker"><b>3</b></div>
+        <div class="gate-body">
+          <div class="gate-title">
+            <h3>Security Foundation</h3>
+            <span class="gate-ref">R1.3</span>
+            <span class="pill done">Confirmed</span>
+          </div>
+          <p class="gate-what">
+            Sign-in policy, session policy, API security, secret references.
+          </p>
+        </div>
+      </div>
+
+      <div class="gate is-now">
+        <div class="marker"><b>4</b></div>
+        <div class="gate-body">
+          <div class="gate-title">
+            <h3>Data Protection, Sovereignty &amp; PDPA</h3>
+            <span class="gate-ref">R1.4</span>
+            <span class="pill now">You are here</span>
+          </div>
+          <p class="gate-what">
+            What personal data you hold, how long you keep it, which country it lives
+            in, and who may read the audit trail.
+          </p>
+          <div class="batches">
+            <div class="batch">
+              <span class="mono">R1.4a</span>
+              <span class="pill done">Accepted</span>
+              <em>Data protection and sovereignty profiles, privacy contact</em>
+            </div>
+            <div class="batch">
+              <span class="mono">R1.4b</span>
+              <span class="pill done">Accepted</span>
+              <em>Auditor capability, sovereignty exceptions, retention, audit log</em>
+            </div>
+            <div class="batch">
+              <span class="mono">R1.4c</span>
+              <span class="pill locked">Not started</span>
+              <em>Privacy requests, breach register, governance overview</em>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gate is-locked">
+        <div class="marker"><b>5</b></div>
+        <div class="gate-body">
+          <div class="gate-title">
+            <h3>Integration Foundation</h3>
+            <span class="gate-ref">R1.5</span>
+            <span class="pill locked">Locked</span>
+          </div>
+          <p class="gate-what">
+            The gate the whole Fabric release depends on. Nothing touches Microsoft
+            Fabric for real until this one is open.
+          </p>
+        </div>
+      </div>
+
+      <div class="gate is-locked">
+        <div class="marker"><b>6</b></div>
+        <div class="gate-body">
+          <div class="gate-title">
+            <h3>Operations</h3>
+            <span class="gate-ref">R1.6</span>
+            <span class="pill locked">Locked</span>
+          </div>
+          <p class="gate-what">Background jobs and monitoring.</p>
+          <p class="gate-note">
+            Needs a real queue worker on the server first. Production currently runs
+            jobs inline, so nothing can be scheduled or retried yet.
+          </p>
+        </div>
+      </div>
+
+      <div class="gate is-locked">
+        <div class="marker"><b>7</b></div>
+        <div class="gate-body">
+          <div class="gate-title">
+            <h3>Verification</h3>
+            <span class="gate-ref">R1.7</span>
+            <span class="pill locked">Locked</span>
+          </div>
+          <p class="gate-what">
+            In-app Help, refreshed context registers, and evidence recorded against
+            every gate before Release 1 closes.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">The part that is confusing you</div>
+      <h2>Fifteen config files. Five are yours.</h2>
+      <p>
+        The other ten ship with every Laravel application and have barely been
+        touched. You never need to open them.
+      </p>
+    </div>
+
+    <div class="split">
+      <div class="card">
+        <div class="card-head">
+          <h3>Yours &mdash; these hold real decisions</h3>
+          <span class="count">5 files</span>
+        </div>
+        <ul class="filelist">
+          <li>
+            <span class="fname">navigation.php</span>
+            <span class="fwhat">The whole menu tree. By far the biggest file, and it is a list, not logic.</span>
+          </li>
+          <li>
+            <span class="fname">security.php</span>
+            <span class="fwhat">Sign-in mode, session rules, API controls. Gate 3.</span>
+          </li>
+          <li>
+            <span class="fname">governance.php</span>
+            <span class="fwhat">Retention categories, exception types, audit log views. Gate 4.</span>
+          </li>
+          <li>
+            <span class="fname">platform.php</span>
+            <span class="fwhat">The system settings catalogue. Gate 1.</span>
+          </li>
+          <li>
+            <span class="fname">brand.php</span>
+            <span class="fwhat">Essentially one line: where the approved logo pack lives.</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="card muted">
+        <div class="card-head">
+          <h3>Stock Laravel &mdash; ignore</h3>
+          <span class="count">10 files</span>
+        </div>
+        <div class="stocklist">
+          app &middot; auth &middot; cache &middot; database &middot; filesystems &middot;
+          logging &middot; mail &middot; queue &middot; services &middot; session
+        </div>
+      </div>
+    </div>
+
+    <div class="answer">
+      <p>
+        <strong>Why permissions live in a config file rather than a database table.</strong>
+        A database row can be edited quietly by anyone with access. A config file
+        cannot &mdash; changing it means opening a pull request where a human can see
+        exactly which privilege moved and why.
+      </p>
+      <p>
+        That is the trade you made: these files exist so that no one, including us,
+        can grant themselves a permission without leaving a reviewable trace.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">The other documents</div>
+      <h2>What each folder is for</h2>
+      <p>
+        Written so that a decision made three weeks ago can still be explained by
+        someone who was not there.
+      </p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Where</th><th>What lives there</th><th>When you would open it</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>IMPLEMENTATION_STATUS.md</code></td>
+            <td>Which gate is confirmed, in progress or locked</td>
+            <td>To answer &ldquo;where are we&rdquo; in ten seconds</td>
+          </tr>
+          <tr>
+            <td><code>doc/TaskCompleted-*</code></td>
+            <td>A day note per working day, with a stopping and starting point</td>
+            <td>Resuming after a break</td>
+          </tr>
+          <tr>
+            <td><code>doc/execution/decisions/</code></td>
+            <td>Numbered decisions &mdash; what was chosen, and what was rejected</td>
+            <td>&ldquo;Why is it built this way?&rdquo;</td>
+          </tr>
+          <tr>
+            <td><code>doc/context/</code></td>
+            <td>Registers of code, data, validation, config and sovereignty</td>
+            <td>Tracing what a change touches</td>
+          </tr>
+          <tr>
+            <td><code>doc/execution/CHECK-*.sql</code></td>
+            <td>Read-only scripts that verify a release on the live database</td>
+            <td>After any production migration</td>
+          </tr>
+          <tr>
+            <td><code>doc/DATA_DICTIONARY.md</code></td>
+            <td>Every table and column, generated from the migrations</td>
+            <td>&ldquo;What does this field mean?&rdquo;</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Before Gate 4 can close</div>
+      <h2>Four things still open</h2>
+    </div>
+
+    <div class="open">
+      <div class="open-item">
+        <span class="dot blocker"></span>
+        <p>
+          <strong>Append-only triggers on privacy correction notes.</strong> This one
+          formally blocks Gate 4. A correction note records what a person disputed
+          about their own data &mdash; if it can be edited afterwards, the party being
+          disputed can rewrite the dispute. Lands in R1.4c.
+        </p>
+      </div>
+      <div class="open-item">
+        <span class="dot"></span>
+        <p>
+          <strong>R1.4c itself.</strong> Privacy requests, breach register, and the
+          governance overview that summarises everything the earlier batches built.
+        </p>
+      </div>
+      <div class="open-item">
+        <span class="dot"></span>
+        <p>
+          <strong>AI processing geography reads &ldquo;Not determined&rdquo;.</strong>
+          Correct behaviour, not a bug &mdash; SemantIQ will not invent a sovereignty
+          position. But it is a question only you can answer, and cross-border AI
+          stays switched off until you do.
+        </p>
+      </div>
+      <div class="open-item">
+        <span class="dot"></span>
+        <p>
+          <strong>No retention period is set for any of the seven data categories.</strong>
+          Also deliberate: how long to keep personal data is a legal judgement, not
+          something software should guess. The screen says <code>Not Configured</code>
+          rather than showing a reassuring default nobody agreed to.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Accurate as of 25 August 2026</span>
+    <span><span class="mono">main</span> at <span class="mono">c5974ab</span></span>
+    <span>Gates 1&ndash;3 confirmed &middot; Gate 4 in progress &middot; Gates 5&ndash;7 locked</span>
+  </footer>
+
+</div>
+</body>
+</html>
