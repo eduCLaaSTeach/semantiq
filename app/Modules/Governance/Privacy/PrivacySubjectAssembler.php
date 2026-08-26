@@ -176,10 +176,16 @@ final class PrivacySubjectAssembler
              * exactly what band C exists to withhold. SEC-DEC-044 was applied
              * to every key below.
              *
-             * The APPROVER IS AN ID, not a name. It resolves to a person for
-             * anybody entitled to resolve it and says nothing to anybody who is
-             * not. The reviewer is the actor of the event through the normal
-             * mechanism, so the two parties are both on the row.
+             * THIS EVENT RECORDS THE AUTHENTICATED REVIEWER AND THE NARROWING
+             * DECISION ONLY. `reviewer_user_id` is an id rather than a name: it
+             * resolves to a person for anybody entitled to resolve it and says
+             * nothing to anybody who is not.
+             *
+             * There is deliberately NO SECOND-APPROVER FIELD. Widening is not
+             * supported until an independently authenticated second-approval
+             * workflow exists, so there is no second party to name - and an
+             * event that named one would be asserting an approval nobody had
+             * given. SEC-DEC-093.
              */
             $this->audit->recordRequired(
                 action: 'governance.privacy_request.treatment_changed',
