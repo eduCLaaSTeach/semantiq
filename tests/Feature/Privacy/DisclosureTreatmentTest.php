@@ -6,6 +6,8 @@ namespace Tests\Feature\Privacy;
 
 use App\Enums\Role;
 use App\Models\User;
+use App\Modules\Audit\Exceptions\RequiredAuditEvidenceMissing;
+use App\Modules\Audit\Models\AuditEvent;
 use App\Modules\Governance\Enums\DisclosureBand;
 use App\Modules\Governance\Enums\DisclosureTreatment;
 use App\Modules\Governance\Models\PrivacyRequestRecord;
@@ -14,6 +16,7 @@ use App\Modules\Governance\Privacy\PrivacySubjectAssembler;
 use App\Modules\Governance\Services\PrivacyRequests;
 use App\Modules\Identity\Support\OrganisationContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -21,6 +24,7 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
 use Tests\TestCase;
+use Throwable;
 
 /**
  * The disclosure rules themselves: what may be widened, by whom, and what this
@@ -62,6 +66,71 @@ class DisclosureTreatmentTest extends TestCase
             ->where('privacy_request_id', $request->getKey())
             ->inBand(DisclosureBand::C)
             ->firstOrFail();
+    }
+
+    /**
+     * Make every audit write fail the way a sick database would.
+     *
+     * A listener that throws on `AuditEvent` creation, so the REAL
+     * `AuditLogger` catch block runs and returns the REAL null. A fake logger
+     * would prove only that the fake works.
+     */
+    private function auditWritesFail(): void
+    {
+        Event::listen('eloquent.creating: '.AuditEvent::class, function (): void {
+            throw new RuntimeException('audit storage is unavailable');
+        });
+    }
+
+    private function treatmentEvents(): int
+    {
+        return AuditEvent::query()
+            ->where('action', 'governance.privacy_request.treatment_changed')
+            ->count();
+    }
+
+    /**
+     * Assert that a refused treatment change left the row exactly as it was.
+     *
+     * The whole reason this invariant needed writing down is that the two
+     * second-approver tests below proved an exception and never looked at the
+     * row behind it.
+     */
+    /**
+     * @return array{treatment: DisclosureTreatment, reviewer_action: ?string, reviewer_note: ?string}
+     */
+    private function snapshot(PrivacyRequestRecord $record): array
+    {
+        $fresh = PrivacyRequestRecord::query()->findOrFail($record->getKey());
+
+        return [
+            'treatment' => $fresh->treatment,
+            'reviewer_action' => $fresh->reviewer_action,
+            'reviewer_note' => $fresh->reviewer_note,
+        ];
+    }
+
+    /**
+     * @param  array{treatment: DisclosureTreatment, reviewer_action: ?string, reviewer_note: ?string}  $before
+     */
+    private function assertTreatmentUnchanged(PrivacyRequestRecord $record, array $before): void
+    {
+        $this->assertSame(
+            $before,
+            $this->snapshot($record),
+            'the treatment, the reviewer action or the note moved despite the refusal',
+        );
+    }
+
+    /** Run a treatment change expected to be refused. */
+    private function refused(callable $call): Throwable
+    {
+        try {
+            $call();
+            $this->fail('the treatment change was expected to be refused and was not');
+        } catch (Throwable $exception) {
+            return $exception;
+        }
     }
 
     /* ------------------------------------------- the construction-time gate */
@@ -127,14 +196,21 @@ class DisclosureTreatmentTest extends TestCase
         $record = $this->aRecord();
         $reviewer = $this->personOn(Role::SystemAdmin);
 
-        $this->expectException(RuntimeException::class);
+        $before = $this->snapshot($record);
+        $events = $this->treatmentEvents();
 
-        app(PrivacySubjectAssembler::class)->retreat(
+        $this->refused(fn () => app(PrivacySubjectAssembler::class)->retreat(
             $record,
             DisclosureTreatment::Include,
             $reviewer,
             'They asked for the detail.',
-        );
+        ));
+
+        /* The refusal happens before any write, so nothing is expected to have
+         * moved - but that is a claim about the row, and it is asserted here
+         * rather than inferred from the exception. */
+        $this->assertTreatmentUnchanged($record, $before);
+        $this->assertSame($events, $this->treatmentEvents());
     }
 
     #[Test]
@@ -143,15 +219,123 @@ class DisclosureTreatmentTest extends TestCase
         $record = $this->aRecord();
         $reviewer = $this->personOn(Role::SystemAdmin);
 
-        $this->expectException(RuntimeException::class);
+        $before = $this->snapshot($record);
+        $events = $this->treatmentEvents();
 
-        app(PrivacySubjectAssembler::class)->retreat(
+        $this->refused(fn () => app(PrivacySubjectAssembler::class)->retreat(
             $record,
             DisclosureTreatment::Include,
             $reviewer,
             'They asked for the detail.',
             $reviewer,
+        ));
+
+        $this->assertTreatmentUnchanged($record, $before);
+        $this->assertSame($events, $this->treatmentEvents());
+    }
+
+    /* ------------------------- a treatment change is evidence-critical (12) */
+
+    #[Test]
+    public function a_failed_audit_on_narrowing_leaves_the_treatment_unchanged(): void
+    {
+        $record = $this->aRecord();
+        $reviewer = $this->personOn(Role::SystemAdmin);
+
+        $before = $this->snapshot($record);
+
+        $this->auditWritesFail();
+
+        $exception = $this->refused(fn () => app(PrivacySubjectAssembler::class)->retreat(
+            $record,
+            DisclosureTreatment::Exclude,
+            $reviewer,
+            'On reflection this says more than it needs to.',
+        ));
+
+        $this->assertInstanceOf(RequiredAuditEvidenceMissing::class, $exception);
+
+        /* Narrowing is one person's call and would otherwise have succeeded.
+         * This is the rollback, not a pre-flight refusal. */
+        $this->assertTreatmentUnchanged($record, $before);
+        $this->assertSame(0, $this->treatmentEvents());
+    }
+
+    #[Test]
+    public function a_failed_audit_on_widening_leaves_the_treatment_unchanged(): void
+    {
+        $record = $this->aRecord();
+        $reviewer = $this->personOn(Role::SystemAdmin);
+        $approver = $this->personOn(Role::SystemAdmin);
+
+        $before = $this->snapshot($record);
+
+        $this->auditWritesFail();
+
+        $exception = $this->refused(fn () => app(PrivacySubjectAssembler::class)->retreat(
+            $record,
+            DisclosureTreatment::Include,
+            $reviewer,
+            'Reviewed the underlying row; it names nobody else.',
+            $approver,
+        ));
+
+        $this->assertInstanceOf(RequiredAuditEvidenceMissing::class, $exception);
+
+        /* The dangerous direction, with a valid second approver, so every
+         * guard passed and only the missing evidence stopped it. */
+        $this->assertTreatmentUnchanged($record, $before);
+        $this->assertSame(0, $this->treatmentEvents());
+    }
+
+    #[Test]
+    public function a_treatment_change_is_recorded_without_any_collected_personal_data(): void
+    {
+        $record = $this->aRecord();
+        $reviewer = $this->personOn(Role::SystemAdmin);
+        $approver = $this->personOn(Role::SystemAdmin);
+
+        $summary = $record->summary;
+        $detail = $record->detail === null ? null : json_encode($record->detail);
+
+        app(PrivacySubjectAssembler::class)->retreat(
+            $record,
+            DisclosureTreatment::Include,
+            $reviewer,
+            'Reviewed the underlying row; it names nobody else.',
+            $approver,
         );
+
+        $event = AuditEvent::query()
+            ->where('action', 'governance.privacy_request.treatment_changed')
+            ->sole();
+
+        $row = json_encode($event->toArray());
+
+        $this->assertIsString($row);
+
+        /* What the treatment governs must never travel in the record OF the
+         * treatment decision. */
+        if ($summary !== null && trim($summary) !== '') {
+            $this->assertStringNotContainsString($summary, $row);
+        }
+
+        if ($detail !== null) {
+            $this->assertStringNotContainsString($detail, $row);
+        }
+
+        $this->assertStringNotContainsString('Dana Subject', $row);
+        $this->assertStringNotContainsString('dana@example.test', $row);
+
+        /* What it DOES carry: the shape of the decision, and both parties. */
+        $after = (array) $event->after_summary;
+
+        $this->assertSame('describe', ((array) $event->before_summary)['treatment']);
+        $this->assertSame('include', $after['treatment']);
+        $this->assertSame('widened', $after['reviewer_action']);
+        $this->assertTrue($after['second_approval_present']);
+        $this->assertSame($approver->getKey(), $after['second_approver_user_id']);
+        $this->assertArrayHasKey('source_table', $after);
     }
 
     #[Test]

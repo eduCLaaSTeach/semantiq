@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Governance\Privacy;
 
 use App\Models\User;
+use App\Modules\Audit\Support\AuditLogger;
 use App\Modules\Governance\Enums\DisclosureTreatment;
 use App\Modules\Governance\Models\PrivacyRequest;
 use App\Modules\Governance\Models\PrivacyRequestRecord;
@@ -33,6 +34,7 @@ final class PrivacySubjectAssembler
 {
     public function __construct(
         private readonly CollectorCatalogue $catalogue,
+        private readonly AuditLogger $audit,
     ) {}
 
     /**
@@ -92,6 +94,20 @@ final class PrivacySubjectAssembler
      * MORE is the direction that can expose somebody who never asked for
      * anything, so it takes a second person who is not the first.
      *
+     * THE CHANGE AND ITS AUDIT EVENT ARE ONE UNIT. Invariant 12, SEC-DEC-090.
+     *
+     * This method decides what a privacy response is allowed to disclose, and
+     * for a while it recorded that decision nowhere. The second-approver rule
+     * was enforced and then forgotten: `treatment`, `reviewer_action` and
+     * `reviewer_note` were persisted, and nothing in the trail said who agreed
+     * to disclose more about a third party, or when.
+     *
+     * That no screen calls this yet was not a defence. It is a public
+     * persistent write path, and an unreachable user interface is not an audit
+     * control - the first screen to call it would have inherited the gap in
+     * silence. So `recordRequired()` is used, inside a transaction: if the
+     * event cannot be written, the treatment does not change either.
+     *
      * @param  User  $approver  the second approver, required only when widening
      */
     public function retreat(
@@ -120,18 +136,52 @@ final class PrivacySubjectAssembler
             );
         }
 
-        /*
-         * A widened item still carries no detail payload unless it was
-         * collected with one. Widening cannot conjure data that was never
-         * gathered - the collector decided what to load, and it declined to
-         * load another person's identity in the first place.
-         */
-        $record->treatment = $to;
-        $record->reviewer_action = $widening ? 'widened' : 'narrowed';
-        $record->reviewer_note = $note;
-        $record->save();
+        return DB::transaction(function () use ($record, $from, $to, $note, $approver, $widening): PrivacyRequestRecord {
+            /*
+             * A widened item still carries no detail payload unless it was
+             * collected with one. Widening cannot conjure data that was never
+             * gathered - the collector decided what to load, and it declined to
+             * load another person's identity in the first place.
+             */
+            $record->treatment = $to;
+            $record->reviewer_action = $widening ? 'widened' : 'narrowed';
+            $record->reviewer_note = $note;
+            $record->save();
 
-        return $record;
+            /*
+             * WHAT THIS EVENT MAY CARRY. The shape of the decision, never the
+             * data it was a decision about. No `summary`, no `detail`, no
+             * subject name or address - those are what the treatment governs,
+             * and copying them into the trail would disclose by the back door
+             * exactly what band C exists to withhold. SEC-DEC-044 was applied
+             * to every key below.
+             *
+             * The APPROVER IS AN ID, not a name. It resolves to a person for
+             * anybody entitled to resolve it and says nothing to anybody who is
+             * not. The reviewer is the actor of the event through the normal
+             * mechanism, so the two parties are both on the row.
+             */
+            $this->audit->recordRequired(
+                action: 'governance.privacy_request.treatment_changed',
+                module: 'Governance',
+                resourceType: 'privacy_request',
+                resourceId: $record->privacy_request_id,
+                before: ['treatment' => $from->value],
+                after: [
+                    'request_reference' => $record->request?->reference,
+                    'record_id' => $record->getKey(),
+                    'source_table' => $record->source_table,
+                    'band' => $record->band->value,
+                    'treatment' => $to->value,
+                    'reviewer_action' => $record->reviewer_action,
+                    'second_approval_present' => $approver !== null,
+                    'second_approver_user_id' => $approver?->getKey(),
+                ],
+                reason: $note,
+            );
+
+            return $record;
+        });
     }
 
     private function assertSecondApproverIsValid(User $reviewer, ?User $approver): void
