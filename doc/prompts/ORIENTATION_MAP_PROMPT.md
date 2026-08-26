@@ -24,6 +24,57 @@ It is a **snapshot with a date and a commit on it**, regenerated when it stops
 being true. That constraint is what keeps it honest: a page that claims to be
 live, and quietly is not, is worse than no page.
 
+Reloading the page changes nothing. Every fact in it is typed into the file.
+This surprises people, so the file says so in a comment at the top and carries
+the date and commit in its footer.
+
+---
+
+## Keeping it current
+
+A snapshot that nobody refreshes becomes a confident lie. Pick a rule and put
+it somewhere the rule will actually be read - in this repository it lives in
+`CLAUDE.md` under "Keep The Orientation Map Current", so it is part of the
+closing routine rather than a good intention.
+
+**Regenerate in the same commit as any of these:**
+
+| Trigger | Why the map goes wrong without it |
+| --- | --- |
+| A milestone is formally accepted | Position section is stale, which is the whole point of the page |
+| The status file changes state | Same |
+| A file is added to or removed from `config/` | The "what is yours vs ignore" count is wrong |
+| An open item is resolved, or a new blocker appears | The Open section is the part that drives decisions |
+
+**Do not regenerate on ordinary commits.** A map rewritten on every push is
+noise in the history and stops being a signal that anything changed.
+
+**Rebuild from the repository, never by editing the numbers in place.** Re-read
+the sources every time rather than trusting what the previous version said. An
+inherited error survives every regeneration that does not go back to the source,
+and it gets more convincing each time it is copied forward.
+
+### The refresh prompt
+
+Shorter than the build prompt, because the page already exists:
+
+```text
+Refresh the Orientation Map at <path>.
+
+Rebuild it from the repository, do not edit the existing numbers in place.
+Re-read the status file, the active plan, the decision records, config/ and
+the recent history, and treat what the current page says as unverified.
+
+Keep the existing structure, palette and type - only the facts change.
+Update the date and commit in the footer.
+
+Then tell me exactly what changed on the page since the last version, and
+say explicitly if anything I previously listed as open is now resolved.
+```
+
+That last line is the useful one. The value of a refresh is not the new page,
+it is the diff.
+
 ---
 
 ## The prompt
@@ -100,7 +151,13 @@ purpose, because software must not guess a legal retention period" saves an
 hour of investigation every time somebody new sees that screen.
 
 **Regenerate rather than edit.** The page is cheap to rebuild and expensive to
-keep partially accurate. When it drifts, run the prompt again.
+keep partially accurate. When it drifts, run the refresh prompt above.
+
+**Tie the refresh to a milestone, not to a calendar.** A weekly rebuild
+produces a page nobody trusts, because most weeks nothing on it moved. A
+rebuild at each acceptance produces a page that is accurate at exactly the
+moments somebody opens it - which, in practice, is after a break, and a break
+usually follows a milestone.
 
 ## Variants worth asking for
 
