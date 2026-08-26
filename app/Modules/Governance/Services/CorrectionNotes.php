@@ -12,6 +12,7 @@ use App\Modules\Governance\Models\PrivacyCorrectionNote;
 use App\Modules\Governance\Models\PrivacyRequest;
 use App\Modules\Governance\Support\GovernanceStorage;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -79,38 +80,54 @@ final class CorrectionNotes
             );
         }
 
-        $note = new PrivacyCorrectionNote;
-        $note->fill([
-            'privacy_request_id' => $request->getKey(),
-            'audit_event_id' => $auditEventId,
-            'subject_assertion' => $assertion,
-        ]);
-        $note->forceFill([
-            'outcome' => $outcome,
-            'outcome_reason' => $reason,
-            'decided_by_user_id' => $actor->getKey(),
-            'decided_at' => now()->utc(),
-            'created_by_user_id' => $actor->getKey(),
-        ]);
-        $note->save();
+        /*
+         * THE NOTE AND ITS AUDIT EVENT ARE ONE UNIT.
+         *
+         * This table cannot be updated or deleted - the triggers refuse - so a
+         * note written without its audit event could never be corrected or
+         * withdrawn afterwards. It would sit there permanently, recording that
+         * somebody disputed a record, with nothing saying who decided what or
+         * when. `recordRequired()` throws rather than returning null, and this
+         * transaction is what turns that throw into "the note was never
+         * written" instead of "the note is now unexplainable, for ever".
+         * SEC-DEC-089.
+         */
+        return DB::transaction(function () use (
+            $request, $actor, $assertion, $outcome, $reason, $auditEventId
+        ): PrivacyCorrectionNote {
+            $note = new PrivacyCorrectionNote;
+            $note->fill([
+                'privacy_request_id' => $request->getKey(),
+                'audit_event_id' => $auditEventId,
+                'subject_assertion' => $assertion,
+            ]);
+            $note->forceFill([
+                'outcome' => $outcome,
+                'outcome_reason' => $reason,
+                'decided_by_user_id' => $actor->getKey(),
+                'decided_at' => now()->utc(),
+                'created_by_user_id' => $actor->getKey(),
+            ]);
+            $note->save();
 
-        $this->audit->record(
-            action: match ($outcome) {
-                CorrectionOutcome::Noted => 'governance.privacy_correction.noted',
-                CorrectionOutcome::Applied => 'governance.privacy_correction.applied',
-                CorrectionOutcome::Refused => 'governance.privacy_correction.refused',
-            },
-            module: 'Governance',
-            resourceType: 'privacy_correction_note',
-            resourceId: $note->getKey(),
-            after: [
-                'request_reference' => $request->reference,
-                'outcome' => $outcome->value,
-                'annotates_event' => $auditEventId !== null,
-            ],
-            reason: $reason,
-        );
+            $this->audit->recordRequired(
+                action: match ($outcome) {
+                    CorrectionOutcome::Noted => 'governance.privacy_correction.noted',
+                    CorrectionOutcome::Applied => 'governance.privacy_correction.applied',
+                    CorrectionOutcome::Refused => 'governance.privacy_correction.refused',
+                },
+                module: 'Governance',
+                resourceType: 'privacy_correction_note',
+                resourceId: $note->getKey(),
+                after: [
+                    'request_reference' => $request->reference,
+                    'outcome' => $outcome->value,
+                    'annotates_event' => $auditEventId !== null,
+                ],
+                reason: $reason,
+            );
 
-        return $note;
+            return $note;
+        });
     }
 }

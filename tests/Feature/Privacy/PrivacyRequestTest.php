@@ -593,6 +593,65 @@ class PrivacyRequestTest extends TestCase
         );
     }
 
+    /* ------------------------------------- what the audit trail may hold */
+
+    #[Test]
+    public function the_audit_trail_records_that_an_assembly_happened_and_never_what_was_in_it(): void
+    {
+        $handler = $this->personOn(Role::SystemAdmin, 'Hilary Handler');
+        $releaser = $this->personOn(Role::SystemAdmin, 'Robin Releaser');
+
+        $request = $this->throughToRelease(app(PrivacyRequests::class), $handler, $releaser);
+
+        $records = PrivacyRequestRecord::query()
+            ->where('privacy_request_id', $request->getKey())
+            ->get();
+
+        $this->assertGreaterThan(0, $records->count(), 'nothing was assembled, so this proves nothing');
+
+        /* Everything the assembled response actually says about this person.
+         * None of it may appear anywhere in the trail. */
+        $disclosed = $records
+            ->flatMap(fn (PrivacyRequestRecord $record): array => array_filter([
+                $record->summary,
+                $record->detail === null ? null : json_encode($record->detail),
+            ]))
+            ->filter(fn (string $text): bool => trim($text) !== '')
+            ->all();
+
+        $trail = AuditEvent::query()
+            ->where('resource_type', 'privacy_request')
+            ->where('resource_id', (string) $request->getKey())
+            ->get();
+
+        $this->assertGreaterThan(0, $trail->count());
+
+        foreach ($trail as $event) {
+            $row = json_encode($event->toArray());
+
+            $this->assertIsString($row);
+
+            /* The subject's own identity is personal data too, and the audit
+             * summary deliberately records only whether they have an account. */
+            $this->assertStringNotContainsString('dana@example.test', $row, $event->action);
+            $this->assertStringNotContainsString('Dana Subject', $row, $event->action);
+
+            foreach ($disclosed as $text) {
+                $this->assertStringNotContainsString(
+                    $text,
+                    $row,
+                    'the audit event '.$event->action.' carries assembled personal data',
+                );
+            }
+        }
+
+        /* What it DOES record: that an assembly happened, and how many items. */
+        $assembled = $trail->firstWhere('action', 'governance.privacy_request.assembled');
+
+        $this->assertNotNull($assembled);
+        $this->assertArrayHasKey('items', (array) $assembled->after_summary);
+    }
+
     /**
      * Run a request that is expected to fail, without caring how the framework
      * surfaces the refusal - what matters is that nothing was released.

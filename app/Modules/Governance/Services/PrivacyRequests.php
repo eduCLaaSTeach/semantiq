@@ -132,7 +132,7 @@ final class PrivacyRequests
             ]);
             $request->save();
 
-            $this->audit->record(
+            $this->audit->recordRequired(
                 action: 'governance.privacy_request.received',
                 module: 'Governance',
                 resourceType: 'privacy_request',
@@ -187,7 +187,7 @@ final class PrivacyRequests
                 'updated_by_user_id' => $actor->getKey(),
             ])->save();
 
-            $this->audit->record(
+            $this->audit->recordRequired(
                 action: 'governance.privacy_request.identity_verified',
                 module: 'Governance',
                 resourceType: 'privacy_request',
@@ -247,7 +247,7 @@ final class PrivacyRequests
                 'updated_by_user_id' => $actor->getKey(),
             ])->save();
 
-            $this->audit->record(
+            $this->audit->recordRequired(
                 action: 'governance.privacy_request.assembled',
                 module: 'Governance',
                 resourceType: 'privacy_request',
@@ -279,7 +279,7 @@ final class PrivacyRequests
                 'updated_by_user_id' => $actor->getKey(),
             ])->save();
 
-            $this->audit->record(
+            $this->audit->recordRequired(
                 action: 'governance.privacy_request.reviewed',
                 module: 'Governance',
                 resourceType: 'privacy_request',
@@ -355,7 +355,7 @@ final class PrivacyRequests
                 'updated_by_user_id' => $actor->getKey(),
             ])->save();
 
-            $this->audit->record(
+            $this->audit->recordRequired(
                 action: 'governance.privacy_request.released',
                 module: 'Governance',
                 resourceType: 'privacy_request',
@@ -407,7 +407,7 @@ final class PrivacyRequests
                 'updated_by_user_id' => $actor->getKey(),
             ])->save();
 
-            $this->audit->record(
+            $this->audit->recordRequired(
                 action: 'governance.privacy_request.refused',
                 module: 'Governance',
                 resourceType: 'privacy_request',
@@ -440,7 +440,7 @@ final class PrivacyRequests
                 'updated_by_user_id' => $actor->getKey(),
             ])->save();
 
-            $this->audit->record(
+            $this->audit->recordRequired(
                 action: 'governance.privacy_request.closed',
                 module: 'Governance',
                 resourceType: 'privacy_request',
