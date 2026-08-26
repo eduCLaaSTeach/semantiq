@@ -35,19 +35,55 @@ behind its own permission.
 | `audit-logs.png` | ADM-013 Audit Logs, System Administrator | Five view presets, eight filters, and the **`From` column present** because this reader holds `admin.audit.view_network` |
 | `audit-logs-auditor.png` | ADM-013 Audit Logs, Auditor | The same trail with **no `From` column at all** - absent, not blanked. The rail also shows only Workspace and Compliance: no Application Administration, no System Administration |
 
-## The pair that matters
+## The pair that matters - SEC-DEC-063 evidence
 
-`audit-logs.png` and `audit-logs-auditor.png` are the same screen, the same
-data, two readers. Compare the table headers:
+`audit-logs.png` and `audit-logs-auditor.png` show the **same Audit Log feature
+and substantially the same audit history, viewed under two authorization
+contexts.**
+
+Compare the table headers:
 
 - System Administrator: `WHEN  WHAT  WHO  OUTCOME  FROM`
 - Auditor: `WHEN  WHAT  WHO  OUTCOME`
 
-The network column is not hidden with CSS and not blanked out. It is never
-selected, so it never reaches the page. That is SEC-DEC-063 working, and it is
-the reason an Auditor can read the whole trail without receiving network
-identifiers as a side effect.
+**The FROM / network-origin column is structurally absent for the Auditor.** Not
+blanked, not redacted, not hidden with CSS. The column is never selected, so it
+never reaches the page. That is SEC-DEC-063 working, and it is the reason an
+Auditor can read the whole trail without receiving network identifiers as a side
+effect.
+
+### They are not identical snapshots, and the wording matters
+
+The two captures were taken moments apart and **the event count is different**:
+the System Administrator capture reads `All Events 27` and the Auditor capture
+reads `All Events 28`.
+
+The difference is explained and benign. The extra row is the newest one in the
+Auditor capture, an `auth.login.succeeded` at 14:41:31 UTC - the Auditor's own
+sign-in, recorded between the two shutters. Everything at 14:41:27 and earlier
+appears in both.
+
+This is stated rather than glossed because an earlier version of this file
+described the pair as "the same screen, the same data, two readers". **The
+history was substantially the same but the snapshots were not identical**, and a
+claim of identity that a reader can disprove by counting the badge weakens
+evidence that is otherwise sound. The column comparison is what carries
+SEC-DEC-063, and it does not depend on the two rows sets matching.
+
+### Navigation is separate, supporting evidence
+
+The Auditor rail shows only `WORKSPACE` and `COMPLIANCE`. The System
+Administrator rail additionally shows `APPLICATION ADMINISTRATION` and
+`SYSTEM ADMINISTRATION`.
+
+That is real authorization evidence and worth keeping, but it is **filter-not-fork
+navigation, a different control from the column-level rule.** It is recorded
+here as supporting evidence and is deliberately not folded into the SEC-DEC-063
+conclusion above.
+
+### Denials are visible
 
 The Auditor capture also shows two `privileged.action.denied` rows against
-`admin.retention.manage`. A refusal is evidence and is recorded, which is how an
-incident review finds attempts rather than only successes.
+`admin.retention.manage`, at 12:42:11 and 12:41:01 UTC. A refusal is evidence
+and is recorded, which is how an incident review finds attempts rather than only
+successes.

@@ -340,6 +340,33 @@ say that too, with the reason.
 `doc/` is excluded from the deploy workflow, so this file never reaches the web
 server and needs no hosting decision.
 
+## Stopping-Point Discipline
+
+**Historical evidence and current operational state must never be conflated.**
+
+A day work note is immutable historical evidence. When the project state
+changes, create a NEW current-state note rather than rewriting the old note into
+a state that was not true on that day. A note saying a batch had not been
+started is correct for the day it was written, and stays.
+
+The new note names the note it supersedes. The old note is never edited to
+agree with it.
+
+**For visual authorization evidence such as screen captures:**
+
+- Describe exactly what the capture proves, and nothing beyond it.
+- **Do not say "same data" unless the snapshots are actually identical.** If
+  counts, timestamps or row sets differ, say so and explain the difference. A
+  claim a reader can disprove by counting a badge weakens evidence that is
+  otherwise sound.
+- **Structural absence of a protected field or column is stronger evidence than
+  an empty value.** Describe it as absence - never selected, never reached the
+  page - rather than as blanking, redaction or hiding.
+- Keep provenance explicit: whether it is a local verification capture or a
+  production screenshot, and what was masked before the shutter.
+- Keep separate controls separate. Navigation differences between roles are
+  supporting authorization evidence, not evidence for a column-level rule.
+
 ## Mandatory Completion Report Format
 
 Every completed task must end with these four tables, in this order, every time.
