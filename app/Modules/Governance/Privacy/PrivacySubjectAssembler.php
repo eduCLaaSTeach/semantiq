@@ -90,35 +90,44 @@ final class PrivacySubjectAssembler
     /**
      * Change one item's treatment.
      *
-     * NARROWING IS ONE PERSON'S CALL. WIDENING NEEDS TWO.
+     * NARROWING IS ALLOWED. WIDENING IS REFUSED. D5, fail closed. SEC-DEC-093.
      *
-     * That asymmetry is the control. A reviewer working at speed can always
-     * choose to disclose less without anybody checking; choosing to disclose
-     * MORE is the direction that can expose somebody who never asked for
-     * anything, so it takes a second person who is not the first.
+     * A reviewer working at speed can always choose to disclose LESS without
+     * anybody checking. Choosing to disclose MORE can expose somebody who never
+     * asked for anything, so it needs a second person - and this release has no
+     * way to establish that a second person actually agreed.
      *
-     * THE CHANGE AND ITS AUDIT EVENT ARE ONE UNIT. Invariant 12, SEC-DEC-090.
+     * WHY THE SECOND-APPROVER ARGUMENT WAS REMOVED RATHER THAN KEPT.
      *
-     * This method decides what a privacy response is allowed to disclose, and
-     * for a while it recorded that decision nowhere. The second-approver rule
-     * was enforced and then forgotten: `treatment`, `reviewer_action` and
-     * `reviewer_note` were persisted, and nothing in the trail said who agreed
-     * to disclose more about a third party, or when.
+     * The previous version accepted a `User $approver`, checked they were a
+     * different person, checked they held `admin.privacy_requests.release`, and
+     * recorded them in the audit trail as having approved the widening.
      *
-     * That no screen calls this yet was not a defence. It is a public
-     * persistent write path, and an unreachable user interface is not an audit
-     * control - the first screen to call it would have inherited the gap in
-     * silence. So `recordRequired()` is used, inside a transaction: if the
-     * event cannot be written, the treatment does not change either.
+     * THEY HAD NOT APPROVED ANYTHING. They were an object handed over by the
+     * reviewer. They never authenticated, never performed an approval action
+     * and never saw the decision. Being ALLOWED to approve is not evidence of
+     * having approved, and a reviewer could have named any System Administrator
+     * in the organisation.
      *
-     * @param  User  $approver  the second approver, required only when widening
+     * That is worse than having no rule at all, because the audit trail would
+     * have carried a false statement - "this person approved" - in the one
+     * record whose entire purpose is to show that two people were involved.
+     *
+     * So widening is refused outright, and the parameter is gone. An argument
+     * that cannot mean what it appears to mean should not be accepted; the API
+     * is unmerged, so nothing depends on it. The refusal message says the
+     * workflow is not enabled rather than implying the caller did something
+     * wrong, because they did not.
+     *
+     * The approval workflow itself - an independently authenticated second
+     * person performing their own action - is NOT assigned to any batch. Its
+     * scope needs separate approval.
      */
     public function retreat(
         PrivacyRequestRecord $record,
         DisclosureTreatment $to,
         User $reviewer,
         string $note,
-        ?User $approver = null,
     ): PrivacyRequestRecord {
         $from = $record->treatment;
 
@@ -128,10 +137,13 @@ final class PrivacySubjectAssembler
 
         $this->assertReviewerIsTheAuthenticatedActor($reviewer);
 
-        $widening = $to->isWiderThan($from);
-
-        if ($widening) {
-            $this->assertSecondApproverIsValid($reviewer, $approver);
+        if ($to->isWiderThan($from)) {
+            throw new RuntimeException(
+                'Widening a privacy-response disclosure requires an independently authenticated second '
+                .'approval. That approval workflow is not enabled in this release, so a disclosure can '
+                .'be narrowed but not widened. Raise it with whoever owns this request if more needs to '
+                .'be disclosed.'
+            );
         }
 
         if (trim($note) === '') {
@@ -141,7 +153,7 @@ final class PrivacySubjectAssembler
             );
         }
 
-        return DB::transaction(function () use ($record, $from, $to, $reviewer, $note, $approver, $widening): PrivacyRequestRecord {
+        return DB::transaction(function () use ($record, $from, $to, $reviewer, $note): PrivacyRequestRecord {
             /*
              * A widened item still carries no detail payload unless it was
              * collected with one. Widening cannot conjure data that was never
@@ -149,7 +161,10 @@ final class PrivacySubjectAssembler
              * load another person's identity in the first place.
              */
             $record->treatment = $to;
-            $record->reviewer_action = $widening ? 'widened' : 'narrowed';
+            /* Only ever `narrowed` while widening is closed. The column keeps
+             * its wider vocabulary because the stored history from before this
+             * rule, and any future approved widening, both use it. */
+            $record->reviewer_action = 'narrowed';
             $record->reviewer_note = $note;
             $record->save();
 
@@ -183,8 +198,6 @@ final class PrivacySubjectAssembler
                     'band' => $record->band->value,
                     'treatment' => $to->value,
                     'reviewer_action' => $record->reviewer_action,
-                    'second_approval_present' => $approver !== null,
-                    'second_approver_user_id' => $approver?->getKey(),
                 ],
                 reason: $note,
             );
@@ -234,47 +247,6 @@ final class PrivacySubjectAssembler
         if (! $this->authorization->allows($reviewer, 'admin.privacy_requests.manage')) {
             throw new RuntimeException(
                 'You are not authorised to change what a privacy response discloses.'
-            );
-        }
-    }
-
-    /**
-     * A second approver must be a different person AND allowed to decide.
-     *
-     * "A SECOND PERSON" AND "A SECOND PERSON WHO MAY DECIDE THIS" ARE DIFFERENT
-     * RULES, and only the second one is a control. This method previously
-     * required an approver that was merely non-null and not the reviewer, which
-     * **a Viewer satisfied** - so the safeguard on the one direction that can
-     * expose somebody who never asked for anything could be met by any account
-     * in the organisation.
-     *
-     * The permission asked for is `admin.privacy_requests.release`, not
-     * `.manage`: widening what leaves SemantIQ is a disclosure decision, and it
-     * belongs at the same System Administrator ceiling already approved for
-     * release itself (SEC-DEC-083). Asked through `Authorization`, never by
-     * comparing a role name - one implementation is what stops navigation, the
-     * route middleware and service rules drifting apart.
-     */
-    private function assertSecondApproverIsValid(User $reviewer, ?User $approver): void
-    {
-        if ($approver === null) {
-            throw new RuntimeException(
-                'Widening what is disclosed requires a second approver. Narrowing does not: being more '
-                .'careful is always one person\'s call, and being less careful should not be.'
-            );
-        }
-
-        if ($approver->getKey() === $reviewer->getKey()) {
-            throw new RuntimeException(
-                'The second approver for a widening must not be the reviewer who proposed it. One person '
-                .'approving their own widening is one person deciding, whatever the record says.'
-            );
-        }
-
-        if (! $this->authorization->allows($approver, 'admin.privacy_requests.release')) {
-            throw new RuntimeException(
-                'The second approver for a widening must be authorised to release a response. A second '
-                .'pair of eyes that is not allowed to make the decision is not a second pair of eyes.'
             );
         }
     }
