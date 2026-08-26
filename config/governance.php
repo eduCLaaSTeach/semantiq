@@ -246,6 +246,53 @@ return [
     | from. A closed list, because an exception to "some stuff" cannot be
     | reviewed, reported on, or compared against the profile it departs from.
     */
+    /*
+    |---------------------------------------------------------------------------
+    | PDPA-01 identity verification methods
+    |---------------------------------------------------------------------------
+    |
+    | Codified rather than free text, so that "how was this person identified"
+    | is a comparable fact across requests rather than a sentence somebody
+    | typed. Nothing is collected until one of these is recorded together with
+    | a note of what was actually checked.
+    |
+    | Adding a method is a code review on purpose: how identity may be proved
+    | is a policy decision, and a list a form can extend is a list that grows
+    | without anybody agreeing to it.
+    */
+
+    'identity_verification_methods' => [
+        'signed_in_session' => 'They were signed in to their own account when they asked',
+        'registered_email_challenge' => 'Replied from the email address already on the account',
+        'government_id_sighted' => 'Government-issued identity document sighted',
+        'employer_confirmation' => 'Confirmed by their employer through a known contact',
+        'in_person' => 'Identified in person by a named member of staff',
+        'other_documented' => 'Another method, described in the note',
+    ],
+
+    /*
+    |---------------------------------------------------------------------------
+    | PDPA-01 response deadline
+    |---------------------------------------------------------------------------
+    |
+    | Days from identity verification to a response being due. The clock starts
+    | at verification rather than at receipt, because a request from somebody
+    | who cannot be identified cannot be answered at all.
+    |
+    | The value is FROZEN onto each request when identity is verified, so
+    | changing this figure moves the deadline for future requests only. A
+    | deadline that moved retrospectively would change a date somebody is
+    | already being held to.
+    |
+    | Thirty days is the operating figure this project uses. It is not a legal
+    | determination: the applicable regime is still to be confirmed, and
+    | compliance owns the number.
+    */
+
+    'privacy_request' => [
+        'response_due_days' => 30,
+    ],
+
     'exception_aspects' => [
         'storage' => 'Storage geography',
         'processing' => 'Processing geography',

@@ -13,7 +13,7 @@ Nothing here is inferred from a column name.
 
 Column-level detail is in [DATA_DICTIONARY.md](DATA_DICTIONARY.md).
 
-Covers 28 tables, 327 columns, 69 foreign keys.
+Covers 31 tables, 383 columns, 84 foreign keys.
 
 ---
 
@@ -47,8 +47,8 @@ explicitly instead, on every read path and every mutation.
 
 | Anchor | Foreign keys pointing at it | What that means |
 |---|---|---|
-| `organisations` | 15 | The tenancy boundary. Cascade on delete: removing a customer removes their data |
-| `users` | 43 | Attribution. Almost all null on delete: the record survives the person |
+| `organisations` | 18 | The tenancy boundary. Cascade on delete: removing a customer removes their data |
+| `users` | 52 | Attribution. Almost all null on delete: the record survives the person |
 
 ---
 
@@ -411,6 +411,30 @@ erDiagram
         bigint created_by_user_id FK
         bigint updated_by_user_id FK
     }
+    privacy_correction_notes {
+        bigint id PK
+        bigint organisation_id FK
+        bigint privacy_request_id FK
+        bigint audit_event_id FK
+        bigint decided_by_user_id FK
+        bigint created_by_user_id FK
+    }
+    privacy_request_records {
+        bigint id PK
+        bigint organisation_id FK
+        bigint privacy_request_id FK
+    }
+    privacy_requests {
+        bigint id PK
+        bigint organisation_id FK
+        varchar status
+        bigint subject_user_id FK
+        bigint identity_verified_by_user_id FK
+        bigint assembled_by_user_id FK
+        bigint reviewed_by_user_id FK
+        bigint released_by_user_id FK
+        bigint created_by_user_id FK
+    }
     retention_policies {
         bigint id PK
         bigint organisation_id FK
@@ -448,6 +472,12 @@ erDiagram
         bigint updated_by_user_id FK
         int version
     }
+    audit_events {
+        bigint id PK
+        bigint organisation_id FK
+        bigint actor_user_id FK
+        varchar action
+    }
     users |o--o{ data_protection_profiles : "updated_by_user_id"
     users |o--o{ data_protection_profiles : "created_by_user_id"
     data_protection_profiles |o--o{ data_protection_profiles : "superseded_by_id"
@@ -461,6 +491,21 @@ erDiagram
     users |o--o{ personal_data_categories : "updated_by_user_id"
     users |o--o{ personal_data_categories : "created_by_user_id"
     organisations ||--o{ personal_data_categories : "organisation_id"
+    users |o--o{ privacy_correction_notes : "created_by_user_id"
+    users |o--o{ privacy_correction_notes : "decided_by_user_id"
+    audit_events |o--o{ privacy_correction_notes : "audit_event_id"
+    privacy_requests ||--o{ privacy_correction_notes : "privacy_request_id"
+    organisations ||--o{ privacy_correction_notes : "organisation_id"
+    privacy_requests ||--o{ privacy_request_records : "privacy_request_id"
+    organisations ||--o{ privacy_request_records : "organisation_id"
+    users |o--o{ privacy_requests : "updated_by_user_id"
+    users |o--o{ privacy_requests : "created_by_user_id"
+    users |o--o{ privacy_requests : "released_by_user_id"
+    users |o--o{ privacy_requests : "reviewed_by_user_id"
+    users |o--o{ privacy_requests : "assembled_by_user_id"
+    users |o--o{ privacy_requests : "identity_verified_by_user_id"
+    users |o--o{ privacy_requests : "subject_user_id"
+    organisations ||--o{ privacy_requests : "organisation_id"
     users |o--o{ retention_policies : "updated_by_user_id"
     users |o--o{ retention_policies : "created_by_user_id"
     users |o--o{ retention_policies : "approved_by_user_id"
@@ -490,6 +535,21 @@ erDiagram
 | `personal_data_categories` | `updated_by_user_id` | `users` | set null | Attribution. The record outlives the person |
 | `personal_data_categories` | `created_by_user_id` | `users` | set null | Attribution. The record outlives the person |
 | `personal_data_categories` | `organisation_id` | `organisations` | cascade | Tenancy. Removing a customer removes their data |
+| `privacy_correction_notes` | `created_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `privacy_correction_notes` | `decided_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `privacy_correction_notes` | `audit_event_id` | `audit_events` | restrict | Ownership |
+| `privacy_correction_notes` | `privacy_request_id` | `privacy_requests` | cascade | Ownership |
+| `privacy_correction_notes` | `organisation_id` | `organisations` | cascade | Tenancy. Removing a customer removes their data |
+| `privacy_request_records` | `privacy_request_id` | `privacy_requests` | cascade | Ownership |
+| `privacy_request_records` | `organisation_id` | `organisations` | cascade | Tenancy. Removing a customer removes their data |
+| `privacy_requests` | `updated_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `privacy_requests` | `created_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `privacy_requests` | `released_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `privacy_requests` | `reviewed_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `privacy_requests` | `assembled_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `privacy_requests` | `identity_verified_by_user_id` | `users` | set null | Attribution. The record outlives the person |
+| `privacy_requests` | `subject_user_id` | `users` | set null | Points at a person |
+| `privacy_requests` | `organisation_id` | `organisations` | cascade | Tenancy. Removing a customer removes their data |
 | `retention_policies` | `updated_by_user_id` | `users` | set null | Attribution. The record outlives the person |
 | `retention_policies` | `created_by_user_id` | `users` | set null | Attribution. The record outlives the person |
 | `retention_policies` | `approved_by_user_id` | `users` | set null | Attribution. The record outlives the person |
@@ -516,7 +576,7 @@ input to the R1.4c collector coverage test.
 
 ## 7. Every foreign key
 
-All 69 of them, read from the live database.
+All 84 of them, read from the live database.
 
 | From | Column | To | On delete |
 |---|---|---|---|
@@ -553,6 +613,21 @@ All 69 of them, read from the live database.
 | `personal_data_categories` | `created_by_user_id` | `users` | set null |
 | `personal_data_categories` | `organisation_id` | `organisations` | cascade |
 | `personal_data_categories` | `updated_by_user_id` | `users` | set null |
+| `privacy_correction_notes` | `audit_event_id` | `audit_events` | restrict |
+| `privacy_correction_notes` | `created_by_user_id` | `users` | set null |
+| `privacy_correction_notes` | `decided_by_user_id` | `users` | set null |
+| `privacy_correction_notes` | `organisation_id` | `organisations` | cascade |
+| `privacy_correction_notes` | `privacy_request_id` | `privacy_requests` | cascade |
+| `privacy_request_records` | `organisation_id` | `organisations` | cascade |
+| `privacy_request_records` | `privacy_request_id` | `privacy_requests` | cascade |
+| `privacy_requests` | `assembled_by_user_id` | `users` | set null |
+| `privacy_requests` | `created_by_user_id` | `users` | set null |
+| `privacy_requests` | `identity_verified_by_user_id` | `users` | set null |
+| `privacy_requests` | `organisation_id` | `organisations` | cascade |
+| `privacy_requests` | `released_by_user_id` | `users` | set null |
+| `privacy_requests` | `reviewed_by_user_id` | `users` | set null |
+| `privacy_requests` | `subject_user_id` | `users` | set null |
+| `privacy_requests` | `updated_by_user_id` | `users` | set null |
 | `retention_policies` | `approved_by_user_id` | `users` | set null |
 | `retention_policies` | `created_by_user_id` | `users` | set null |
 | `retention_policies` | `organisation_id` | `organisations` | cascade |

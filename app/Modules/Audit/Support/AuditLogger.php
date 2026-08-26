@@ -6,6 +6,7 @@ namespace App\Modules\Audit\Support;
 
 use App\Models\User;
 use App\Modules\Audit\Enums\AuditOutcome;
+use App\Modules\Audit\Exceptions\RequiredAuditEvidenceMissing;
 use App\Modules\Audit\Models\AuditEvent;
 use App\Modules\Identity\Support\OrganisationContext;
 use Illuminate\Support\Facades\Auth;
@@ -103,6 +104,63 @@ class AuditLogger
 
             return null;
         }
+    }
+
+    /**
+     * Record one event, and REFUSE THE CALLER if it could not be written.
+     *
+     * The opposite trade-off from `record()`, for the small number of writes
+     * whose entire purpose is to be evidence.
+     *
+     * `record()` swallows its own failure on purpose - see the class docblock -
+     * so a caller inside a transaction cannot tell whether the event landed,
+     * and would commit business fields whose audit trail is silently missing.
+     * For a PDPA-01 lifecycle write that produces a row asserting a disclosure
+     * happened with no evidence that it did: the row and the trail contradict
+     * each other, and neither can be shown to be the true one.
+     *
+     * This method changes nothing about `record()`. It calls it, checks what
+     * came back, and throws when it is null. Called inside a transaction, that
+     * throw is what rolls the whole operation back.
+     *
+     * WHO MAY CALL THIS. The PDPA-01 privacy request lifecycle and correction
+     * notes, and nothing else. It is not a "safer" `record()` to reach for by
+     * default: making an ordinary administrative action fail because the audit
+     * trail is unwell is precisely what gate 1 decided against, and widening
+     * this quietly would undo that decision without anybody recording it.
+     * SEC-DEC-089.
+     *
+     * @param  array<array-key, mixed>|null  $before  Redacted before it is stored.
+     * @param  array<array-key, mixed>|null  $after  Redacted before it is stored.
+     *
+     * @throws RequiredAuditEvidenceMissing when the event could not be written.
+     */
+    public function recordRequired(
+        string $action,
+        string $module,
+        AuditOutcome $outcome = AuditOutcome::Succeeded,
+        ?string $resourceType = null,
+        int|string|null $resourceId = null,
+        ?array $before = null,
+        ?array $after = null,
+        ?string $reason = null,
+    ): AuditEvent {
+        $event = $this->record(
+            action: $action,
+            module: $module,
+            outcome: $outcome,
+            resourceType: $resourceType,
+            resourceId: $resourceId,
+            before: $before,
+            after: $after,
+            reason: $reason,
+        );
+
+        if ($event === null) {
+            throw RequiredAuditEvidenceMissing::forAction($action);
+        }
+
+        return $event;
     }
 
     /**

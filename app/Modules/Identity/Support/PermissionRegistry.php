@@ -312,6 +312,28 @@ class PermissionRegistry
             $declare('Admin', 'sovereignty_exceptions', 'request', 'Ask for a time-bounded exception to the approved sovereignty profile.', Role::Admin, PermissionRisk::Elevated, true),
             $declare('Admin', 'sovereignty_exceptions', 'approve', 'Approve, reject or revoke a sovereignty exception. Never available to its requester.', Role::SystemAdmin, PermissionRisk::High, true),
 
+            /* ---- Privacy requests, gate 4 batch R1.4c-i ------------------
+             *
+             * NONE OF THESE CARRIES `orAuditor`, and that is a deliberate line
+             * rather than an oversight. An Auditor reads the audit trail: what
+             * happened, who did it, when. A privacy request contains one named
+             * person's assembled personal data - their account, their access,
+             * their activity, gathered into one place precisely because they
+             * asked for it. Those are different things, and the capability
+             * granted in R1.4b does not stretch to cover the second.
+             *
+             * `release` IS SEPARATE FROM `manage` BECAUSE THEY ARE DIFFERENT
+             * ACTS. Assembling a response is careful clerical work.
+             * Authorising it to leave SemantIQ is a disclosure decision about
+             * a real person, and it is the last point at which anybody can
+             * catch a mistake. The person who assembled a response must not be
+             * the only pair of eyes on what is sent, which is why release sits
+             * a tier higher and is re-authenticated.
+             */
+            $declare('Admin', 'privacy_requests', 'view', 'See privacy requests and how each is progressing.', Role::Admin, PermissionRisk::Elevated),
+            $declare('Admin', 'privacy_requests', 'manage', 'Record a request, verify identity, assemble a response and record a correction note.', Role::Admin, PermissionRisk::High, true),
+            $declare('Admin', 'privacy_requests', 'release', 'Authorise a response to leave SemantIQ, or refuse a request. Never the same person who assembled it alone.', Role::SystemAdmin, PermissionRisk::High, true),
+
             /* ---- Security, gate 3 --------------------------------------
              *
              * All four sit at System Administrator, ceiling and auto-grant

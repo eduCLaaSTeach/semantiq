@@ -87,6 +87,20 @@ class GovernanceStorage
     }
 
     /**
+     * PDPA-01 needs all three of its tables, so it asks about all three.
+     *
+     * A partial answer here would be worse than no answer: a register that
+     * could list requests but not their assembled records would show a reviewer
+     * an empty response and let them conclude nothing was held.
+     */
+    public function privacyRequestsAreReady(): bool
+    {
+        return $this->tableExists('privacy_requests')
+            && $this->tableExists('privacy_request_records')
+            && $this->tableExists('privacy_correction_notes');
+    }
+
+    /**
      * Whether every governance table exists.
      *
      * Used by the write middleware, which is why it is an AND across all of
@@ -95,7 +109,8 @@ class GovernanceStorage
      */
     public function isReady(): bool
     {
-        return $this->categoriesAreReady()
+        return $this->privacyRequestsAreReady()
+            && $this->categoriesAreReady()
             && $this->dataProtectionIsReady()
             && $this->sovereigntyIsReady()
             && $this->exceptionsAreReady()

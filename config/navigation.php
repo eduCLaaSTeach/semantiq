@@ -105,6 +105,13 @@ return [
         'admin-retention' => ['min' => Role::DomainOwner, 'or_auditor' => true, 'permission' => 'admin.retention.view'],
         'admin-sovereignty-exceptions' => ['min' => Role::DomainOwner, 'or_auditor' => true, 'permission' => 'admin.sovereignty_exceptions.view'],
         'admin-audit' => ['min' => Role::DomainOwner, 'or_auditor' => true, 'permission' => 'admin.audit.view'],
+        /*
+         * PDPA-01. Administrator tier and NOT auditor-readable: an Auditor reads
+         * the audit trail, which is a different thing from one named person's
+         * assembled personal data gathered into one place. R1.4b's capability
+         * deliberately does not stretch to cover this.
+         */
+        'admin-privacy-requests' => ['min' => Role::Admin, 'permission' => 'admin.privacy_requests.view'],
 
         'domain-executive' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Executive],
         'domain-sales' => ['min' => Role::Viewer, 'domain' => BusinessDomain::Sales],
@@ -927,10 +934,21 @@ return [
                      * now and render disabled with a Soon pill; the screens
                      * behind them are R1.4c.
                      */
+                    /*
+                     * Built in R1.4c-i. The leaf stays visible even when the
+                     * migration has not run, because the screen explains that
+                     * state and hiding it would hide the explanation.
+                     *
+                     * `permission` rather than `policy`: this is a named
+                     * capability now, and an Auditor deliberately does not hold
+                     * it. Reading the audit trail and reading one person's
+                     * assembled personal data are different things.
+                     */
                     [
                         'label' => 'Privacy Requests',
                         'icon' => 'i-inbox',
-                        'policy' => 'compliance',
+                        'route' => 'admin.governance.privacy-requests',
+                        'policy' => 'admin-privacy-requests',
                     ],
                     [
                         'label' => 'Breach Register',

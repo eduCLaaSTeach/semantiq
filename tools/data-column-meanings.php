@@ -188,4 +188,55 @@ return [
     'retention_policies.next_review_on' => 'When somebody should look again. The screen flags it once the date passes, derived on read. Nothing else happens.',
     'retention_policies.approved_at' => 'When a person agreed the period. **Approving switches nothing on.** Editing afterwards returns the policy to draft, because a period that changed after approval is not the period anybody approved.',
     'retention_policies.approved_by_user_id' => 'Who agreed it.',
+
+    /* PDPA-01 Privacy Requests. Gate 4 batch R1.4c-i. */
+    'privacy_requests.reference' => 'Quotable in correspondence: PR-0001. Derived from the highest existing reference rather than a count, so a deleted row can never cause one to be reused - a reference that pointed at two different requests would be worse than none.',
+    'privacy_requests.request_type' => 'access, correction or withdrawal. Only the last two route through a decision step; an access request is answered by disclosing.',
+    'privacy_requests.subject_user_id' => 'The requester\'s SemantIQ account, if they have one. **Nullable by decision D6**: a person whose account was deleted still has personal data in `audit_events` and is still entitled to ask for it.',
+    'privacy_requests.subject_name' => 'Their name, held here rather than read from `users`, so the request survives the deletion of the account it was about.',
+    'privacy_requests.subject_email' => 'How they were contacted. Also what `password_reset_tokens` is matched on, since that table is keyed by address rather than by account.',
+    'privacy_requests.subject_reference' => 'An external identifier, where the customer uses one. Optional.',
+    'privacy_requests.received_at' => 'When the request arrived, which may predate this row - a letter recorded a week later is still received on the day it arrived.',
+    'privacy_requests.received_channel' => 'How it arrived: email, post, in person. Free text because the ways a person can ask are not enumerable.',
+    'privacy_requests.identity_verified_at' => '**The gate.** Null means unverified, and unverified means nothing is collected. Checked by the service independently of `status`, because a status records where a row got to and a timestamp records that a person actually did something.',
+    'privacy_requests.identity_verified_by_user_id' => 'Who confirmed it. The accountable human, not a system.',
+    'privacy_requests.identity_verification_method' => 'From the codified list in `config/governance.php`, so "how was this person identified" is comparable across requests rather than a sentence somebody typed.',
+    'privacy_requests.identity_verification_note' => 'What was actually checked. Required. "Verified" without this is somebody\'s word for it.',
+    'privacy_requests.assembled_at' => 'When collection last ran. Re-running replaces the records wholesale rather than appending, so a response never mixes what was true then with what is true now.',
+    'privacy_requests.reviewed_at' => 'When a reviewer went through the assembled response.',
+    'privacy_requests.reviewed_by_user_id' => 'Who reviewed it.',
+    'privacy_requests.decision' => 'released or refused. Refusal is a lawful outcome, not a failure.',
+    'privacy_requests.decision_reason' => 'Required on refusal. Refusing is defensible; refusing without a stated reason is not.',
+    'privacy_requests.released_at' => 'When disclosure was authorised. A different act from assembling the response, behind its own permission at System Administrator.',
+    'privacy_requests.released_by_user_id' => 'Who authorised it. Deliberately capable of being a different person from whoever assembled it.',
+    'privacy_requests.evidence_reference' => 'How the response was actually delivered - a postal tracking number, a meeting date. **SemantIQ sends nothing itself** (D9), so without this there is no evidence the person ever received an answer.',
+    'privacy_requests.closed_at' => 'When it was finished. A closed request is never reopened; a new one is raised instead, so the record of what was disclosed on a date stays exactly as it was.',
+    'privacy_requests.due_at' => '**Frozen at verification, never recomputed.** A deadline derived from a policy somebody later edited would silently move a date a person is being held to. Whether it has passed IS derived on read, so nothing needs to run.',
+
+    'privacy_request_records.privacy_request_id' => 'Which request this belongs to. Cascade is correct here and only here: these rows have no meaning apart from their request, and the evidence that an assembly happened lives in the audit trail.',
+    'privacy_request_records.band' => 'A, B, C or D. How this item relates to the subject, which decides the default treatment. **Band C is the design problem**: the subject\'s name on somebody else\'s record is personal data about two people.',
+    'privacy_request_records.source_table' => 'Which table it came from. What the coverage test reconciles against the live schema.',
+    'privacy_request_records.collector' => 'The collector class that produced it. Recorded so a reader can find the code that made a disclosure decision.',
+    'privacy_request_records.treatment' => 'include, describe or exclude. **`exclude` rows are kept precisely because they disclose nothing** - they are the evidence that a table was considered and deliberately withheld, which is what makes the coverage claim checkable rather than asserted.',
+    'privacy_request_records.summary' => 'What the subject is told, already rendered. For band C it was rendered by a function that never received the other person\'s identity, so a template mistake cannot leak what was never passed in.',
+    'privacy_request_records.detail' => 'The verbatim structured payload. **Populated only for `include`** - `CollectedItem` refuses the other combination at construction, so no collector can produce a described item that discloses.',
+    'privacy_request_records.occurred_at' => 'When the underlying thing happened, for the time-ordered bands.',
+    'privacy_request_records.reviewer_action' => 'kept, narrowed or widened. **Widening needs a second approver who is not the reviewer**; narrowing does not. Being more careful is always one person\'s call.',
+    'privacy_request_records.reviewer_note' => 'Why a treatment was changed. Required, so nobody can later ask whether a disclosure was considered or accidental.',
+
+    'privacy_correction_notes.privacy_request_id' => 'The request this dispute arose in.',
+    'privacy_correction_notes.audit_event_id' => 'The disputed entry. **restrictOnDelete, not cascade**: an annotation must not vanish because something upstream was removed. Nullable, because a subject may dispute something that is not a single event.',
+    'privacy_correction_notes.subject_assertion' => 'What the person says is wrong, in their own terms. Written once and never editable, which is the entire point - a dispute the disputed party can rewrite is not evidence of anything.',
+    'privacy_correction_notes.outcome' => 'noted, applied or refused. **`noted` is a complete and correct outcome**, not a lesser one: where the disputed record is an audit event, the trail cannot be edited and the permanent annotation beside it IS the remedy.',
+    'privacy_correction_notes.outcome_reason' => 'Why this outcome was reached. Required on every outcome including a correction, because "corrected" alone does not say what was corrected or on what basis.',
+    'privacy_correction_notes.decided_by_user_id' => 'Who decided.',
+    'privacy_correction_notes.decided_at' => 'When. Written with the row, since assertion and decision are recorded together - recording one and then the other would mean updating, and this table cannot be updated.',
+
+    /* Framework queue tables. Empty on this deployment - QUEUE_CONNECTION is
+     * sync and there is no worker - but documented because the columns exist
+     * and a reader finding them should not have to guess. */
+    'failed_jobs.queue' => 'Which queue the job was on when it failed. Framework column.',
+    'failed_jobs.payload' => 'The serialised job. **May incidentally contain personal data** if a queued job ever carried any, which is why `failed_jobs` is named in the privacy exclusion register as a known incidental surface rather than silently ignored. Empty on this deployment.',
+
+    'privacy_requests.assembled_by_user_id' => 'Who ran the collection. **Recorded so separation of duties can be enforced against the person who actually did the work, not against a permission tier.** A System Administrator holds both `.manage` and `.release`, so the tier split alone stopped nobody from assembling a response and then authorising its own disclosure. The service compares this and `reviewed_by_user_id` against the releaser.',
 ];
