@@ -302,6 +302,44 @@ remains the user's approval.
 Never report a deployment as successful on the strength of a green workflow
 alone.
 
+## Keep The Orientation Map Current
+
+`doc/PROJECT_MAP.html` is the one-page plain-language answer to "where is this
+project, what do I actually have to care about, and what is still open". It is
+written for the product owner, not for engineers.
+
+**It is a snapshot, not a dashboard.** Every fact in it is typed into the file.
+It reads nothing at runtime, so it does not correct itself and a reload changes
+nothing. That is deliberate - a page that looked current but silently was not
+would be worse than no page - and it is why the file carries a date and a commit
+in its footer and says so in a comment at the top.
+
+Because nothing keeps it honest automatically, regenerate it **in the same
+commit** as any of these:
+
+- a batch or gate is formally accepted by the product owner;
+- a gate opens or is confirmed, or `IMPLEMENTATION_STATUS.md` changes state;
+- a config file is added to or removed from `config/`, since the map tells the
+  owner which ones are theirs;
+- an item the map lists as open is resolved, or a new blocker appears.
+
+Do not regenerate it for ordinary commits. A map rewritten on every push is
+noise in the history and stops being a signal that something changed.
+
+Rebuild it from the repository, never by editing the numbers in place. The
+prompt and the reasoning behind its structure are in
+`doc/prompts/ORIENTATION_MAP_PROMPT.md`. Re-read the status file, the active
+plan, the decision records and `config/` each time rather than trusting what the
+previous version said - an inherited error survives every regeneration that does
+not go back to the source.
+
+State in the completion report that the map was refreshed, and name what changed
+on it. If a task met one of the triggers above and the map was NOT refreshed,
+say that too, with the reason.
+
+`doc/` is excluded from the deploy workflow, so this file never reaches the web
+server and needs no hosting decision.
+
 ## Mandatory Completion Report Format
 
 Every completed task must end with these four tables, in this order, every time.

@@ -1103,3 +1103,202 @@ The replacement, `CHECK-R1.4a.sql`, computes a verdict per row - `PASS`,
 untouched as equally valid. **Every future verification sheet uses this shape.**
 A check that requires interpretation is a check that produces false alarms, and a
 false alarm on a governance screen costs more than the check saves.
+
+---
+
+## 15. Gate 4 batch R1.4b, verified in production
+
+Feature scope: the Auditor authorization capability (D2), ADM-016 Sovereignty
+Exceptions, PDPA-03 per-category Retention, and ADM-013 Audit Log with view
+presets (DEC-004).
+
+**This release failed on its first production migration attempt and was
+recovered.** That is the substance of this section, not an appendix to it.
+
+### 15.1 Release identifiers
+
+| What | Value |
+| --- | --- |
+| R1.4b implementation | PR #26, merged as `f920f41d81c0dd53f834c088e939002e5145c848` |
+| Migration fix and guard | PR #27, merged as `c5974ab8568fd08ec71029086e7e2675be4ca245` |
+| CI on the R1.4b merge | run 42, success |
+| Deploy on the R1.4b merge | run 51, success |
+| CI on the fix merge | run 45, success |
+| Deploy on the fix merge | run 52, success |
+| Automated tests | 537 passing, 3692 assertions, Pint clean |
+
+### 15.2 The production migration failure
+
+The first `php artisan migrate --force` stopped part way through:
+
+```
+2026_08_28_090000_create_sovereignty_exceptions_table  2s DONE
+2026_08_28_090100_create_retention_policies_table      1s FAIL
+
+SQLSTATE[42000]: 1059 Identifier name
+'retention_policies_organisation_id_personal_data_category_id_unique'
+is too long
+```
+
+Laravel derives an index name from the table plus its columns. For that unique
+key it produces 67 characters; MySQL's limit is 64.
+
+**Why nothing caught it.** The suite runs on SQLite, which imposes no identifier
+length limit. The name is legal in every test and illegal on the production
+engine. This release cleared 536 tests, Pint, CI, a green deploy and a browser
+pass across two roles, two themes and two viewports, and was still undeployable.
+
+The narrow defect is one long index name. The finding that matters is that **a
+release can pass every automated gate and still fail on the server, because the
+one engine that enforces the rule is the one place a migration is never
+rehearsed.** Recorded as SEC-DEC-078.
+
+**It failed destructively.** MySQL does not roll DDL back, so the run left the
+table created, the key missing, and the migration unrecorded. A plain re-run
+could not recover it: Laravel would run the migration again and `CREATE TABLE`
+would fail.
+
+### 15.3 The recovery, and the evidence gathered before it
+
+`CHECK-R1.4b-RECOVERY.sql`, read-only, run against production before anything
+was changed. **9 of 9 matched the diagnosis exactly.**
+
+| Check | Verdict |
+| --- | --- |
+| `create_sovereignty_exceptions_table` recorded | PASS, found 1 |
+| `create_retention_policies_table` NOT recorded | PASS, found 0 |
+| `add_module_and_outcome_indexes` NOT recorded | PASS, found 0 |
+| `sovereignty_exceptions` table exists | PASS |
+| `retention_policies` table exists | ACTION NEEDED, as predicted |
+| `retention_policies` is empty | **PASS, 0 rows** |
+| the rejected 67-character index is absent | PASS, found 0 |
+| `audit_events` row count | PASS, **19 rows** |
+| both audit append-only triggers present | PASS, found 2 |
+
+The empty-table result is what authorised the drop. The pre-check returns STOP
+rather than PASS on any other row count, so a non-empty table would have halted
+the recovery rather than being dropped on an assumption.
+
+Recovery, each step separately approved by the product owner: merge and deploy
+the fix, `DROP TABLE retention_policies`, then re-run the migration. It produced
+exactly two lines, the first migration correctly skipped as already recorded:
+
+```
+2026_08_28_090100_create_retention_policies_table                       DONE
+2026_08_28_090200_add_module_and_outcome_indexes_to_audit_events_table  DONE
+```
+
+### 15.4 Post-recovery evidence
+
+| Check | Result |
+| --- | --- |
+| all three migrations recorded | PASS, found 3 |
+| no unexpected migration ran | PASS, found 0 |
+| both audit triggers still present | PASS, found 2 |
+| **audit row count unchanged** | PASS, **19 before, 19 after** |
+| two new audit indexes added | PASS, found 2 |
+| four earlier audit indexes survived | PASS, found 4 |
+| retention unique key created | `retention_policies_org_category_unique`, 2 columns, UNIQUE |
+| no index name over 64 characters | PASS, found 0 |
+
+**The append-only guarantee held through a failed migration and a manual
+recovery.** Both triggers survived and the row count did not move. That is the
+condition SEC-DEC-037 and SEC-DEC-039 exist for, tested by an event nobody
+planned.
+
+### 15.5 Live screens, confirmed by the product owner
+
+**Retention** renders all 7 personal data categories, each with its description,
+and every one of Kept for, Counted from and Then showing `Not Configured`, state
+`Nothing recorded`. SemantIQ filled in nothing, which is SEC-DEC-069's
+compliance-owned rule holding in production: a plausible default here would be a
+compliance claim nobody made.
+
+**Sovereignty Exceptions** renders the approved position - version 1, storage
+Singapore, processing Singapore, backups Singapore, AI processing `Not
+determined` - and `Exceptions in force right now: None. The position above
+applies without exception.` The empty state states the position rather than
+showing a blank list.
+
+**Audit Logs** renders all five presets: All Events, User Activity,
+Administrative Changes, Security Changes, Configuration Changes.
+
+Note that Audit Logs was fully functional BEFORE the migration, because
+`audit_events` has existed since gate 1 and the third migration adds only
+indexes. Only Retention and Sovereignty Exceptions were gated.
+
+### 15.6 A process finding, recorded because it cost the product owner time again
+
+**The R1.4b post-check reported a correct schema as FAIL.**
+`information_schema.STATISTICS` holds one row per COLUMN, so a two-column
+composite key returns two rows for one index. The script counted
+`COUNT(DISTINCT INDEX_NAME)` for the audit indexes and `COUNT(*)` for the
+retention key - an inconsistency within a single file. The product owner
+correctly reported FAIL on a schema that was right.
+
+Two follow-up queries then compounded it: both carried a `TABLE_SCHEMA =
+DATABASE()` filter and were run from a phpMyAdmin tab with no database selected,
+where `DATABASE()` is NULL. They returned zero rows and briefly made a correct
+index look genuinely missing. The query that settled it dropped the filter
+entirely.
+
+**This is the second consecutive batch where a verification script made a
+working system look broken.** Section 14.11 recorded the first. The rule from
+that section - compute a verdict, never print numbers to compare - was followed
+this time and was not sufficient, because the verdict itself was computed
+wrongly. The additional rule: **a verification script is code, and a check that
+has never been run against a known-good system has not been tested.**
+
+Fixed in commit `903a143`, with the counting rule written into the file as a
+comment so the next person does not repeat it.
+
+### 15.7 What this batch does NOT cover
+
+Not built, and explicitly out of scope: PDPA-01 Privacy Requests, PDPA-02 Breach
+Register, Governance Overview, `privacy_correction_notes` and its triggers,
+export, generated files, queue or worker changes, email, scheduled reminders,
+and retention deletion execution.
+
+**Retention stores policy and executes nothing.** There is no delete method and
+no destroy route; `no_deletion_path_exists` scans method names and registered
+route verbs to keep it that way. A filled-in retention table is not protection,
+and the screen says so.
+
+**Gate 4 as a whole is NOT complete.** R1.4b is the second of three batches.
+R1.4c is not started and `IMPLEMENTATION_STATUS.md` keeps R1.4 open.
+
+### 15.8 Acceptance
+
+**R1.4b is ACCEPTED.** Confirmed in the product owner's own words on
+24 August 2026, after they ran the migration, the post-check and all three
+screens on the live deployment themselves:
+
+```
+I formally accept R1.4b.
+```
+
+The final production evidence they recorded with that acceptance:
+
+| Area | Evidence |
+| --- | --- |
+| Retention | 7 categories; all compliance-owned values `Not Configured`; no false retention claim |
+| Sovereignty Exceptions | approved sovereignty position shown; no exception in force |
+| Audit Logs | live; five presets available |
+| Audit integrity | 2 append-only triggers present; `audit_events` 19 rows before and 19 after |
+| Migration recovery | failed retention migration repaired via PR #27; **no rollback used**; permanent MySQL identifier-length guard added |
+
+**No confirmation phrase was set for this batch**, for the same reason as
+R1.4a: a phrase belongs to a whole gate, and R1.4b is a batch inside gate 4.
+Recorded as said rather than paraphrased.
+
+### 15.9 Gate 4 batch status after this acceptance
+
+| Batch | State |
+| --- | --- |
+| R1.4a profiles and privacy contact | **ACCEPTED** 24 August 2026 |
+| R1.4b auditor capability, exceptions, retention, audit log | **ACCEPTED** 24 August 2026 |
+| R1.4c privacy requests, breach register, governance overview | **NOT STARTED** |
+| **R1.4 Gate 4 overall** | **IN PROGRESS** |
+
+`IMPLEMENTATION_STATUS.md` keeps R1.4 open. Two of three batches accepted does
+not unlock gate 5.
