@@ -406,14 +406,14 @@ class AuditEvidenceRollbackTest extends TestCase
         /* Gate 1 decided that a sick audit trail must not stop an
          * administrator acting. `recordRequired()` is opt-in, and this proves
          * the fix did not quietly turn every `record()` call fail-closed. */
-        app(AuditLogger::class)->record(
+        $event = app(AuditLogger::class)->record(
             action: 'user.disabled',
             module: 'Identity',
             resourceType: 'user',
             resourceId: $subject->getKey(),
         );
 
-        $this->assertSame(0, AuditEvent::query()->count());
-        $this->assertTrue(true, 'record() returned without throwing, which is the gate 1 behaviour');
+        $this->assertNull($event, 'record() must report the loss by returning null, not by throwing');
+        $this->assertSame(0, AuditEvent::query()->count(), 'the event genuinely did not land');
     }
 }
