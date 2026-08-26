@@ -282,7 +282,7 @@
                 </div>
 
                 <div class="alert alert-info" role="note">
-                    <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+                    <svg class="icon" aria-hidden="true"><use href="#i-check-circle"/></svg>
                     <span>
                         <strong>The audit trail is never edited.</strong>
                         Where somebody says an entry is wrong, the remedy is a note recorded permanently
@@ -436,7 +436,22 @@
                     last point at which a mistake can be caught, so it is deliberately not the same person.
                 </p>
 
-                @if ($releaseBlocker)
+                @if ($request->decision !== null)
+                    {{-- ALREADY ANSWERED. Both forms are withdrawn rather than
+                         offered and then refused: a recorded decision, who made
+                         it and when are not overwritten, so a control that
+                         cannot succeed must not be presented as if it could.
+                         The reason is stated rather than the section merely
+                         vanishing, per SEC-DEC-087. --}}
+                    <div class="alert alert-info" role="status">
+                        <svg class="icon" aria-hidden="true"><use href="#i-check-circle"/></svg>
+                        <span>
+                            <strong>This request has already been answered.</strong>
+                            The decision, who made it and when are part of the record and are not
+                            overwritten. Raise a new request if something further is needed.
+                        </span>
+                    </div>
+                @elseif ($releaseBlocker)
                     <div class="alert alert-warning" role="alert">
                         <svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
                         <span>
@@ -466,7 +481,9 @@
 
                 {{-- Refusal is NOT gated on a second person: it discloses
                      nothing, and the control exists to stop a disclosure
-                     happening on one person's say-so. --}}
+                     happening on one person's say-so. It IS withdrawn once a
+                     decision has been recorded, for the reason above. --}}
+                @if ($request->decision === null)
                 <form class="settings-form" method="POST"
                       action="{{ route('admin.governance.privacy-requests.refuse', $request->getKey()) }}">
                     @csrf
@@ -482,6 +499,7 @@
                         <button class="btn btn-outline" type="submit">Refuse the request</button>
                     </div>
                 </form>
+                @endif
             </section>
         @endif
 

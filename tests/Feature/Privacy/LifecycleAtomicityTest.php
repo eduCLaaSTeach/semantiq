@@ -350,6 +350,32 @@ class LifecycleAtomicityTest extends TestCase
     }
 
     #[Test]
+    public function the_screen_withdraws_the_decide_forms_once_a_decision_is_recorded(): void
+    {
+        $handler = $this->personOn(Role::SystemAdmin);
+        $releaser = $this->personOn(Role::SystemAdmin);
+
+        $service = app(PrivacyRequests::class);
+
+        $request = $service->receive($this->aRequest(), $handler);
+        $request = $service->verifyIdentity($request, $handler, 'in_person', 'Passport sighted.');
+        $request = $service->assemble($request, $handler);
+        $request = $service->markReviewed($request, $handler);
+        $request = $service->release($request, $releaser, 'Handed over in person.');
+
+        $page = $this->actingAs($handler)
+            ->get('/admin/governance/privacy-requests/'.$request->getKey());
+
+        $page->assertOk();
+        $page->assertSee('This request has already been answered.', false);
+
+        /* A control that cannot succeed must not be offered. Asserted against
+         * the rendered page rather than the service, per SEC-DEC-061. */
+        $page->assertDontSee('Refuse the request', false);
+        $page->assertDontSee('Release the response', false);
+    }
+
+    #[Test]
     public function a_second_close_does_not_move_the_closing_date(): void
     {
         $handler = $this->personOn(Role::SystemAdmin);
