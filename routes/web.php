@@ -8,6 +8,7 @@ use App\Http\Controllers\Pages\HomeController;
 use App\Modules\Governance\Http\Controllers\AuditLogController;
 use App\Modules\Governance\Http\Controllers\DataProtectionProfileController;
 use App\Modules\Governance\Http\Controllers\PersonalDataCategoryController;
+use App\Modules\Governance\Http\Controllers\PrivacyRequestController;
 use App\Modules\Governance\Http\Controllers\RetentionPolicyController;
 use App\Modules\Governance\Http\Controllers\SovereigntyExceptionController;
 use App\Modules\Governance\Http\Controllers\SovereigntyProfileController;
@@ -455,6 +456,70 @@ Route::middleware('auth')->group(function (): void {
                 ->whereNumber('exception')
                 ->middleware(['permission:admin.sovereignty_exceptions.approve', 'governance-storage'])
                 ->name('exceptions.revoke');
+
+            /*
+             * PDPA-01 Privacy Requests. Gate 4 batch R1.4c-i.
+             *
+             * THERE IS NO EXPORT ROUTE AND NO DOWNLOAD ROUTE, and their absence
+             * is the feature. Decision D9: a generated file full of one
+             * person's personal data would carry its own retention, access and
+             * geography problem, and would drag in `public/storage`, a mail
+             * transport and a queue worker - three unapproved dependencies
+             * bought at once. The response is read on screen and delivered by
+             * a person outside SemantIQ.
+             *
+             * THERE IS NO DELETE ROUTE. Correction notes are append-only
+             * (SEC-DEC-066) and assembled records are replaced wholesale by
+             * re-assembly, never removed by a request.
+             *
+             * `whereNumber` on every id, and the controller resolves it with an
+             * explicit `find()`. SEC-DEC-058: `SubstituteBindings` runs in the
+             * `web` middleware GROUP, ahead of route middleware, so an implicit
+             * binding would query the table before any guard could refuse.
+             *
+             * `release` and `refuse` sit behind `admin.privacy_requests.release`
+             * at System Administrator: authorising a disclosure is a different
+             * act from assembling one, and the person who assembled a response
+             * must not be the only pair of eyes on what leaves.
+             */
+            Route::get('/privacy-requests', [PrivacyRequestController::class, 'index'])
+                ->middleware('permission:admin.privacy_requests.view')->name('privacy-requests');
+            Route::get('/privacy-requests/{request}', [PrivacyRequestController::class, 'show'])
+                ->whereNumber('request')
+                ->middleware('permission:admin.privacy_requests.view')->name('privacy-requests.show');
+
+            Route::post('/privacy-requests', [PrivacyRequestController::class, 'store'])
+                ->middleware(['permission:admin.privacy_requests.manage', 'governance-storage'])
+                ->name('privacy-requests.store');
+            Route::post('/privacy-requests/{request}/verify', [PrivacyRequestController::class, 'verify'])
+                ->whereNumber('request')
+                ->middleware(['permission:admin.privacy_requests.manage', 'governance-storage'])
+                ->name('privacy-requests.verify');
+            Route::post('/privacy-requests/{request}/assemble', [PrivacyRequestController::class, 'assemble'])
+                ->whereNumber('request')
+                ->middleware(['permission:admin.privacy_requests.manage', 'governance-storage'])
+                ->name('privacy-requests.assemble');
+            Route::post('/privacy-requests/{request}/review', [PrivacyRequestController::class, 'review'])
+                ->whereNumber('request')
+                ->middleware(['permission:admin.privacy_requests.manage', 'governance-storage'])
+                ->name('privacy-requests.review');
+            Route::post('/privacy-requests/{request}/note', [PrivacyRequestController::class, 'note'])
+                ->whereNumber('request')
+                ->middleware(['permission:admin.privacy_requests.manage', 'governance-storage'])
+                ->name('privacy-requests.note');
+
+            Route::post('/privacy-requests/{request}/release', [PrivacyRequestController::class, 'release'])
+                ->whereNumber('request')
+                ->middleware(['permission:admin.privacy_requests.release', 'governance-storage'])
+                ->name('privacy-requests.release');
+            Route::post('/privacy-requests/{request}/refuse', [PrivacyRequestController::class, 'refuse'])
+                ->whereNumber('request')
+                ->middleware(['permission:admin.privacy_requests.release', 'governance-storage'])
+                ->name('privacy-requests.refuse');
+            Route::post('/privacy-requests/{request}/close', [PrivacyRequestController::class, 'close'])
+                ->whereNumber('request')
+                ->middleware(['permission:admin.privacy_requests.release', 'governance-storage'])
+                ->name('privacy-requests.close');
 
             /*
              * PDPA-03 Retention. Gate 4 batch R1.4b.

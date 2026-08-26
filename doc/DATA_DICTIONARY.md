@@ -19,7 +19,7 @@ the part worth reading.
 
 Types are shown as **MySQL** produces them, because production is MySQL.
 
-Covers 28 tables, 327 columns, 69 foreign keys.
+Covers 31 tables, 382 columns, 83 foreign keys.
 
 ---
 
@@ -59,7 +59,7 @@ be worse than showing a departed account.
 
 **Security** - [secret_references](#secret-references), [security_policies](#security-policies)
 
-**Governance** - [data_protection_profiles](#data-protection-profiles), [data_sovereignty_profiles](#data-sovereignty-profiles), [personal_data_categories](#personal-data-categories), [retention_policies](#retention-policies), [sovereignty_exceptions](#sovereignty-exceptions)
+**Governance** - [data_protection_profiles](#data-protection-profiles), [data_sovereignty_profiles](#data-sovereignty-profiles), [personal_data_categories](#personal-data-categories), [privacy_correction_notes](#privacy-correction-notes), [privacy_request_records](#privacy-request-records), [privacy_requests](#privacy-requests), [retention_policies](#retention-policies), [sovereignty_exceptions](#sovereignty-exceptions)
 
 **Laravel** - [cache](#cache), [cache_locks](#cache-locks), [failed_jobs](#failed-jobs), [job_batches](#job-batches), [jobs](#jobs), [password_reset_tokens](#password-reset-tokens), [sessions](#sessions)
 
@@ -631,6 +631,112 @@ Seeded from a scan of the live schema, not a privacy template: personal data was
 | `created_at` | `timestamp` | yes | - | - | When the row was written. |
 | `updated_at` | `timestamp` | yes | - | - | When the row last changed. |
 
+## `privacy_correction_notes`
+
+A data subject's assertion that a record about them is wrong, and what was decided about it.
+
+| | |
+|---|---|
+| **Module** | Governance |
+| **Introduced** | R1.4c-i |
+| **Classification** | Confidential |
+| **Personal data** | YES - the assertion is the subject's own words about themselves |
+| **Columns** | 12 |
+
+**APPEND-ONLY, and the database is what enforces it.** `audit_events` cannot be edited, so when a subject says the trail is wrong the remedy is a new row here linked to the event id: the original is untouched and anyone reading it sees the challenge beside it. Model hooks throw on update and delete, but they are **defence in depth, not the control** - they do not fire on a mass delete or a raw query, and MySQL has no DENY. The control is a pair of BEFORE UPDATE and BEFORE DELETE triggers, deliberately NOT in a migration (SEC-DEC-037: a migration that can create a trigger can also drop it) and installed as a separately approved production step. **SEC-DEC-066 makes those triggers a gate 4 acceptance condition.** **There is no `updated_by_user_id` column** - a table that can never be updated has no use for one, and its presence would imply an update path exists. **`audit_event_id` uses restrictOnDelete**: an annotation must not vanish because something upstream was removed.
+
+| Column | Type | Null | Default | Points at | What it means |
+|---|---|---|---|---|---|
+| **id** | `bigint unsigned AUTO_INCREMENT` | - | - | - | Surrogate primary key. Auto-incrementing, never reused, never meaningful. |
+| `organisation_id` | `bigint unsigned` | - | - | `organisations.id (cascade)` | Which customer owns this row. The tenancy boundary. `BelongsToOrganisation` fills it at creation and fails closed when no context is resolved. |
+| `privacy_request_id` | `bigint unsigned` | - | - | `privacy_requests.id (cascade)` | The request this dispute arose in. |
+| `audit_event_id` | `bigint unsigned` | yes | - | `audit_events.id (restrict)` | The disputed entry. **restrictOnDelete, not cascade**: an annotation must not vanish because something upstream was removed. Nullable, because a subject may dispute something that is not a single event. |
+| `subject_assertion` | `text` | - | - | - | What the person says is wrong, in their own terms. Written once and never editable, which is the entire point - a dispute the disputed party can rewrite is not evidence of anything. |
+| `outcome` | `varchar(16)` | - | `noted` | - | noted, applied or refused. **`noted` is a complete and correct outcome**, not a lesser one: where the disputed record is an audit event, the trail cannot be edited and the permanent annotation beside it IS the remedy. |
+| `outcome_reason` | `text` | yes | - | - | Why this outcome was reached. Required on every outcome including a correction, because "corrected" alone does not say what was corrected or on what basis. |
+| `decided_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who decided. |
+| `decided_at` | `timestamp` | yes | - | - | When. Written with the row, since assertion and decision are recorded together - recording one and then the other would mean updating, and this table cannot be updated. |
+| `created_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who created it. Kept as `nullOnDelete` so the record survives the person leaving. |
+| `created_at` | `timestamp` | yes | - | - | When the row was written. |
+| `updated_at` | `timestamp` | yes | - | - | When the row last changed. |
+
+## `privacy_request_records`
+
+One collected item in an assembled response, with the band it falls in and how it may be disclosed.
+
+| | |
+|---|---|
+| **Module** | Governance |
+| **Introduced** | R1.4c-i |
+| **Classification** | Confidential |
+| **Personal data** | YES - this is the assembled personal data itself |
+| **Columns** | 14 |
+
+**These rows are the response.** There is no document and no export; the response is read on screen and delivered by a person. **Stored rather than recomputed** because a response must be reproducible: recomputed at read time it would change as the data changed, and nobody could later say what was actually disclosed on the day. **`band` and `treatment` carry the disclosure model.** Band C is the design problem - "Alice approved Bob's entitlement" is personal data about both, so the default is `describe`, which states the fact without naming the second person (D5). **`detail` is populated only for `include`**, and `CollectedItem` refuses the other combination at construction, so no collector can produce the leaking shape. **Widening a treatment needs a second approver who is not the reviewer**; narrowing does not.
+
+| Column | Type | Null | Default | Points at | What it means |
+|---|---|---|---|---|---|
+| **id** | `bigint unsigned AUTO_INCREMENT` | - | - | - | Surrogate primary key. Auto-incrementing, never reused, never meaningful. |
+| `organisation_id` | `bigint unsigned` | - | - | `organisations.id (cascade)` | Which customer owns this row. The tenancy boundary. `BelongsToOrganisation` fills it at creation and fails closed when no context is resolved. |
+| `privacy_request_id` | `bigint unsigned` | - | - | `privacy_requests.id (cascade)` | Which request this belongs to. Cascade is correct here and only here: these rows have no meaning apart from their request, and the evidence that an assembly happened lives in the audit trail. |
+| `band` | `varchar(1)` | - | - | - | A, B, C or D. How this item relates to the subject, which decides the default treatment. **Band C is the design problem**: the subject's name on somebody else's record is personal data about two people. |
+| `source_table` | `varchar(64)` | - | - | - | Which table it came from. What the coverage test reconciles against the live schema. |
+| `collector` | `varchar(190)` | - | - | - | The collector class that produced it. Recorded so a reader can find the code that made a disclosure decision. |
+| `treatment` | `varchar(16)` | - | - | - | include, describe or exclude. **`exclude` rows are kept precisely because they disclose nothing** - they are the evidence that a table was considered and deliberately withheld, which is what makes the coverage claim checkable rather than asserted. |
+| `summary` | `text` | yes | - | - | What the subject is told, already rendered. For band C it was rendered by a function that never received the other person's identity, so a template mistake cannot leak what was never passed in. |
+| `detail` | `json` | yes | - | - | The verbatim structured payload. **Populated only for `include`** - `CollectedItem` refuses the other combination at construction, so no collector can produce a described item that discloses. |
+| `occurred_at` | `timestamp` | yes | - | - | When the underlying thing happened, for the time-ordered bands. |
+| `reviewer_action` | `varchar(16)` | yes | - | - | kept, narrowed or widened. **Widening needs a second approver who is not the reviewer**; narrowing does not. Being more careful is always one person's call. |
+| `reviewer_note` | `text` | yes | - | - | Why a treatment was changed. Required, so nobody can later ask whether a disclosure was considered or accidental. |
+| `created_at` | `timestamp` | yes | - | - | When the row was written. |
+| `updated_at` | `timestamp` | yes | - | - | When the row last changed. |
+
+## `privacy_requests`
+
+A request from a person about the personal data held about them, and its lifecycle from arrival to closure.
+
+| | |
+|---|---|
+| **Module** | Governance |
+| **Introduced** | R1.4c-i |
+| **Classification** | Confidential |
+| **Personal data** | YES - it identifies the requester directly, by name and email |
+| **Columns** | 29 |
+
+**The subject need not have an account.** `subject_user_id` is nullable by decision D6, and the name and email are held on this row independently: a contractor whose account was deleted still has personal data in `audit_events`, and the PDPA does not stop applying because the account did. **That is also the obvious attack** - assemble a stranger's data by asserting you are them - so `identity_verified_at` gates everything downstream, and the service refuses to collect without it independently of the status. **`due_at` is frozen, not derived.** It is written once at verification. A deadline recomputed from a policy somebody later edited would silently move a date a person is being held to. **No file is ever produced** (D9): `evidence_reference` records how a human delivered the response outside SemantIQ.
+
+| Column | Type | Null | Default | Points at | What it means |
+|---|---|---|---|---|---|
+| **id** | `bigint unsigned AUTO_INCREMENT` | - | - | - | Surrogate primary key. Auto-incrementing, never reused, never meaningful. |
+| `organisation_id` | `bigint unsigned` | - | - | `organisations.id (cascade)` | Which customer owns this row. The tenancy boundary. `BelongsToOrganisation` fills it at creation and fails closed when no context is resolved. |
+| `reference` | `varchar(32)` | - | - | - | Quotable in correspondence: PR-0001. Derived from the highest existing reference rather than a count, so a deleted row can never cause one to be reused - a reference that pointed at two different requests would be worse than none. |
+| `status` | `varchar(32)` | - | `received` | - | Lifecycle state, from a codified list. Never free text. |
+| `request_type` | `varchar(16)` | - | - | - | access, correction or withdrawal. Only the last two route through a decision step; an access request is answered by disclosing. |
+| `subject_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | The requester's SemantIQ account, if they have one. **Nullable by decision D6**: a person whose account was deleted still has personal data in `audit_events` and is still entitled to ask for it. |
+| `subject_name` | `varchar(190)` | - | - | - | Their name, held here rather than read from `users`, so the request survives the deletion of the account it was about. |
+| `subject_email` | `varchar(190)` | - | - | - | How they were contacted. Also what `password_reset_tokens` is matched on, since that table is keyed by address rather than by account. |
+| `subject_reference` | `varchar(190)` | yes | - | - | An external identifier, where the customer uses one. Optional. |
+| `received_at` | `timestamp` | - | - | - | When the request arrived, which may predate this row - a letter recorded a week later is still received on the day it arrived. |
+| `received_channel` | `varchar(32)` | yes | - | - | How it arrived: email, post, in person. Free text because the ways a person can ask are not enumerable. |
+| `identity_verified_at` | `timestamp` | yes | - | - | **The gate.** Null means unverified, and unverified means nothing is collected. Checked by the service independently of `status`, because a status records where a row got to and a timestamp records that a person actually did something. |
+| `identity_verified_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who confirmed it. The accountable human, not a system. |
+| `identity_verification_method` | `varchar(64)` | yes | - | - | From the codified list in `config/governance.php`, so "how was this person identified" is comparable across requests rather than a sentence somebody typed. |
+| `identity_verification_note` | `text` | yes | - | - | What was actually checked. Required. "Verified" without this is somebody's word for it. |
+| `assembled_at` | `timestamp` | yes | - | - | When collection last ran. Re-running replaces the records wholesale rather than appending, so a response never mixes what was true then with what is true now. |
+| `reviewed_at` | `timestamp` | yes | - | - | When a reviewer went through the assembled response. |
+| `reviewed_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who reviewed it. |
+| `decision` | `varchar(16)` | yes | - | - | released or refused. Refusal is a lawful outcome, not a failure. |
+| `decision_reason` | `text` | yes | - | - | Required on refusal. Refusing is defensible; refusing without a stated reason is not. |
+| `released_at` | `timestamp` | yes | - | - | When disclosure was authorised. A different act from assembling the response, behind its own permission at System Administrator. |
+| `released_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who authorised it. Deliberately capable of being a different person from whoever assembled it. |
+| `evidence_reference` | `varchar(190)` | yes | - | - | How the response was actually delivered - a postal tracking number, a meeting date. **SemantIQ sends nothing itself** (D9), so without this there is no evidence the person ever received an answer. |
+| `closed_at` | `timestamp` | yes | - | - | When it was finished. A closed request is never reopened; a new one is raised instead, so the record of what was disclosed on a date stays exactly as it was. |
+| `due_at` | `timestamp` | yes | - | - | **Frozen at verification, never recomputed.** A deadline derived from a policy somebody later edited would silently move a date a person is being held to. Whether it has passed IS derived on read, so nothing needs to run. |
+| `created_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who created it. Kept as `nullOnDelete` so the record survives the person leaving. |
+| `updated_by_user_id` | `bigint unsigned` | yes | - | `users.id (set null)` | Who last changed it. Same nullability reasoning. |
+| `created_at` | `timestamp` | yes | - | - | When the row was written. |
+| `updated_at` | `timestamp` | yes | - | - | When the row last changed. |
+
 ## `retention_policies`
 
 How long one category of personal data is kept, on what basis, from what event, and what happens at the end.
@@ -769,8 +875,8 @@ A job that threw, with its payload and stack trace.
 | **id** | `bigint unsigned AUTO_INCREMENT` | - | - | - | Surrogate primary key. Auto-incrementing, never reused, never meaningful. |
 | `uuid` | `varchar(255)` | - | - | - | Unique id for the failure. |
 | `connection` | `varchar(255)` | - | - | - | Which queue connection. |
-| `queue` | `varchar(255)` | - | - | - |  |
-| `payload` | `longtext` | - | - | - |  |
+| `queue` | `varchar(255)` | - | - | - | Which queue the job was on when it failed. Framework column. |
+| `payload` | `longtext` | - | - | - | The serialised job. **May incidentally contain personal data** if a queued job ever carried any, which is why `failed_jobs` is named in the privacy exclusion register as a known incidental surface rather than silently ignored. Empty on this deployment. |
 | `exception` | `longtext` | - | - | - | The stack trace. |
 | `failed_at` | `timestamp` | - | - | - | When it gave up. |
 

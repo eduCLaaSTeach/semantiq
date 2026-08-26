@@ -77,6 +77,77 @@ class DataDocsTest extends TestCase
         }
     }
 
+    /**
+     * A row in the table is not documentation. The meaning column must say
+     * something.
+     *
+     * WHY THIS EXISTS SEPARATELY from the presence check above. R1.4c-i added
+     * three tables, and the presence check passed immediately - every column
+     * had a row, because the generator writes a row for every column whether or
+     * not anybody wrote a meaning for it. Twenty-two of those rows had an EMPTY
+     * meaning cell, and the suite was green.
+     *
+     * A check that confirms a row exists, when the row is generated
+     * unconditionally, confirms only that the generator ran. This one reads
+     * the cell.
+     *
+     * Columns whose meaning comes from a shared shape - `id`,
+     * `*_by_user_id`, timestamps - are covered by that shape and are not
+     * exempted here, because the shape fills the cell like any other source.
+     */
+    #[Test]
+    public function every_column_meaning_actually_says_something(): void
+    {
+        $dictionary = $this->dictionary();
+        $hollow = [];
+
+        foreach ($this->tables() as $table) {
+            $start = strpos($dictionary, '## `'.$table.'`');
+
+            if ($start === false) {
+                continue;
+            }
+
+            $next = strpos($dictionary, "\n## ", $start + 1);
+            $section = substr($dictionary, $start, $next === false ? null : $next - $start);
+
+            foreach (explode("\n", $section) as $line) {
+                if (! str_starts_with($line, '| ')) {
+                    continue;
+                }
+
+                $cells = array_map('trim', explode('|', $line));
+
+                /* A column row is: '', name, type, null, default, points at, meaning, ''. */
+                if (count($cells) !== 8) {
+                    continue;
+                }
+
+                $name = trim($cells[1], '`* ');
+                $meaning = $cells[6];
+
+                /* The header row and the separator row are not columns. */
+                if ($name === 'Column' || str_starts_with($name, '---')) {
+                    continue;
+                }
+
+                if ($meaning === '' || $meaning === '-') {
+                    $hollow[] = $table.'.'.$name;
+                }
+            }
+        }
+
+        $this->assertSame([], $hollow, sprintf(
+            "%d column(s) appear in the data dictionary with an EMPTY meaning.\n"
+            ."A generated row is not documentation - the generator writes one whether or not\n"
+            ."anybody explained the column. Add an entry to tools/data-column-meanings.php\n"
+            ."keyed `table.column`, or a shared shape to tools/data-meanings.php, then run:\n"
+            ."  php tools/generate-data-docs.php\n\n%s",
+            count($hollow),
+            implode("\n", $hollow)
+        ));
+    }
+
     #[Test]
     public function every_column_is_in_the_data_dictionary(): void
     {
