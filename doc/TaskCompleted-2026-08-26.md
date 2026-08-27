@@ -226,6 +226,28 @@ right column counts and the unique key genuinely unique, foreign keys 8 / 2 / 5,
 empty**, and **no correction-note triggers installed** - which is correct,
 because installing them is a separate approved step.
 
+### What the migration evidence is, and what it is not
+
+**The `php artisan migrate --force` console output was not captured.** The
+product owner ran the command and observed the three migrations move from
+`Pending` to `Ran`, but did not keep the terminal output.
+
+That observation is recorded here as what it is - **an operator observation,
+not captured command output.** It is not presented as a transcript.
+
+The durable evidence is stronger than the console text would have been, because
+it was read from the database rather than from a scrollback:
+
+| Evidence | Source |
+| --- | --- |
+| The three migrations are recorded in the ledger | Post-check row `E1`, reading the `migrations` table - which is the same table `migrate:status` reads |
+| The three tables exist with the right shape, indexes and keys | Post-check rows `B1` to `D4`, 14 rows, all PASS |
+| The tables are empty | Post-check `F1` to `F3` |
+| No triggers were installed | Post-check `G1` |
+
+`CONFIRM-MIGRATION-LEDGER.sql` covers the one thing `E1` did not: whether any
+OTHER migration is still pending across the whole application.
+
 ### The pre-check raised two STOP rows, and both were my script's fault
 
 `CHECK-R1.4c-i-PRE.sql` reported `4 of 7 expected` migrations and `4 of 5
