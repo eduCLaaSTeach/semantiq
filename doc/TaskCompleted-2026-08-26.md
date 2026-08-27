@@ -216,6 +216,38 @@ change until acceptance.
 
 ---
 
+## The three migrations were run on production
+
+Run by the product owner on 26 August against `smntqc2sadm_transdb`. The
+post-migration verification returned **PASS on every row**: three tables
+present, column counts 30 / 14 / 12, all five named indexes correct with the
+right column counts and the unique key genuinely unique, foreign keys 8 / 2 / 5,
+`audit_event_id` on RESTRICT, the three migrations recorded, **all three tables
+empty**, and **no correction-note triggers installed** - which is correct,
+because installing them is a separate approved step.
+
+### The pre-check raised two STOP rows, and both were my script's fault
+
+`CHECK-R1.4c-i-PRE.sql` reported `4 of 7 expected` migrations and `4 of 5
+expected` tables for R1.4a and R1.4b. **Production was right both times and the
+script was wrong both times.**
+
+| Row | What the script asserted | Why it could never pass |
+| --- | --- | --- |
+| C1 | Seven migrations match its LIKE patterns | Only four filenames can ever match. `create_data_sovereignty_profiles` does not match `_create_sovereignty%`, and `add_structured_privacy_contact` does not match `_add_privacy_contact%`. The "7" was invented, not counted |
+| C2 | A table named `sovereignty_profiles` | That table has never existed. The real name is `data_sovereignty_profiles` |
+
+**This is the third time a verification script of mine has made a correct
+production system look broken** - after the R1.4b `COUNT(*)` versus
+`COUNT(DISTINCT INDEX_NAME)` error, and the two diagnostics that returned empty
+because they carried a `DATABASE()` filter while no database was selected.
+
+The pattern is the same each time: **an expectation written from memory rather
+than read from the repository.** The corrected script lists migration and table
+names in full instead of matching by pattern, so the expectation cannot drift
+from the filenames again. `CONFIRM-R1.4a-R1.4b.sql` closes the two rows out
+positively.
+
 ## Documentation cleanup carried forward
 
 Found in review, recorded rather than fixed, because production code is not

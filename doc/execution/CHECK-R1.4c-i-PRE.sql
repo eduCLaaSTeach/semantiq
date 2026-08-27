@@ -55,16 +55,25 @@ UNION ALL SELECT '---', '---', '---'
 -- ---------------------------------------------------------------- prereq 4
 -- The R1.4a and R1.4b migrations must already be recorded as run.
 UNION ALL
+-- CORRECTED. The first version of this block expected SEVEN migrations from
+-- LIKE patterns that only four filenames can ever match, and asserted a table
+-- named `sovereignty_profiles` that has never existed - the real name is
+-- `data_sovereignty_profiles`. Production returned 4 and 4, which was RIGHT
+-- both times, and this script called it STOP. Names are listed in full now
+-- rather than matched by pattern, so the expectation cannot drift from the
+-- filenames again.
 SELECT 'C1. R1.4a + R1.4b migrations recorded',
-       CONCAT(COUNT(*), ' of 7 expected'),
-       CASE WHEN COUNT(*) = 7 THEN 'PASS'
+       CONCAT(COUNT(*), ' of 6 expected'),
+       CASE WHEN COUNT(*) = 6 THEN 'PASS'
             ELSE 'STOP - the previous batches are not fully migrated' END
 FROM migrations
-WHERE migration LIKE '2026_08_2%_create_data_protection%'
-   OR migration LIKE '2026_08_2%_create_sovereignty%'
-   OR migration LIKE '2026_08_2%_create_personal_data%'
-   OR migration LIKE '2026_08_2%_create_retention_policies%'
-   OR migration LIKE '2026_08_2%_add_privacy_contact%'
+WHERE migration IN (
+  '2026_08_27_090000_create_personal_data_categories_table',
+  '2026_08_27_090100_create_data_protection_profiles_table',
+  '2026_08_27_090200_create_data_sovereignty_profiles_table',
+  '2026_08_27_090300_add_structured_privacy_contact_to_organisations_table',
+  '2026_08_28_090000_create_sovereignty_exceptions_table',
+  '2026_08_28_090100_create_retention_policies_table')
 
 UNION ALL
 SELECT 'C2. tables the previous batches created are present',
@@ -73,9 +82,9 @@ SELECT 'C2. tables the previous batches created are present',
             ELSE 'STOP - a previous batch table is missing' END
 FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = DATABASE()
-  AND TABLE_NAME IN ('data_protection_profiles', 'sovereignty_profiles',
-                     'personal_data_categories', 'retention_policies',
-                     'sovereignty_exceptions')
+  AND TABLE_NAME IN ('personal_data_categories', 'data_protection_profiles',
+                     'data_sovereignty_profiles', 'sovereignty_exceptions',
+                     'retention_policies')
 
 UNION ALL
 SELECT 'C3. the R1.4b retention unique key, after the 1059 recovery',
