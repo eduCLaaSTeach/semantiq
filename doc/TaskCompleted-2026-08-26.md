@@ -216,6 +216,34 @@ change until acceptance.
 
 ---
 
+## Documentation cleanup carried forward
+
+Found in review, recorded rather than fixed, because production code is not
+edited as part of a migration step.
+
+**`database/migrations/2026_08_29_090100_create_privacy_request_records_table.php`
+carries a stale explanatory comment.** Lines 41 to 44 say "WIDENING NEEDS TWO
+PEOPLE ... requires a second approver who is not the first". That was true of an
+earlier draft and is no longer true of the code.
+
+Current truth, per SEC-DEC-093:
+
+| | |
+| --- | --- |
+| narrowing | supported |
+| widening | **fail closed** |
+| independently authenticated second-approval workflow | **not yet scoped** |
+
+The comment is non-executable, does not affect the schema the migration
+creates, and **does not block the migration**. It belongs with the
+context-register backfill PR (acceptance step 4), not with a production change.
+
+`reviewer_action` keeps its wider vocabulary - `kept`, `narrowed`, `widened` -
+and that part of the comment stays accurate: the column can express all three
+even though only `narrowed` can currently be written.
+
+---
+
 ## The stopping-point rule
 
 **Historical evidence and current operational state must never be conflated.**
