@@ -245,8 +245,19 @@ because they carried a `DATABASE()` filter while no database was selected.
 The pattern is the same each time: **an expectation written from memory rather
 than read from the repository.** The corrected script lists migration and table
 names in full instead of matching by pattern, so the expectation cannot drift
-from the filenames again. `CONFIRM-R1.4a-R1.4b.sql` closes the two rows out
-positively.
+from the filenames again.
+
+**`CONFIRM-R1.4a-R1.4b.sql` was run and closes both rows positively:**
+
+| Check | Observed | Verdict |
+| --- | --- | --- |
+| H1. all six R1.4a + R1.4b migrations recorded | `6 of 6` | PASS |
+| H2. all five R1.4a + R1.4b tables present | `5 of 5` | PASS |
+| H3. which tables are present | `data_protection_profiles, data_sovereignty_profiles, ...` | INFO |
+| H4. the audit index migration recorded | `1` | PASS |
+
+The previous batches were fully migrated the whole time. Nothing on production
+needed fixing, and nothing on production was changed to make these rows pass.
 
 ## Documentation cleanup carried forward
 
