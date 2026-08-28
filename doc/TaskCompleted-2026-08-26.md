@@ -218,7 +218,7 @@ change until acceptance.
 
 ## The three migrations were run on production
 
-Run by the product owner on 26 August against `smntqc2sadm_transdb`. The
+Run by the product owner against `<DATABASE_NAME>`. The
 post-migration verification returned **PASS on every row**: three tables
 present, column counts 30 / 14 / 12, all five named indexes correct with the
 right column counts and the unique key genuinely unique, foreign keys 8 / 2 / 5,
@@ -310,6 +310,34 @@ from the filenames again.
 
 The previous batches were fully migrated the whole time. Nothing on production
 needed fixing, and nothing on production was changed to make these rows pass.
+
+## Backup evidence, and what the capture does and does not prove
+
+The product owner supplied a file-browser capture of the pre-migration
+checkpoint.
+
+**What it proves:** a file named `<DATABASE_NAME>.sql.gz` exists, 10 KB, type
+GZip archive, shown as "Yesterday at 5:36 PM".
+
+**What it does not prove, and must not be written up as proving:** the contents,
+the completeness, the restorability, or which schema state it holds. None of
+that is visible in a file listing, and this session cannot open the file.
+
+**Two things to settle before the next production change:**
+
+1. **The absolute date is not established.** "Yesterday" is relative to whenever
+   the screenshot was taken, which is not in the capture. The acceptance record
+   needs the actual date and time.
+2. **It predates the migration by roughly a day.** 10 KB gzipped is consistent
+   with this database - very little data, mostly schema - so the size is not a
+   concern in itself. But a restore from it would roll back the R1.4c-i schema
+   as well as any production activity since it was taken. `audit_events` moved
+   from 19 to 21 across that window, so the activity lost would be small but not
+   nothing.
+
+Neither point blocks anything already done. **A fresh checkpoint should be taken
+immediately before the trigger installation**, because that backup no longer
+matches the current schema.
 
 ## Documentation cleanup carried forward
 
