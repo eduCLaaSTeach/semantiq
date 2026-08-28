@@ -340,6 +340,35 @@ say that too, with the reason.
 `doc/` is excluded from the deploy workflow, so this file never reaches the web
 server and needs no hosting decision.
 
+## Production-Verification Discipline
+
+**Exact-set reconciliation beats a count. Exact names beat LIKE patterns.
+Expected values must be GENERATED from the approved repository state, never
+remembered or reconstructed by hand.**
+
+A count is not a set. `COUNT(migrations) = 33` is satisfied by thirty-two
+correct rows plus one obsolete row, while a real migration is still pending.
+Reconcile both directions and name the offenders:
+
+- everything expected is present, and
+- nothing unexpected is present.
+
+A LIKE pattern is a guess about filenames. `_create_sovereignty%` does not
+match `create_data_sovereignty_profiles`, and nothing warns you - the query
+simply returns a smaller number and the script calls the database broken.
+
+**Where a verification script needs to know what the repository contains,
+generate it.** Read `git ls-tree <approved-sha> <path>` and emit the SQL from
+a committed generator, so the expectation cannot drift from the repository and
+cannot be mis-typed. Commit the generator and the generated file together, and
+record the commit the expectation came from inside the generated file.
+
+**Then run the generated logic against a real database before handing it to an
+operator.** Build the healthy case, assert it passes, then deliberately break
+it in the way the check exists to catch, and assert it fails. Reading a query
+and believing it is correct is how three separate scripts on this project came
+to report a correct production system as broken.
+
 ## Stopping-Point Discipline
 
 **Historical evidence and current operational state must never be conflated.**
