@@ -55,16 +55,22 @@ UNION ALL SELECT '---', '---', '---'
 -- ---------------------------------------------------------------- prereq 4
 -- The R1.4a and R1.4b migrations must already be recorded as run.
 UNION ALL
--- CORRECTED. The first version of this block expected SEVEN migrations from
--- LIKE patterns that only four filenames can ever match, and asserted a table
--- named `sovereignty_profiles` that has never existed - the real name is
--- `data_sovereignty_profiles`. Production returned 4 and 4, which was RIGHT
--- both times, and this script called it STOP. Names are listed in full now
--- rather than matched by pattern, so the expectation cannot drift from the
--- filenames again.
+-- CORRECTED TWICE, and the second correction is the interesting one.
+--
+-- The first version expected SEVEN migrations from LIKE patterns that only
+-- four filenames can ever match. The fix replaced it with SIX exact names -
+-- and silently dropped a real one, `add_module_and_outcome_indexes_to_
+-- audit_events_table`. So it could PASS while an R1.4b migration was missing,
+-- while claiming the previous batches were fully migrated.
+--
+-- Both errors had the same cause: a list written by hand. The names below are
+-- the complete set of `2026_08_27_*` and `2026_08_28_*` migrations at commit
+-- 660d74c427a9e9dab3d611d39e69396cab5953e9, and
+-- `MigrationExpectationTest` fails the build if this file and the repository
+-- ever disagree.
 SELECT 'C1. R1.4a + R1.4b migrations recorded',
-       CONCAT(COUNT(*), ' of 6 expected'),
-       CASE WHEN COUNT(*) = 6 THEN 'PASS'
+       CONCAT(COUNT(*), ' of 7 expected'),
+       CASE WHEN COUNT(*) = 7 THEN 'PASS'
             ELSE 'STOP - the previous batches are not fully migrated' END
 FROM migrations
 WHERE migration IN (
@@ -73,9 +79,14 @@ WHERE migration IN (
   '2026_08_27_090200_create_data_sovereignty_profiles_table',
   '2026_08_27_090300_add_structured_privacy_contact_to_organisations_table',
   '2026_08_28_090000_create_sovereignty_exceptions_table',
-  '2026_08_28_090100_create_retention_policies_table')
+  '2026_08_28_090100_create_retention_policies_table',
+  '2026_08_28_090200_add_module_and_outcome_indexes_to_audit_events_table')
 
 UNION ALL
+-- Seven migrations, five NEW TABLES. `add_structured_privacy_contact_to_
+-- organisations_table` and `add_module_and_outcome_indexes_to_audit_events_
+-- table` both alter an existing table rather than creating one, so five is
+-- correct here and is not a copy of the number above.
 SELECT 'C2. tables the previous batches created are present',
        CONCAT(COUNT(*), ' of 5 expected'),
        CASE WHEN COUNT(*) = 5 THEN 'PASS'
@@ -101,12 +112,17 @@ UNION ALL SELECT '---', '---', '---'
 -- ---------------------------------------------------------------- prereq 3b
 -- The three R1.4c-i migrations must NOT already be recorded.
 UNION ALL
+-- EXACT NAMES, NOT A LIKE PATTERN. A pattern is a guess about filenames, and
+-- this file has already been wrong twice for exactly that reason.
 SELECT 'D1. R1.4c-i migrations not yet recorded',
-       CAST(COUNT(*) AS CHAR),
+       CONCAT(COUNT(*), ' of 3 must be absent'),
        CASE WHEN COUNT(*) = 0 THEN 'PASS'
             ELSE 'STOP - already recorded, do not run the migration' END
 FROM migrations
-WHERE migration LIKE '2026_08_29_09%'
+WHERE migration IN (
+  '2026_08_29_090000_create_privacy_requests_table',
+  '2026_08_29_090100_create_privacy_request_records_table',
+  '2026_08_29_090200_create_privacy_correction_notes_table')
 
 UNION ALL SELECT '---', '---', '---'
 

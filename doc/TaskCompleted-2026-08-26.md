@@ -299,7 +299,11 @@ than read from the repository.** The corrected script lists migration and table
 names in full instead of matching by pattern, so the expectation cannot drift
 from the filenames again.
 
-**`CONFIRM-R1.4a-R1.4b.sql` was run and closes both rows positively:**
+**`CONFIRM-R1.4a-R1.4b.sql` was run and closes both rows positively.**
+
+**This is the output that was actually produced on the day, quoted as it ran.**
+The script has since been corrected - see below - but this record is not
+rewritten to show a result nobody obtained:
 
 | Check | Observed | Verdict |
 | --- | --- | --- |
@@ -310,6 +314,30 @@ from the filenames again.
 
 The previous batches were fully migrated the whole time. Nothing on production
 needed fixing, and nothing on production was changed to make these rows pass.
+
+### The evidence held, even though the script was wrong
+
+Review afterwards found that H1's list of six **omitted a real migration**,
+`2026_08_28_090200_add_module_and_outcome_indexes_to_audit_events_table`. R1.4a
+and R1.4b contain **seven** migrations, not six, so H1 as written could have
+passed with one missing while claiming the batches were complete.
+
+**The evidence is nonetheless sound, for two independent reasons:**
+
+1. **H4 checked the omitted migration separately**, and returned `1`, PASS.
+   H1 and H4 together therefore covered all seven - by accident of how the
+   script was assembled rather than by design, which is exactly why it was
+   still a defect worth fixing.
+2. **The exact-set reconciliation above proves it outright.** `K1` returns
+   `0 missing` against all 33 migrations at approved main, and `K2` returns
+   `0 unexpected`. That single result subsumes H1 and H4 entirely and depends
+   on no hand-written list.
+
+**The reusable script was corrected afterwards**, not the record of what ran.
+`CONFIRM-R1.4a-R1.4b.sql` now names all seven and reads `7 of 7`, and
+`CHECK-R1.4c-i-PRE.sql` C1 does the same. Anybody running them today gets the
+stronger check; anybody reading this note sees what was actually observed on
+the day.
 
 ## Privacy Requests - production signed-in verification
 

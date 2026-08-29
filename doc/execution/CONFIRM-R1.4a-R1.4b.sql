@@ -2,9 +2,9 @@
 -- SELECT ONLY. Closes out the two STOP rows in CHECK-R1.4c-i-PRE.sql, which
 -- were caused by wrong expectations in that script, not by the database.
 
-SELECT 'H1. all six R1.4a + R1.4b migrations recorded' AS check_name,
-       CONCAT(COUNT(*), ' of 6') AS observed,
-       CASE WHEN COUNT(*) = 6 THEN 'PASS' ELSE 'REPORT TO ME' END AS verdict
+SELECT 'H1. all seven R1.4a + R1.4b migrations recorded' AS check_name,
+       CONCAT(COUNT(*), ' of 7') AS observed,
+       CASE WHEN COUNT(*) = 7 THEN 'PASS' ELSE 'REPORT TO ME' END AS verdict
 FROM migrations
 WHERE migration IN (
   '2026_08_27_090000_create_personal_data_categories_table',
@@ -12,7 +12,8 @@ WHERE migration IN (
   '2026_08_27_090200_create_data_sovereignty_profiles_table',
   '2026_08_27_090300_add_structured_privacy_contact_to_organisations_table',
   '2026_08_28_090000_create_sovereignty_exceptions_table',
-  '2026_08_28_090100_create_retention_policies_table')
+  '2026_08_28_090100_create_retention_policies_table',
+  '2026_08_28_090200_add_module_and_outcome_indexes_to_audit_events_table')
 
 UNION ALL
 SELECT 'H2. all five R1.4a + R1.4b tables present',
