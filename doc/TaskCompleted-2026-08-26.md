@@ -1,13 +1,29 @@
 # Day work note - 26 August 2026
 
+> **HISTORICAL NOTE.**
+>
+> **The STOPPING POINT and STARTING POINT below describe the 26 August
+> operational state and are NOT the current execution plan.** In particular
+> they record the production database as unmigrated and direct an operator to
+> run the three R1.4c-i migrations. **Those migrations have since been run and
+> verified.** Following the STARTING POINT today would repeat completed work.
+>
+> **Current operational state: `TaskCompleted-2026-08-29.md`.**
+>
+> Everything below stays as written. The later sections of this same file
+> record the migration, the verification and the UI correction as they
+> happened, in the order they happened.
+
 Written at the pause point so the next session starts from fact rather than
 memory. Read STOPPING POINT and STARTING POINT first; everything after is
 detail.
 
-**This note supersedes `TaskCompleted-2026-08-24.md` as the CURRENT state. It
-does not replace it.** That note remains accurate for the day it describes and
-must not be edited into a state that was not true on 24 August. See "The
-stopping-point rule" at the end.
+**This note superseded `TaskCompleted-2026-08-24.md` on 26 August 2026.** That
+note remains accurate for the day it describes and must not be edited into a
+state that was not true on 24 August. See "The stopping-point rule" at the end.
+
+**This note was in turn superseded on 29 August 2026**, by the file named in the
+banner above - which is that same rule applied to this file.
 
 ---
 
