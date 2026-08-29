@@ -311,6 +311,60 @@ from the filenames again.
 The previous batches were fully migrated the whole time. Nothing on production
 needed fixing, and nothing on production was changed to make these rows pass.
 
+## Privacy Requests - production signed-in verification
+
+The product owner completed the signed-in production check of
+Compliance -> Data Protection -> Privacy Requests.
+
+**Result:**
+
+- route and page render successfully
+- storage is ready
+- no "Migration required"
+- no application error
+- 0 privacy requests
+- legitimate empty state rendered
+- **presentation defect discovered during visual review**
+
+The functional half passed. **The visual presentation is NOT accepted**, and is
+not treated as accepted until the correction below is reviewed.
+
+### The presentation defect, and its root cause
+
+Nearly half the markup on the page was inert. The R1.4c-i views used class
+names that **no stylesheet rule defines**:
+
+| View | Classes used | Undefined |
+| --- | ---: | ---: |
+| `privacy-requests.blade.php` | 30 | **14** |
+| `privacy-request.blade.php` | 34 | **13** |
+| `retention.blade.php` | 23 | 0 |
+| `retention-edit.blade.php` | 28 | 0 |
+| `audit-log.blade.php` | 35 | 0 |
+
+Every established governance screen is clean. Only the two new ones invented
+names. The three visible symptoms map exactly onto three of them:
+
+| Symptom | Cause |
+| --- | --- |
+| Empty-state text in a narrow column at the far left | `.empty-state` is undefined. `.empty` is what supplies `display:flex`, centring and padding |
+| Text against the card border, no padding | `.card-note` is undefined, and **`.card` carries no padding of its own** - padding comes from `.card-head`, `.settings-form`, `.record-list` or `.empty` |
+| Form fields running the full page width | The `.settings-fields` wrapper was missing. It is what constrains a form to a readable 560px |
+
+Four sprite icons were also referenced but do not exist: `i-info`, `i-plus`,
+`i-edit`, `i-send`. **An `<svg>` with an unresolvable `<use href>` still occupies
+its 18x18 box**, so the defect renders as an invisible gap rather than a broken
+image, and the heading is simply misaligned for ever. Every established screen
+references 0 missing icons.
+
+**None of it failed a test.** All 627 tests passed throughout, because a class
+name that does nothing still renders and the assertions were about text and
+behaviour. Only a person looking at the screen could see it - and that person
+was the product owner, after it reached production.
+
+`DesignSystemContractTest` is the cheap mechanical guard that would have caught
+both, and now does.
+
 ## Backup evidence, and what the capture does and does not prove
 
 The product owner supplied a file-browser capture of the pre-migration
@@ -323,12 +377,12 @@ GZip archive, shown as "Yesterday at 5:36 PM".
 the completeness, the restorability, or which schema state it holds. None of
 that is visible in a file listing, and this session cannot open the file.
 
-**Two things to settle before the next production change:**
+**Confirmed by the operator:** taken **26 August 2026, 17:30 SGT**, a gzip SQL
+backup. That settles the absolute date, which the capture alone did not show.
 
-1. **The absolute date is not established.** "Yesterday" is relative to whenever
-   the screenshot was taken, which is not in the capture. The acceptance record
-   needs the actual date and time.
-2. **It predates the migration by roughly a day.** 10 KB gzipped is consistent
+**One thing remains true and matters:**
+
+1. **It is not the trigger-installation checkpoint.** 10 KB gzipped is consistent
    with this database - very little data, mostly schema - so the size is not a
    concern in itself. But a restore from it would roll back the R1.4c-i schema
    as well as any production activity since it was taken. `audit_events` moved
