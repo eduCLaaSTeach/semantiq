@@ -40,7 +40,14 @@ ACCEPTED.**
 | | |
 |---|---|
 | `main`, before PR #30 merges | `660d74c427a9e9dab3d611d39e69396cab5953e9` |
-| PR #30 head | `27d3fdb4973ae312bd0d8147c7d2a5edc36a0514` |
+| PR #30 head, at the moment this note was first written | `27d3fdb4973ae312bd0d8147c7d2a5edc36a0514` |
+| PR #30 head, current | `1f335a6c38d7d30111f2652f89997a38559204b4` |
+
+**A note cannot record the SHA of the commit that creates it.** Writing this
+file moved the head, so the first row is the head this note was written
+against and the second is the head it landed on. Read the second one, and
+confirm it against the PR before acting - by the time anybody reads this,
+GitHub is the authority on where PR #30 is, not a line of Markdown.
 
 ### What is true about production right now
 
@@ -91,6 +98,27 @@ would roll back the R1.4c-i schema as well as everything since.
 real triggers, including an unqualified raw `DELETE`. On production only their
 existence and definition are checked. Deliberately attacking a live evidence
 table to watch it refuse is not a test worth the risk.
+
+---
+
+## Session end - 29 August 2026
+
+Work paused here by the product owner. **Nothing is half-finished.**
+
+| Check | State |
+|---|---|
+| Working tree | Clean, 0 uncommitted changes |
+| Branch pushed | Yes, local and remote agree |
+| PR #30 | Open, CI green, **not merged** |
+| `main` | `660d74c4`, unchanged today |
+| Production database | **Unchanged today.** No SQL, no migration, no trigger |
+| Local test artefacts | Removed - the throwaway SQLite databases and the local server, verified by probing the port rather than assuming |
+| `IMPLEMENTATION_STATUS.md` | Not advanced |
+| `doc/PROJECT_MAP.html` | **Not regenerated.** None of its four triggers fired: no acceptance, no status change, no `config/` file added or removed, and R1.4c remains open on the map as it does in reality |
+
+**Resume by reading this file's STOPPING POINT and STARTING POINT.** The next
+action is to obtain merge approval for PR #30. Everything after that is the
+eight-step list above, in order.
 
 ---
 
