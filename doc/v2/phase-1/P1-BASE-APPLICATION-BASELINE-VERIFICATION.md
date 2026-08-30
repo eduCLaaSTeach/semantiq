@@ -6,7 +6,7 @@ database provisioning. See §7.
 
 **Unit:** P1-BASE
 **Design:** `P1-BASE-APPLICATION-BASELINE-DESIGN.md` (approved with four corrections)
-**Head verified:** `e096b62`
+**Head verified:** `bb8c765` — the current PR head
 **Date:** 30 August 2026
 
 Nothing below is marked PASS unless it was actually executed and its output
@@ -37,8 +37,17 @@ Six tests existed and had never run. Registering the suite is part of this unit.
 
 ## 2. CI
 
-Run [33321086991](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321086991)
-on `e096b62`. **Every step succeeded.**
+Run [33321180460](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321180460)
+on **`bb8c765`, the current PR head**. Job `Pint, PHPUnit and MySQL migrations`,
+conclusion `success`; all 13 steps succeeded, completed 16:00:40 UTC.
+
+An earlier successful run, [33321086991](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321086991)
+on `e096b62`, is superseded and is not the acceptance evidence. It is listed
+only so the record shows which head each run belongs to; a green run on a head
+that is no longer current proves nothing about the head being accepted.
+
+`bb8c765` differs from `e096b62` by one commit, which adds this verification
+document and touches no application file.
 
 | Step | Result |
 | --- | --- |
@@ -52,7 +61,7 @@ on `e096b62`. **Every step succeeded.**
 
 | # | Item | Result |
 | --- | --- | --- |
-| B3 | CI green on the pull request | **PASS** |
+| B3 | CI green on the pull request, on the current head | **PASS** — run 33321180460 on `bb8c765` |
 | B4 | CI green on `main` | **NOT VERIFIED** — the branch is not merged |
 | B5 | Migrations apply against real MySQL | **PASS** — CI step 12 |
 
@@ -164,9 +173,12 @@ Laravel is on the server there is nothing to test: the checks would pass
 trivially against the static page and prove nothing.
 
 The tests are implemented in `deploy.yml` and run automatically on the first
-deployment. They treat any status other than 403/404 as failure, explicitly
-reject a redirect as proof, cache-bust every request, and assert `.well-known/`
-stays reachable.
+deployment. They cover the Gate 4 minimum list in full, treat any status other
+than 403/404 as failure, explicitly reject a redirect as proof, cache-bust every
+request, and assert `.well-known/` stays reachable. Each response body is also
+scanned for `APP_KEY`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`,
+`MICROSOFT_CLIENT_SECRET`, connection strings and server paths - a 403 that
+still returns a body carrying one of those is a failure.
 
 **Current live server state**, observed 30 August 2026 (cache-busted), *before*
 any P1-BASE deployment:

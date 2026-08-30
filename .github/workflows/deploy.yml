@@ -242,19 +242,24 @@ jobs:
         run: |
           set -euo pipefail
           failed=0
+          # The Gate 4 minimum list, in full.
           for path in \
-            ".env" "composer.json" "composer.lock" "package.json" "package-lock.json" \
+            ".env" ".git/config" \
+            "composer.json" "composer.lock" "package.json" "package-lock.json" \
             "artisan" "phpunit.xml" "vite.config.js" \
-            "app/" "bootstrap/" "config/" "database/" "resources/" "routes/" "tests/" "vendor/" \
-            "storage/logs/laravel.log" "deployment/public_html.htaccess" "doc/" ".git/config"
+            "app/" "bootstrap/" "config/" "database/" "resources/" "routes/" \
+            "storage/" "tests/" "vendor/" "deployment/" "doc/" \
+            "README.md" "deployment/public_html.htaccess" "storage/logs/laravel.log"
           do
             code="$(curl -s -o /tmp/body -w '%{http_code}' "$APP_URL/$path?cb=${GITHUB_SHA}")"
             case "$code" in
               403|404) ;;
               *) echo "::error::$path returned $code; expected 403 or 404 (a redirect is not proof)"; failed=1 ;;
             esac
-            if grep -qE 'APP_KEY|DB_PASSWORD|MICROSOFT_CLIENT_SECRET' /tmp/body 2>/dev/null; then
-              echo "::error::$path response contained a secret marker"; failed=1
+            # Secret markers, connection strings and server paths. A 403 or 404
+            # that still returns a body carrying any of these is a failure.
+            if grep -qE 'APP_KEY|DB_DATABASE|DB_USERNAME|DB_PASSWORD|MICROSOFT_CLIENT_SECRET|mysql://|/home/[a-z0-9]+/public_html' /tmp/body 2>/dev/null; then
+              echo "::error::$path response contained a secret marker, connection string or server path"; failed=1
             fi
           done
 
