@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SemantIQ — Deployment Test</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; min-height: 100vh;
+    display: grid; place-items: center;
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #f6f7f9; color: #14181f;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0e1116; color: #e6e9ef; }
+    .card { background: #161b22; border-color: #2a313c; }
+    dt { color: #9aa4b2; }
+  }
+  .card {
+    background: #fff; border: 1px solid #e2e6ec; border-radius: 12px;
+    padding: 2rem 2.25rem; max-width: 34rem; margin: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  h1 { margin: 0 0 .25rem; font-size: 1.35rem; }
+  .ok { color: #1a7f4b; font-weight: 600; }
+  p { margin: .5rem 0 1.25rem; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: .4rem 1rem; margin: 0; }
+  dt { color: #5b6472; }
+  dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <h1>SemantIQ <span class="ok">&#10003; deploy OK</span></h1>
+    <p>This page was published to cPanel by GitHub Actions. The values below are
+       stamped in at build time, so they prove <em>this</em> commit reached the
+       server rather than a cached earlier copy.</p>
+    <dl>
+      <dt>Commit</dt><dd>__COMMIT__</dd>
+      <dt>Branch</dt><dd>__REF__</dd>
+      <dt>Deployed</dt><dd>__DEPLOYED_AT__</dd>
+      <dt>Run</dt><dd>__RUN__</dd>
+    </dl>
+  </main>
+</body>
+</html>

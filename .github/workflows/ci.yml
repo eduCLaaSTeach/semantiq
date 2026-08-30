@@ -10,10 +10,13 @@
 # holds no deployment secret.
 name: CI
 
+# PARKED. The Laravel application this pipeline builds is not in the
+# repository right now, so every automatic run fails at the first
+# composer step. Automatic triggers are removed until the new
+# application is scaffolded; restore them in the same commit that
+# brings back composer.json. It can still be started by hand.
 on:
-  pull_request:
-  push:
-    branches: main
+  workflow_dispatch:
 
 # Read-only. Nothing here writes to the repository or reaches the server.
 permissions:
