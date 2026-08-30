@@ -6,7 +6,7 @@ database provisioning. See §7.
 
 **Unit:** P1-BASE
 **Design:** `P1-BASE-APPLICATION-BASELINE-DESIGN.md` (approved with four corrections)
-**Head verified:** `bb8c765` — the current PR head
+**Head verified:** `8d01db3` — see §2 for the full run ledger and the currency rule
 **Date:** 30 August 2026
 
 Nothing below is marked PASS unless it was actually executed and its output
@@ -37,17 +37,27 @@ Six tests existed and had never run. Registering the suite is part of this unit.
 
 ## 2. CI
 
-Run [33321180460](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321180460)
-on **`bb8c765`, the current PR head**. Job `Pint, PHPUnit and MySQL migrations`,
-conclusion `success`; all 13 steps succeeded, completed 16:00:40 UTC.
+Every CI run on this branch is listed, newest first, so the record shows which
+run belongs to which head rather than a single claim that ages badly.
 
-An earlier successful run, [33321086991](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321086991)
-on `e096b62`, is superseded and is not the acceptance evidence. It is listed
-only so the record shows which head each run belongs to; a green run on a head
-that is no longer current proves nothing about the head being accepted.
+| Head | Run | Conclusion | Contents |
+| --- | --- | --- | --- |
+| `8d01db3` | [33321421385](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321421385) | **success**, 13/13 steps | Gate 4 path list completed; evidence ledger |
+| `bb8c765` | [33321180460](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321180460) | success, 13/13 | Verification document added |
+| `e096b62` | [33321086991](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321086991) | success, 13/13 | CI and deployment workflows |
 
-`bb8c765` differs from `e096b62` by one commit, which adds this verification
-document and touches no application file.
+**Currency rule.** A green run on a head that is no longer current proves
+nothing about the head being accepted, so the ledger above is kept rather than
+overwritten. The commit that adds each ledger entry is itself documentation-only
+and changes no application file, which is why the entry can be trusted about the
+code it describes.
+
+The definitive pre-merge evidence is the CI run on the **final** head at merge
+time, confirmed in the acceptance report rather than predicted here. This
+document cannot cite the SHA of the commit that creates it.
+
+All three runs above executed the same 13 steps, including migrations against
+MySQL 8.4:
 
 | Step | Result |
 | --- | --- |
