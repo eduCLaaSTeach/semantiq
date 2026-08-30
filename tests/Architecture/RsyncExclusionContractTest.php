@@ -34,8 +34,12 @@ final class RsyncExclusionContractTest extends TestCase
         $workflow = file_get_contents(self::WORKFLOW);
 
         foreach ($this->protectedPaths() as $path) {
+            // The trailing boundary matters. Without it, --exclude ".env.example"
+            // satisfies a search for ".env" and the guard silently passes while
+            // the only copy of the database password goes unprotected. This test
+            // was written without it and did exactly that.
             $this->assertMatchesRegularExpression(
-                '/--exclude[= ]"?'.preg_quote($path, '/').'"?/',
+                '/--exclude[= ]"'.preg_quote($path, '/').'"(\s|$)/m',
                 $workflow,
                 "Protected path [{$path}] is not excluded in deploy.yml. rsync --delete would "
                 .'remove it from the server, and .env exists nowhere else.'

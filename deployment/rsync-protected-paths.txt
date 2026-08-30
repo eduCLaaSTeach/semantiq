@@ -1,0 +1,16 @@
+# Paths the deployment must NEVER transfer and must NEVER delete.
+#
+# This file is the exclusion contract. It is not documentation: the deployment
+# pre-flight asserts every line here appears as an --exclude in the rsync command
+# before any transfer runs, and a CI test asserts the same against the workflow
+# file, so a pull request that drops one goes red without needing a deployment to
+# find out.
+#
+# .env is the only copy of the database password and, from P1-00, the Microsoft
+# client secret. It exists nowhere else - not in the repository, not in GitHub.
+#
+# Lines beginning with # and blank lines are ignored.
+.env
+.well-known/
+storage/
+public/storage

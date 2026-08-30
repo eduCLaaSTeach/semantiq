@@ -6,6 +6,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -13,7 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         then: function (): void {
             // Registered with no middleware group at all - see routes/health.php.
-            Illuminate\Support\Facades\Route::group([], __DIR__.'/../routes/health.php');
+            Route::group([], __DIR__.'/../routes/health.php');
         },
     )
     ->withProviders([
