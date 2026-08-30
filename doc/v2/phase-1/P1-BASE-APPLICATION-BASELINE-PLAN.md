@@ -1,7 +1,8 @@
 # P1-BASE — Application Baseline — PLAN
 
-**Status:** DRAFT — awaiting product-owner approval
-**Unit:** P1-BASE (proposed; see `PHASE-1-PLAN.md` §2)
+**Status:** APPROVED — 30 August 2026. Moved to DESIGN; see
+`P1-BASE-APPLICATION-BASELINE-DESIGN.md`.
+**Unit:** P1-BASE (approved; see `PHASE-1-PLAN.md` §2)
 **Precedes:** P1-00 — Application Entry, Login & First-Run Bootstrap
 **Authority:** Blueprint §3.7 order 1 — "Create the fresh v2 application baseline
 on the already-established Laravel/React/MySQL/cPanel delivery platform; add CI
@@ -45,15 +46,17 @@ early. The shell renders its cluster headings and nothing beneath them.
 
 ## 2. Dependencies and blockers
 
-| ID | Decision | Blocks |
-| --- | --- | --- |
-| D-02 | Navigation cluster mapping | The shell. Must be answered before build. |
-| D-05 | MySQL database provisioning | Migrations and the health check |
-| D-01 | Role model conflict | Only the schema direction; no role tables are created in this unit, so this can be answered during P1-BASE rather than before it |
-| D-06 | Deploy test page removal | Deployment layout |
+All P1-BASE blockers are resolved. Decisions in full: `PHASE-1-PLAN.md` §4.
 
-D-03 and D-04 (bootstrap method, Entra registration) do **not** block P1-BASE.
-They block P1-00. Raising them now only protects the schedule.
+| ID | Decision | Outcome |
+| --- | --- | --- |
+| D-01 | Role and access model | **APPROVED** — blueprint model governs. No role/domain/scope/sensitivity schema in P1-BASE; module boundaries only |
+| D-02 | Navigation architecture | **APPROVED** — three product areas, not the four generic clusters. Only accepted System Administration capabilities become navigable |
+| D-05 | MySQL provisioning and migrations | **APPROVED** — one-time infrastructure provisioning; migrations run through the deploy workflow; migration failure fails the deployment |
+| D-06 | Deploy test page | **APPROVED** — removed during P1-BASE, in the stated order, after Laravel is verified at the site root |
+
+D-03 (bootstrap method) and D-04 (Entra registration) are **DEFERRED TO P1-00**.
+They do not block P1-BASE and are not solved here.
 
 ---
 

@@ -1,6 +1,8 @@
 # Phase 1 Plan — System Administration & Security Foundation
 
-**Status:** DRAFT — awaiting product-owner approval
+**Status:** APPROVED — 30 August 2026. D-01, D-02, D-05 and D-06 decided;
+D-03 and D-04 deferred to P1-00. P1-BASE approved as a delivery unit and moved
+to DESIGN.
 **Authority:** `doc/SemantIQ_v2_PHASE_1_System_Administration.md`
 **Parent baseline:** `doc/SemantIQ_v2.2_Ground_Zero_Architecture_Reset_Three_Phase_Blueprint.md`
 **UI standard:** `doc/design-system/ui-and-ux-layout-template-shared.md`
@@ -51,8 +53,12 @@ The blueprint anticipates this. §3.7 Phase 1 Execution Sequence, order 1, is:
 
 Order 2 is the Login/bootstrap work that the Phase 1 document calls P1-00.
 
-**Proposal:** run the baseline as its own delivery unit, **P1-BASE**, ahead of
-P1-00, with its own plan, acceptance and verification record. Reasons:
+**APPROVED 30 August 2026.** The product owner confirmed this reading of the
+blueprint: establish the fresh Laravel/React/MySQL baseline first, prove
+CI/deployment/schema/runtime safety, and only then begin P1-00.
+
+Run the baseline as its own delivery unit, **P1-BASE**, ahead of P1-00, with its
+own plan, acceptance and verification record. Reasons:
 
 - Its acceptance is infrastructural (app boots, CI green, deploys, migrates), not
   behavioural. Folding it into P1-00 would mix two unrelated definitions of done
@@ -62,10 +68,8 @@ P1-00, with its own plan, acceptance and verification record. Reasons:
 - P1-00's "must prove" list is a security proof. It should not share a unit with
   scaffolding noise.
 
-This framing needs approval. The alternative — treating the baseline as P1-00
-step zero — is workable but weakens the evidence trail.
-
-Unit plan: `P1-BASE-APPLICATION-BASELINE-PLAN.md` (drafted, awaiting approval).
+Unit plan: `P1-BASE-APPLICATION-BASELINE-PLAN.md` — approved.
+Unit design: `P1-BASE-APPLICATION-BASELINE-DESIGN.md` — drafted, awaiting approval.
 
 ---
 
@@ -92,91 +96,145 @@ ACCEPT. A green CI run does not unlock the next unit.
 
 ---
 
-## 4. Decisions required before implementation
+## 4. Decision register
 
-These cannot be resolved from the documents. Each blocks the unit named.
+All decisions below were made by the product owner on 30 August 2026 unless
+marked DEFERRED. They are settled: they are not reopened without a verified
+technical impossibility.
 
-### D-01 — Role model conflict (blocks P1-05, shapes P1-BASE schema)
+### D-01 — Role and access model — **APPROVED: follow the blueprint**
 
-The two authorities describe different access models.
+The SemantIQ authorisation model is:
 
-| | Blueprint §2 / Phase 1 §P1-05 | Design system §7 |
-| --- | --- | --- |
-| Roles | 7: System Admin, Organisation Admin, Executive, Domain Owner/Director, Manager, Business User, Auditor | 5 tiers: `system_admin`, `admin`, `team`, `self`, `self_view` |
-| Scope | Independently assigned: Own, Team, Business Unit, Domain, Organisation | Derived from tier |
-| Domain | Orthogonal entitlement per user | Not modelled |
-| Sensitivity | Standard / Confidential / Restricted ceiling | Not modelled |
+```text
+Identity
++ Platform Role
++ Business Domain
++ Scope
++ Sensitivity
++ Organisation / Team / Ownership relationship
++ Policy
+= Effective Access
+```
 
-These are not the same shape. The blueprint makes scope, domain and sensitivity
-orthogonal to role; the design system derives scope from tier. The design system
-says to keep its tier shapes; the blueprint says security is Role + Domain +
-Scope + Sensitivity.
+Seven baseline roles: System Administrator, Organisation Administrator,
+Executive, Domain Owner / Director, Manager, Business User, Auditor.
 
-Source-of-truth (blueprint §2.11) puts the blueprint at priority 2 and the shared
-UI standard at priority 4, so **the blueprint's model governs** and the design
-system's five tiers become a presentation concern.
+Domain, Scope and Sensitivity are **independent authorisation dimensions**.
+Scope is never derived from a UI role tier. The design system's five-tier model
+is **not** the SemantIQ authorisation engine and is not authoritative for
+SemantIQ security. This is recorded as an approved SemantIQ-specific deviation
+from the shared UI standard, which sits below the blueprint in the
+source-of-truth hierarchy.
 
-**Recommendation:** implement the blueprint's model as the authorisation engine,
-and treat the design-system tiers as a UI vocabulary mapped onto it. Record this
-as the documented per-app deviation the design system asks for. Confirm before
-P1-05 design.
+**System Administrator does not automatically receive business-domain access** —
+not Sales, Finance, People, Learning or any other domain.
 
-### D-02 — Navigation cluster mapping (blocks P1-BASE shell)
+**P1-BASE constraint:** no role, domain, scope or sensitivity schema is created
+in P1-BASE. Those belong to the later Phase 1 units. P1-BASE establishes only the
+architectural and module boundaries that will host them.
 
-The design system mandates four fixed sidebar clusters: Workspace, Compliance,
-Application Administration, System Administration. The blueprint defines three
-product areas: System Administration, Fabric Configuration, SemantIQ Workplace.
+### D-02 — Navigation architecture — **APPROVED: three product areas**
 
-They do not map one to one. Options:
+Top-level product areas are **System Administration**, **Fabric Configuration**
+and **SemantIQ Workplace**. SemantIQ is not forced into the design system's four
+generic clusters (Workspace, Compliance, Application Administration, System
+Administration). Recorded as an approved SemantIQ-specific deviation.
 
-- **(a)** Blueprint areas become the clusters, documented as a deviation.
-- **(b)** Blueprint areas map onto the four clusters (Workplace → Workspace,
-  Fabric Configuration → Application Administration, System Administration →
-  System Administration, Compliance holds Audit and Access Reviews).
+The shared UI standard still governs visual design, sidebar behaviour,
+typography, tokens, colour, icons, light/dark themes, responsiveness,
+accessibility, page archetypes and component behaviour. It does not govern
+SemantIQ's product information architecture.
 
-**Recommendation: (a).** The blueprint's §2.6 menu structure is explicitly
-authoritative for v2 navigation and is stated as such. Confirm before the shell
-is built, because the shell is built in P1-BASE and changing it later touches
-every screen.
+Audit, Access Reviews and Security Status remain **inside System
+Administration**. No separate top-level Compliance area is created.
 
-### D-03 — First-admin bootstrap method (blocks P1-00)
+**Phase 1 rule.** No Phase 2 or Phase 3 menus are prebuilt. P1-BASE creates only
+the shell and navigation architecture needed to support the three-area model.
+During Phase 1, only implemented and accepted System Administration capabilities
+become navigable. Fabric Configuration and SemantIQ Workplace must not expose
+fake, placeholder or partially implemented screens merely because the shell can
+represent them.
 
-Required to be a product feature, not a manual database edit, and to be
-non-reusable afterwards. Candidate approaches:
+### D-05 — MySQL provisioning and migrations — **APPROVED**
 
-- One-time bootstrap token in the server `.env`, consumed on first successful
-  SSO sign-in and then invalidated.
-- Allowlisted Entra object ID or UPN in configuration, promoted to System
-  Administrator on first sign-in.
-- Signed one-time bootstrap URL generated by an `artisan` command run over SSH.
+Provisioning and application migration are separate concerns.
 
-Each satisfies "no manual MySQL row insertion". They differ in operational
-handling and in what "disabled afterwards" means. **Product-owner choice.**
+*One-time provisioning.* The cPanel MySQL database and user are created as a
+one-time infrastructure administration action. Database and user creation is
+never built into application code. `DB_DATABASE`, `DB_USERNAME` and `DB_PASSWORD`
+live in the server `.env` only and are never stored in GitHub or the repository.
+The design documents this prerequisite and its verification steps.
 
-### D-04 — Microsoft Entra ID app registration (blocks P1-00)
+*Migrations.* Once the database exists and the server `.env` is configured,
+schema migration is part of the controlled deployment:
+`php artisan migrate --force --no-interaction` over SSH through the deployment
+workflow. Manual execution is not the normal production path. **A migration
+failure fails the deployment** rather than letting the application continue on an
+inconsistent schema. Migration verification is part of P1-BASE acceptance.
 
-External dependency outside the repository. Needed: tenant ID, client ID, client
-secret, redirect URI, and which account performs the registration. Also whether
-the Release 1 tenant is single-tenant or accepts multiple.
+For P1-BASE, only Laravel framework baseline tables required by the approved
+architecture are created. No SemantIQ business, role, domain, Fabric or
+future-phase schema.
 
-Secrets go to the server `.env` and GitHub environment secrets only, never to the
-repository.
+### D-06 — Deploy test page — **APPROVED: remove during P1-BASE**
 
-### D-05 — MySQL database provisioning (blocks P1-BASE)
+`public/index.html` is temporary deployment-test material. Transition order:
 
-The server `.env` has empty `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`. A cPanel
-database and user must be created and those values filled in on the server. Who
-does this, and are migrations run from CI over SSH or manually on first release?
+1. Preserve the existing deployment test until the real Laravel path is ready.
+2. Deploy and verify the actual Laravel application.
+3. Confirm Laravel responds at the SemantIQ site root.
+4. Remove `public/index.html`.
+5. Retire `deploy-test.yml`.
+6. Keep the real `deploy.yml` as the deployment mechanism.
+7. Verify the site again after removal.
 
-### D-06 — Fate of the deploy test page (housekeeping, P1-BASE)
+The static page must never shadow Laravel's `public/index.php`.
 
-`public/index.html` currently occupies the live site root. Once Laravel is
-deployed, `public_html` holds the application tree and the forwarder rewrites into
-`public/`. The test page must be removed or moved so it does not shadow the
-application's front controller. Recommend removing it in P1-BASE and keeping the
-deploy-test workflow only until the real deploy workflow is restored.
+### D-03 — First-administrator bootstrap — **DEFERRED TO P1-00**
 
----
+Does not block P1-BASE and is not solved there. Recorded as a P1-00 blocker, to
+be brought back for explicit decision at P1-00 planning.
+
+### D-04 — Microsoft Entra ID registration — **DEFERRED TO P1-00**
+
+Does not block P1-BASE and is not solved there. Recorded as a P1-00 blocker, to
+be brought back for explicit decision at P1-00 planning. Needed then: tenant ID,
+client ID, client secret, redirect URI, the registering account, and whether
+Release 1 is single-tenant.
+
+### Web exposure — **product-owner direction accepted**
+
+The application tree must never be web-accessible merely because Laravel is
+deployed inside `public_html`. The P1-BASE design addresses the document-root and
+`public/` forwarding architecture explicitly and protects at minimum `.env`,
+`vendor/`, `app/`, `bootstrap/`, `config/`, `database/`, `resources/`, `routes/`,
+`storage/`, `tests/`, `deployment/`, `artisan`, Composer and package manifests,
+logs and internal documentation. `.well-known/` continues to work for TLS/ACME.
+
+Correct-looking Apache configuration is not proof. **Acceptance performs real
+HTTPS negative tests against protected paths.** For sensitive filesystem paths a
+redirect to a Login page is not sufficient — the files must not be served at all.
+
+### Deployment safety — **product-owner direction accepted**
+
+`.env`, `.well-known/`, runtime storage and persistent uploaded data must survive
+deployment. No unrestricted `rsync --delete` against `public_html`. If `--delete`
+is retained, its exclusions and target boundaries must make deletion of
+server-managed files impossible. The design states explicitly which paths are
+source-controlled, server-managed, persistent runtime data, secrets, or generated
+build artefacts. Nothing here is left to assumption.
+
+### Decisions opened by the design
+
+Two architectural questions surfaced while writing the P1-BASE design. Neither
+contradicts an approved decision; both are recorded in
+`P1-BASE-APPLICATION-BASELINE-DESIGN.md` §21 for decision at design approval.
+
+| ID | Question |
+| --- | --- |
+| D-07 | React integration pattern: server-driven Inertia pages, or a separate SPA with a JSON API |
+| D-08 | Whether the cPanel document root can be repointed to `public_html/public`, which removes the exposure class the forwarder defends against |
 
 ## 5. Standing constraints carried into every unit
 
@@ -231,8 +289,18 @@ pass:
 
 ## 8. What happens next
 
-1. Product owner answers **D-01** through **D-06**, or defers the ones that only
-   block later units (D-03 and D-04 block P1-00; the rest block P1-BASE).
-2. Product owner approves or amends the **P1-BASE** framing in §2.
-3. On approval, `P1-BASE-APPLICATION-BASELINE-PLAN.md` moves to DESIGN.
-4. No application code is written before that design is approved.
+Done: D-01, D-02, D-05 and D-06 decided; D-03 and D-04 deferred to P1-00;
+P1-BASE approved and moved from PLAN to DESIGN.
+
+1. Product owner reviews `P1-BASE-APPLICATION-BASELINE-DESIGN.md`, including the
+   two questions it raises in its §21 (D-07 React integration pattern, D-08
+   document-root option).
+2. On design approval, P1-BASE moves to EXECUTE — the first application code of
+   SemantIQ v2.
+3. P1-BASE then runs TEST → VERIFY → ACCEPT, producing
+   `P1-BASE-APPLICATION-BASELINE-VERIFICATION.md` with real evidence.
+4. Only after P1-BASE acceptance does P1-00 planning begin, at which point D-03
+   and D-04 return for decision.
+
+No application code is written before the design is approved. No migration is
+created. The live server is not modified.
