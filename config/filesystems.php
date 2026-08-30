@@ -33,7 +33,21 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+
+            /*
+             * Laravel's built-in /storage/{path} route is disabled.
+             *
+             * D-08B puts the whole tree inside the document root, so the
+             * hardened forwarder must refuse /storage/ to protect logs,
+             * sessions and cache on disk. That block lands before Laravel, so
+             * the route can never be reached - registering it would leave a
+             * URL that resolves in the router and 403s in production.
+             *
+             * A later unit that needs to serve user files must choose a path
+             * outside the protected list and route it through an authorised
+             * controller, which under this security model it would need anyway.
+             */
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],

@@ -17,12 +17,12 @@ final class DenyByDefaultTest extends TestCase
 {
     public function test_the_authenticated_area_refuses_an_anonymous_request(): void
     {
-        $this->get('/app')->assertRedirect('/');
+        $this->get('/console')->assertRedirect('/');
     }
 
     public function test_the_refusal_reveals_nothing_about_what_was_requested(): void
     {
-        $response = $this->get('/app');
+        $response = $this->get('/console');
 
         $this->assertStringNotContainsString('System Administration', $response->getContent());
         $this->assertStringNotContainsString('shell-rail', $response->getContent());
@@ -30,7 +30,7 @@ final class DenyByDefaultTest extends TestCase
 
     public function test_a_json_client_is_refused_with_401_and_no_payload(): void
     {
-        $this->getJson('/app')
+        $this->getJson('/console')
             ->assertStatus(401)
             ->assertExactJson(['message' => 'Unauthenticated.']);
     }
