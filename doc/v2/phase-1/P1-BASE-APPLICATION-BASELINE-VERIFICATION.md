@@ -213,20 +213,32 @@ any P1-BASE deployment:
 | G22 Laravel is the site root | **NOT VERIFIED** |
 | G23 no artefact can shadow `public/index.php` | **NOT VERIFIED** on the server; **PASS** in the repository |
 
-### J — D-08 document root (J24)
+### J — D-08 document root (J24) — **RESOLVED: D-08B**
 
-**NOT VERIFIED — requires cPanel inspection. Not guessed.**
+**D-08B CONFIRMED** by the product owner, 30 August 2026, from cPanel.
 
-What is known from outside: the document root is currently `public_html`
-itself, since a file written to `public_html/index.html` is served at `/`. That
-is the **D-08B** shape today.
+| | |
+| --- | --- |
+| Document root | `public_html` |
+| `public_html/public` available | No — cPanel does not offer the required arrangement for this deployment |
+| Architecture in force | Hardened root forwarder, `deployment/public_html.htaccess` |
 
-What cannot be determined remotely: whether cPanel *permits* repointing
-`semantiq.claas2saas.com` to `public_html/public`. That needs someone with
-panel access to look at the subdomain's document-root setting.
+**This raises the stakes on two gates rather than lowering them.** Under D-08A
+the application tree would sit physically outside the web root and no rewrite
+rule could expose it. Under D-08B the tree is *inside* `public_html`, so the
+root `.htaccess` is the only thing standing between a request and `.env`,
+`vendor/`, `config/` and the rest.
 
-Record the outcome here as **D-08A** or **D-08B** before the first deployment.
-The application code is identical either way.
+Consequently, for P1-BASE acceptance:
+
+- the root `.htaccess` security boundary is a **mandatory** acceptance gate, not
+  a defence-in-depth extra;
+- the complete live web-exposure test suite (§E) is **mandatory** and must be
+  executed against the deployed application, not inferred from the `.htaccess`
+  source.
+
+Correct-looking Apache configuration is not evidence. Only observed HTTPS
+responses are.
 
 ---
 
