@@ -1,0 +1,256 @@
+name: Deploy to cPanel (SSH)
+
+on:
+  push:
+    branches: main
+  workflow_dispatch:
+
+concurrency:
+  group: cpanel-deploy
+  cancel-in-progress: false
+
+# The pipeline only reads the repository. Narrow the ambient GITHUB_TOKEN scope
+# explicitly rather than inheriting whatever the organization default happens to be.
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and sync to cPanel over SSH
+    runs-on: ubuntu-latest
+
+    # Binding the job to a GitHub environment is what makes environment-scoped
+    # secrets and a main-only deployment branch policy possible. Both are configured
+    # in the repository settings, not here; see PROJECT-CONTEXT.md.
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Configure PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.5'
+
+      - name: Validate Composer configuration
+        run: composer validate --no-check-publish
+
+      - name: Install PHP dependencies
+        run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
+
+      - name: Configure Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      # public/build contains the Vite manifest and compiled frontend assets.
+      # It is commonly excluded from Git but must be included in the deployment.
+      # node_modules is not required by the production Laravel runtime.
+      - name: Remove node_modules before deployment
+        run: rm -rf node_modules
+
+      # Copy the version-controlled cPanel forwarder to the deployment root.
+      # The deployment directory itself is excluded from rsync.
+      - name: Stage the public_html forwarder
+        run: cp deployment/public_html.htaccess .htaccess
+
+      # Load the passphrase-protected deployment key into ssh-agent.
+      # The private key remains encrypted on disk, and the passphrase is supplied
+      # through an SSH askpass helper rather than a command-line argument.
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          # Create every file in this step at 0600, so the private key needs no
+          # follow-up chmod and the askpass helper is never briefly readable before it
+          # is promoted to 0700 below.
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 \
+          SSH_ASKPASS="$HOME/.ssh/askpass.sh" \
+          SSH_ASKPASS_REQUIRE=force \
+          ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-add -l
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      - name: Test SSH authentication
+        run: |
+          set -euo pipefail
+
+          ssh \
+            -i ~/.ssh/cpanel_deploy_key \
+            -p "$CPANEL_PORT" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && pwd && command -v rsync && rsync --version | head -n 1"
+
+      # Transfer the complete built application, including vendor/ and
+      # public/build. Excluded runtime paths remain managed by the server.
+      - name: Sync files to cPanel
+        run: |
+          set -euo pipefail
+
+          rsync -az \
+            --delete \
+            --human-readable \
+            --itemize-changes \
+            -e "ssh -i ~/.ssh/cpanel_deploy_key -p $CPANEL_PORT -o IdentitiesOnly=yes -o BatchMode=yes" \
+            --exclude ".well-known/" \
+            --exclude ".git/" \
+            --exclude ".github/" \
+            --exclude "deployment/" \
+            --exclude "node_modules/" \
+            --exclude "tests/" \
+            --exclude "phpunit.xml" \
+            --exclude "README.md" \
+            --exclude "doc/" \
+            --exclude ".claude/" \
+            --exclude "*.md" \
+            --exclude ".editorconfig" \
+            --exclude ".gitignore" \
+            --exclude ".gitattributes" \
+            --exclude ".env" \
+            --exclude ".env.example" \
+            --exclude "storage/" \
+            --exclude "public/storage" \
+            ./ "$CPANEL_USER@$CPANEL_HOST:$CPANEL_DEPLOY_PATH/"
+
+      # storage/ is excluded from synchronization. Create the required Laravel
+      # runtime directories when they do not already exist, while preserving
+      # existing logs, sessions, cache data, and uploaded files.
+      - name: Ensure Laravel runtime directories exist and are writable
+        run: |
+          set -euo pipefail
+
+          ssh \
+            -i ~/.ssh/cpanel_deploy_key \
+            -p "$CPANEL_PORT" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache && chmod -R ug+rwX storage bootstrap/cache"
+
+      # The server .env is excluded from rsync so it survives every deploy, which
+      # also means it never arrives from the repository. Create it once if it is
+      # absent and let Artisan generate APP_KEY in place. The database values are
+      # deliberately left empty: no credential is ever written from this repo, and
+      # they are filled in on the server.
+      #
+      # The script is piped to a remote shell rather than inlined into the ssh
+      # argument, so nothing has to survive two rounds of shell quoting.
+      - name: Ensure the server environment file exists and is keyed
+        run: |
+          set -euo pipefail
+
+          cat > /tmp/bootstrap-env.sh <<'SH'
+          #!/bin/sh
+          set -eu
+
+          deploy_path="$1"
+          cd "$deploy_path"
+
+          php_bin="$(command -v php || true)"
+          if [ -z "$php_bin" ]; then
+            echo "No php CLI found on the server; cannot generate APP_KEY." >&2
+            exit 1
+          fi
+          echo "php: $php_bin ($("$php_bin" -r 'echo PHP_VERSION;'))"
+
+          if [ ! -f .env ]; then
+            echo ".env is missing, creating it"
+            cat > .env <<'ENVFILE'
+          APP_NAME=SemantIQ
+          APP_ENV=production
+          APP_KEY=
+          APP_DEBUG=false
+          APP_URL=https://semantiq.claas2saas.com
+
+          DB_CONNECTION=mysql
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_DATABASE=
+          DB_USERNAME=
+          DB_PASSWORD=
+
+          SESSION_DRIVER=file
+          CACHE_STORE=file
+          QUEUE_CONNECTION=sync
+
+          MICROSOFT_TENANT_ID=
+          MICROSOFT_CLIENT_ID=
+          MICROSOFT_CLIENT_SECRET=
+          MICROSOFT_REDIRECT_URI=
+
+          MASTER_ADMIN_EMAILS=
+          ENVFILE
+            chmod 600 .env
+          else
+            echo ".env already present, leaving it untouched"
+          fi
+
+          if grep -q '^APP_KEY=base64:' .env; then
+            echo "APP_KEY already set"
+          else
+            echo "APP_KEY is empty, generating one"
+            "$php_bin" artisan key:generate --force --no-interaction
+          fi
+          SH
+
+          ssh \
+            -i ~/.ssh/cpanel_deploy_key \
+            -p "$CPANEL_PORT" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "sh -s -- \"$CPANEL_DEPLOY_PATH\"" < /tmp/bootstrap-env.sh
+
+      # Clear the compiled config, route, view and application caches after each
+      # sync. Without this the server keeps serving caches built from the previous
+      # release, and an edited .env is ignored until the config cache is dropped.
+      - name: Clear Laravel caches
+        run: |
+          set -euo pipefail
+
+          ssh \
+            -i ~/.ssh/cpanel_deploy_key \
+            -p "$CPANEL_PORT" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan optimize:clear --no-interaction"
