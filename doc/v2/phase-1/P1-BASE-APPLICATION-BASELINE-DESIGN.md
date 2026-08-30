@@ -1,12 +1,23 @@
 # P1-BASE — Application Baseline — DESIGN
 
-**Status:** DRAFT — awaiting product-owner approval
-**Unit:** P1-BASE — approved 30 August 2026, PLAN → DESIGN
+**Status:** APPROVED WITH AMENDMENTS — 30 August 2026. Cleared for EXECUTE.
+**Unit:** P1-BASE — PLAN → DESIGN → EXECUTE
 **Plan:** `P1-BASE-APPLICATION-BASELINE-PLAN.md`
-**Decisions:** `PHASE-1-PLAN.md` §4 (D-01, D-02, D-05, D-06 approved; D-03, D-04 deferred)
+**Decisions:** `PHASE-1-PLAN.md` §4 (D-01, D-02, D-05, D-06 approved; D-03, D-04
+deferred). D-07 and D-08 decided at design approval — see §21.
 
-No application code is written, no migration is created and the live server is
-not modified until this design is approved.
+Four mandatory corrections were made at approval and are incorporated in place:
+
+| # | Correction | Section |
+| --- | --- | --- |
+| 1 | First deployment differs from subsequent deployment; no remote `artisan` exists yet | §11 |
+| 2 | The static test page is removed in the implementation commit, not after a verify step | §12, §18 |
+| 3 | `--delete` exclusions asserted by a pre-flight check, not documented and trusted | §12 |
+| 4 | Configuration validation distinguishes P1-BASE requirements from future-phase ones | §6 |
+
+Implementation is authorised strictly within this design. Anything outside it —
+Microsoft SSO, bootstrap, users, roles, domains, Fabric, Workplace — is out of
+scope for P1-BASE.
 
 ---
 
@@ -41,9 +52,9 @@ CI and in deploy, and shipped by rsync. A prior failure mode was feature tests
 rendering `@vite` views on a clean runner with no manifest, producing a 500 that
 reads like an application bug. CI builds assets before running tests.
 
-The integration *pattern* — server-driven pages versus a separate SPA and API —
-is **D-07**, raised in §21. The rest of this design holds either way; only the
-page-delivery layer differs.
+The integration pattern is **Inertia + React**, approved as D-07 (§21). Laravel
+owns routing, session, authorisation and refusal states; React renders. There is
+no separate SPA authentication surface and no token auth for Release 1.
 
 ---
 
@@ -175,12 +186,27 @@ for documented per-app reasons.
 | `config/semantiq.php` | SemantIQ-specific configuration, read from env at boot | Yes |
 | GitHub environment secrets | Deployment credentials only, never application secrets | n/a |
 
-**Boot-time validation.** A configuration validator asserts every required key is
-present and well-formed. On failure the application refuses to serve and returns
-a generic error; the specific missing key is written to the log, never to the
-response. A misconfigured application must fail loudly rather than serve a
-half-working site — the failure mode this guards against is a deploy that
-succeeds while the app quietly misbehaves.
+**Boot-time validation, scoped to this unit (Correction 4).** The validator
+asserts only what P1-BASE actually needs to run. Future-phase configuration is
+declared but not required, and its absence is not a boot failure.
+
+| Class | Keys | P1-BASE behaviour |
+| --- | --- | --- |
+| **Required now** | `APP_KEY`, `APP_ENV`, `APP_URL`, `DB_CONNECTION`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` | Missing or malformed ⇒ refuse to serve |
+| **Required with a safe default** | `APP_DEBUG` (false in production), `SESSION_DRIVER`, `CACHE_STORE`, `QUEUE_CONNECTION` | Defaulted; a production boot with `APP_DEBUG=true` is a validation failure |
+| **Declared, not yet required** | `MICROSOFT_TENANT_ID`, `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_REDIRECT_URI` | Present in `.env.example` as empty. **Absence is not an error in P1-BASE.** They become required when P1-00 activates Microsoft authentication |
+
+The requirement set is declared as data, so P1-00 promotes the Microsoft keys
+from *declared* to *required* by moving them between lists — no validator rewrite,
+and no chance of the promotion being forgotten.
+
+**No placeholder secrets.** Fake Microsoft values are never created to satisfy
+validation. An empty value that is not yet required stays empty; a fake one would
+survive into P1-00 and fail at the identity provider instead of at boot.
+
+On failure the application refuses to serve and returns a generic error. The
+specific missing key goes to the log, never to the response. The failure mode this
+guards against is a deploy that succeeds while the application quietly misbehaves.
 
 No secret is ever logged, rendered, or included in an error payload or health
 response.
@@ -260,12 +286,33 @@ public_html/.htaccess
                                public/.htaccess ──> public/index.php
 ```
 
-**A better option exists and is worth checking first.** If cPanel permits
-repointing the domain's document root to `public_html/public`, the entire
-exposure class disappears: the application tree simply sits outside the web root
-and no forwarder is needed to protect it. That is **D-08** in §21. This design
-specifies the forwarder because it works on the established baseline; if D-08 is
-available, the forwarder becomes redundant defence rather than the only defence.
+### D-08 precedence — preferred architecture first
+
+**Preferred.** If cPanel allows `semantiq.claas2saas.com` to use
+`public_html/public` as its document root, that architecture is used. `.env`,
+`vendor/`, `app/`, `config/`, `database/`, `storage/`, `routes/` and the rest sit
+**physically outside** the HTTP document root, which is materially stronger than
+relying on rewrite rules. Laravel's normal `public/.htaccess` then handles routing.
+
+The root-level forwarder may remain as defence against an accidental future
+document-root change, but it is **not** the primary boundary in this mode.
+
+**Fallback.** If the document root cannot be changed, the hardened
+`public_html/.htaccess` architecture above stands and is load-bearing.
+
+**Neither mode weakens the §16 exposure tests.** Even with `public_html/public`
+configured, `/.env`, `/composer.json`, `/vendor/`, `/storage/` and `/.git/config`
+must still return 403 or 404 and must never redirect into application
+authentication.
+
+**This does not block implementation.** The application code is identical either
+way. Before the first deployment the actual cPanel capability is checked and the
+result recorded in the verification document as exactly one of:
+
+- **D-08A** — `public_html/public` supported and configured
+- **D-08B** — document-root change unavailable; hardened forwarder used
+
+The result is established by inspection, never guessed.
 
 ---
 
@@ -332,31 +379,87 @@ CI is read-only, holds no deployment secret and never touches the server.
 `deploy.yml` restored with `push: main` and `workflow_dispatch`, bound to the
 `development` environment for environment-scoped secrets.
 
+### Two deployment states (Correction 1)
+
+The sequence cannot assume a remote `artisan`. On the first P1-BASE deployment
+there is no Laravel installation on the server at all, so `php artisan down`
+would fail and abort the pipeline **before** it could install the application
+that would have made the command work.
+
+**Detection is explicit and deterministic.** A directory existing is not
+evidence of a working installation. The deployment probes for all of:
+
+```text
+$CPANEL_DEPLOY_PATH/artisan                    exists
+$CPANEL_DEPLOY_PATH/vendor/autoload.php        exists
+$CPANEL_DEPLOY_PATH/bootstrap/app.php          exists
+php artisan --version                          exits 0
+```
+
+All four ⇒ **EXISTING**. Anything else ⇒ **INITIAL**. A missing *or broken*
+prior installation must never block installing the new one, so a failed probe
+resolves to INITIAL rather than to an error.
+
+#### Initial deployment
+
 ```text
  1  checkout
  2  composer install --no-dev --optimize-autoloader
  3  npm ci && npm run build
- 4  rm -rf node_modules                       (not a production runtime need)
+ 4  remove node_modules            (not a production runtime need)
  5  stage deployment/public_html.htaccess -> .htaccess
  6  configure SSH (agent, askpass, keyscan)
  7  verify SSH authentication
- 8  php artisan down                          <- maintenance window opens
- 9  rsync (see §12)
-10  ensure storage/ and bootstrap/cache exist and are writable
-11  php artisan migrate --force --no-interaction
-12  php artisan optimize:clear
-13  php artisan up                            <- maintenance window closes
-14  HTTPS verification (see §16)
+ 8  rsync exclusion pre-flight     (§12 — fails before any transfer)
+ 9  detect installation state      -> INITIAL
+10  (no artisan down — nothing to put into maintenance)
+11  rsync (§12)
+12  ensure storage/ and bootstrap/cache exist and are writable
+13  verify server .env exists and required configuration is present
+14  php artisan migrate --force --no-interaction
+15  php artisan optimize:clear
+16  health verification            (§13)
+17  HTTPS verification             (§16)
+18  exposure-negative tests        (§16)
 ```
 
-**Why the maintenance window spans steps 8–13.** New code lands in step 9 and the
-schema catches up in step 11. Between them the application would be running new
-code against an old schema. Maintenance mode makes that interval invisible to
-users.
+Step 13 matters on this path specifically: the server `.env` is created by the
+one-time provisioning of D-05, and the first deployment is where a missing or
+unconfigured `.env` would otherwise surface as a confusing migration error.
 
-**If step 11 fails, the job fails and the application stays down.** That is
-deliberate: a visible maintenance page is better than a live application on an
-inconsistent schema. The failure is loud, and §15 describes recovery.
+#### Subsequent deployments
+
+```text
+ 1-8  as above
+ 9    detect installation state    -> EXISTING
+10    php artisan down             <- maintenance window opens
+11    rsync (§12)
+12    ensure runtime directories
+13    php artisan migrate --force --no-interaction
+14    php artisan optimize:clear
+15    health verification
+16    php artisan up               <- maintenance window closes
+17    HTTPS verification
+18    exposure-negative tests
+```
+
+**Why the window spans sync and migration.** New code lands at step 11 and the
+schema catches up at step 13. In between, the application would run new code
+against an old schema. Maintenance mode makes that interval invisible.
+
+### Migration failure
+
+If the migration fails on either path the job fails and the deployment is not
+completed. On the EXISTING path the application **stays in maintenance**:
+
+- `php artisan up` does **not** run after a failed migration, on any path or
+  condition;
+- the failure is visible as a failed GitHub Actions job;
+- no rollback migration runs automatically — a destructive automatic `down()` on
+  a half-applied migration can lose data that the failure itself did not.
+
+A visible maintenance page is better than a live application on an inconsistent
+schema. Operator recovery is in §15.
 
 ---
 
@@ -378,13 +481,64 @@ bottom four classes is an explicit `--exclude`. An exclude protects a path from
 deletion as well as from transfer, so the classification above *is* the safety
 mechanism.
 
-**Two independent protections for `.env`:** it is excluded from rsync, and §9
-denies it over HTTP. Losing it is unrecoverable — it is the only copy of the
-database password and, from P1-00, the Microsoft client secret.
+### Enforced exclusion contract (Correction 3)
 
-Acceptance asserts `.env` and `.well-known/` still exist after a deploy (§18).
-This is verified rather than assumed, because the cost of being wrong is a
-credential that exists nowhere else.
+Documentation and comments are not protection. The mandatory exclusions are
+declared once, as data, in `deployment/rsync-protected-paths.txt`:
+
+```text
+.env
+.well-known/
+storage/
+public/storage
+```
+
+Two mechanisms enforce it, so that weakening it later is hard rather than merely
+discouraged:
+
+1. **Deployment pre-flight.** Before any transfer, the workflow asserts that
+   every path in the contract appears as an `--exclude` in the rsync command it
+   is about to run. A missing entry **fails the job before rsync starts**. This
+   runs on every deployment, not only the first.
+2. **CI test.** A repository test parses `.github/workflows/deploy.yml` and
+   asserts the same thing, so a pull request that drops an exclusion goes red
+   without needing a deployment to discover it.
+
+Any further server-generated persistent path found during implementation is added
+to the contract file, and both mechanisms pick it up with no other change.
+
+**Three independent protections for `.env`:** excluded from rsync, asserted by
+the pre-flight, and denied over HTTP by §9. Losing it is unrecoverable — it is
+the only copy of the database password and, from P1-00, the Microsoft client
+secret.
+
+After deployment, acceptance asserts every protected path still exists (§18).
+Verified, not assumed, because the cost of being wrong is a credential that
+exists nowhere else.
+
+### Retiring the static test page (Correction 2)
+
+The deploy-test workflow copies the repository's `public/index.html` to the
+server document root. It is not a Laravel file, and it must never sit beside
+`public/index.php`, where Apache's `DirectoryIndex` could serve it instead of the
+front controller.
+
+The removal therefore happens **in the implementation commit**, not after a
+verification step. Verifying Laravel first and removing the page afterwards would
+require a window in which both exist — exactly the shadowing risk being avoided.
+
+In the commit that introduces the real application:
+
+- `public/index.html` is removed from the repository;
+- `deploy-test.yml` is retired;
+- `public/index.php` is introduced;
+- the real `deploy.yml` is restored.
+
+The static page may remain **on the server** until the first real deployment,
+which is what keeps the existing proof intact until the moment it is replaced.
+The first deployment then removes the obsolete root `index.html` as part of the
+controlled transition: it is not in the repository, so it is not transferred, and
+it is not in the exclusion contract, so `--delete` removes it.
 
 ---
 
@@ -392,9 +546,22 @@ credential that exists nowhere else.
 
 Two surfaces, deliberately split by audience.
 
-**`GET /up` — public liveness.** Returns `200` or `503` and a status word.
-No detail, no versions, no configuration, no business data. It exists so an
-uptime monitor can watch the site without being an information leak.
+**`GET /up` — public liveness.** Returns `200` or `503` and a single status word.
+Nothing else.
+
+It must never reveal Laravel or PHP versions, database names, hostnames,
+usernames, environment values, stack traces, migration names, filesystem paths or
+secrets. A test asserts the response body matches a strict allowlist rather than
+merely "does not contain a secret" — an allowlist cannot be outgrown by a future
+edit that adds a field.
+
+**Availability during maintenance is implemented, not assumed.** Laravel's
+maintenance mode intercepts requests in middleware before routing, so `/up` is
+*not* automatically exempt. The exemption is explicit — the maintenance
+middleware carries `/up` in its URI exemption list — and it is **tested**, by
+putting the application into maintenance and asserting `/up` still answers while
+an ordinary route returns 503. Without that test, a deploy-time probe could be
+reporting on maintenance mode rather than on application health.
 
 **`php artisan semantiq:health` — operator diagnostics, over SSH.** Reports:
 
@@ -542,11 +709,17 @@ count.
 17. `semantiq:health` reports each check accurately.
 18. Boot with a required config key removed refuses to serve and leaks nothing.
 
-**G — Deploy test retirement (D-06 order)**
-19. Laravel verified at the site root *(step 9)*.
-20. `public/index.html` removed.
-21. `deploy-test.yml` retired.
-22. Site verified again after removal; the front controller answers.
+**G — Deploy test retirement (Correction 2 order)**
+19. Existing static deployment proof known good before rollout.
+20. `public/index.html` and `deploy-test.yml` removed in the implementation
+    commit, before the first real deployment.
+21. First real deployment removes the obsolete server root `index.html`.
+22. Laravel is the site root; HTTPS read-back proves a Laravel response.
+23. No deploy-test artefact remains capable of shadowing `public/index.php`.
+
+**J — D-08 document root**
+24. Actual cPanel capability checked and recorded as **D-08A** or **D-08B**.
+    Never guessed.
 
 **H — UI**
 23. Shell renders in light and dark with design-system tokens and brand assets.
@@ -611,42 +784,41 @@ recorded here rather than left for a reviewer to discover.
 
 ---
 
-## 21. Questions raised by this design
+## 21. Decisions taken at design approval
 
-Neither contradicts an approved decision. Both are design-level and want an
-answer at design approval.
+### D-07 — React integration — **APPROVED: Inertia + React**
 
-### D-07 — React integration pattern
+```text
+Laravel  ->  Inertia  ->  React 19  ->  Vite
+```
 
-| Option | Trade-off |
-| --- | --- |
-| **Inertia + React (recommended)** | Laravel routes render React pages directly. Authorisation and navigation stay server-side, which is what the blueprint requires — navigation generated from effective access, every request re-authorised. No second auth surface. Cost: Inertia is an additional dependency, and a future non-web client would need an API added later |
-| Separate SPA + JSON API | Cleaner for a future mobile or third-party client. Cost: a second authorisation surface to keep consistent with the first, client-side routing that makes menu-hiding feel like access control, and token/session handling that P1-00 must design on top of SSO |
+Laravel remains authoritative for routes, authentication and session context,
+authorisation, effective-access resolution, navigation authorisation, protected
+data requests, and redirects and refusal states. React is the presentation layer.
 
-**Recommendation: Inertia.** The deciding factor is not developer convenience but
-where authorisation lives. The blueprint states menu hiding is never the control
-and every protected request re-authorises at the backend. Inertia makes that the
-default path; an SPA makes it a discipline to maintain. SemantIQ has no announced
-non-web client, and an API can be added for one later without redoing the
-security model.
+No separate SPA authentication architecture for Release 1, and no JWT or local
+token authentication introduced merely to serve the frontend. P1-00 integrates
+Microsoft Entra SSO into the normal Laravel application session.
 
-### D-08 — Document root
+**Inertia is not authorisation.** Every protected controller, action and service
+still enforces backend policy. React must never decide whether a user may
+retrieve protected information. Navigation filtering is UX only; backend
+authorisation is mandatory. This is written into the navigation contracts: a node
+carries a policy key, and the route it points at re-authorises independently, so
+filtering the menu and authorising the request are separate code paths that
+cannot be collapsed into one by accident.
 
-Can the cPanel document root be repointed from `public_html` to
-`public_html/public`?
+If a mobile application, external API or third-party consumer is needed later, a
+dedicated API contract is created at that time against the same effective-access
+engine. No speculative API is designed now.
 
-If yes, the application tree sits outside the web root entirely and the whole
-class of exposure the forwarder defends against disappears. The forwarder would
-remain as second-line defence rather than the only line.
+### D-08 — cPanel document root — **APPROVED with precedence**
 
-If no, §8 and §9 stand as designed and the forwarder is load-bearing.
-
-This needs someone with cPanel access to check the subdomain's document-root
-setting. It changes no application code either way, so it does not block
-implementation — but if it is available, it is a materially stronger posture for
-a directory holding a database password.
-
----
+Preferred: document root at `public_html/public`, putting the application tree
+physically outside the web root. Fallback: the hardened forwarder of §8–§9.
+Neither mode weakens the §16 exposure tests. Full precedence and the recording
+requirement are in §8; the outcome is recorded as D-08A or D-08B in the
+verification document, established by inspection rather than assumed.
 
 ## 22. Stop point
 
