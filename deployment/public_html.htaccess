@@ -1,51 +1,50 @@
 # SemantIQ cPanel front door.
 #
-# Used when the document root is public_html and the whole Laravel tree is
-# deployed inside it (D-08B). Where cPanel allows the document root to be set to
-# public_html/public (D-08A), the application tree sits outside the web root and
-# this file remains only as defence against an accidental future document-root
-# change - not as the primary boundary.
+# D-08B is in force: the document root is public_html and the whole Laravel tree
+# is deployed inside it, so this file is the security boundary rather than a
+# defence-in-depth extra. Only public/ is ever meant to be reachable.
 #
-# TWO independent guards. The rewrite at the bottom sends every request into
-# public/; the deny rules above refuse the sensitive paths outright. Either alone
-# would do the job today. Together, neither one failing quietly exposes a
-# credential - and what is behind the door is a database password and, from
-# P1-00, a Microsoft client secret.
+# EVERY rule below lives in mod_rewrite, deliberately. The first version mixed
+# mod_rewrite with mod_alias RedirectMatch and mod_authz FilesMatch, and the
+# live exposure test showed the denials never fired: protected paths answered
+# 404 from Laravel rather than 403 from Apache, because the forwarder had
+# already rewritten them into public/ where they do not exist. Nothing was
+# exposed, but only one guard was doing any work. Rules in a single module run
+# in written order, so the denials now genuinely precede the forwarder.
+#
+# The FilesMatch block is kept afterwards as a second, independent mechanism -
+# real defence in depth this time, because it is a different module and not a
+# rule the forwarder can outrun.
 #
 # No RewriteBase, domain or absolute path, so the same file works across domains
 # and subdomains.
 
-# ---------------------------------------------------------------------------
-# Guard one: refuse the sensitive paths outright.
-# ---------------------------------------------------------------------------
-
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # .well-known must stay reachable: it carries the ACME challenge that renews
-    # the TLS certificate. Blocking it breaks HTTPS renewal silently, weeks
-    # later, in a way nobody connects back to this file. It is matched FIRST,
-    # before the dotfile rule below would otherwise catch it.
+    # FIRST, before any dotfile rule. .well-known carries the ACME challenge that
+    # renews the TLS certificate; blocking it breaks HTTPS renewal silently,
+    # weeks later, in a way nobody connects back to this file.
     RewriteRule ^\.well-known/ - [L]
 
-    # Every other dotfile.
+    # Every other dotfile, at any depth: .env, .git, .gitignore and friends.
     RewriteRule (^|/)\. - [F,L]
+
+    # Sensitive files by name, at any depth, so a file that moves does not
+    # quietly lose its guard.
+    RewriteRule (^|/)(composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml|vite\.config\.js|[^/]*\.md|[^/]*\.ya?ml|[^/]*\.log|[^/]*\.sqlite)$ - [F,L]
+
+    # Directories holding code, configuration, dependencies or runtime state.
+    # A route may not begin with any of these; RoutePrefixCollisionTest enforces
+    # that, because a URL this blocks is a URL the application cannot serve.
+    RewriteRule ^(app|bootstrap|config|database|doc|deployment|node_modules|resources|routes|storage|tests|vendor)(/|$) - [F,L]
+
+    # Everything that survives goes to Laravel's front controller.
+    RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
 
-# Matched by name as well as by directory, so a file that moves does not quietly
-# lose its guard.
+# Second, independent mechanism. Different module, so a mistake in the rewrite
+# rules above does not silently disable this too.
 <FilesMatch "(?i)^(\.env.*|composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml|vite\.config\.js|.*\.md|.*\.ya?ml|.*\.sqlite|.*\.log)$">
     Require all denied
 </FilesMatch>
-
-# Directories holding code, configuration, dependencies or runtime state.
-RedirectMatch 404 ^/(app|bootstrap|config|database|doc|deployment|node_modules|resources|routes|storage|tests|vendor)(/|$)
-
-# ---------------------------------------------------------------------------
-# Guard two: forward everything else into public/, where Laravel's front
-# controller handles the request.
-# ---------------------------------------------------------------------------
-
-<IfModule mod_rewrite.c>
-    RewriteRule ^(.*)$ public/$1 [L]
-</IfModule>

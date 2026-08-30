@@ -29,7 +29,7 @@ final class NavigationRegistryTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new NavigationNode(ProductArea::SystemAdministration, 'Users', 'users', 'app.home', '');
+        new NavigationNode(ProductArea::SystemAdministration, 'Users', 'users', 'console.home', '');
     }
 
     public function test_a_node_cannot_be_created_without_a_route(): void
@@ -43,7 +43,7 @@ final class NavigationRegistryTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new NavigationNode(ProductArea::SystemAdministration, 'Users', '', 'app.home', 'users.view');
+        new NavigationNode(ProductArea::SystemAdministration, 'Users', '', 'console.home', 'users.view');
     }
 
     public function test_registering_a_node_for_an_undefined_route_is_refused(): void
@@ -72,7 +72,7 @@ final class NavigationRegistryTest extends TestCase
             ProductArea::SystemAdministration,
             'App home',
             'home',
-            'app.home',
+            'console.home',
             'platform.view',
         ));
 
