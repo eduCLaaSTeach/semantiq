@@ -1,0 +1,258 @@
+/*
+ * SemantIQ design tokens.
+ *
+ * Values are taken verbatim from the shared CLaaS2SaaS UI/UX standard, section 4.
+ * That document permits token NAMES to adapt to the stack but not token VALUES,
+ * and forbids hardcoding a hex anywhere else. Every rule below reads a variable.
+ *
+ * Both themes are defined here. The two chromes are different colours by design
+ * - white against ink navy - and are never rendered the same in both modes.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Brand palette */
+  --brand-primary: #193E6B;
+  --brand-gold: #B3A125;
+  --brand-violet: #7F3F98;
+  --brand-jellybean: #448E9D;
+  --semantic-success: #5F8025;
+  --semantic-warning: #E9AC53;
+  --semantic-danger: #991547;
+
+  /* Light theme core tokens */
+  --chrome: #FFFFFF;
+  --chrome-text: #223349;
+  --chrome-muted: #566779;
+  --chrome-hover: rgba(25, 62, 107, 0.07);
+  --chrome-edge: rgba(15, 25, 45, 0.14);
+  --canvas: #E8DFD0;
+  --card: #FFFFFF;
+  --card-border: #E8E2D8;
+  --card-border-strong: #D5CEC1;
+  --surface-hover: rgba(25, 62, 107, 0.06);
+  --divider: #E4DCCD;
+  --text: #1E2E42;
+  --text-muted: #4D5E75;
+  --accent: #193E6B;
+  --accent-hover: #142F52;
+  --accent-contrast: #FFFFFF;
+  --selection: rgba(179, 161, 37, 0.35);
+
+  /* Spacing scale: 4px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 64px;
+
+  /* Radius */
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-modal: 14px;
+  --radius-pill: 999px;
+
+  /* Elevation. Cards are FLAT at rest: 1px border, no resting shadow. */
+  --elevation-md: 0 2px 8px rgba(25, 40, 65, 0.08);
+  --elevation-lg: 0 8px 24px rgba(15, 25, 45, 0.14);
+
+  /* Type */
+  --font-heading: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Shell dimensions */
+  --rail-width: 264px;
+  --topbar-height: 56px;
+}
+
+/*
+ * Dark theme. Applied on the system preference unless an explicit light choice
+ * is stamped on the root, and again for an explicit dark choice, so a future
+ * in-app toggle wins in both directions without redefining the palette a third
+ * time.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --chrome: #080F1A;
+    --chrome-text: #E4EBF4;
+    --chrome-muted: #9AABC0;
+    --chrome-hover: rgba(255, 255, 255, 0.09);
+    --chrome-edge: rgba(0, 0, 0, 0.50);
+    --canvas: #1A2E46;
+    --card: #253E5D;
+    --card-border: rgba(255, 255, 255, 0.10);
+    --card-border-strong: rgba(255, 255, 255, 0.18);
+    --surface-hover: rgba(255, 255, 255, 0.07);
+    --divider: rgba(255, 255, 255, 0.13);
+    --text: #E9EFF6;
+    --text-muted: #A3B2C5;
+    --accent: #7FADE1;
+    --accent-hover: #93BBE8;
+    --accent-contrast: #0F1C2E;
+  }
+}
+
+:root[data-theme='dark'] {
+  --chrome: #080F1A;
+  --chrome-text: #E4EBF4;
+  --chrome-muted: #9AABC0;
+  --chrome-hover: rgba(255, 255, 255, 0.09);
+  --chrome-edge: rgba(0, 0, 0, 0.50);
+  --canvas: #1A2E46;
+  --card: #253E5D;
+  --card-border: rgba(255, 255, 255, 0.10);
+  --card-border-strong: rgba(255, 255, 255, 0.18);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --divider: rgba(255, 255, 255, 0.13);
+  --text: #E9EFF6;
+  --text-muted: #A3B2C5;
+  --accent: #7FADE1;
+  --accent-hover: #93BBE8;
+  --accent-contrast: #0F1C2E;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--selection); }
+
+h1, h2, h3 { font-family: var(--font-heading); font-weight: 600; margin: 0; }
+
+/* Focus ring on every interactive element, per the standard. */
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- Pre-authentication entry: the Auth archetype (standard 5.7) ---------
+   A standalone centred card with no shell. Nothing here describes what exists
+   behind authentication. */
+
+.entry {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+
+.entry-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+}
+
+.entry-mark {
+  height: 40px;
+  width: auto;
+  margin-bottom: var(--space-4);
+}
+
+.entry-card h1 { font-size: 20px; margin-bottom: var(--space-2); }
+
+.entry-card p {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0 0 var(--space-3);
+}
+
+.entry-note {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--divider);
+  font-size: 12px;
+}
+
+/* The mark is a raster asset with light and dark variants; constrain by height
+   so both render at the same optical size. */
+.entry-card picture { display: block; }
+
+/* ---- Application shell --------------------------------------------------- */
+
+.shell { min-height: 100vh; display: flex; }
+
+.shell-rail {
+  width: var(--rail-width);
+  flex: 0 0 var(--rail-width);
+  background: var(--chrome);
+  color: var(--chrome-text);
+  box-shadow: 2px 0 10px var(--chrome-edge);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+}
+
+.shell-area-label {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--chrome-muted);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.shell-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--chrome-text);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.shell-link:hover { background: var(--chrome-hover); }
+
+.shell-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.shell-topbar {
+  height: var(--topbar-height);
+  background: var(--chrome);
+  color: var(--chrome-text);
+  box-shadow: 0 2px 10px var(--chrome-edge);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.shell-canvas { flex: 1; padding: var(--space-4); }
+
+/* The honest-empty state. P1-BASE has no navigable capability, so the shell says
+   so plainly rather than rendering a menu of links to nothing. */
+.shell-empty {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+  color: var(--text-muted);
+  max-width: 560px;
+}
+
+@media (max-width: 768px) {
+  .shell { flex-direction: column; }
+  .shell-rail { width: 100%; flex: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

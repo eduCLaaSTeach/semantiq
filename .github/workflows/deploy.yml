@@ -1,19 +1,22 @@
+# Deploy to cPanel over SSH.
+#
+# Two deployment states, per correction 1. The first P1-BASE deployment finds no
+# Laravel installation on the server, so "artisan down" would fail and abort the
+# pipeline before it could install the application that would have made the
+# command work. Detection is an explicit probe, and a broken prior installation
+# resolves to INITIAL rather than to an error - a half-installed server must
+# never block installing its replacement.
 name: Deploy to cPanel (SSH)
 
-# PARKED. The Laravel application this pipeline builds is not in the
-# repository right now, so every automatic run fails at the first
-# composer step. Automatic triggers are removed until the new
-# application is scaffolded; restore them in the same commit that
-# brings back composer.json. It can still be started by hand.
 on:
+  push:
+    branches: main
   workflow_dispatch:
 
 concurrency:
   group: cpanel-deploy
   cancel-in-progress: false
 
-# The pipeline only reads the repository. Narrow the ambient GITHUB_TOKEN scope
-# explicitly rather than inheriting whatever the organization default happens to be.
 permissions:
   contents: read
 
@@ -21,10 +24,6 @@ jobs:
   deploy:
     name: Build and sync to cPanel over SSH
     runs-on: ubuntu-latest
-
-    # Binding the job to a GitHub environment is what makes environment-scoped
-    # secrets and a main-only deployment branch policy possible. Both are configured
-    # in the repository settings, not here; see PROJECT-CONTEXT.md.
     environment: development
 
     env:
@@ -32,6 +31,7 @@ jobs:
       CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
       CPANEL_USER: ${{ secrets.CPANEL_USER }}
       CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+      APP_URL: https://semantiq.claas2saas.com
 
     steps:
       - name: Checkout
@@ -60,200 +60,223 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
-      # public/build contains the Vite manifest and compiled frontend assets.
-      # It is commonly excluded from Git but must be included in the deployment.
-      # node_modules is not required by the production Laravel runtime.
       - name: Remove node_modules before deployment
         run: rm -rf node_modules
 
-      # Copy the version-controlled cPanel forwarder to the deployment root.
-      # The deployment directory itself is excluded from rsync.
       - name: Stage the public_html forwarder
         run: cp deployment/public_html.htaccess .htaccess
 
-      # Load the passphrase-protected deployment key into ssh-agent.
-      # The private key remains encrypted on disk, and the passphrase is supplied
-      # through an SSH askpass helper rather than a command-line argument.
+      # Correction 3. The exclusion contract is enforced here, on the runner,
+      # before anything is transferred. A missing entry fails the job rather than
+      # deleting a file that exists nowhere else. A CI test makes the same
+      # assertion on every pull request so it rarely gets this far.
+      - name: Assert the rsync exclusion contract
+        run: |
+          set -euo pipefail
+          missing=0
+          while IFS= read -r path; do
+            case "$path" in ''|\#*) continue ;; esac
+            if ! grep -q -- "--exclude \"$path\"" "$GITHUB_WORKFLOW_REF_FILE"; then
+              echo "::error::Protected path [$path] is not excluded in the rsync command."
+              missing=1
+            fi
+          done < deployment/rsync-protected-paths.txt
+          [ "$missing" -eq 0 ] || exit 1
+        env:
+          GITHUB_WORKFLOW_REF_FILE: .github/workflows/deploy.yml
+
       - name: Configure SSH
         env:
           CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
           CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
         run: |
           set -euo pipefail
-          # Create every file in this step at 0600, so the private key needs no
-          # follow-up chmod and the askpass helper is never briefly readable before it
-          # is promoted to 0700 below.
           umask 077
 
           : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
           : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
 
           install -m 700 -d ~/.ssh
-
           printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
 
           cat > ~/.ssh/askpass.sh <<'EOF'
           #!/bin/sh
           printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
           EOF
-
           chmod 700 ~/.ssh/askpass.sh
 
           eval "$(ssh-agent -s)"
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
 
-          DISPLAY=:0 \
-          SSH_ASKPASS="$HOME/.ssh/askpass.sh" \
-          SSH_ASKPASS_REQUIRE=force \
-          ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
 
-          ssh-add -l
           ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
 
       - name: Test SSH authentication
         run: |
           set -euo pipefail
-
-          ssh \
-            -i ~/.ssh/cpanel_deploy_key \
-            -p "$CPANEL_PORT" \
-            -o IdentitiesOnly=yes \
-            -o BatchMode=yes \
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
             "$CPANEL_USER@$CPANEL_HOST" \
             "cd \"$CPANEL_DEPLOY_PATH\" && pwd && command -v rsync && rsync --version | head -n 1"
 
-      # Transfer the complete built application, including vendor/ and
-      # public/build. Excluded runtime paths remain managed by the server.
+      # A directory existing is not evidence of a working installation. All four
+      # markers must hold, and anything else resolves to INITIAL.
+      - name: Detect the installation state
+        id: state
+        run: |
+          set -euo pipefail
+          state="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" 2>/dev/null || exit 0; \
+             [ -f artisan ] && [ -f vendor/autoload.php ] && [ -f bootstrap/app.php ] \
+               && php artisan --version >/dev/null 2>&1 && echo EXISTING || true")"
+          state="${state:-INITIAL}"
+          [ "$state" = "EXISTING" ] || state="INITIAL"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "::notice::Deployment state: $state"
+
+      - name: Open the maintenance window
+        if: steps.state.outputs.state == 'EXISTING'
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan down --retry=60"
+
+      # --delete removes stale files, including the obsolete deploy-test
+      # index.html at the document root. Every protected path is excluded, and an
+      # exclusion protects against deletion as well as transfer - that is the
+      # safety mechanism, asserted above before this runs.
       - name: Sync files to cPanel
         run: |
           set -euo pipefail
-
-          rsync -az \
-            --delete \
-            --human-readable \
-            --itemize-changes \
+          rsync -az --delete --human-readable --itemize-changes \
             -e "ssh -i ~/.ssh/cpanel_deploy_key -p $CPANEL_PORT -o IdentitiesOnly=yes -o BatchMode=yes" \
+            --exclude ".env" \
             --exclude ".well-known/" \
+            --exclude "storage/" \
+            --exclude "public/storage" \
             --exclude ".git/" \
             --exclude ".github/" \
             --exclude "deployment/" \
             --exclude "node_modules/" \
             --exclude "tests/" \
             --exclude "phpunit.xml" \
-            --exclude "README.md" \
             --exclude "doc/" \
-            --exclude ".claude/" \
             --exclude "*.md" \
             --exclude ".editorconfig" \
             --exclude ".gitignore" \
             --exclude ".gitattributes" \
-            --exclude ".env" \
             --exclude ".env.example" \
-            --exclude "storage/" \
-            --exclude "public/storage" \
             ./ "$CPANEL_USER@$CPANEL_HOST:$CPANEL_DEPLOY_PATH/"
 
-      # storage/ is excluded from synchronization. Create the required Laravel
-      # runtime directories when they do not already exist, while preserving
-      # existing logs, sessions, cache data, and uploaded files.
-      - name: Ensure Laravel runtime directories exist and are writable
+      - name: Ensure runtime directories exist and are writable
         run: |
           set -euo pipefail
-
-          ssh \
-            -i ~/.ssh/cpanel_deploy_key \
-            -p "$CPANEL_PORT" \
-            -o IdentitiesOnly=yes \
-            -o BatchMode=yes \
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
             "$CPANEL_USER@$CPANEL_HOST" \
             "cd \"$CPANEL_DEPLOY_PATH\" && mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache && chmod -R ug+rwX storage bootstrap/cache"
 
-      # The server .env is excluded from rsync so it survives every deploy, which
-      # also means it never arrives from the repository. Create it once if it is
-      # absent and let Artisan generate APP_KEY in place. The database values are
-      # deliberately left empty: no credential is ever written from this repo, and
-      # they are filled in on the server.
+      # The server .env is created by the one-time provisioning of D-05 and is
+      # never transferred.
       #
-      # The script is piped to a remote shell rather than inlined into the ssh
-      # argument, so nothing has to survive two rounds of shell quoting.
-      - name: Ensure the server environment file exists and is keyed
+      # APP_KEY is bootstrapped here, and only here. The provisioning writes
+      # .env by hand, a Laravel key cannot be written by hand, and before the
+      # first deployment there is no remote artisan to generate one - so a check
+      # that simply refused an empty key could never be satisfied. This step runs
+      # after the sync, so the application it needs is already present.
+      #
+      # On an UPDATE deployment an existing key is mandatory and is never
+      # regenerated: rotating it invalidates every encrypted cookie and session.
+      # The logic lives in a script so it can be tested for real rather than
+      # asserted about; see tests/Architecture/AppKeyBootstrapTest.php. It is
+      # piped over stdin because deployment/ is excluded from rsync and has no
+      # business on the host.
+      - name: Verify the environment and bootstrap APP_KEY if this is the first deployment
         run: |
           set -euo pipefail
-
-          cat > /tmp/bootstrap-env.sh <<'SH'
-          #!/bin/sh
-          set -eu
-
-          deploy_path="$1"
-          cd "$deploy_path"
-
-          php_bin="$(command -v php || true)"
-          if [ -z "$php_bin" ]; then
-            echo "No php CLI found on the server; cannot generate APP_KEY." >&2
-            exit 1
-          fi
-          echo "php: $php_bin ($("$php_bin" -r 'echo PHP_VERSION;'))"
-
-          if [ ! -f .env ]; then
-            echo ".env is missing, creating it"
-            cat > .env <<'ENVFILE'
-          APP_NAME=SemantIQ
-          APP_ENV=production
-          APP_KEY=
-          APP_DEBUG=false
-          APP_URL=https://semantiq.claas2saas.com
-
-          DB_CONNECTION=mysql
-          DB_HOST=127.0.0.1
-          DB_PORT=3306
-          DB_DATABASE=
-          DB_USERNAME=
-          DB_PASSWORD=
-
-          SESSION_DRIVER=file
-          CACHE_STORE=file
-          QUEUE_CONNECTION=sync
-
-          MICROSOFT_TENANT_ID=
-          MICROSOFT_CLIENT_ID=
-          MICROSOFT_CLIENT_SECRET=
-          MICROSOFT_REDIRECT_URI=
-
-          MASTER_ADMIN_EMAILS=
-          ENVFILE
-            chmod 600 .env
-          else
-            echo ".env already present, leaving it untouched"
-          fi
-
-          if grep -q '^APP_KEY=base64:' .env; then
-            echo "APP_KEY already set"
-          else
-            echo "APP_KEY is empty, generating one"
-            "$php_bin" artisan key:generate --force --no-interaction
-          fi
-          SH
-
-          ssh \
-            -i ~/.ssh/cpanel_deploy_key \
-            -p "$CPANEL_PORT" \
-            -o IdentitiesOnly=yes \
-            -o BatchMode=yes \
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
             "$CPANEL_USER@$CPANEL_HOST" \
-            "sh -s -- \"$CPANEL_DEPLOY_PATH\"" < /tmp/bootstrap-env.sh
+            "sh -s -- \"$CPANEL_DEPLOY_PATH\" \"${{ steps.state.outputs.state }}\"" \
+            < deployment/ensure-app-key.sh
 
-      # Clear the compiled config, route, view and application caches after each
-      # sync. Without this the server keeps serving caches built from the previous
-      # release, and an edited .env is ignored until the config cache is dropped.
-      - name: Clear Laravel caches
+      # Migration failure fails the deployment. On the EXISTING path the
+      # application stays in maintenance: artisan up does not run after this, and
+      # no rollback migration is triggered automatically, because a destructive
+      # down() over a half-applied migration can lose data the failure did not.
+      - name: Run database migrations
         run: |
           set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan migrate --force --no-interaction"
 
-          ssh \
-            -i ~/.ssh/cpanel_deploy_key \
-            -p "$CPANEL_PORT" \
-            -o IdentitiesOnly=yes \
-            -o BatchMode=yes \
+      - name: Clear compiled caches
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
             "$CPANEL_USER@$CPANEL_HOST" \
             "cd \"$CPANEL_DEPLOY_PATH\" && php artisan optimize:clear --no-interaction"
+
+      - name: Verify application health over SSH
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan semantiq:health"
+
+      - name: Close the maintenance window
+        if: steps.state.outputs.state == 'EXISTING'
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan up"
+
+      - name: Verify the site over HTTPS
+        run: |
+          set -euo pipefail
+          # Cache-busted: a cached 200 from an earlier state would read as a pass.
+          code="$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 --retry-all-errors "$APP_URL/?deploy=${GITHUB_SHA}")"
+          [ "$code" = "200" ] || { echo "::error::Site root returned $code"; exit 1; }
+
+          up="$(curl -fsS --retry 3 --retry-delay 5 --retry-all-errors "$APP_URL/up?deploy=${GITHUB_SHA}")"
+          [ "$up" = "ok" ] || { echo "::error::/up returned [$up]"; exit 1; }
+
+          echo "::notice::Site root 200 and /up ok."
+
+      # Correction: a redirect is not proof. A 302 means the request reached the
+      # application; the requirement is that these files are never served.
+      - name: Web-exposure negative tests
+        run: |
+          set -euo pipefail
+          failed=0
+          # The Gate 4 minimum list, in full.
+          for path in \
+            ".env" ".git/config" \
+            "composer.json" "composer.lock" "package.json" "package-lock.json" \
+            "artisan" "phpunit.xml" "vite.config.js" \
+            "app/" "bootstrap/" "config/" "database/" "resources/" "routes/" \
+            "storage/" "tests/" "vendor/" "deployment/" "doc/" \
+            "README.md" "deployment/public_html.htaccess" "storage/logs/laravel.log"
+          do
+            code="$(curl -s -o /tmp/body -w '%{http_code}' "$APP_URL/$path?cb=${GITHUB_SHA}")"
+            case "$code" in
+              403|404) ;;
+              *) echo "::error::$path returned $code; expected 403 or 404 (a redirect is not proof)"; failed=1 ;;
+            esac
+            # Secret markers, connection strings and server paths. A 403 or 404
+            # that still returns a body carrying any of these is a failure.
+            if grep -qE 'APP_KEY|DB_DATABASE|DB_USERNAME|DB_PASSWORD|MICROSOFT_CLIENT_SECRET|mysql://|/home/[a-z0-9]+/public_html' /tmp/body 2>/dev/null; then
+              echo "::error::$path response contained a secret marker, connection string or server path"; failed=1
+            fi
+          done
+
+          # .well-known must stay reachable or TLS renewal breaks silently.
+          wk="$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/.well-known/")"
+          case "$wk" in 403) echo "::error::.well-known/ is blocked; ACME renewal will fail"; failed=1 ;; esac
+
+          [ "$failed" -eq 0 ] || exit 1
+          echo "::notice::Web-exposure negative tests passed."
