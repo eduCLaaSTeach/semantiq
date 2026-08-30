@@ -5,9 +5,12 @@
 # below can therefore only ever affect that one directory. The running
 # application, the server .env, storage/ and uploads are untouched.
 #
-# The document root is public_html and the front-door .htaccess rewrites
-# every request into public/, so a file at public/deploy-test/index.html is
-# served at /deploy-test/ without that forwarder needing any change.
+# On the URL below. The deploy path is itself the document root, and it holds
+# no front-door .htaccess: the first run of this workflow proved that by
+# transferring the file successfully and then getting a 404 at /deploy-test/.
+# public/ is therefore exposed literally rather than being rewritten into, so
+# public/deploy-test/index.html is served at /public/deploy-test/. When the new
+# application lands and restores a forwarder, this URL is what has to change.
 #
 # The SSH and rsync mechanics are carried over unchanged from the previous
 # deployment workflow, which was known to work. Nothing about the transport
@@ -141,7 +144,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          url="https://semantiq.claas2saas.com/deploy-test/"
+          url="https://semantiq.claas2saas.com/public/deploy-test/"
           echo "Fetching $url"
 
           body="$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "$url")"
@@ -150,6 +153,7 @@ jobs:
             echo "::notice::Deploy test passed. $url is serving commit $GITHUB_SHA"
           else
             echo "::error::$url responded but does not carry commit $GITHUB_SHA."
-            echo "The transfer succeeded, so this points at the front-door .htaccess or caching."
+            echo "The transfer succeeded, so this points at the URL mapping or caching,"
+            echo "not at the GitHub to cPanel transfer itself."
             exit 1
           fi
