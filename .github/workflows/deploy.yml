@@ -1,8 +1,11 @@
 name: Deploy to cPanel (SSH)
 
+# PARKED. The Laravel application this pipeline builds is not in the
+# repository right now, so every automatic run fails at the first
+# composer step. Automatic triggers are removed until the new
+# application is scaffolded; restore them in the same commit that
+# brings back composer.json. It can still be started by hand.
 on:
-  push:
-    branches: main
   workflow_dispatch:
 
 concurrency:
