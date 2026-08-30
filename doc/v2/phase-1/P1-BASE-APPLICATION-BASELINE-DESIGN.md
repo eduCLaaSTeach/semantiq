@@ -220,13 +220,57 @@ response.
 Performed once by infrastructure administration, outside the application:
 
 1. Create the cPanel MySQL database.
-2. Create the database user and grant it on that database only.
-3. Set `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` in the server `.env`.
+2. Create a dedicated database user and grant it on that database only.
+3. Set `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` in the server `.env`, and
+   leave **`APP_KEY=` empty**.
 
 Never built into application code. Never stored in the repository or in GitHub.
 
 **Verification:** `php artisan db:show` over SSH reports the connection, and the
 health check (§13) reports the database reachable. Both are recorded as evidence.
+
+### APP_KEY bootstrap — INITIAL deployment only
+
+The provisioning above writes `.env` by hand, and a Laravel application key
+cannot reasonably be written by hand. Before the first deployment there is no
+remote `artisan` to generate one either. A deployment that refused to proceed on
+an empty `APP_KEY` would therefore never reach the point where it could fix
+that — a deadlock in the first version of this design.
+
+The key is generated exactly once, by `deployment/ensure-app-key.sh`, piped to
+the server over stdin after the sync, when **all four** hold:
+
+1. the server `.env` exists;
+2. `APP_KEY` is absent, empty or malformed;
+3. the application has been transferred — `artisan` and `vendor/autoload.php`
+   both present;
+4. the detected state is **INITIAL**.
+
+| State | Key | Behaviour |
+| --- | --- | --- |
+| INITIAL | absent / empty / malformed | Generate once, then verify `.env` holds a `base64:` key |
+| INITIAL | valid | Leave untouched |
+| UPDATE | valid | Leave untouched |
+| UPDATE | absent / empty / malformed | **Fail the deployment** with an explicit message |
+
+**Never regenerated on an UPDATE.** Rotating `APP_KEY` on a running system
+invalidates every encrypted cookie and session, and anything else encrypted with
+it — an outage that looks like data loss, caused by a deployment trying to help.
+
+**The key value never leaves the server.** `key:generate` output is discarded so
+nothing carrying it can reach the workflow log whatever a future Laravel version
+decides to print. It is never echoed, never returned to GitHub and never written
+to repository configuration. Only the *presence* of a key is ever reported.
+
+`APP_KEY=base64:` with nothing after it counts as missing, not present. Matching
+the shape rather than the prefix is what makes that true.
+
+The logic lives in a script rather than inline SSH shell so it can be executed
+against fixtures. `tests/Architecture/AppKeyBootstrapTest.php` runs the real
+script with a stubbed `php` for each row of the table above, plus the
+no-`.env` and no-Laravel refusals, and asserts the generated key appears in
+neither stream. Deleting the UPDATE guard fails two of those tests, which is how
+the coverage is known to be real rather than decorative.
 
 ### Migration lifecycle
 

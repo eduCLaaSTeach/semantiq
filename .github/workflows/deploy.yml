@@ -180,16 +180,27 @@ jobs:
             "cd \"$CPANEL_DEPLOY_PATH\" && mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache && chmod -R ug+rwX storage bootstrap/cache"
 
       # The server .env is created by the one-time provisioning of D-05 and is
-      # never transferred. On the first deployment a missing or unconfigured .env
-      # would otherwise surface as a confusing migration error.
-      - name: Verify the server environment file
+      # never transferred.
+      #
+      # APP_KEY is bootstrapped here, and only here. The provisioning writes
+      # .env by hand, a Laravel key cannot be written by hand, and before the
+      # first deployment there is no remote artisan to generate one - so a check
+      # that simply refused an empty key could never be satisfied. This step runs
+      # after the sync, so the application it needs is already present.
+      #
+      # On an UPDATE deployment an existing key is mandatory and is never
+      # regenerated: rotating it invalidates every encrypted cookie and session.
+      # The logic lives in a script so it can be tested for real rather than
+      # asserted about; see tests/Architecture/AppKeyBootstrapTest.php. It is
+      # piped over stdin because deployment/ is excluded from rsync and has no
+      # business on the host.
+      - name: Verify the environment and bootstrap APP_KEY if this is the first deployment
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
             "$CPANEL_USER@$CPANEL_HOST" \
-            "cd \"$CPANEL_DEPLOY_PATH\" && \
-             { [ -f .env ] || { echo 'No .env on the server. Complete the one-time provisioning (D-05) first.' >&2; exit 1; }; } && \
-             grep -q '^APP_KEY=base64:' .env || { echo 'APP_KEY is not set in the server .env.' >&2; exit 1; }"
+            "sh -s -- \"$CPANEL_DEPLOY_PATH\" \"${{ steps.state.outputs.state }}\"" \
+            < deployment/ensure-app-key.sh
 
       # Migration failure fails the deployment. On the EXISTING path the
       # application stays in maintenance: artisan up does not run after this, and
