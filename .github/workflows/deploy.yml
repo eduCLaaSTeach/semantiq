@@ -172,6 +172,37 @@ jobs:
             --exclude ".env.example" \
             ./ "$CPANEL_USER@$CPANEL_HOST:$CPANEL_DEPLOY_PATH/"
 
+      # Fact A of the diagnostic: prove the .htaccess on the server is the one
+      # under version control. Every claim about the security boundary rests on
+      # that file, and until now nothing checked that what we reason about is
+      # what Apache actually reads. A mismatch fails the deployment.
+      #
+      # Hashes only. No file content is printed.
+      - name: Verify the deployed .htaccess matches the repository copy
+        run: |
+          set -euo pipefail
+
+          expected="$(sha256sum deployment/public_html.htaccess | cut -d' ' -f1)"
+
+          actual="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && { sha256sum .htaccess 2>/dev/null || shasum -a 256 .htaccess 2>/dev/null || openssl dgst -sha256 .htaccess 2>/dev/null; } | grep -oE '[0-9a-f]{64}' | head -1")"
+
+          echo "expected (repository) : ${expected:-<none>}"
+          echo "actual   (server)     : ${actual:-<none>}"
+
+          if [ -z "$actual" ]; then
+            echo "::error::Could not read a checksum for the deployed .htaccess."
+            exit 1
+          fi
+
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::The deployed .htaccess does NOT match deployment/public_html.htaccess."
+            exit 1
+          fi
+
+          echo "::notice::.htaccess integrity verified - the deployed file is the repository file."
+
       - name: Ensure runtime directories exist and are writable
         run: |
           set -euo pipefail
@@ -280,3 +311,38 @@ jobs:
 
           [ "$failed" -eq 0 ] || exit 1
           echo "::notice::Web-exposure negative tests passed."
+
+      # Fact B of the diagnostic: can Apache refuse a request at the public_html
+      # level, before the catch-all forwarder rewrites it into public/?
+      #
+      # A synthetic path with no route, no file and no secret. It runs after the
+      # exposure suite so it cannot influence those results, and it changes no
+      # application behaviour: adding a deny rule only ever denies more.
+      #
+      # This step does not fail the deployment on 404. A 404 is a real answer -
+      # the capability is not proven - and the product owner decides what
+      # follows. 200 is a different matter and fails immediately.
+      - name: Apache root denial probe (diagnostic)
+        run: |
+          set -euo pipefail
+
+          url="$APP_URL/__semantiq_apache_deny_probe?cb=${GITHUB_SHA}"
+          code="$(curl -s -o /tmp/probe -w '%{http_code}' -m 25 "$url")"
+          bytes="$(wc -c < /tmp/probe | tr -d ' ')"
+
+          echo "probe path   : /__semantiq_apache_deny_probe"
+          echo "status       : $code"
+          echo "body bytes   : $bytes"
+
+          case "$code" in
+            403)
+              echo "::notice::APACHE ROOT DENIAL CAPABILITY VERIFIED - 403 from Apache, before the forwarder."
+              ;;
+            404)
+              echo "::warning::APACHE ROOT DENIAL CAPABILITY NOT VERIFIED - 404. The request reached Laravel, so the deny rule did not fire."
+              ;;
+            *)
+              echo "::error::Probe returned $code. Nothing may serve this path; 200 is a critical failure."
+              exit 1
+              ;;
+          esac

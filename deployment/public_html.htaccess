@@ -27,6 +27,26 @@
     # weeks later, in a way nobody connects back to this file.
     RewriteRule ^\.well-known/ - [L]
 
+    # ---- TEMPORARY DIAGNOSTIC -------------------------------------------
+    # Synthetic deny probe. Proves whether Apache can refuse a request at the
+    # public_html level BEFORE the catch-all forwarder rewrites it into public/.
+    #
+    # It exists because every protected path currently answers 404 from Laravel
+    # and none answers 403 from Apache, which means the forwarder is doing all
+    # the protecting and the deny rules have never been observed to work. The
+    # planned move of the front controller to public_html/index.php removes that
+    # forwarder and makes these rules load-bearing, so the capability has to be
+    # demonstrated before that migration, not assumed by it.
+    #
+    # 403 => Apache denial works here.
+    # 404 => the request fell through to the forwarder and Laravel. NOT proven.
+    # 200 => critical failure; nothing should ever serve this path.
+    #
+    # The path is synthetic and harmless: no route, no file, no secret. Removing
+    # this block is safe once the question is answered.
+    RewriteRule ^__semantiq_apache_deny_probe(/|$) - [F,L]
+    # ---- END TEMPORARY DIAGNOSTIC ---------------------------------------
+
     # Every other dotfile, at any depth: .env, .git, .gitignore and friends.
     RewriteRule (^|/)\. - [F,L]
 
