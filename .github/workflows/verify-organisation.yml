@@ -86,6 +86,32 @@ jobs:
               \$fk = collect(\Illuminate\Support\Facades\Schema::getForeignKeys(\"users\"))
                 ->first(fn (\$k) => \$k[\"columns\"] === [\"organisation_id\"]);
 
+              # Aggregate counts only. Nothing below reads or prints a name,
+              # an email, an identity, a structural value or any log line.
+              \$membershipsCurrent = \Illuminate\Support\Facades\DB::table(\"team_memberships\")->whereNull(\"left_at\")->count();
+              \$membershipsEnded   = \Illuminate\Support\Facades\DB::table(\"team_memberships\")->whereNotNull(\"left_at\")->count();
+
+              # The D-14 shape, as two integers: how many business units carry
+              # more than one legal entity, and how many legal entities are
+              # carried by more than one business unit.
+              \$buMulti = \Illuminate\Support\Facades\DB::table(\"business_unit_legal_entity\")
+                ->select(\"business_unit_id\")->groupBy(\"business_unit_id\")
+                ->havingRaw(\"count(*) > 1\")->get()->count();
+              \$leMulti = \Illuminate\Support\Facades\DB::table(\"business_unit_legal_entity\")
+                ->select(\"legal_entity_id\")->groupBy(\"legal_entity_id\")
+                ->havingRaw(\"count(*) > 1\")->get()->count();
+
+              \$buActive   = \Illuminate\Support\Facades\DB::table(\"business_units\")->where(\"status\", \"active\")->count();
+              \$buInactive = \Illuminate\Support\Facades\DB::table(\"business_units\")->where(\"status\", \"inactive\")->count();
+
+              # Occurrences of the structured event NAME only. The log is
+              # scanned with substr_count and no line, id or value from it is
+              # retained or printed - only the integer.
+              \$logPath = storage_path(\"logs/laravel.log\");
+              \$movedEvents = is_readable(\$logPath)
+                ? substr_count((string) file_get_contents(\$logPath), \"department.moved\")
+                : 0;
+
               \$deleteRoutes = 0;
               foreach (\Illuminate\Support\Facades\Route::getRoutes() as \$r) {
                 if (str_starts_with(\$r->uri(), \"console/organisation\") && in_array(\"DELETE\", \$r->methods(), true)) {
@@ -101,6 +127,13 @@ jobs:
                 \"d16_foreign_key_target\"  => \$fk[\"foreign_table\"] ?? null,
                 \"users_total\"             => \App\Modules\Platform\Models\User::query()->count(),
                 \"users_with_organisation\" => \App\Modules\Platform\Models\User::query()->whereNotNull(\"organisation_id\")->count(),
+                \"team_memberships_current\" => \$membershipsCurrent,
+                \"team_memberships_ended\"   => \$membershipsEnded,
+                \"business_units_with_multiple_legal_entities\" => \$buMulti,
+                \"legal_entities_with_multiple_business_units\" => \$leMulti,
+                \"business_units_active\"    => \$buActive,
+                \"business_units_inactive\"  => \$buInactive,
+                \"department_moved_events\"  => \$movedEvents,
                 \"organisation_delete_routes\" => \$deleteRoutes,
               ]), PHP_EOL;'")"
 
