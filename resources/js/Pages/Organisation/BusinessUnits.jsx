@@ -25,7 +25,7 @@ export default function BusinessUnits({ businessUnits }) {
                         <th>Code</th>
                         <th>Departments</th>
                         <th>Status</th>
-                        <th />
+                        <th><span className="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -63,6 +63,7 @@ export default function BusinessUnits({ businessUnits }) {
             </table>
 
             <form className="org-form org-form-inline" onSubmit={submit}>
+                        <h2 className="org-form-title">Add a business unit</h2>
                 <label>
                     Name
                     <input value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} required />

@@ -60,6 +60,7 @@ export default function BusinessUnit({ businessUnit, associated, available, depa
 
                 {available.length > 0 ? (
                     <form className="org-form org-form-inline" onSubmit={submit}>
+                        <h2 className="org-form-title">Associate a legal entity</h2>
                         <label>
                             Associate a legal entity
                             <select

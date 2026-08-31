@@ -41,7 +41,7 @@ export default function Team({ team, members, candidates }) {
                             <th>Email</th>
                             <th>Joined</th>
                             <th>Left</th>
-                            <th />
+                            <th><span className="sr-only">Actions</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -79,6 +79,7 @@ export default function Team({ team, members, candidates }) {
 
             {candidates.length > 0 ? (
                 <form className="org-form org-form-inline" onSubmit={submit}>
+                        <h2 className="org-form-title">Add a member</h2>
                     <label>
                         Add a member
                         <select

@@ -55,7 +55,7 @@ export default function Profile({ organisation, associated }) {
                     <input value={form.data.legal_name} onChange={(e) => form.setData('legal_name', e.target.value)} />
                 </label>
 
-                <label>
+                <label className="org-field-sm">
                     Country
                     <input
                         value={form.data.country}
@@ -65,7 +65,7 @@ export default function Profile({ organisation, associated }) {
                     />
                 </label>
 
-                <label>
+                <label className="org-field-md">
                     Timezone
                     <input
                         value={form.data.timezone}
@@ -80,22 +80,26 @@ export default function Profile({ organisation, associated }) {
             </form>
 
             {existing ? (
-                <nav className="org-next">
-                    <button type="button" onClick={() => router.get('/console/organisation/legal-entities')}>
-                        Legal Entities
-                    </button>
-                    <button type="button" onClick={() => router.get('/console/organisation/business-units')}>
-                        Business Units
-                    </button>
-                    <button type="button" onClick={() => router.get('/console/organisation/departments')}>
-                        Departments
-                    </button>
-                    <button type="button" onClick={() => router.get('/console/organisation/teams')}>
-                        Teams
-                    </button>
-                    <button type="button" onClick={() => router.get('/console/organisation/hierarchy')}>
-                        Management Hierarchy
-                    </button>
+                <nav aria-label="Organisation sections">
+                    <h2 className="org-next-title">Organisation sections</h2>
+
+                    <div className="org-next">
+                        <button type="button" onClick={() => router.get('/console/organisation/legal-entities')}>
+                            Legal Entities
+                        </button>
+                        <button type="button" onClick={() => router.get('/console/organisation/business-units')}>
+                            Business Units
+                        </button>
+                        <button type="button" onClick={() => router.get('/console/organisation/departments')}>
+                            Departments
+                        </button>
+                        <button type="button" onClick={() => router.get('/console/organisation/teams')}>
+                            Teams
+                        </button>
+                        <button type="button" onClick={() => router.get('/console/organisation/hierarchy')}>
+                            Management Hierarchy
+                        </button>
+                    </div>
                 </nav>
             ) : null}
         </OrganisationPage>

@@ -25,7 +25,7 @@ export default function Teams({ teams, departments }) {
                         <th>Department</th>
                         <th>Members</th>
                         <th>Status</th>
-                        <th />
+                        <th><span className="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -63,6 +63,7 @@ export default function Teams({ teams, departments }) {
             </table>
 
             <form className="org-form org-form-inline" onSubmit={submit}>
+                        <h2 className="org-form-title">Add a team</h2>
                 <label>
                     Department
                     <select
