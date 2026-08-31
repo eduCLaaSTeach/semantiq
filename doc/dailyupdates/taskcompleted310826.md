@@ -481,28 +481,31 @@ HTTP response.
 ### Status
 
 ```
-P1-00 BUILD VERIFIED — READY FOR PRODUCT OWNER ACCEPTANCE
+P1-00 ACCEPTED — 31 August 2026
 ```
 
-Test suite at verification: **121 tests, 464 assertions.**
+Accepted by the Product Owner against the verified production baseline.
+**P1-00 is closed.** Full evidence: `doc/v2/phase-1/P1-00-LOGIN-BOOTSTRAP-VERIFICATION.md`.
+
+Test suite at acceptance: **121 tests, 464 assertions.**
 
 ---
 
 ## 13. What must NOT happen next
 
-P1-BASE is accepted and closed. **P1-00 is unlocked for PLAN ONLY.**
+P1-BASE and P1-00 are both accepted and closed. **P1-01 — Organisation is
+unlocked for PLAN ONLY.**
 
 The lifecycle is unchanged: `PLAN → APPROVE → DESIGN → APPROVE → EXECUTE →
 TEST → VERIFY → ACCEPT`.
 
-- Do **not** begin P1-00 DESIGN or write any P1-00 code until the PLAN is
+- Do **not** begin P1-01 DESIGN or write any P1-01 code until the PLAN is
   approved.
-- Do **not** create migrations, users-table changes, organisation schema, roles,
-  domains, scopes or sensitivity.
-- Do **not** write Entra integration code, callback routes, login UI or
-  bootstrap code.
-- Do **not** create secrets or Microsoft app registrations.
+- Do **not** create roles, permissions, business domains, scopes, sensitivity or
+  the access engine — those are P1-04 and P1-05.
+- Do **not** build user or group administration — that is P1-03.
 - Do **not** implement Fabric, Power BI, AI or Workplace.
+- Do **not** issue another bootstrap grant. Bootstrap is CONFIGURED and closed.
 - Do **not** perform speculative refactoring.
 
 ### Settled baseline decisions — do not reopen
