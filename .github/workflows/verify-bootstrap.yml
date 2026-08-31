@@ -28,15 +28,39 @@ jobs:
       CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
 
     steps:
+      # Mirrors deploy.yml exactly. The deploy key is passphrase-protected, so
+      # writing the key file alone is not enough - it must be loaded into an
+      # agent with the passphrase supplied through askpass. Omitting that is
+      # what made the first run of this workflow fail with "Permission denied
+      # (publickey)", which looked alarming and was entirely my own doing.
       - name: Configure SSH
         env:
           CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
           printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
-          chmod 600 ~/.ssh/cpanel_deploy_key
-          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
 
       # Counts and a state word. No identity, no grant, no secret, no token.
       - name: Report bootstrap state
