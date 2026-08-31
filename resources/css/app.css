@@ -527,3 +527,32 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
   .org-form-inline { flex-direction: column; align-items: stretch; }
   .org-table { display: block; overflow-x: auto; }
 }
+
+/* ---- Signed-in landing ---------------------------------------------------- */
+
+/* Deliberately minimal. Not Administration Home - P1-10 owns that - and not a
+   placeholder dashboard. */
+
+.console-landing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: 640px;
+}
+
+.console-landing h1 {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.console-landing p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.console-note { color: var(--text-muted); }

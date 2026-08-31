@@ -29,7 +29,15 @@ final class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
-            'productAreas' => app(NavigationRegistry::class)->visibleFor(),
+
+            // A CLOSURE, deliberately. Inertia's middleware calls share() BEFORE
+            // it calls $next($request), so anything evaluated here runs before
+            // the route middleware that establishes who is asking. Resolving
+            // visibleFor() eagerly asked the authorizer about a request that had
+            // no user yet, so it denied every node and the sidebar was empty for
+            // everyone, on every page. Inertia resolves the closure when the
+            // response is built, by which time EnsureSessionIsCurrent has run.
+            'productAreas' => fn (): array => app(NavigationRegistry::class)->visibleFor(),
         ];
     }
 }
