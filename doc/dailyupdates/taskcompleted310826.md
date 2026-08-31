@@ -388,21 +388,124 @@ Test suite at acceptance: **64 tests, 185 assertions.**
 
 ---
 
-## 12. What must NOT happen next
+## 12. P1-00 — Login, Microsoft Entra SSO and first-run bootstrap
 
-P1-BASE is accepted and closed. **P1-00 is unlocked for PLAN ONLY.**
+Delivered, deployed and verified against the real eduCLaaS Entra tenant on
+31 August 2026. **Not accepted** — acceptance is the Product Owner's.
+
+### Lifecycle
+
+| Stage | Evidence |
+| --- | --- |
+| PLAN | `P1-00-LOGIN-BOOTSTRAP-PLAN.md` — approved, decisions D-03, D-04, D-09, D-10, D-11, D-12 |
+| DESIGN | `P1-00-LOGIN-BOOTSTRAP-DESIGN.md` — approved, D-03.1 and D-13 |
+| EXECUTE | PR [#45](https://github.com/eduCLaaSTeach/semantiq/pull/45) · merge `6aa4ab0` |
+| Correction | PR [#46](https://github.com/eduCLaaSTeach/semantiq/pull/46) · merge `08d7bd2` |
+| Tooling fix | PR [#47](https://github.com/eduCLaaSTeach/semantiq/pull/47) · merge `72b3f4d` |
+
+### The production defect — kept, not erased
+
+The first live sign-in **failed**. The server log carried one line:
+
+```
+auth.login.refused.protocol {"result":"refused","reason":"token_signature_invalid"}
+```
+
+**Root cause.** `JWK::parseKeySet($jwks)` was called without a default
+algorithm. Microsoft's real Entra JWKS omits the per-key `alg` field, and
+php-jwt throws `UnexpectedValueException: JWK must contain an "alg" parameter`
+for such a key when no default is given. The whole key set failed to parse, so
+**no signature was ever checked**. The rotation-retry path did not engage — it
+only refetches when the error message mentions `kid` — so the failure fell
+through to `token_signature_invalid`, naming the wrong cause.
+
+**Why CI was green while production was broken.** The test JWKS included `alg`.
+The fixture was more helpful than the real thing, so it tested the fixture
+rather than the system. That is the lesson worth keeping from this unit.
+
+**Correction.** Keys are filtered before parsing — RSA only, `use: sig` when
+present, `alg: RS256` when present, `kid`/`n`/`e` required — then parsed with
+RS256 as the explicit default. The fixture now mirrors Entra exactly, and the
+pre-fix validator **fails seven tests against it**.
+
+The first bootstrap grant was issued before this defect was found and could not
+be redeemed. It was **not reused** and **no database record was edited**; it was
+left to expire, and a fresh grant was issued after the fix.
+
+A second, smaller defect: the read-only verification workflow failed its first
+run with `Permission denied (publickey)`. The cPanel deploy key is
+passphrase-protected and the workflow only wrote the key file instead of
+loading it into an agent. A workflow defect, not a production one.
+
+### Live verification — 31 August 2026
+
+**Microsoft Entra authentication succeeded end to end.** The nominated first
+System Administrator signed in through Entra and reached `/console`.
+
+Server state, from the read-only verification workflow
+([33371191488](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33371191488)),
+counts only — no identity, grant or secret read:
+
+```json
+{"bootstrap_state":"CONFIGURED","active_system_admins":1,"users_total":1,
+ "grants_total":2,"grants_consumed":1,"grants_still_open":0}
+```
+
+| Claim | Evidence |
+| --- | --- |
+| Bootstrap closed | `bootstrap_state = CONFIGURED` |
+| Exactly one administrator | `active_system_admins = 1`, `users_total = 1` |
+| The successful grant was consumed | `grants_consumed = 1` |
+| No usable grant remains | `grants_still_open = 0` — the failed first grant expired unused |
+| No self-registration | `users_total = 1`; only the bootstrapped administrator exists |
+
+| Check | Result |
+| --- | --- |
+| `/` · `/up` · `/console` anonymous | 200 · `ok` · 302 to login |
+| `/console` anonymous, JSON client | **401** |
+| `GET /auth/logout` | **405** — POST only |
+| `POST /auth/logout` without session | **419** — CSRF enforced |
+| Invented 64-character grants (×2) | 302 to closed; no administrator creatable |
+| Six refusal states | 200, no trace, framework internals, token, nonce or role mapping |
+| 17 protected paths | **all 403** |
+| ACME challenge path | **404** (resolves, file absent) · `.well-known/` 403 (listing off) |
+| `semantiq:health` | **green** on the deployment |
+| Secret hygiene | no token, grant, code, nonce, verifier or administrator identity in any public body or workflow output |
+
+**Note on what cannot be proven from outside.** `/first-run/<grant>` answers
+identically whether bootstrap is closed, the grant is unknown, or it has
+expired. That indistinguishability is deliberate anti-probing, which is exactly
+why closure is proven from the server state above rather than inferred from an
+HTTP response.
+
+### Status
+
+```
+P1-00 ACCEPTED — 31 August 2026
+```
+
+Accepted by the Product Owner against the verified production baseline.
+**P1-00 is closed.** Full evidence: `doc/v2/phase-1/P1-00-LOGIN-BOOTSTRAP-VERIFICATION.md`.
+
+Test suite at acceptance: **121 tests, 464 assertions.**
+
+---
+
+## 13. What must NOT happen next
+
+P1-BASE and P1-00 are both accepted and closed. **P1-01 — Organisation is
+unlocked for PLAN ONLY.**
 
 The lifecycle is unchanged: `PLAN → APPROVE → DESIGN → APPROVE → EXECUTE →
 TEST → VERIFY → ACCEPT`.
 
-- Do **not** begin P1-00 DESIGN or write any P1-00 code until the PLAN is
+- Do **not** begin P1-01 DESIGN or write any P1-01 code until the PLAN is
   approved.
-- Do **not** create migrations, users-table changes, organisation schema, roles,
-  domains, scopes or sensitivity.
-- Do **not** write Entra integration code, callback routes, login UI or
-  bootstrap code.
-- Do **not** create secrets or Microsoft app registrations.
+- Do **not** create roles, permissions, business domains, scopes, sensitivity or
+  the access engine — those are P1-04 and P1-05.
+- Do **not** build user or group administration — that is P1-03.
 - Do **not** implement Fabric, Power BI, AI or Workplace.
+- Do **not** issue another bootstrap grant. Bootstrap is CONFIGURED and closed.
 - Do **not** perform speculative refactoring.
 
 ### Settled baseline decisions — do not reopen
@@ -433,7 +536,7 @@ Settled unless a verified technical impossibility appears.
 
 ---
 
-## 13. Evidence references
+## 14. Evidence references
 
 | Item | Reference |
 | --- | --- |
@@ -458,7 +561,7 @@ other secret appears in this document, and none may be added to it.
 
 ---
 
-## 14. Daily update convention
+## 15. Daily update convention
 
 From now on, at the end of every working day or session, maintain exactly one file:
 
