@@ -75,6 +75,28 @@ final class ApacheDenialBoundaryTest extends TestCase
         return $next === false ? substr($workflow, $start) : substr($workflow, $start, $next - $start);
     }
 
+    /**
+     * Just the loop over protected paths, not the whole step.
+     *
+     * Scoping matters and got sharper the hard way. The step legitimately
+     * accepts "403 or 404" elsewhere - a directory with listing disabled
+     * answers either - so a step-wide search for that pattern fails on a
+     * correct workflow. What must never accept 404 is the protected-path loop
+     * itself, so that is what is inspected.
+     */
+    private function protectedPathLoop(): string
+    {
+        $step = $this->exposureStep();
+
+        $start = strpos($step, 'for path in');
+        $this->assertNotFalse($start, 'The protected-path loop is missing from the exposure step.');
+
+        $end = strpos($step, "\n          done", $start);
+        $this->assertNotFalse($end, 'The protected-path loop is not closed.');
+
+        return substr($step, $start, $end - $start);
+    }
+
     private function htaccess(): string
     {
         return file_get_contents(self::HTACCESS);
@@ -230,18 +252,18 @@ final class ApacheDenialBoundaryTest extends TestCase
     {
         $workflow = $this->workflow();
 
-        $step = $this->exposureStep();
+        $loop = $this->protectedPathLoop();
 
         $this->assertStringNotContainsString(
             '403|404)',
-            $step,
+            $loop,
             'The exposure gate still accepts 404 as a pass. A 404 means the request reached '
             .'Laravel instead of being denied by Apache.'
         );
 
         $this->assertMatchesRegularExpression(
             '/404\)\s*\n\s*echo "::error/',
-            $step,
+            $loop,
             'The exposure gate must treat 404 as an explicit failure.'
         );
     }
@@ -261,6 +283,39 @@ final class ApacheDenialBoundaryTest extends TestCase
                 "The exposure gate does not request [{$path}]."
             );
         }
+    }
+
+    /**
+     * TLS renewal fails silently, weeks later, and by then nobody connects it
+     * back to a deployment. The first version of this gate asserted that
+     * /.well-known/ was not 403 - a stand-in that held only while the directory
+     * answered with a listing, and that failed the deployment on a certificate
+     * path which was working perfectly the moment listings were turned off.
+     *
+     * So the gate must exercise the real mechanism: a file written under
+     * acme-challenge, fetched over HTTPS, and read back.
+     */
+    public function test_the_deployment_proves_acme_by_fetching_a_real_challenge_file(): void
+    {
+        $workflow = $this->workflow();
+
+        $this->assertStringContainsString(
+            '.well-known/acme-challenge/$acme_token',
+            $workflow,
+            'The deployment does not fetch a real ACME challenge file, so TLS renewal is only assumed to work.'
+        );
+
+        $this->assertStringContainsString(
+            'SEMANTIQ_ACME_SELFTEST',
+            $workflow,
+            'The ACME check does not verify the response body, so a 200 from anything would pass.'
+        );
+
+        $this->assertStringContainsString(
+            'trap cleanup_acme EXIT',
+            $workflow,
+            'The ACME self-test token is not removed on every exit path.'
+        );
     }
 
     /**
