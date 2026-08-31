@@ -1,15 +1,16 @@
 # P1-00 — Application Entry, Login & First-Run Bootstrap — DESIGN
 
-**Status:** DESIGN — awaiting Product Owner review. **Documentation only.**
+**Status:** **DESIGN APPROVED — 31 August 2026.** D-03.1, D-13 and the
+`RoutePrefixCollisionTest` correction are decided in §19. **P1-00 EXECUTE is
+authorised.** No open Product Owner decision blocks implementation.
 **Unit:** P1-00 (Phase 1 delivery order 2)
 **PLAN:** `P1-00-LOGIN-BOOTSTRAP-PLAN.md` — **APPROVED 31 August 2026**, decisions D-03, D-04, D-09, D-10, D-11, D-12
 **Predecessor:** P1-BASE — **ACCEPTED** at `3d075bf`
 **UI standard:** `doc/design-system/ui-and-ux-layout-template-shared.md` §5.7 Auth archetype, WCAG AA
 
-> **Nothing here is implemented.** No migration, route, controller, screen,
-> configuration key, dependency, Entra registration, secret or bootstrap grant
-> has been created. This document is the developer-ready specification that
-> EXECUTE will follow once approved.
+> **This document is the specification EXECUTE follows.** It is not redesigned
+> while coding. Where implementation reveals that something here is wrong, the
+> discrepancy is reported — not silently resolved in code.
 
 ---
 
@@ -31,7 +32,7 @@ while passing every local test — precisely the failure that cost a deployment
 when the authenticated area sat at `/app`. The first-run path is **`/first-run`**
 instead. Every route in §1 was checked against that list.
 
-### 0.2 `RoutePrefixCollisionTest` guards only one direction — **my defect, fix belongs here**
+### 0.2 `RoutePrefixCollisionTest` guards only one direction — **APPROVED to fix in P1-00**
 
 The test asserts that every name in its own `PROTECTED_ROOTS` list appears in the
 forwarder. It does **not** assert the reverse. When PR #40 added `public` to the
@@ -42,6 +43,10 @@ Consequence today: a route beginning `/public` would **pass CI and 403 in
 production**. Nothing currently uses that prefix, so nothing is broken — but the
 guard that exists to prevent the `/app` class of failure has a hole in it.
 
+**Approved as a correction to an existing security guard, not new scope.** The
+protection becomes bidirectional: every protected Apache root is represented in
+the collision test, and no application route may use a prefix Apache blocks.
+
 This is my defect, introduced in PR #40. The fix belongs in this unit because
 P1-00 is the unit that adds routes:
 
@@ -50,7 +55,7 @@ P1-00 is the unit that adds routes:
   must appear in `PROTECTED_ROOTS`;
 - prove it non-vacuous by removing an entry and observing the failure.
 
-### 0.3 D-03 rule 5 cannot be implemented as literally worded — **Product Owner input needed**
+### 0.3 D-03 rule 5 cannot be implemented as literally worded — **RESOLVED by D-03.1**
 
 Approved D-03 rule 5 reads:
 
@@ -78,8 +83,10 @@ what bounds that, and the window is operator-controlled.
 and supplies the `oid` when issuing the grant. Exact and immutable, at the cost
 of a portal lookup in the bootstrap runbook.
 
-**This is a reinterpretation of an approved decision, so it is put back to you
-rather than resolved here.** §19 records it as the decision required.
+**Resolved: reading A is approved as D-03.1** (§19). The operator is explicitly
+*not* required to obtain `oid` from Entra before first login. After the first
+successful authentication the captured `oid` becomes the identity key, and all
+subsequent mapping uses `oid + tid` — never email or UPN.
 
 ---
 
@@ -725,45 +732,70 @@ The PLAN §18 list, plus what this design adds:
 
 ---
 
-## 19. Decisions required before EXECUTE
+## 19. Decisions — **ALL DECIDED, 31 August 2026**
 
-### D-03.1 — Bootstrap subject matching · **BLOCKING** (from §0.3)
+> **DESIGN APPROVED. No open Product Owner decision blocks P1-00 implementation.**
 
-Approved D-03 rule 5 requires `oid` **and** `tid` to match the expected grant
-subject, but `oid` cannot be known before the user has ever signed in.
+### D-03.1 — Bootstrap identity matching · **APPROVED — reading A**
 
-- **A (recommended):** grant records the expected **UPN/email**; at callback
-  `tid` matches exactly and UPN matches case-insensitively; `oid` is captured,
-  not matched. Residual risk bounded by the 30-minute TTL.
-- **B (stricter):** operator supplies the `oid` from the Entra portal at issue
-  time. Exact and immutable; adds a portal lookup to the runbook.
+For the initial bootstrap grant:
 
-### D-13 — OIDC implementation approach and dependency · **BLOCKING**
+- match the expected Entra **`tid` exactly**;
+- match the expected **UPN/email case-insensitively**;
+- after successful Entra authentication, **capture the verified `oid`**;
+- **from that point onward, SemantIQ identity mapping uses `oid + tid`, not
+  email/UPN.**
 
-- **A (recommended):** implement the flow explicitly against Entra's discovery
-  document, using **`firebase/php-jwt`** for JWKS signature validation. Every
-  check in §5 is visible, ordered and individually testable. One small, widely
-  used dependency in the security path.
-- **B:** Laravel Socialite + a community Azure provider. Less code, but it is an
-  OAuth2 social-login abstraction: ID-token validation, `nonce` and `tid` are not
-  its primary concern, and the validations this unit exists to *prove* would sit
-  inside a third-party package.
-- **C:** a full OIDC client library. More complete than needed for one provider
-  and a larger dependency surface.
+> The operator is **not** required to obtain `oid` from Entra before first login.
+> That was the whole objection to the literal wording of D-03 rule 5, and this
+> resolves it: UPN is used exactly once, to match the grant, and never again as
+> an identity key.
 
-Recommendation is **A**: this unit's whole purpose is demonstrating that each
-check fires, and a negative test is only meaningful against a check we control.
+Unchanged from D-03: 30-minute TTL · single use · hash-only grant storage ·
+atomic consumption · wrong identity does not consume the grant · no privilege
+until Entra authentication succeeds.
 
-### Confirmation sought, not a new decision
+### D-13 — OIDC implementation · **APPROVED — explicit implementation**
 
-§0.2 — the `RoutePrefixCollisionTest` fix is treated as in-scope for P1-00.
-It is a two-line test change plus a reverse assertion, and P1-00 is the unit
-adding routes. Confirm, or direct it elsewhere.
+- Normal Laravel/PHP HTTP facilities for the OIDC requests.
+- **`firebase/php-jwt`** for JWT/JWKS verification.
+- Explicit validation of `state`, `nonce`, PKCE, issuer, audience, tenant and
+  required claims — the §5 sequence, each check visible and individually
+  testable.
+
+**Scope constraint.** Narrowly scoped to Microsoft Entra OIDC. **Do not turn it
+into a large generic identity framework.** The `IdentityProvider` boundary (§3)
+stays exactly as designed, so a future provider can be added later without
+changing the application authentication contract — but only one implementation
+exists, and no second is anticipated in P1-00.
+
+### RoutePrefixCollisionTest correction · **APPROVED in P1-00**
+
+Make the protection **bidirectional**:
+
+- every protected Apache root is represented in the collision test; **and**
+- no application route can use a prefix Apache blocks.
+
+Recorded as a **correction to an existing security guard, not new scope**.
 
 ---
 
 ## 20. Stop point
 
-**DESIGN stops here.** No application code, migration, route, controller, screen,
-configuration key, dependency, Entra registration, secret or bootstrap grant is
-created before this design is approved and **D-03.1** and **D-13** are decided.
+**DESIGN is approved and EXECUTE is authorised.**
+
+Implementation follows this document exactly and does not redesign while coding.
+Where implementation reveals something here is wrong, the discrepancy is
+reported rather than silently resolved in code.
+
+Two things still stop the unit short of acceptance, by design:
+
+1. **Live Entra values.** Implementation builds the code and configuration
+   contract first. At the point real values are required, work stops and the
+   Product Owner receives a short manual action list — what to create in Entra,
+   the exact redirect URI, the exact `.env` key names, and where each value
+   comes from. **The client secret is never printed or returned.**
+2. **Acceptance.** EXECUTE → TEST → VERIFY produces
+   `P1-00-LOGIN-BOOTSTRAP-VERIFICATION.md` and the statement
+   *P1-00 BUILD VERIFIED — READY FOR PRODUCT OWNER ACCEPTANCE*. Only the Product
+   Owner issues acceptance, and P1-01 stays locked until then.
