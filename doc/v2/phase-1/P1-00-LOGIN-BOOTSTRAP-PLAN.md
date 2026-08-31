@@ -1,6 +1,8 @@
 # P1-00 — Application Entry, Login & First-Run Bootstrap — PLAN
 
-**Status:** PLAN — awaiting Product Owner review. No design, no code.
+**Status:** **PLAN APPROVED — 31 August 2026.** All Product Owner decisions
+recorded in §20. P1-00 is authorised to proceed to **DESIGN ONLY**; see
+`P1-00-LOGIN-BOOTSTRAP-DESIGN.md`. No implementation.
 **Unit:** P1-00 (Phase 1 delivery order 2, immediately after P1-BASE)
 **Predecessor:** P1-BASE — **ACCEPTED 31 August 2026** at `3d075bf`
 **Successor:** P1-01 — Organisation (locked until P1-00 is accepted)
@@ -10,10 +12,10 @@
 `doc/v2/phase-1/PHASE-1-PLAN.md` §3–§5
 **UI standard:** `doc/design-system/ui-and-ux-layout-template-shared.md` §5.7 Auth archetype
 
-> **Lifecycle position.** PLAN → *(you are here)* → APPROVE → DESIGN → APPROVE →
-> EXECUTE → TEST → VERIFY → ACCEPT. Nothing in §§1–23 is implemented. Two
-> blocking decisions (**D-03**, **D-04**) and three new ones (**D-09**–**D-11**)
-> are raised in §20 and are **not** decided here.
+> **Lifecycle position.** PLAN → APPROVE ✓ → **DESIGN** *(next)* → APPROVE →
+> EXECUTE → TEST → VERIFY → ACCEPT. Nothing in §§1–23 is implemented. **D-03**,
+> **D-04**, **D-09**, **D-10**, **D-11** and **D-12** are all decided in §20 and
+> are binding on DESIGN.
 
 ---
 
@@ -200,13 +202,13 @@ Not built, not stubbed, not "prepared for".
 | Security Status, Access Reviews, **Audit UI and audit tables**, System Health, Administration Home | P1-06 – P1-10 |
 | Any Fabric Configuration or SemantIQ Workplace screen | Phases 2–3 |
 | A second identity provider implementation | Later, when explicitly configured |
-| Step-up / re-authentication for privileged actions (SYS-018) | Deferred — see §20 D-10 |
-| Concrete session timeout *policy administration* | P1-02 (the *values* are D-10 here) |
+| Step-up / re-authentication for privileged actions (SYS-018) | Deferred to a later unit; not part of P1-00 |
+| Session timeout *policy administration* | P1-02 (the fixed values are decided in §20 D-10) |
 
 **No pre-building.** PHASE-1-PLAN §5: *"Future menus, tables and services are not
 created early. A shared dependency needed by more than one unit is raised for
-approval before it is introduced."* Two such dependencies are raised in §20
-(**D-09**, **D-11**) rather than assumed.
+approval before it is introduced."* Three such dependencies were raised and are
+now approved as **D-09**, **D-11** and **D-12** in §20.
 
 ---
 
@@ -224,7 +226,7 @@ P1-00 needs the smallest identity surface that can fail closed. Identified here;
 | --- | --- | --- |
 | `users` | Map a verified external identity to an active SemantIQ principal | New in P1-00 |
 | `sessions` | Laravel server-side session store | **Exists** from P1-BASE |
-| Bootstrap grant record | Single-use, expiring, replay-proof first-admin grant | Shape depends on **D-03** |
+| Bootstrap grant record | Single-use, expiring, replay-proof first-admin grant | Shape follows **D-03**, approved |
 
 ### Minimum `users` fields
 
@@ -236,6 +238,7 @@ P1-00 needs the smallest identity surface that can fail closed. Identified here;
 | Email / UPN | Display and administrator correlation only, never the authorisation key |
 | Display name | UI |
 | Status (active / inactive) | Active-user validation; inactive must fail closed |
+| Platform role seam (`system_administrator` only) | **D-09**, approved. A P1-00 seam that P1-05 replaces |
 | Timestamps, last successful sign-in | Support and audit correlation |
 
 ### What is deliberately absent
@@ -244,9 +247,6 @@ No roles table, no domains, no scopes, no sensitivity, no organisations, no
 teams, no entitlements, no permissions. `NoBusinessSchemaTest` must be **amended
 to transfer ownership of `users` to P1-00 while continuing to forbid the rest** —
 a test change, reviewed as part of this unit, not a silent relaxation.
-
-> **Open:** representing "System Administrator" before P1-05 exists is a real
-> modelling problem. Raised as **D-09** in §20. Not decided here.
 
 ---
 
@@ -259,9 +259,9 @@ a test change, reviewed as part of this unit, not a silent relaxation.
 | Cookie | `HttpOnly`, `Secure`, `SameSite` per DESIGN; the site is HTTPS-only |
 | Fixation | Session identifier regenerated on privilege transition (anonymous → authenticated, and on bootstrap completion) |
 | Issuance | Only **after** identity *and* access context are valid (Blueprint step 7) |
-| Expiry | Idle and absolute lifetimes — **values are D-10** |
-| Logout | Server-side destruction, not merely a cookie clear; lands on **Signed Out** |
-| Revocation | An inactive user must lose access; whether that is immediate or next-request is **D-10** |
+| Expiry | **60 minutes idle, 12 hours absolute** (D-10, approved) |
+| Logout | Server-side destruction, not merely a cookie clear; lands on **Signed Out**. No global Entra sign-out (D-04) |
+| Revocation | Inactive users lose access at the **next protected request**, re-evaluated server-side before protected functionality is served (D-10, approved) |
 | `/up` | Remains outside the session middleware, as P1-BASE established, so liveness never depends on the session store |
 
 ---
@@ -301,9 +301,10 @@ The application has an observable installation state:
 Blueprint §0.3: *"After bootstrap is complete, the bootstrap path is disabled or
 otherwise made non-reusable according to the approved design."*
 
-The transition is **one-way** under the recommended option. Recovery — what
-happens if every System Administrator is lost — is a real operational question
-and is raised as part of **D-03**; it is not silently designed in.
+The transition is **one-way**. Recovery — what happens if every System
+Administrator is lost — is decided in §20 D-03: a fresh operator-issued grant
+through the same privileged channel, permitted only at zero valid System
+Administrators, never silently re-enabling bootstrap and never bypassing Entra.
 
 ---
 
@@ -333,23 +334,23 @@ changes, and Phase 1 doc P1-08 lists "successful/failed login evidence" as an
 **audit-unit** test. The audit *table*, *UI* and *event catalogue* belong to
 **P1-08**.
 
-P1-00 therefore has a genuine boundary problem, and it is raised rather than
-resolved unilaterally: bootstrap creates the most privileged principal in the
-system, and doing so with no durable evidence would be indefensible.
+P1-00 therefore had a genuine boundary problem: bootstrap creates the most
+privileged principal in the system, and doing so with no durable evidence would
+be indefensible. **Resolved by D-12, approved.**
 
-**Proposal (subject to §20 D-09/D-11 style approval as a shared dependency):**
 P1-00 emits security-relevant events through the application log with a
 structured, redacted shape — actor, action, target, result, timestamp — and does
 **not** create an audit table. P1-08 later introduces durable storage and adopts
-these events. Events proposed:
+these events. Events:
 
 `bootstrap.grant.issued` · `bootstrap.completed` · `bootstrap.refused` ·
 `auth.login.succeeded` · `auth.login.refused.unknown_identity` ·
 `auth.login.refused.inactive` · `auth.login.refused.tenant` ·
 `auth.login.refused.protocol` · `auth.logout` · `auth.session.expired`
 
-No token, secret, client secret, `state`, `nonce`, code or PKCE verifier appears
-in any event. Identity is recorded as `oid`/`tid`, not as raw credentials.
+**Never logged:** client secret · authorization code · access or ID token ·
+bootstrap token · `state` · `nonce` · PKCE verifier. Identity is recorded as
+`oid`/`tid`, not as raw credentials.
 
 ---
 
@@ -364,12 +365,12 @@ in any event. Identity is recorded as `oid`/`tid`, not as raw credentials.
 | Token substitution (token from another application/audience) | Audience must match the configured client ID |
 | Tenant confusion (valid Microsoft account, wrong directory) | Rejected on `tid` |
 | Issuer spoofing | Rejected on issuer + signature |
-| Bootstrap grant brute force | High-entropy grant, short TTL, single use, rate limited |
+| Bootstrap grant brute force | High-entropy grant, 30-minute TTL, single use, rate limited |
 | Bootstrap replay after consumption | Atomic conditional consume; second attempt refused |
 | Bootstrap hijack by a different identity | Verified subject must match the grant; mismatch refuses **and does not consume** |
 | Directory enumeration through refusal states | "Not assigned" and "inactive" must not be distinguishable to an anonymous caller by status, timing or body |
 | Session fixation | Identifier regenerated on privilege change |
-| Session riding after deactivation | Inactive user loses access per **D-10** |
+| Session riding after deactivation | Inactive user loses access at the next protected request (D-10) |
 | Secret leakage | No client secret in repository, logs, CI output, PR text, or browser-visible errors |
 | Login-page content leakage | Pre-auth pages carry no menu, no user list, no tenant name, no version string |
 
@@ -416,24 +417,24 @@ is no business data to request — the test must therefore assert against the
 | Database unavailable during callback | Fail closed, no session; `/up` still answers per P1-BASE |
 | Session store unavailable | Fail closed |
 | Bootstrap grant lost before use | Issue a new grant; the old one expires unused |
-| All System Administrators lost | **Recovery procedure is an open question — part of D-03** |
-| Client secret expired | Sign-in fails cleanly with **Sign-in Unavailable**; rotation ownership is part of **D-04** |
+| All System Administrators lost | Operator-issued recovery grant through the same privileged channel, per §20 D-03 |
+| Client secret expired | Sign-in fails cleanly with **Sign-in Unavailable**; rotation owned by the SemantIQ platform / Entra application owner, 12-month target with a 30-day alert (D-04) |
 
 ---
 
 ## 15. External prerequisites
 
-Outside this repository. None can be satisfied by code.
+Outside this repository. None can be satisfied by code. All are **operational
+values, not architecture** — see §20.6.
 
-| # | Prerequisite | Owner | Blocks |
+| # | Prerequisite | Owner | Needed by |
 | --- | --- | --- | --- |
-| 1 | Entra ID application registration | Product Owner / tenant admin | **D-04** |
-| 2 | Tenant ID, client ID | Product Owner | **D-04** |
-| 3 | Client secret (or certificate) placed **only** in the server `.env` | Product Owner / operator | **D-04** |
-| 4 | Redirect URI registered exactly | Product Owner | **D-04** |
-| 5 | Decision on single-tenant vs multi-tenant for Release 1 | Product Owner | **D-04** |
-| 6 | Identity of the first System Administrator | Product Owner | **D-03** |
-| 7 | Session lifetime values | Product Owner | **D-10** |
+| 1 | Entra ID application registration | Approved tenant administrator (Application Administrator or Cloud Application Administrator) | EXECUTE |
+| 2 | Tenant ID, client ID | Product Owner | EXECUTE |
+| 3 | Client secret placed **only** in the server `.env` | Product Owner / operator | EXECUTE |
+| 4 | Redirect URI registered exactly as `https://semantiq.claas2saas.com/auth/microsoft/callback` | Product Owner | EXECUTE |
+| 5 | Identity of the nominated first System Administrator | Product Owner | Live bootstrap verification |
+| 6 | Named platform operator authorised to issue bootstrap grants | Product Owner | Live bootstrap verification |
 
 ---
 
@@ -449,7 +450,7 @@ app/Modules/Platform/Http/Controllers/  entry, login, callback, logout,
                                         bootstrap, refusal states
 app/Modules/Platform/Http/Middleware/   RequireAuthenticatedSession (extended)
 config/                                 identity/session configuration keys
-database/migrations/                    users                               [D-09]
+database/migrations/                    users, bootstrap grants             [D-09]
 resources/js/Pages/Auth/                Login, refusal states, bootstrap
 routes/web.php                          entry, auth, bootstrap routes
 tests/Feature/ tests/Architecture/      the §13 negative suite
@@ -466,16 +467,18 @@ DESIGN time.
 
 ## 17. Definition of Ready
 
-P1-00 may enter DESIGN when **all** hold:
+**SATISFIED — 31 August 2026.** All conditions hold:
 
-1. This PLAN is approved by the Product Owner.
-2. **D-03** is decided — bootstrap mechanism, TTL, closure and recovery.
-3. **D-04** is decided — Entra registration values identified and owned.
-4. **D-09** is decided — how "System Administrator" is represented before P1-05.
-5. **D-10** is decided — session lifetime and revocation timing.
-6. **D-11** is decided — post-authentication landing while no menu exists.
-7. No secret value has been requested through, or pasted into, chat, GitHub or
-   documentation.
+| # | Condition | Status |
+| --- | --- | --- |
+| 1 | PLAN approved by the Product Owner | ✅ |
+| 2 | **D-03** decided — mechanism, TTL, closure, recovery, who may issue | ✅ Option A |
+| 3 | **D-04** decided — Entra shape and ownership identified | ✅ single-tenant, `openid profile email`, client secret in server `.env` |
+| 4 | **D-09** decided — System Administrator seam before P1-05 | ✅ Option A |
+| 5 | **D-10** decided — session lifetime and revocation | ✅ 60 min idle / 12 h absolute / next protected request |
+| 6 | **D-11** decided — post-authentication landing | ✅ Option A |
+| 7 | **D-12** decided — audit and security event boundary | ✅ redacted events through the existing logging boundary |
+| 8 | No secret requested through, or pasted into, chat, GitHub or documentation | ✅ none requested, none present |
 
 ## 18. Definition of Done
 
@@ -508,111 +511,140 @@ P1-00 may enter DESIGN when **all** hold:
 
 ---
 
-## 20. Product Owner decisions required
+## 20. Product Owner decisions — **ALL DECIDED, 31 August 2026**
 
-### D-03 — First-administrator bootstrap · **BLOCKING**
+> **PLAN APPROVED.** All six decisions are settled below and are binding on
+> DESIGN. Named human identities and runtime values are deliberately absent —
+> see §20.6.
 
-Deferred from Phase 1 planning; now live.
+### D-03 — First System Administrator bootstrap · **APPROVED — Option A**
 
-**Recommended: single-use bootstrap grant, redeemed only by completed Entra SSO.**
+Single-use bootstrap grant, redeemed only through successful Entra SSO.
 
-An operator who already holds SSH and deploy trust runs an Artisan command on the
-server. It records a grant — high-entropy secret stored only as a hash, an
-expected subject, a short expiry, a single-use flag — and prints the one-time
-value to that operator's terminal alone. The nominated administrator opens the
-bootstrap entry with it, and it grants **nothing** by itself: they must still
-complete Microsoft SSO, and the verified `oid`/`tid` must match the grant's
-expected subject. Only then is the first System Administrator created, the grant
-consumed by an atomic conditional update, and the bootstrap path closed.
-
-*Why this one:* it adds no new standing secret, no new trust channel and no email
-dependency — it reuses the SSH boundary that already exists and is already the
-only privileged channel. It satisfies every constraint: controlled, restricted
-eligibility, auditable, replay-proof, fail closed, closed after use, and no
-ordinary database manipulation.
-
-| Alternative | Why not recommended |
+| # | Approved rule |
 | --- | --- |
-| **B — Allow-list in server `.env`** (`BOOTSTRAP_ADMIN_UPN`; first successful SSO by that identity becomes admin) | Simplest, but leaves a *standing* privilege-granting value in a hand-maintained file. Easy to leave behind; if an administrator is later removed, it silently re-arms |
-| **C — One-time setup token in `.env`** | Same shape as A, but the secret lives in `.env` — a second place to leak from, and rotation means editing production configuration |
-| **D — Artisan command creates the administrator directly** | Violates Blueprint §0.3: the first administrator *"signs in through the verified enterprise identity path before receiving the privileged application session."* Also creates a principal that never passed MFA |
-| **E — Claim-next-login flag** | A variant of B with the same standing-privilege weakness |
+| 1 | Mechanism: single-use, high-entropy bootstrap grant |
+| 2 | Stored server-side **as a hash only**, never plaintext |
+| 3 | The grant alone grants **no** administrator privilege |
+| 4 | The nominated user must complete Microsoft Entra SSO successfully |
+| 5 | Verified `oid` **and** `tid` must match the expected grant subject |
+| 6 | Consumed **atomically**, and only after successful identity verification |
+| 7 | Wrong identity **refuses without consuming** the grant |
+| 8 | TTL = **30 minutes** |
+| 9 | Bootstrap closes once a System Administrator exists |
+| 10 | Bootstrap remains unavailable during normal configured operation |
 
-**Risks in the recommendation:** the grant value must never reach a log or CI
-output (same discipline as APP_KEY); operator terminal capture is the residual
-exposure; a mistyped expected subject wastes a grant (safe — it refuses without
-consuming); and one-way closure means losing every administrator needs a
-deliberate recovery path.
+**Recovery.** Permitted through the same privileged operator channel **only when
+the system has zero valid System Administrators**. Recovery issues a fresh,
+short-lived, single-use grant, and the replacement administrator completes Entra
+SSO exactly like the original bootstrap. Recovery must be explicitly initiated by
+an authorised platform operator; must never silently re-enable bootstrap; must be
+auditable; must fail closed; must never create an administrator directly through
+MySQL; and must never bypass Entra identity verification.
 
-**Exact decisions required:**
+**Who may issue grants.** Restricted to designated SemantIQ platform operators
+holding approved cPanel/SSH administrative access. It must **not** be exposed as
+a normal application screen, a public HTTP endpoint, or a generic admin menu
+action.
 
-1. Approve mechanism **A**, or select B/C/E.
-2. Grant TTL — recommend **30 minutes**.
-3. Closure rule — recommend permanent while any System Administrator exists.
-4. Recovery if all administrators are lost — recommend a fresh operator-issued
-   grant through the same command, which is deliberately as privileged as the
-   original. **Confirm this is acceptable.**
-5. Who may run the command (which operator identities).
-6. The nominated first System Administrator (identity only — no secret).
+**Never print the bootstrap grant into GitHub Actions logs.** The same discipline
+that governs APP_KEY governs this value.
 
-### D-04 — Microsoft Entra ID registration · **BLOCKING**
+### D-04 — Microsoft Entra ID registration · **APPROVED**
 
-**Do not paste any secret into chat, GitHub, this document, or a pull request.**
-Secret values belong only in approved server configuration. This PLAN needs the
-*shape and ownership* of the configuration, not the values.
-
-| # | Item | Needed at | Recommendation |
-| --- | --- | --- | --- |
-| 1 | **Tenant ID** (directory ID) | Server `.env` | Not a secret, but treat as configuration |
-| 2 | **Application (client) ID** | Server `.env` | Not a secret |
-| 3 | **Client secret** *or* certificate | Server `.env` **only** | Prefer a **certificate** if the tenant permits — no expiry surprise mid-quarter; otherwise a secret with a diarised rotation owner |
-| 4 | **Redirect URI** | Registered in Entra **and** in config | Propose exactly `https://semantiq.claas2saas.com/auth/microsoft/callback` — **confirm** |
-| 5 | **Registering account / role** | Entra portal | Requires Application Administrator or Cloud Application Administrator. **Name the person or role** |
-| 6 | **Single-tenant vs multi-tenant** for Release 1 | Registration + validation | Recommend **single-tenant**; multi-tenant widens the trust boundary with no Release 1 benefit |
-| 7 | **Scopes / consent** | Registration | Recommend `openid profile email` **only** — no Microsoft Graph. Anything more needs a stated reason |
-| 8 | **Secret storage location** | Operations | Server `.env`, which is already excluded from transfer and deletion. **Not** a GitHub Actions secret — the application reads it at runtime, and CI has no need of it |
-| 9 | Front-channel logout URI | Optional | Decide whether logout should also terminate the Entra session |
-
-**Exact decisions required:** items 3, 4, 5, 6, 7 and 9 above, plus who owns
-secret rotation and on what cadence.
-
-### D-09 — Representing "System Administrator" before P1-05 · **NEW, BLOCKING**
-
-P1-00 must create a System Administrator, but the role model belongs to P1-05,
-and PHASE-1-PLAN forbids pre-building it. Three options:
-
-| Option | Assessment |
+| Item | Approved position |
 | --- | --- |
-| **A (recommended)** — one narrowly-typed column on `users` admitting only `system_administrator`, explicitly documented as a P1-00 seam that P1-05 replaces | Smallest thing that works; impossible to mistake for the authorisation engine; migrates cleanly |
-| **B** — build the full role table now | Directly violates the no-pre-building rule and pre-empts P1-05's design |
-| **C** — infer administrator status from "was created by bootstrap" | Implicit, unqueryable, and breaks the moment a second administrator exists |
+| **Tenant model** | **Single-tenant.** Release 1 trusts only the approved eduCLaaS Entra tenant. Multi-tenant identity is not required for P1-00. The architecture stays capable of a future adapter change, but **multi-tenant behaviour is not built now** |
+| **Redirect URI** | Exactly `https://semantiq.claas2saas.com/auth/microsoft/callback` |
+| **OIDC scopes** | **`openid profile email` only.** No Microsoft Graph. No Mail, Files, Groups, Directory or other API permissions. Anything beyond requires a later explicit Product Owner decision |
+| **Credential method** | **Client secret** for Release 1, not a certificate — smaller operational footprint for the initial login implementation, compatible with the existing protected server `.env`, and certificate lifecycle can be reviewed later under P1-02 |
+| **Secret storage** | Server `.env` **only**. Not a GitHub Actions secret unless a future workflow has a genuine runtime requirement; CI does not need the application client secret |
+| **Secret handling** | Never committed to Git, never in documentation, never printed in CI, never pasted into chat, **never exposed to React/browser code** |
+| **Rotation** | Owner: SemantIQ platform / Entra application owner. Target **12 months maximum**, or shorter if tenant policy requires. Operational alert from **at least 30 days** before expiry. P1-02 may later add formal administration and health around this |
+| **Registration permissions** | Performed by an approved tenant administrator holding **Application Administrator** or **Cloud Application Administrator**, as the tenant permits |
+| **Logout** | **No global Entra sign-out in Release 1.** SemantIQ logout destroys the Laravel server-side session, invalidates the SemantIQ browser session, and lands on **Signed Out**. It must **not** sign the user out of their wider Microsoft 365 session — SemantIQ must not unexpectedly sign a user out of Outlook or Teams. **No mandatory Entra front-channel/global logout is required in P1-00** |
 
-**Decision required:** approve A, or direct otherwise. This is a shared
-dependency and needs explicit approval per PHASE-1-PLAN §5.
+### D-09 — System Administrator representation before P1-05 · **APPROVED — Option A**
 
-### D-10 — Session lifetime and revocation · **NEW, BLOCKING**
+The smallest explicit P1-00 seam that can represent `system_administrator`
+before the role engine exists: a narrowly typed field on the P1-00 user identity
+record.
 
-Blueprint defers the numbers; P1-02 owns the *administration* of session policy,
-but P1-00 must ship with values.
+**Constraints:** only `system_administrator` may exist in P1-00; do **not** add
+Organisation Administrator, Executive, Manager, Business User or Auditor; do
+**not** create a roles table; do **not** create permissions; do **not** create
+domain, scope or sensitivity structures; do **not** treat this field as the
+future authorisation engine.
 
-**Decisions required:** idle timeout (recommend **60 minutes**); absolute
-lifetime (recommend **12 hours**); whether deactivating a user terminates live
-sessions immediately or at next request (recommend **next request** in P1-00,
-with immediate revocation deferred to P1-03 where user lifecycle lives).
+> **P1-05 owns the final role and access model and must replace or migrate this
+> P1-00 seam.** A System Administrator still receives **zero automatic
+> business-domain access**.
 
-### D-11 — Post-authentication landing · **NEW, BLOCKING**
+### D-10 — Session lifetime and revocation · **APPROVED**
 
-Blueprint step 8 says administrators land on "their authorised administration
-experience" — but no administration menu exists until P1-01, and P1-00's own exit
-criterion forbids implementing one. **The source documents do not resolve this.**
-
-| Option | Assessment |
+| Setting | Approved value |
 | --- | --- |
-| **A (recommended)** — a minimal authenticated confirmation state inside `/console`: signed-in identity, sign-out, and an explicit "no access assigned yet" message. No menu, no business metadata | Honest about the system's actual state, proves the session works, builds nothing P1-01 owns |
-| **B** — land on the P1-BASE shell with empty navigation | Risks implying capability that does not exist; D-02 forbids placeholder screens |
-| **C** — land back on a signed-in variant of the entry page | Cannot demonstrate that a protected route is reachable, weakening acceptance criterion 2 |
+| Idle timeout | **60 minutes** |
+| Absolute session lifetime | **12 hours** |
+| Inactive-user revocation | **Next protected request** |
 
-**Decision required:** approve A, or direct otherwise.
+"Next protected request" means the active-user condition is **re-evaluated
+server-side before serving protected functionality**. If the user has become
+inactive: destroy or refuse the session, serve the approved inactive/session-ended
+state, and **do not continue serving cached protected application data**.
+
+Immediate administrative session-revocation tooling remains owned by the later
+user/session administration unit. P1-02 may later make these values
+administratively configurable; **P1-00 ships the approved fixed defaults**.
+
+### D-11 — Post-authentication landing · **APPROVED — Option A**
+
+A minimal protected confirmation state inside `/console`.
+
+**May show only:** the signed-in user's safe display identity; confirmation that
+authentication succeeded; sign-out; and an explicit message that no
+business/application access has yet been assigned.
+
+**Must contain none of:** a sidebar; Administration Home; a fake menu; P1-01
+functionality; placeholder P1-02–P1-10 screens; business-domain data; Fabric or
+Workplace capability.
+
+Its purpose is to prove `authenticated session → protected route` **without
+pre-building the next unit**.
+
+### D-12 — Audit and security event boundary · **APPROVED**
+
+The §11 proposal is approved. P1-00 emits **structured, redacted security events
+through the existing application logging boundary** and does **not** create the
+P1-08 audit schema early.
+
+Permitted events: bootstrap grant issued; bootstrap completed; bootstrap
+refused; login succeeded; login refused; logout; session expired.
+
+**Never logged:** client secret · authorization code · access or ID token ·
+bootstrap token · `state` · `nonce` · PKCE verifier.
+
+P1-08 later owns durable audit storage, the catalogue and the UI.
+
+### 20.6 Operational values are not architecture
+
+The following are **external operational prerequisites**, not architecture
+decisions, and are deliberately **absent from this repository**:
+
+- Tenant ID · Client ID · client secret
+- The nominated first System Administrator identity
+- The named Entra registration account
+- The named SSH/platform operator
+
+DESIGN may proceed once their **required shape is known, ownership is assigned,
+and secure storage location is decided** — all three now hold. The actual values
+must be available before EXECUTE and real Entra verification, where technically
+required.
+
+> **Tests are not weakened because values are not committed to Git.** Protocol
+> validation, mapping and refusal behaviour are tested against controlled
+> fixtures; the live end-to-end path is verified separately against the real
+> tenant at VERIFY.
 
 ---
 
@@ -646,21 +678,16 @@ is not repeated.)*
 
 ## 23. Stop point — the exact DESIGN gate
 
-**This PLAN stops here.**
+**This gate is now OPEN.** The PLAN is approved and every decision is recorded
+in §20, so DESIGN is authorised.
 
-DESIGN begins only when the Product Owner has:
-
-1. approved this PLAN;
-2. decided **D-03** (six sub-decisions);
-3. decided **D-04** (items 3, 4, 5, 6, 7, 9 plus rotation ownership);
-4. decided **D-09**, **D-10** and **D-11**.
-
-`P1-00-LOGIN-BOOTSTRAP-DESIGN.md` will then cover: screen flow and every
-pre-auth state against the approved design system; the identity adapter contract
-and the Entra implementation; the exact claim-validation sequence; route and
-controller structure; the `users` migration; the bootstrap grant lifecycle; the
-session configuration; the audit event shapes; and the full test plan including
-all thirteen negative cases with their non-vacuity proofs.
+`P1-00-LOGIN-BOOTSTRAP-DESIGN.md` covers: screen flow and every pre-auth state
+against the approved design system; the identity adapter contract and the Entra
+implementation; the exact claim-validation sequence; route and controller
+structure; the `users` migration and the D-09 seam; the bootstrap grant schema,
+lifecycle and atomic consumption; the session configuration; the redacted
+security event shapes; and the full test plan including all thirteen negative
+cases with their non-vacuity proofs.
 
 **No application code, migration, route, screen, configuration key, Entra
 registration or secret is created before that design is approved.**
