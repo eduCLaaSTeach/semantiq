@@ -235,6 +235,15 @@ stack trace or `<?php`.
 
 ### 7.1 Unresolved risk — the second guard is still not firing
 
+> **Update.** The product owner has since fixed **D-08B as the permanent hosting
+> model**. D-08A is closed and the hosting provider will not be asked to repoint the
+> document root, so option 2 below is withdrawn. The remaining question — whether an
+> Apache denial can fire at all on this host — is now more important, not less,
+> because `DEPLOYMENT-LAYOUT-AMENDMENT.md` proposes removing the forwarder that is
+> currently doing all of the protecting. That amendment makes proving a 403 a
+> prerequisite rather than a follow-up.
+
+
 **Every gate passes. This is not a gate failure. It is a weakness worth a
 decision.**
 
