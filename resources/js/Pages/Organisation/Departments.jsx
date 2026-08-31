@@ -36,7 +36,7 @@ export default function Departments({ departments, businessUnits }) {
                         <th>Name</th>
                         <th>Business unit</th>
                         <th>Status</th>
-                        <th />
+                        <th><span className="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -83,6 +83,7 @@ export default function Departments({ departments, businessUnits }) {
             </table>
 
             <form className="org-form org-form-inline" onSubmit={submit}>
+                        <h2 className="org-form-title">Add a department</h2>
                 <label>
                     Business unit
                     <select

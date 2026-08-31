@@ -9,20 +9,40 @@
  * An area with no visible nodes is not rendered, which is what keeps Fabric
  * Configuration and SemantIQ Workplace out of the Phase 1 sidebar with no
  * special-casing: they have no nodes yet, so they do not appear.
+ *
+ * node.icon is a REGISTRY KEY, never text. Rendering it directly is what put
+ * the word "building" in the sidebar; Icon resolves the key to a glyph and
+ * renders nothing at all for an unknown one.
  */
+import Icon from '../Components/Icon'
+
 export default function AppShell({ productAreas = [], title, children }) {
     return (
         <div className="shell">
             <nav className="shell-rail" aria-label="Primary">
                 {productAreas.map((area) => (
-                    <div key={area.key}>
-                        <div className="shell-area-label">{area.label}</div>
-                        {area.nodes.map((node) => (
-                            <a className="shell-link" key={node.route} href={node.route}>
-                                <span aria-hidden="true">{node.icon}</span>
-                                {node.label}
-                            </a>
-                        ))}
+                    <div className="shell-area" key={area.key}>
+                        <h2 className="shell-area-label">{area.label}</h2>
+
+                        <ul className="shell-node-list">
+                            {area.nodes.map((node) => (
+                                <li key={node.route}>
+                                    <a
+                                        className="shell-link"
+                                        href={node.route}
+                                        aria-current={
+                                            typeof window !== 'undefined' &&
+                                            window.location.pathname.startsWith(node.route)
+                                                ? 'page'
+                                                : undefined
+                                        }
+                                    >
+                                        <Icon name={node.icon} />
+                                        <span className="shell-link-label">{node.label}</span>
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 ))}
             </nav>

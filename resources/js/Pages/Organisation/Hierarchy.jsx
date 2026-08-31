@@ -30,7 +30,7 @@ export default function Hierarchy({ people }) {
                         <th>Name</th>
                         <th>Email</th>
                         <th>Manager</th>
-                        <th />
+                        <th><span className="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -66,6 +66,7 @@ export default function Hierarchy({ people }) {
 
             {people.length > 1 ? (
                 <form className="org-form org-form-inline" onSubmit={submit}>
+                        <h2 className="org-form-title">Set a manager</h2>
                     <label>
                         User
                         <select

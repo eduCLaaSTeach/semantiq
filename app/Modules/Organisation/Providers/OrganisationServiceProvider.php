@@ -34,7 +34,12 @@ final class OrganisationServiceProvider extends ServiceProvider
             $this->app->make(NavigationRegistry::class)->add(new NavigationNode(
                 area: ProductArea::SystemAdministration,
                 label: 'Organisation',
-                icon: 'building',
+
+                // A key into the central icon registry, NOT display text.
+                // The shared standard names symbols i-<concept>; the shell
+                // resolves this to a glyph and renders nothing for an unknown
+                // key, so a bad key can never surface as words in the sidebar.
+                icon: 'i-sitemap',
                 routeName: 'organisation.profile',
                 policyKey: 'organisation.view',
             ));
