@@ -81,7 +81,7 @@ Unit design: `P1-BASE-APPLICATION-BASELINE-DESIGN.md` — drafted, awaiting appr
 | 2 | **P1-00** | Login, Microsoft SSO, callback validation, session, bootstrap, refusal states | Auth path proven end to end including fail-closed cases |
 | 3 | **P1-01** | Organisation, business units, departments, teams, hierarchy, legal entities | Scope source established |
 | 4 | **P1-02** | Identity & SSO administration, health, session policy | Identity supportable without exposing secrets |
-| 5 | **P1-03** | Users & Groups, directory sync, lifecycle | Users exist with no accidental data access |
+| 5 | **P1-03** | Users & Groups, directory sync, lifecycle | Users exist with no accidental data access **+ carried gate from P1-01: live multi-user management-cycle refusal** |
 | 6 | **P1-04** | Business Domains, owners, defaults | Domains assignable |
 | 7 | **P1-05** | Roles, entitlements, scopes, sensitivity, Access Simulator | Effective-access engine proven |
 | 8 | **P1-06** | Security Status | Posture legible without security expertise |
@@ -325,3 +325,23 @@ P1-BASE approved and moved from PLAN to DESIGN.
 
 No application code is written before the design is approved. No migration is
 created. The live server is not modified.
+
+---
+
+## 10. Carried verification gates
+
+A carried gate is a check that a unit's design requires but its delivered state
+cannot execute. It is recorded here so it is executed against the later unit
+rather than quietly lost.
+
+| From | To | Gate | Why it could not run in the originating unit |
+| --- | --- | --- | --- |
+| **P1-01** | **P1-03** | Live multi-user management-cycle refusal, observed in production | Self-management is refused before the chain walk, so a genuine cycle needs at least two SemantIQ users. P1-01 ships with `users_total = 1`; P1-03 provisions the second |
+
+**P1-03 is not accepted until every gate carried into it has been executed and
+recorded with observed output.**
+
+The originating unit keeps its own automated coverage as its evidence — for the
+P1-01 cycle rule that is negative case 8, proven non-vacuous by the mutation
+*remove the chain walk*. A carried gate defers the **live observation**, never
+the rule and never the test.

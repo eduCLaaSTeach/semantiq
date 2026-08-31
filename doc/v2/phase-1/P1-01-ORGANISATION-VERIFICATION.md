@@ -1,6 +1,7 @@
 # P1-01 — Organisation — VERIFICATION
 
-**Status:** BUILD VERIFIED — awaiting Product Owner acceptance.
+**Status:** BUILD VERIFIED — awaiting Product Owner live verification of §7.5, then acceptance.
+**Carried gate:** the live multi-user management-cycle check is deferred to **P1-03** (§7.3).
 **Deployed:** merge `9afe33d`, deployment [33378638710](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33378638710) — success
 **Unit:** P1-01 (Phase 1 delivery order 3)
 **PLAN:** `P1-01-ORGANISATION-PLAN.md` — approved; D-14, D-15
@@ -297,38 +298,53 @@ The two `users_*` counts together are the direct evidence for D-16's population
 rule: the column exists on the live table, and the one existing administrator
 carries **NULL** — no seed, no backfill, no manual database write, and no change
 to bootstrap. They acquire an organisation only by creating the Company Profile,
-which is check 5a in §7.3.
+which is check 5a in §7.5.
 
 `users_total = 1` also re-confirms SYS-014/SYS-015 across this deployment: no
 self-registration, and no user appeared as a side effect of the migration.
 
-### 7.3 What could NOT be verified without the Product Owner
+### 7.3 Deferred to P1-03 — the live multi-user management cycle
 
-Checks 2 to 7, 9 and 5a all require **an authenticated System Administrator
-session**, which means a real interactive Microsoft Entra sign-in:
+**Product Owner decision, 31 August 2026.**
 
-| # | Check | Why it is not marked PASS |
-| --- | --- | --- |
-| 2 | Signed-in System Administrator sees the Organisation screen | Requires an Entra sign-in |
-| 3 | Create organisation, legal entity, business unit, department, team | Requires an authenticated session |
-| 4 | One business unit ↔ two legal entities, and the reverse — the D-14 shape | Requires an authenticated session |
-| 5 | Add a team member, then remove; `left_at` set, row retained | Requires an authenticated session |
-| 5a | **D-16:** the administrator who created the profile carries that `organisation_id` | Requires the profile to have been created |
-| 6 | Set a manager, then attempt a cycle | Requires an authenticated session |
-| 7 | Deactivate a business unit with active departments; refused, children named | Requires an authenticated session |
-| 9 | Move a department between business units; event emitted | Requires an authenticated session |
+Check 6 requires setting a manager and then attempting a **genuine** management
+cycle. The implementation refuses self-management before the chain walk runs, so
+a real cycle needs **at least two SemantIQ users**. Production has
+`users_total = 1`, and P1-03 — which provisions additional users — has not been
+delivered.
 
-I have no credentials for that sign-in and have not asked for any — the standing
-instruction is that no secret is pasted into chat, GitHub or this session, and a
-sign-in I could perform would mean a credential existed somewhere it must not.
+My earlier statement that one Product Owner sign-in could complete all eight
+outstanding checks was **wrong**: check 6 is not executable in P1-01 at all.
 
-**These are left blank rather than inferred.** Each is covered by an automated
-test that was proven non-vacuous by mutation (§3), but a passing test is not the
-same claim as an observed production result, and this document does not mark
-anything PASS that was not executed and observed.
+It is **not** solved by inserting a user, reopening bootstrap, writing to MySQL,
+building P1-03 early, or weakening the cycle rule. None of those was done.
 
-They are completed by the Product Owner signing in and working through §7.3 once,
-after which this section is filled in with the observed outcome.
+| | |
+| --- | --- |
+| **P1-01 evidence for the cycle rule** | The mutation-proven automated coverage in §3 — case 8, mutation *remove the chain walk*, **CAUGHT** |
+| **Carried gate** | The live multi-user management-cycle observation becomes a **mandatory carried verification gate for P1-03**, to be executed before P1-03 acceptance, once a second legitimate SemantIQ user exists |
+| **Implementation impact** | **None.** The management-cycle rule and its implementation are unchanged |
+
+### 7.4 Outstanding for P1-01 — executable now
+
+Seven checks remain, all executable in a browser by the existing System
+Administrator: **2, 3, 4, 5, 5a, 7 and 9**. They are listed in §7.5.
+
+They are recorded as **not yet observed** rather than inferred. Each is covered
+by a test proven non-vacuous by mutation, but a passing test is not the same
+claim as an observed production result.
+
+### 7.5 The seven checks
+
+| # | Check | Expected | Observed |
+| --- | --- | --- | --- |
+| 2 | Signed-in System Administrator reaches Organisation | Screen renders | |
+| 3 | Create organisation, legal entity, business unit, department, team | Persisted | |
+| 4 | One business unit ↔ two legal entities, and one legal entity ↔ two business units | Both permitted — the D-14 shape | |
+| 5 | Add a team member, then remove | `left_at` set, row retained | |
+| 5a | **D-16:** the administrator who created the profile carries that `organisation_id` | Set, non-NULL | |
+| 7 | Deactivate a business unit with active departments | Refused, children named | |
+| 9 | Move a department between business units | Permitted, event emitted | |
 
 ---
 
@@ -342,7 +358,7 @@ after which this section is filled in with the observed outcome.
 | 4 | No roles, permissions, domains, scopes or sensitivity schema | ✅ |
 | 4a | `users.organisation_id` nullable, one writer, `tenant_id` read nowhere | ✅ |
 | 5 | Organisation is the first navigable item; nothing else navigable | ✅ |
-| 6 | All 11 production checks executed and recorded | **Partial** — checks 1, 8, 10, 11 and the whole D-16 schema claim observed (§7.1, §7.2); checks 2-7, 9 and 5a need one Product Owner sign-in (§7.3) |
+| 6 | All production checks executed and recorded | **Partial** — checks 1, 8, 10, 11 and the D-16 schema claim observed (§7.1, §7.2); checks 2, 3, 4, 5, 5a, 7, 9 outstanding (§7.5); **check 6 deferred to P1-03** (§7.3) |
 | 7 | Apache boundary, 403 gate, ACME and both checksums pass unchanged | ✅ §7.1 |
 | 8 | Explicit Product Owner acceptance | ⏳ |
 
