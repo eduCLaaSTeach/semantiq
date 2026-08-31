@@ -1,0 +1,115 @@
+# Read-only P1-01 schema and state verification.
+#
+# Manual dispatch only. It reports SCHEMA FACTS AND COUNTS: whether the P1-01
+# migrations applied, whether users.organisation_id exists and is nullable, and
+# how many rows each structural table holds.
+#
+# It never reads a name, an email, an identity, a grant or a secret. Structure
+# is business content and none of it is printed - the questions this answers are
+# "did the schema land" and "how many rows", which is what production evidence
+# for P1-01 requires and nothing more.
+#
+# It mirrors verify-bootstrap.yml, including the ssh-agent and askpass handling
+# the deploy key needs: the key is passphrase-protected, and writing the key
+# file alone produces "Permission denied (publickey)".
+name: Verify P1-01 organisation schema (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Report organisation schema state over SSH
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+    steps:
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      # Schema facts and counts. No name, email, identity, grant or secret.
+      - name: Report organisation schema state
+        run: |
+          set -euo pipefail
+
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
+              \$tables = [\"organisations\",\"legal_entities\",\"business_units\",
+                \"business_unit_legal_entity\",\"departments\",\"teams\",
+                \"team_memberships\",\"management_relationships\"];
+
+              \$present = [];
+              \$counts  = [];
+              foreach (\$tables as \$t) {
+                \$present[\$t] = \Illuminate\Support\Facades\Schema::hasTable(\$t);
+                \$counts[\$t]  = \$present[\$t] ? \Illuminate\Support\Facades\DB::table(\$t)->count() : null;
+              }
+
+              \$seam = collect(\Illuminate\Support\Facades\Schema::getColumns(\"users\"))
+                ->firstWhere(\"name\", \"organisation_id\");
+
+              \$fk = collect(\Illuminate\Support\Facades\Schema::getForeignKeys(\"users\"))
+                ->first(fn (\$k) => \$k[\"columns\"] === [\"organisation_id\"]);
+
+              \$deleteRoutes = 0;
+              foreach (\Illuminate\Support\Facades\Route::getRoutes() as \$r) {
+                if (str_starts_with(\$r->uri(), \"console/organisation\") && in_array(\"DELETE\", \$r->methods(), true)) {
+                  \$deleteRoutes++;
+                }
+              }
+
+              echo json_encode([
+                \"tables_present\"          => \$present,
+                \"row_counts\"              => \$counts,
+                \"d16_column_exists\"       => \$seam !== null,
+                \"d16_column_nullable\"     => \$seam[\"nullable\"] ?? null,
+                \"d16_foreign_key_target\"  => \$fk[\"foreign_table\"] ?? null,
+                \"users_total\"             => \App\Modules\Platform\Models\User::query()->count(),
+                \"users_with_organisation\" => \App\Modules\Platform\Models\User::query()->whereNotNull(\"organisation_id\")->count(),
+                \"organisation_delete_routes\" => \$deleteRoutes,
+              ]), PHP_EOL;'")"
+
+          echo "$out" | tail -1 | tee /tmp/organisation.json
+
+          # Nothing of secret shape may ever appear here.
+          if grep -qE '[A-Za-z0-9]{40,}' /tmp/organisation.json; then
+            echo "::error::The report contains a long opaque string. Refusing to display it."
+            exit 1
+          fi
+
+          echo "::notice::Organisation schema state reported. Schema facts and counts only."
