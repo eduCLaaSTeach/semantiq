@@ -193,6 +193,58 @@ jobs:
           echo "state=$state" >> "$GITHUB_OUTPUT"
           echo "::notice::Deployment state: $state"
 
+      # Fail BEFORE the site goes down, not after.
+      #
+      # P1-00 makes the Microsoft keys required in production, and the health
+      # check that enforces that runs after the maintenance window has already
+      # opened - so a deployment missing them would abort with the site still in
+      # maintenance and "artisan up" never reached. That is an outage caused by
+      # a configuration check, which is the same shape as the APP_KEY deadlock
+      # this pipeline hit once before.
+      #
+      # Checking here means a misconfigured deployment stops with production
+      # untouched and still serving.
+      #
+      # PRESENCE ONLY. No value is read, printed, or transmitted anywhere. The
+      # client secret in particular never leaves the server.
+      - name: Verify identity configuration is present on the server
+        run: |
+          set -euo pipefail
+
+          result="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "bash -s -- '$CPANEL_DEPLOY_PATH'" <<'REMOTE'
+          set -u
+          cd "$1" 2>/dev/null || { echo 'FATAL_NO_DEPLOY_DIR'; exit 0; }
+          [ -f .env ] || { echo 'FATAL_NO_ENV'; exit 0; }
+          for key in MICROSOFT_TENANT_ID MICROSOFT_CLIENT_ID MICROSOFT_CLIENT_SECRET MICROSOFT_REDIRECT_URI; do
+            if grep -qE "^${key}=.+" .env; then
+              echo "${key}=PRESENT"
+            else
+              echo "${key}=MISSING"
+            fi
+          done
+          REMOTE
+          )"
+
+          echo "$result"
+
+          if echo "$result" | grep -q 'FATAL_NO_ENV'; then
+            echo "::error::No .env on the server. Provisioning has not been completed."
+            exit 1
+          fi
+
+          if echo "$result" | grep -q 'FATAL_NO_DEPLOY_DIR'; then
+            echo "::error::The deployment directory does not exist."
+            exit 1
+          fi
+
+          if echo "$result" | grep -q 'MISSING'; then
+            echo "::error::Required Microsoft identity configuration is missing from the server .env. Production has NOT been touched."
+            exit 1
+          fi
+
+          echo "::notice::All four Microsoft identity settings are present and non-empty. No value was read."
+
       - name: Open the maintenance window
         if: steps.state.outputs.state == 'EXISTING'
         run: |
