@@ -1,6 +1,7 @@
 # P1-01 — Organisation — PLAN
 
-**Status:** PLAN — awaiting Product Owner review. **Planning documentation only.**
+**Status:** **PLAN APPROVED — 31 August 2026.** D-14 and D-15 decided in §12;
+Definition of Ready satisfied. **P1-01 DESIGN is authorised.** No implementation.
 **Unit:** P1-01 (Phase 1 delivery order 3)
 **Predecessor:** P1-00 — **ACCEPTED 31 August 2026**
 **Successor:** P1-02 — Identity & SSO Administration (locked)
@@ -102,7 +103,8 @@ One parent each, no cycles.
 
 ```text
 Organisation
-  └── Legal Entity
+  ├── Legal Entity      ─┐
+  └── Business Unit     ─┴─  optional many-to-many association
 ```
 
 A **separate axis**, not a level of the structural tree. A legal entity is who
@@ -110,8 +112,16 @@ signs contracts and employs people; a business unit is how work is organised.
 They frequently do not align — one legal entity can span several business units,
 and one business unit can operate across several legal entities.
 
-**Proposed:** legal entity attaches at business unit level, optional. §10 D-14
-puts that to the Product Owner rather than assuming it.
+**Decided (D-14):** business unit ↔ legal entity is an **optional many-to-many
+association**, carried in a junction. That follows from the paragraph above
+rather than contradicting it: if one legal entity can span several business
+units and one business unit can operate across several legal entities, then any
+single-parent attachment forces a falsehood into the data on the first day it
+stops being true.
+
+The association **grants nothing** — no scope, no permission, no employment
+inference. Person-level employing legal entity, if ever required, belongs to
+P1-03 and is not pre-built here.
 
 ### 3.3 Management hierarchy — who reports to whom
 
@@ -122,9 +132,11 @@ for manager/team scope"* — so it must be recorded in its own right.
 
 P1-01 records the relationship. **P1-05 decides what a manager can see.**
 
-> P1-01 has no `users` beyond the P1-00 identity table. Team membership and
-> management relationships reference that table. Whether a person may exist
-> without a user record is **D-15** (§10).
+> **Decided (D-15):** team membership and management relationships reference the
+> P1-00 `users` table and nothing else. There is no separate `people` table, so
+> there is no second source of truth for who someone is and no reconciliation
+> problem later. The accepted consequence is that the chart is only as complete
+> as the user list, and fills in once P1-03 provisions users.
 
 ---
 
@@ -136,9 +148,9 @@ P1-01 records the relationship. **P1-05 decides what a manager can see.**
 | Organisation → Business Unit | 1 → many | at least one |
 | Business Unit → Department | 1 → many | optional |
 | Department → Team | 1 → many | optional |
-| Business Unit → Legal Entity | many → 1 | optional — **D-14** |
-| Team ↔ Person | many → many | optional |
-| Person → Manager | many → 1 | optional |
+| Business Unit ↔ Legal Entity | many ↔ many, via junction | optional |
+| Team ↔ User | many ↔ many | optional |
+| User → Manager (a User) | many → 1 | optional |
 
 Every record belongs to exactly one organisation. That column is what keeps the
 multi-tenant boundary real without building multi-tenancy.
@@ -157,11 +169,12 @@ Indicative. Exact columns are DESIGN.
 | --- | --- |
 | **Organisation** | name, legal/display name, primary legal entity, country, timezone, status, timestamps |
 | **Legal Entity** | organisation, name, registration/company number, jurisdiction, registered address, status |
-| **Business Unit** | organisation, name, code, optional legal entity, status |
+| **Business Unit** | organisation, name, code, status |
 | **Department** | organisation, business unit, name, code, status |
 | **Team** | organisation, department, name, code, status |
-| **Team membership** | team, person, joined/left dates, status |
-| **Management relationship** | person, manager, effective from/to |
+| **Business Unit ↔ Legal Entity** | organisation, business unit, legal entity — association only, no attributes that could be read as entitlement |
+| **Team membership** | team, user, joined/left dates, status |
+| **Management relationship** | user, manager (user), effective from/to |
 
 Codes are for administrator correlation and import. **They are never identity
 keys** — the same lesson as P1-00, where email is carried but `oid` is the key.
@@ -238,7 +251,7 @@ alter someone's future scope, and the source document names restructuring
 specifically.
 
 **Never logged:** anything that is not a structural identifier — no session, no
-token, no personal data beyond the person reference.
+token, no personal data beyond the user reference.
 
 ---
 
@@ -255,7 +268,7 @@ token, no personal data beyond the person reference.
 | 7 | Cycle in the structural tree | Refused |
 | 8 | Cycle in the management chain | Refused |
 | 9 | Team whose department is outside its business unit | Refused |
-| 10 | Person managing themselves | Refused |
+| 10 | A user managing themselves | Refused |
 | 11 | Deactivating a node with active children | Refused, with the reason |
 | 12 | Hard delete attempted through any route | Not available |
 | 13 | Error and refusal bodies | No stack trace, framework internals or structure beyond what the caller may already see |
@@ -289,48 +302,59 @@ every one was caught by mutation, none by review.
 
 ---
 
-## 12. Product Owner decisions
+## 12. Product Owner decisions — **BOTH DECIDED, 31 August 2026**
 
-Two, and only two. Both are genuine forks where a wrong guess would be
-expensive to unpick later; everything else follows from the source documents.
+### D-14 — Business Unit ↔ Legal Entity · **APPROVED — optional many-to-many**
 
-### D-14 — Where a legal entity attaches · **BLOCKING**
+The many-to-one model I proposed was **rejected, correctly**: it contradicted
+this plan's own statement that one legal entity may span several business units
+and one business unit may operate across several legal entities. A single-parent
+attachment would have forced a falsehood into the data the first day that
+stopped being true.
 
-Legal structure and operating structure rarely align, and the source document
-lists Legal Entities as a peer subscreen without saying how it joins.
+Approved model:
 
-| Option | Assessment |
-| --- | --- |
-| **A (recommended)** — optional legal entity on **business unit** | Matches how organisations usually work: a business unit operates under one employing entity. Optional, so it can be filled in progressively |
-| **B** — legal entity on **department** | Finer-grained and occasionally true, but multiplies the records an administrator maintains, for a distinction most organisations do not draw |
-| **C** — legal entity on the **person** | Most accurate for employment reality and the most work; better suited to P1-03, which owns people |
+- one organisation has many legal entities;
+- one organisation has many business units;
+- a business unit may be associated with **zero, one or several** legal entities;
+- a legal entity may be associated with **zero, one or several** business units.
 
-Choosing A does not preclude C later — a person-level attribution can be added
-in P1-03 without changing the structural tree.
+Legal Entity remains a **separate organisational axis**, never a level in
+`Business Unit → Department → Team`.
 
-### D-15 — Whether a "person" can exist without a SemantIQ user · **BLOCKING**
+**The association grants no access.** P1-01 must not infer scope, permissions or
+employment from it. Person-level employing legal entity, if later required,
+belongs to **P1-03** and must not be pre-built now.
 
-Team membership and management relationships reference people. Today the only
-people SemantIQ knows are those with a `users` row from P1-00 — created only by
-bootstrap or, from P1-03, by administrator provisioning.
+### D-15 — Person representation · **APPROVED — `users` only**
 
-| Option | Assessment |
-| --- | --- |
-| **A (recommended)** — structure references **`users` only** | Simplest and safest. One identity table, no shadow people, no reconciliation. It means hierarchy can only be built for people who exist in SemantIQ, which in practice means P1-03 lands before an organisation chart is fully populated |
-| **B** — a separate `people` table, optionally linked to a user | Lets the full chart be modelled before users exist, at the cost of two sources of truth for "who someone is" and a merge problem the moment they sign in |
+Team memberships and management relationships reference the existing `users`
+identity table. **No separate `people` table.**
 
-**A is recommended and the consequence stated plainly:** with A, P1-01 delivers
-the structure and the *relationships that can be filled in today*, and the chart
-becomes fully populated once P1-03 provisions users. B trades that sequencing
-constraint for a duplicate-identity problem, which is the more expensive of the
-two.
+It is accepted that P1-01 initially carries limited people data and becomes
+fully populated once P1-03 provisions additional users. That sequencing
+constraint is preferable to duplicate identity records and the reconciliation
+problem they create — the same reasoning that made `oid` rather than email the
+identity key in P1-00.
+
+---
+
+## 12A. Definition of Ready — **SATISFIED**
+
+| # | Condition | Status |
+| --- | --- | --- |
+| 1 | PLAN approved by the Product Owner | ✅ |
+| 2 | **D-14** decided — business unit ↔ legal entity cardinality | ✅ optional many-to-many |
+| 3 | **D-15** decided — person representation | ✅ `users` only |
+| 4 | Scope and out-of-scope agreed | ✅ §2 |
+| 5 | No settled Phase 1 decision reopened | ✅ |
 
 ---
 
 ## 13. Stop point
 
-**This PLAN stops here.** DESIGN begins only when the Product Owner has approved
-it and decided **D-14** and **D-15**.
+**The PLAN gate is OPEN.** DESIGN is authorised and is specified in
+`P1-01-ORGANISATION-DESIGN.md`.
 
-No migration, model, route, controller, screen, seed or test is created before
-that design is approved.
+DESIGN is documentation only. No migration, model, route, controller, screen,
+seed or test is created before that design is approved.
