@@ -1,16 +1,49 @@
 # P1-BASE — Application Baseline — VERIFICATION
 
-**Status:** BUILD VERIFIED — every P1-BASE gate has been executed against the
-live deployment and passed. One unresolved risk is recorded in §7.1; it does not
-fail a gate but is a real weakness in the D-08B posture and is the product
-owner's to weigh.
+## P1-BASE ACCEPTED — 31 August 2026
 
-Awaiting product-owner acceptance. Successful deployment is not acceptance.
+**Status:** **ACCEPTED** by the Product Owner against the verified production
+baseline at `3d075bfbf80392651577abe256526575632b3e73`. **P1-BASE is closed.**
+
+The risk recorded in §7.1 is **resolved, not outstanding.** It was never a real
+weakness: the Apache deny rules had been firing throughout, and only their
+reported status was wrong. Four independent mechanisms were measured returning
+403, the boundary now requires 403 on every protected path, and the front
+controller serves directly from `public_html`. §7.1 is retained in full, marked
+superseded, because the reasoning that produced the wrong conclusion is worth
+keeping.
 
 **Unit:** P1-BASE
 **Design:** `P1-BASE-APPLICATION-BASELINE-DESIGN.md` (approved with four corrections)
-**Head verified:** `8d01db3` — see §2 for the full run ledger and the currency rule
-**Date:** 30 August 2026
+**Baseline accepted:** `3d075bf` — final deployment
+[33354691876](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33354691876),
+27/27 steps
+**Head first verified:** `8d01db3` — see §2 for the full run ledger and the currency rule
+**Verification dates:** 30–31 August 2026
+**Acceptance evidence:** `doc/dailyupdates/taskcompleted310826.md` §11
+**Hosting architecture:** `doc/v2/phase-1/HOSTING-ARCHITECTURE.md`
+
+### Delivery history — retained, including the failures
+
+| Event | Outcome |
+| --- | --- |
+| First deployment (PR #34, `996cd9f`) | **FAILED** its own exposure gate on `/app/` — a route-prefix collision, not a leak |
+| PR #35 correction (`6f68a62`) | Authenticated area moved to `/console`; deployment success |
+| PR #37 denial diagnostic (`662c84e`) | Probe returned 404 — reported as **NOT VERIFIED**, and that conclusion was later shown to be a false negative |
+| PR #38 denial matrix (`d44f8e0`) | **All four mechanisms 403.** The deny rules had been working all along; a path-valued ErrorDocument was masking the status |
+| PR #39 — PR 1 (`e4830ee`) | Diagnostics removed; gate tightened to require 403; deployment success |
+| PR #40 — PR 2 (`da7ddea`) | Root layout migrated; **deployment FAILED** on a `.well-known/` check that was itself wrong |
+| PR #41 — PR 2a (`3d075bf`) | ACME proven end to end; deployment success, 27/27 steps |
+
+Two deployments failed on the way to this baseline. Both are recorded above and
+in detail in the daily handover. Neither is erased: the first proved the
+exposure gate works, and the second was a defect in a gate rather than in the
+site — `Options -Indexes` turned a directory listing into a 403 while the check
+still asserted "not 403".
+
+Nothing below is marked PASS unless it was actually executed and its output
+observed. Items that could not be executed are marked NOT VERIFIED with the
+reason, never assumed.
 
 Nothing below is marked PASS unless it was actually executed and its output
 observed. Items that could not be executed are marked NOT VERIFIED with the

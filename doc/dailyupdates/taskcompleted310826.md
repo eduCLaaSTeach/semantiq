@@ -295,58 +295,145 @@ evidence, and this daily update document.
 ## 10. Current P1-BASE status
 
 ```
-P1-BASE BUILD VERIFIED — READY FOR PRODUCT OWNER ACCEPTANCE
+P1-BASE ACCEPTED — 31 August 2026
 ```
 
-**but:**
+Accepted by the Product Owner against the verified production baseline at
+`3d075bfbf80392651577abe256526575632b3e73`. **P1-BASE is closed.**
 
-```
-P1-BASE HAS NOT YET RECEIVED FINAL PRODUCT OWNER ACCEPTANCE.
-```
-
-The unresolved D-08B defence-depth observation in §8 remains for product-owner
-review. A successful deployment is not acceptance.
+The D-08B observation recorded in §8 is **resolved**, not outstanding — see §8
+for the correction and §11 for the evidence. The forwarder was never the only
+protection; the deny rules had been firing all along and only their reported
+status was wrong.
 
 ---
 
-## 11. What must NOT happen next
+## 11. P1-BASE final acceptance evidence
 
-- Do **not** start P1-00.
-- Do **not** implement Microsoft Entra SSO.
-- Do **not** implement first-admin bootstrap.
-- Do **not** create users or groups.
-- Do **not** create organisation schema.
-- Do **not** create roles, domains, scopes or sensitivity.
-- Do **not** implement Fabric.
-- Do **not** implement Power BI.
-- Do **not** implement AI.
-- Do **not** implement Workplace.
+The delivery ran to four pull requests after PR #36. All are recorded, including
+the deployment that failed.
+
+### The pull requests
+
+| PR | Purpose | Merge SHA | CI | Deployment |
+| --- | --- | --- | --- | --- |
+| #38 | Apache denial-capability matrix (authorised diagnostic) | `d44f8e0` | [33349778947](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33349778947) | [33349882458](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33349882458) — success |
+| #39 | PR 1 — diagnostics removed, boundary hardened | `e4830ee` | [33353084363](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33353084363) | [33353179847](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33353179847) — success |
+| #40 | PR 2 — final `public_html` root layout | `da7ddea` | [33354172485](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33354172485) | [33354267648](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33354267648) — **FAILED** |
+| #41 | PR 2a — corrective: prove ACME end to end | `3d075bf` | [33354599929](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33354599929) | [33354691876](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33354691876) — success, 27/27 steps |
+
+### PR #40's failed deployment — kept, not smoothed over
+
+The layout migration itself succeeded. **One check failed, and the check was
+wrong.**
+
+`Options -Indexes` turned `/.well-known/` from a 200 directory listing into a
+403, and the gate asserted "not 403" — so it failed the deployment on a
+certificate path that was working correctly.
+
+**This defect was mine.** `-Indexes` was added in PR #40 without revisiting a
+gate written against the old behaviour.
+
+TLS renewal was never at risk, and one measurement settles it: a *missing*
+challenge token returns **404, not 403**. The request resolves to the filesystem
+and only the file is absent; an existing file fails the `!-f` condition and is
+served directly. Let's Encrypt writes one file and reads it back — it never
+lists the directory.
+
+The check could have been relaxed to accept 403. That would have concealed the
+fact that renewal had never actually been verified, only a proxy for it. PR #41
+replaced the proxy with the mechanism: write a token, fetch it over HTTPS,
+require 200 with the exact body, remove it under a `trap`.
+
+> **A gate that fails on a healthy system gets ignored, which is worse than not
+> having it.**
+
+Two further defects were caught by rehearsal **before** reaching production: a
+`grep && exit` guard that would have aborted assembly under `set -e` on its
+*passing* path, and an asset check reading manifest paths in the wrong form,
+which would have failed every deployment unconditionally.
+
+### The 17-point acceptance evidence
+
+| # | Item | Result |
+| --- | --- | --- |
+| 1–2 | PR 1 (#39) `e4830ee` | CI and deployment success |
+| 3 | Strengthened 403 gate | **26/26 paths 403**, 9-byte bodies, zero leaks |
+| 4–5 | PR 2 (#40) `da7ddea`, PR 2a (#41) `3d075bf` | final deployment success, 27/27 steps |
+| 6 | Root front controller | `/index.php` **200**; SHA-256 verified; resolves siblings |
+| 7 | No `public_html/public` dependency | `SEMANTIQ_PUBLIC_ABSENT`; `/public/index.php` **403**; site 200 |
+| 8 | Apache exposure | all 26 protected paths **403**, no secret, path, source or trace |
+| 9 | Checksums | `.htaccess` **MATCH**, `index.php` **MATCH** |
+| 10 | `.well-known` / ACME | file written, fetched, **200 exact body**; missing token 404; listing 403; token removed |
+| 11 | APP_KEY | **preserved** — `EXISTING` path, never regenerated |
+| 12 | `.env` | **preserved** — excluded from transfer and deletion |
+| 13 | MySQL / migrations | ran against production, success |
+| 14 | Application health | `semantiq:health` **5/5 OK** over SSH |
+| 15 | Assets | `/build/assets/*.css` and `*.js` **200**; `/build/` listing **403** |
+| 16 | Unresolved risk | **none outstanding** |
+| 17 | Recommendation | READY FOR ACCEPTANCE → **ACCEPTED** |
+
+### Final hosting architecture, in force
+
+```
+cPanel document root          = public_html
+deployment root               = public_html
+production front controller   = public_html/index.php
+public_html/public            = not a required production layer
+```
+
+Full detail: `doc/v2/phase-1/HOSTING-ARCHITECTURE.md`.
+
+Test suite at acceptance: **64 tests, 185 assertions.**
+
+---
+
+## 12. What must NOT happen next
+
+P1-BASE is accepted and closed. **P1-00 is unlocked for PLAN ONLY.**
+
+The lifecycle is unchanged: `PLAN → APPROVE → DESIGN → APPROVE → EXECUTE →
+TEST → VERIFY → ACCEPT`.
+
+- Do **not** begin P1-00 DESIGN or write any P1-00 code until the PLAN is
+  approved.
+- Do **not** create migrations, users-table changes, organisation schema, roles,
+  domains, scopes or sensitivity.
+- Do **not** write Entra integration code, callback routes, login UI or
+  bootstrap code.
+- Do **not** create secrets or Microsoft app registrations.
+- Do **not** implement Fabric, Power BI, AI or Workplace.
 - Do **not** perform speculative refactoring.
-- Do **not** change deployment or security architecture without a product-owner
-  decision.
+
+### Settled baseline decisions — do not reopen
+
+D-07 (Laravel → Inertia → React 19 → Vite) · D-08B (`public_html` permanent
+document and deployment root) · root `public_html/index.php` front controller ·
+GitHub Actions → SSH → cPanel deployment · APP_KEY preservation rules ·
+deployment-controlled MySQL migrations · the approved Apache 403 exposure
+boundary.
+
+Settled unless a verified technical impossibility appears.
 
 ---
 
-## Resume Here Tomorrow
+## Resume Here Next Session
 
 1. **Read this daily update first.**
-2. Read `doc/v2/phase-1/P1-BASE-APPLICATION-BASELINE-VERIFICATION.md`.
-3. Check the current state of `main` — it should be at `6f68a62` unless something
-   has changed since.
-4. Check the status of **PR #36** (documentation only — merged, open, or closed).
-5. **Do not assume product-owner acceptance has been given.** It had not been given
-   when this handover was written.
-6. Present the unresolved **D-08B defence-depth observation** from §8, with its three
-   options, and do not choose among them.
-7. **Wait for the product owner's decision.**
-8. Only after an explicit `P1-BASE ACCEPTED` may planning for **P1-00** begin. P1-00
-   planning starts by bringing back **D-03** (first-administrator bootstrap method)
-   and **D-04** (Microsoft Entra ID app registration), both of which were deferred
-   and remain undecided.
+2. Read `doc/v2/phase-1/P1-BASE-APPLICATION-BASELINE-VERIFICATION.md` — it records
+   `P1-BASE ACCEPTED — 31 August 2026`.
+3. Read `doc/v2/phase-1/HOSTING-ARCHITECTURE.md` for the final layout.
+4. Read `doc/v2/phase-1/P1-00-APPLICATION-ENTRY-LOGIN-PLAN.md` — the P1-00 PLAN,
+   awaiting Product Owner review.
+5. `main` should be at or after `3d075bf`.
+6. **D-03** (first-administrator bootstrap) and **D-04** (Microsoft Entra ID
+   registration) are live P1-00 blockers. Both are presented in the PLAN with
+   options and required decisions; **neither may be chosen unilaterally.**
+7. Wait for explicit PLAN approval before DESIGN.
 
 ---
 
-## 12. Evidence references
+## 13. Evidence references
 
 | Item | Reference |
 | --- | --- |
@@ -371,7 +458,7 @@ other secret appears in this document, and none may be added to it.
 
 ---
 
-## 13. Daily update convention
+## 14. Daily update convention
 
 From now on, at the end of every working day or session, maintain exactly one file:
 
