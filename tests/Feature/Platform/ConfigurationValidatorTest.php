@@ -45,21 +45,26 @@ final class ConfigurationValidatorTest extends TestCase
     }
 
     /**
-     * Correction 4. P1-BASE must not refuse to boot because P1-00 Microsoft
-     * configuration is absent, and no fake value may be invented to satisfy it.
+     * Correction 4, still true after P1-00 activated these keys: absent
+     * Microsoft configuration must not stop a non-production environment
+     * booting, and no fake value may be invented to satisfy the validator.
+     *
+     * The keys moved from config/semantiq.php to config/identity.php when
+     * P1-00 activated them - one file, one owner.
      */
-    public function test_absent_microsoft_configuration_is_not_a_p1_base_problem(): void
+    public function test_absent_microsoft_configuration_is_not_a_problem_outside_production(): void
     {
         config([
-            'semantiq.identity.microsoft.tenant_id' => null,
-            'semantiq.identity.microsoft.client_id' => null,
-            'semantiq.identity.microsoft.client_secret' => null,
-            'semantiq.identity.microsoft.redirect_uri' => null,
+            'app.env' => 'testing',
+            'identity.microsoft.tenant_id' => null,
+            'identity.microsoft.client_id' => null,
+            'identity.microsoft.client_secret' => null,
+            'identity.microsoft.redirect_uri' => null,
         ]);
 
         $this->assertTrue(
             app(ConfigurationValidator::class)->isValid(),
-            'P1-BASE refused to validate without P1-00 identity configuration.'
+            'Validation failed without identity configuration outside production.'
         );
     }
 
@@ -72,11 +77,47 @@ final class ConfigurationValidatorTest extends TestCase
         $this->assertStringContainsString('database.connections.sqlite.database', $problems);
     }
 
-    public function test_microsoft_keys_are_declared_and_owned_by_p1_00(): void
+    /**
+     * P1-00 promoted the Microsoft keys from declared to required-in-production.
+     * A production deployment missing them must fail at boot, not at a user's
+     * first sign-in attempt.
+     */
+    public function test_identity_keys_are_required_in_production(): void
     {
-        foreach (ConfigurationRequirements::declared() as $key => $owner) {
-            $this->assertSame('P1-00', $owner, "Declared key [{$key}] should be owned by P1-00.");
-            $this->assertNotContains($key, ConfigurationRequirements::required());
+        config([
+            'app.env' => 'production',
+            'app.debug' => false,
+            'identity.microsoft.tenant_id' => '',
+            'identity.microsoft.client_id' => '',
+            'identity.microsoft.client_secret' => '',
+            'identity.microsoft.redirect_uri' => '',
+        ]);
+
+        $problems = implode(' ', app(ConfigurationValidator::class)->problems());
+
+        foreach (ConfigurationRequirements::requiredInProduction() as $key) {
+            $this->assertStringContainsString($key, $problems, "[{$key}] must be required in production.");
         }
+    }
+
+    /**
+     * And NOT required elsewhere. CI and developer machines have no Entra
+     * tenant, and inventing placeholder values to satisfy the validator would
+     * move the failure from boot, where it is obvious, to the identity
+     * provider, where it is not.
+     */
+    public function test_identity_keys_are_not_required_outside_production(): void
+    {
+        config([
+            'app.env' => 'testing',
+            'identity.microsoft.tenant_id' => '',
+            'identity.microsoft.client_id' => '',
+            'identity.microsoft.client_secret' => '',
+            'identity.microsoft.redirect_uri' => '',
+        ]);
+
+        $problems = implode(' ', app(ConfigurationValidator::class)->problems());
+
+        $this->assertStringNotContainsString('identity.microsoft', $problems);
     }
 }

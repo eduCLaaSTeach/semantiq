@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
 final class NoBusinessSchemaTest extends TestCase
 {
     private const FORBIDDEN = [
-        'users', 'roles', 'permissions', 'domains', 'business_domains', 'scopes',
+        'roles', 'permissions', 'domains', 'business_domains', 'scopes',
         'sensitivity', 'entitlements', 'organisations', 'organizations', 'teams',
         'business_units', 'audit', 'access_reviews', 'fabric',
     ];

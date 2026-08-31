@@ -53,17 +53,38 @@ final class ConfigurationRequirements
     }
 
     /**
+     * Identity keys, required in production only.
+     *
+     * P1-00 promotes these from declared to required, so a production
+     * deployment missing them fails loudly at boot rather than at a user's
+     * first sign-in attempt.
+     *
+     * They are NOT required outside production, and that is deliberate. CI and
+     * developer machines have no Entra tenant, and the alternative - inventing
+     * placeholder values to satisfy the validator - is exactly what this class
+     * already warns against: it moves the failure from boot, where it is
+     * obvious, to the identity provider, where it is not. The provider's own
+     * isConfigured() handles the unconfigured case gracefully.
+     *
+     * @return list<string>
+     */
+    public static function requiredInProduction(): array
+    {
+        return [
+            'identity.microsoft.tenant_id',
+            'identity.microsoft.client_id',
+            'identity.microsoft.client_secret',
+            'identity.microsoft.redirect_uri',
+        ];
+    }
+
+    /**
      * Recognised, deliberately not required yet, and owned by a later unit.
      *
      * @return array<string, string>
      */
     public static function declared(): array
     {
-        return [
-            'semantiq.identity.microsoft.tenant_id' => 'P1-00',
-            'semantiq.identity.microsoft.client_id' => 'P1-00',
-            'semantiq.identity.microsoft.client_secret' => 'P1-00',
-            'semantiq.identity.microsoft.redirect_uri' => 'P1-00',
-        ];
+        return [];
     }
 }

@@ -4,25 +4,30 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Http\Controllers;
 
+use App\Modules\Platform\Identity\IdentityProvider;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * The pre-authentication entry page.
+ * The Login page.
  *
  * The blueprint requires that an unauthenticated browser receives no protected
  * shell, menu or business metadata. This page therefore carries none: brand,
- * product name, a short statement, and nothing that describes what exists
- * behind authentication.
+ * product name, and one action.
  *
- * P1-00 replaces this with the real Login page and its Sign in with Microsoft
- * action. It is not a placeholder for a screen that should exist now - in
- * P1-BASE there is genuinely nothing to sign in to.
+ * The provider is offered only when it is configured, per blueprint 0.2. Note
+ * what is passed to the browser - a boolean, not the client id, not the tenant,
+ * and certainly not the secret. The view has no way to render what it never
+ * receives.
  */
 final class EntryController
 {
+    public function __construct(private readonly IdentityProvider $provider) {}
+
     public function __invoke(): Response
     {
-        return Inertia::render('Entry');
+        return Inertia::render('Entry', [
+            'microsoftEnabled' => $this->provider->isConfigured(),
+        ]);
     }
 }
