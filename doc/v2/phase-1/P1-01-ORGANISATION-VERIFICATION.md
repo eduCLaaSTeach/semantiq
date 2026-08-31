@@ -325,6 +325,25 @@ building P1-03 early, or weakening the cycle rule. None of those was done.
 | **Carried gate** | The live multi-user management-cycle observation becomes a **mandatory carried verification gate for P1-03**, to be executed before P1-03 acceptance, once a second legitimate SemantIQ user exists |
 | **Implementation impact** | **None.** The management-cycle rule and its implementation are unchanged |
 
+### 7.3a Counts-only baseline, before any browser action
+
+`verify-organisation.yml` run
+[33381020970](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33381020970),
+captured **before** the Product Owner performs any browser action, so the live
+verification is judged on a before/after delta rather than an absolute reading.
+
+```json
+{"users_total":1,"users_with_organisation":0,
+ "team_memberships_current":0,"team_memberships_ended":0,
+ "business_units_with_multiple_legal_entities":0,
+ "legal_entities_with_multiple_business_units":0,
+ "business_units_active":0,"business_units_inactive":0,
+ "department_moved_events":0,
+ "organisation_delete_routes":0}
+```
+
+All structural row counts are `0`, and every table is present.
+
 ### 7.4 Outstanding for P1-01 — executable now
 
 Seven checks remain, all executable in a browser by the existing System
@@ -336,15 +355,31 @@ claim as an observed production result.
 
 ### 7.5 The seven checks
 
-| # | Check | Expected | Observed |
-| --- | --- | --- | --- |
-| 2 | Signed-in System Administrator reaches Organisation | Screen renders | |
-| 3 | Create organisation, legal entity, business unit, department, team | Persisted | |
-| 4 | One business unit ↔ two legal entities, and one legal entity ↔ two business units | Both permitted — the D-14 shape | |
-| 5 | Add a team member, then remove | `left_at` set, row retained | |
-| 5a | **D-16:** the administrator who created the profile carries that `organisation_id` | Set, non-NULL | |
-| 7 | Deactivate a business unit with active departments | Refused, children named | |
-| 9 | Move a department between business units | Permitted, event emitted | |
+**No check may be satisfied by inventing business data.** Product Owner
+direction, 31 August 2026: only real Organisation, Legal Entity, Business Unit,
+Department and Team records are created; no second legal entity or business unit
+is invented; no department is moved where it does not genuinely belong; and a
+team membership is recorded only if it is factually correct.
+
+A refused deactivation is exempt from that constraint — it makes no data change,
+which is the point of the check.
+
+Where a check cannot be exercised without creating false or misleading permanent
+business history, it is marked **NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION
+DATA**, keeps its mutation-proven automated evidence, and its live observation is
+carried to the first legitimate opportunity. **That is not an implementation
+defect** — P1-01 has no hard delete, so a record created to satisfy a test is
+permanent.
+
+| # | Check | Condition | Expected | Observed |
+| --- | --- | --- | --- | --- |
+| 2 | Signed-in System Administrator reaches Organisation | Unconditional | Screen renders | |
+| 3 | Create the organisation, and the legal entities, business units, departments and teams that genuinely exist | Unconditional | Persisted | |
+| 5a | **D-16:** the administrator who created the profile carries that `organisation_id` | Follows from 3 | `users_with_organisation` 0 → 1 | |
+| 7 | Deactivate a business unit that genuinely has an active department | Needs one real business unit with one real department. **No data change either way** | Refused, children named | |
+| 4 | One business unit ↔ two legal entities, and one legal entity ↔ two business units | **Only if the real organisation genuinely has that shape** | Both permitted | |
+| 9 | Move a department between business units | **Only if a legitimate structural move exists** | Permitted, event emitted | |
+| 5 | Add a team member, then remove | **Only if that membership is factually correct** | `left_at` set, row retained | |
 
 ---
 
