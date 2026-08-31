@@ -423,7 +423,7 @@ Settled unless a verified technical impossibility appears.
 2. Read `doc/v2/phase-1/P1-BASE-APPLICATION-BASELINE-VERIFICATION.md` — it records
    `P1-BASE ACCEPTED — 31 August 2026`.
 3. Read `doc/v2/phase-1/HOSTING-ARCHITECTURE.md` for the final layout.
-4. Read `doc/v2/phase-1/P1-00-APPLICATION-ENTRY-LOGIN-PLAN.md` — the P1-00 PLAN,
+4. Read `doc/v2/phase-1/P1-00-LOGIN-BOOTSTRAP-PLAN.md` — the P1-00 PLAN,
    awaiting Product Owner review.
 5. `main` should be at or after `3d075bf`.
 6. **D-03** (first-administrator bootstrap) and **D-04** (Microsoft Entra ID
