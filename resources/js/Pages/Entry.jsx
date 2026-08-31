@@ -1,32 +1,37 @@
-import logoDark from '../../brand/logo-full-dark.png'
-import logoLight from '../../brand/logo-full-light.png'
+import AuthCard from '../Components/AuthCard'
 
 /**
- * Pre-authentication entry page.
+ * The Login page.
  *
- * The Auth archetype from the shared standard (5.7): a standalone centred card
- * with no shell. It deliberately says nothing about what exists behind
- * authentication - no menu, no product areas, no counts, no version. An
- * unauthenticated browser learns only that this is SemantIQ.
+ * Sign in with Microsoft is the primary Release 1 action. Nothing here
+ * describes what exists behind authentication - no menu, no product areas, no
+ * counts, no version, no tenant name. An unauthenticated browser learns only
+ * that this is SemantIQ.
  *
- * The brand mark has light and dark variants and both ship, because the two
- * themes' surfaces are different colours by design and a single asset is legible
- * on only one of them.
- *
- * P1-00 replaces this with the Login page and its Sign in with Microsoft action.
+ * The provider is offered only when it is configured, per blueprint 0.2: a
+ * button that cannot work is worse than no button.
  */
-export default function Entry() {
+export default function Entry({ microsoftEnabled }) {
     return (
-        <main className="entry">
-            <section className="entry-card">
-                <picture>
-                    <source srcSet={logoDark} media="(prefers-color-scheme: dark)" />
-                    <img className="entry-mark" src={logoLight} alt="CLaaS2SaaS" />
-                </picture>
-                <h1>SemantIQ</h1>
-                <p>Secure business decision intelligence.</p>
+        <AuthCard
+            title="SemantIQ"
+            footer={
+                <>
+                    Access is assigned by your organisation&rsquo;s administrator.
+                    <br />
+                    Contact them if you cannot sign in.
+                </>
+            }
+        >
+            <p>Secure business decision intelligence.</p>
+
+            {microsoftEnabled ? (
+                <a className="auth-action" href="/auth/microsoft/redirect">
+                    Sign in with Microsoft
+                </a>
+            ) : (
                 <p className="entry-note">Sign-in is not yet available on this deployment.</p>
-            </section>
-        </main>
+            )}
+        </AuthCard>
     )
 }

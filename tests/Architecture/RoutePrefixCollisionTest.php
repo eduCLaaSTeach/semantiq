@@ -29,9 +29,11 @@ final class RoutePrefixCollisionTest extends TestCase
     /**
      * Kept in step with the directory list in deployment/public_html.htaccess.
      */
+    private const HTACCESS = __DIR__.'/../../deployment/public_html.htaccess';
+
     private const PROTECTED_ROOTS = [
         'app', 'bootstrap', 'config', 'database', 'doc', 'deployment',
-        'node_modules', 'resources', 'routes', 'storage', 'tests', 'vendor',
+        'node_modules', 'public', 'resources', 'routes', 'storage', 'tests', 'vendor',
     ];
 
     public function test_no_route_begins_with_a_protected_directory_name(): void
@@ -51,10 +53,13 @@ final class RoutePrefixCollisionTest extends TestCase
 
     /**
      * The list above is only useful while it matches the forwarder it mirrors.
+     *
+     * This direction: nothing is claimed as protected that the forwarder does
+     * not actually block.
      */
-    public function test_the_protected_list_matches_the_forwarder(): void
+    public function test_every_listed_root_is_named_in_the_forwarder(): void
     {
-        $htaccess = file_get_contents(__DIR__.'/../../deployment/public_html.htaccess');
+        $htaccess = file_get_contents(self::HTACCESS);
 
         foreach (self::PROTECTED_ROOTS as $dir) {
             $this->assertMatchesRegularExpression(
@@ -63,5 +68,47 @@ final class RoutePrefixCollisionTest extends TestCase
                 "[{$dir}] is treated as protected here but is not named in the forwarder."
             );
         }
+    }
+
+    /**
+     * And the other direction, which was missing and mattered.
+     *
+     * The mirror only guarded one way: every name in the list appeared in the
+     * forwarder, but nothing checked that every directory the forwarder blocks
+     * appeared in the list. When "public" was added to the forwarder, the list
+     * was not updated and silently stopped being a mirror - so a route
+     * beginning /public would have passed CI and returned 403 in production,
+     * which is exactly the /app failure this guard exists to prevent.
+     */
+    public function test_every_forwarder_root_is_present_in_the_list(): void
+    {
+        foreach ($this->forwarderRoots() as $dir) {
+            $this->assertContains(
+                $dir,
+                self::PROTECTED_ROOTS,
+                "The forwarder blocks [{$dir}] but the collision guard does not know about it, "
+                .'so a route using that prefix would pass CI and 403 in production.'
+            );
+        }
+    }
+
+    /**
+     * The directory names in the forwarder's deny rule, read from the file
+     * rather than restated here - a second hand-maintained copy would drift in
+     * exactly the way this test exists to catch.
+     *
+     * @return list<string>
+     */
+    private function forwarderRoots(): array
+    {
+        preg_match(
+            '/RewriteRule \^\(([a-z_|]+)\)\(\/\|\$\) - \[F,L\]/',
+            file_get_contents(self::HTACCESS),
+            $matches
+        );
+
+        $this->assertNotEmpty($matches, 'The forwarder directory deny rule was not found.');
+
+        return explode('|', $matches[1]);
     }
 }

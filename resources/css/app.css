@@ -256,3 +256,30 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---- Auth actions -------------------------------------------------------- */
+
+/* The primary action on the Auth archetype. Solid accent fill with accent-contrast
+   text, 32px control height, and the standard focus ring - the same geometry as
+   every other button at this size, per the shared standard. */
+.auth-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 var(--space-4);
+  margin-top: var(--space-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.auth-action:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.auth-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

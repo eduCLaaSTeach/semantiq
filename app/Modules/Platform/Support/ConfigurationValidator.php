@@ -34,6 +34,14 @@ final class ConfigurationValidator
             }
         }
 
+        if ($this->config->get('app.env') === 'production') {
+            foreach (ConfigurationRequirements::requiredInProduction() as $key) {
+                if ($this->isBlank($this->config->get($key))) {
+                    $problems[] = "Required configuration [{$key}] is missing or empty.";
+                }
+            }
+        }
+
         $problems = [...$problems, ...$this->connectionProblems()];
 
         // Debug output in production leaks stack traces, environment and query
