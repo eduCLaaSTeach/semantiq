@@ -1,6 +1,7 @@
 # P1-01 — Organisation — VERIFICATION
 
-**Status:** BUILD VERIFIED — awaiting Product Owner live verification of §7.5, then acceptance.
+**Status:** **NOT ACCEPTED.** A live defect (§7.2a) was found by Product Owner
+verification and corrected; the seven §7.5 checks remain outstanding.
 **Carried gate:** the live multi-user management-cycle check is deferred to **P1-03** (§7.3).
 **Deployed:** merge `9afe33d`, deployment [33378638710](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33378638710) — success
 **Unit:** P1-01 (Phase 1 delivery order 3)
@@ -324,6 +325,66 @@ building P1-03 early, or weakening the cycle rule. None of those was done.
 | **P1-01 evidence for the cycle rule** | The mutation-proven automated coverage in §3 — case 8, mutation *remove the chain walk*, **CAUGHT** |
 | **Carried gate** | The live multi-user management-cycle observation becomes a **mandatory carried verification gate for P1-03**, to be executed before P1-03 acceptance, once a second legitimate SemantIQ user exists |
 | **Implementation impact** | **None.** The management-cycle rule and its implementation are unchanged |
+
+### 7.2a Live defect found by the Product Owner — CORRECTED
+
+**Found on 31 August 2026 by live verification. Not caught by any test.**
+
+After signing in, `/console` still rendered the P1-00 standalone card: no
+sidebar, no Organisation. The unit's first navigable capability was built,
+routed and authorised — and unreachable from the page an administrator lands on.
+
+Investigating it found a **second, worse cause hidden by the first.**
+
+```text
+Reproduced before fixing:
+/console                 component Console/Home   productAreas []
+/console/organisation                             productAreas []   <-- nobody suspected this
+```
+
+| # | Cause | Effect |
+| --- | --- | --- |
+| 1 | `/console` was never moved onto `AppShell` | The landing page had no shell, so no navigation could appear on it |
+| 2 | `SystemAdministratorNavigationAuthorizer` took `Request` through its **constructor**, and `NavigationRegistry` is a **singleton** — so it read `semantiq_user` from a Request captured at construction, not the one the session middleware set it on | Every node denied. `productAreas` resolved to `[]` on **every page, the Organisation screens included.** Their sidebars were empty too |
+
+**Corrections.** The request is read at call time. `productAreas` is shared as a
+closure — Inertia calls `share()` before `$next($request)`, so eager evaluation
+only worked because the middleware priority happens to run the session gate
+first; that dependency is removed rather than relied on. `/console` renders
+inside the shell with a deliberately minimal canvas: **not** Administration Home
+(P1-10 owns that) and **not** a placeholder dashboard.
+
+Backend authorisation is untouched. Sidebar visibility remains presentation
+only, and every `/console` route still re-authorises independently.
+
+**Why the existing tests missed it.** `NavigationRegistryTest` exercised the
+registry **in isolation** — a hand-built registry, a stub authorizer, no HTTP.
+`OrganisationBoundaryTest` exercised `/console/organisation` **directly by URL**.
+Both were correct about their own subject. Neither asked the question a person
+asks: *after signing in, is the capability actually there?* Every seam was
+tested; the join between them was not.
+
+**Regression proof.** `ConsoleNavigationTest` — 7 cases against the real HTTP
+response. Four mutations applied, **all four caught**, including reverting
+`/console` to the exact P1-00 card the Product Owner saw.
+
+| Mutation | Result |
+| --- | --- |
+| Revert `/console` to the P1-00 card | **CAUGHT** |
+| Authorizer holds a stale `Request` | **CAUGHT** |
+| Authorizer admits everyone | **CAUGHT** |
+| Register a Phase 2 node | **CAUGHT** |
+
+**Live confirmation**, deployment
+[33382545040](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33382545040)
+on merge `4f99c46`:
+
+| Check | Observed | Result |
+| --- | --- | --- |
+| Served bundle is the corrected build | `/build/assets/app-DajlIiJG.js` — hash matches the post-fix local build | **PASS** |
+| The landing page carries the shell | `console-landing` and `shell-rail` both present in the served bundle; `console-landing` exists only in the corrected version | **PASS** |
+| `/console` anonymous | 302 to login, **zero** occurrences of "Organisation" in the body | **PASS** |
+| Signed-in sidebar shows Organisation | Requires an authenticated session — see §7.5 check 2 | **not yet observed** |
 
 ### 7.3a Counts-only baseline, before any browser action
 
