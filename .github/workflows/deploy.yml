@@ -499,9 +499,54 @@ jobs:
             failed=1
           fi
 
-          # .well-known must stay reachable or TLS renewal breaks silently.
-          wk="$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/.well-known/")"
-          case "$wk" in 403) echo "::error::.well-known/ is blocked; ACME renewal will fail"; failed=1 ;; esac
+          # TLS renewal must keep working, and this now tests the thing that
+          # actually renews it rather than a proxy for it.
+          #
+          # The old check asserted that /.well-known/ was not 403. That was a
+          # reasonable stand-in while the directory answered 200 with a listing,
+          # but it was never what ACME uses - and the moment Options -Indexes
+          # turned the listing off, the check failed on a certificate path that
+          # was working perfectly. A gate that fails on a healthy system gets
+          # ignored, which is worse than not having it.
+          #
+          # Let's Encrypt requests one FILE it has just written under
+          # .well-known/acme-challenge and reads the body back. So that is what
+          # this does: write a token, fetch it over HTTPS, require 200 with the
+          # exact body, and remove it whatever happens. Nothing is inferred.
+          acme_token="semantiq-acme-selftest-${GITHUB_SHA}"
+          acme_dir="$CPANEL_DEPLOY_PATH/.well-known/acme-challenge"
+          acme_ssh="ssh -i $HOME/.ssh/cpanel_deploy_key -p $CPANEL_PORT -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 $CPANEL_USER@$CPANEL_HOST"
+
+          cleanup_acme() {
+            $acme_ssh "rm -f '$acme_dir/$acme_token'" \
+              || echo "::warning::Could not remove the ACME self-test token; it contains no secret."
+          }
+          trap cleanup_acme EXIT
+
+          if $acme_ssh "mkdir -p '$acme_dir' && printf 'SEMANTIQ_ACME_SELFTEST\n' > '$acme_dir/$acme_token'"; then
+            acode="$(curl -s -o /tmp/acme -w '%{http_code}' -m 25 "$APP_URL/.well-known/acme-challenge/$acme_token")"
+            if [ "$acode" != "200" ]; then
+              echo "::error::An ACME challenge file returned $acode, not 200. Certificate renewal WILL fail."
+              failed=1
+            elif ! grep -q 'SEMANTIQ_ACME_SELFTEST' /tmp/acme; then
+              echo "::error::The ACME challenge path returned 200 but not the file's contents. Renewal would fail validation."
+              failed=1
+            else
+              echo "::notice::ACME challenge file served verbatim over HTTPS; certificate renewal path is intact."
+            fi
+          else
+            echo "::error::Could not write an ACME self-test token; the challenge directory may not be writable."
+            failed=1
+          fi
+
+          # The directory itself must NOT list. That is a change from the old
+          # behaviour and an improvement: enumerating .well-known was never
+          # required by ACME and only advertised what is there.
+          wk="$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/.well-known/?cb=${GITHUB_SHA}")"
+          case "$wk" in
+            403|404) ;;
+            *) echo "::error::/.well-known/ returned $wk; directory listing may be enabled"; failed=1 ;;
+          esac
 
           # The application must still be alive. A boundary that denies
           # everything, including the site, is not a passing state.

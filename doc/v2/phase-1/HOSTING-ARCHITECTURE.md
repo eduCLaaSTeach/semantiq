@@ -116,7 +116,8 @@ The gate is observed behaviour, not configuration review:
 - the denial body must reveal no framework, path, trace or configuration;
 - `.htaccess` **and** `index.php` are SHA-256 verified against the repository on
   every deployment;
-- `.well-known/` must stay reachable, or TLS renewal fails silently.
+- an **ACME challenge file** is written, fetched over HTTPS and read back on
+  every deployment — see §7.
 
 ## 6. Deployment
 
@@ -131,3 +132,40 @@ any transfer, and by a CI test on every pull request.
 
 No manual cPanel deployment. No manual production file editing. No manual
 migrations as the normal path.
+
+---
+
+## 7. TLS renewal: what the gate learned
+
+The first migration deployment failed on one check, and the check was wrong.
+
+`Options -Indexes` turned `/.well-known/` from a 200 directory listing into a
+403. The gate asserted "`.well-known/` is not 403" and failed the deployment —
+on a certificate path that was working perfectly.
+
+The stand-in had been reasonable while the directory answered with a listing,
+but it was never what ACME uses. Let's Encrypt requests **one file it has just
+written** under `.well-known/acme-challenge/` and reads the body back. It never
+lists the directory.
+
+Measured on the live site after the migration:
+
+| Path | Status | Meaning |
+| --- | --- | --- |
+| `/.well-known/acme-challenge/<missing token>` | **404** | reaches the filesystem — not denied |
+| `/.well-known/` | **403** | listing disabled, which ACME never needs |
+| `/build/`, `/build/assets/` | **403** | listing disabled |
+
+A 404 rather than a 403 on the challenge path is the important observation: the
+request is resolving, and only the file is absent. An existing file fails the
+`!-f` condition and is served directly.
+
+The gate now proves that rather than arguing it. Each deployment writes a token
+under `.well-known/acme-challenge/`, fetches it over HTTPS, requires **200 with
+the exact body**, and removes it under a `trap` on every exit path. The
+directory is separately asserted **not** to list, which is now a positive
+requirement rather than a tolerated side effect.
+
+The lesson is worth keeping: **a gate that fails on a healthy system gets
+ignored, which is worse than not having it.** The fix was to test the mechanism
+instead of a proxy for it.
