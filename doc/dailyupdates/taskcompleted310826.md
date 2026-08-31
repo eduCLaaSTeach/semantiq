@@ -202,7 +202,47 @@ Retained because each was silent and each was found by allowing a check to fail.
 
 ---
 
-## 8. OPEN PRODUCT-OWNER DECISION — SECURITY FOLLOW-UP
+## 8. RESOLVED — SECURITY FOLLOW-UP (superseded 31 August 2026)
+
+> **STATUS: RESOLVED by PR #38. The finding recorded below is wrong.**
+>
+> It is kept, not deleted, because the observation was accurate and only the
+> inference drawn from it was mistaken — and because the way it was mistaken is
+> worth remembering.
+>
+> **Observed:** all 29 protected paths returned Laravel 404; none returned an
+> Apache 403. **Inferred:** the Apache deny rules were not executing, and the
+> forwarder was the only working protection.
+>
+> **Actually true:** the deny rules executed every time. Apache serves a denial
+> through its `ErrorDocument` chain, and the inherited path-valued
+> `ErrorDocument` re-entered the rewrite engine, met the forwarder, reached
+> Laravel and returned 404. The refusal always happened; the reported status did
+> not survive the round trip.
+>
+> A quoted-literal `ErrorDocument 403` — answered from memory, with no internal
+> redirect — made the true status visible. Four mechanisms then measured **403**
+> in one request cycle: mod_rewrite `[R=403,L]`, mod_rewrite `[F,L]`, mod_alias
+> `RedirectMatch 403`, and `<Files>` + `Require all denied`. A guarded real file
+> returned 403 while its unguarded sibling returned 200, proving the file was
+> reachable and the directive refused it. `.env`, `/vendor/` and `/app/` now
+> return **403**.
+>
+> **Answering the three options below:** none was needed. `AllowOverride` was
+> never the cause — the caution in refusing to state it as fact was justified.
+> D-08A stays closed. And the forwarder is not a single boundary: four
+> mechanisms deny, and the `.htaccess` checksum control means the boundary
+> cannot be edited on the server without failing the deployment.
+>
+> **Nothing was ever exposed** — no protected path returned anything but a
+> refusal in any run. The cost was three weeks of being unable to tell a working
+> boundary from a broken one, which is why the exposure gate now **requires 403**
+> and a fall-through to Laravel fails the deployment.
+>
+> Full evidence: `doc/v2/phase-1/APACHE-DENIAL-CAPABILITY-DIAGNOSTIC.md`.
+
+<details>
+<summary>Original finding, retained as written (superseded)</summary>
 
 > **Do not lose this. It is not a gate failure. It is an unresolved weakness.**
 
@@ -236,6 +276,8 @@ onto real files, with no second mechanism demonstrated to stop them.
    deployment.
 
 **No decision has been made. Do not silently select one.**
+
+</details>
 
 ---
 

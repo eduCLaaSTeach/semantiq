@@ -1,6 +1,9 @@
 # Apache Denial-Capability Diagnostic
 
-**Status:** AUTHORISED — one final diagnostic. Product Owner instruction, 31 August 2026.
+**Status:** COMPLETE — result accepted by the Product Owner, 31 August 2026.
+**Result:** **APACHE ROOT DENIAL MECHANISM VERIFIED.** All four mechanisms returned 403.
+**Probes removed** in the follow-up security-cleanup change; the `ErrorDocument 403`
+instrument was made permanent with a neutral body.
 **Scope:** Diagnostic only. No application behaviour changes, no schema changes,
 no `.env` change, no APP_KEY change, no manual server edits.
 **Relates to:** `DEPLOYMENT-LAYOUT-AMENDMENT.md` (D-08B), PR #37 findings.
@@ -173,3 +176,76 @@ Fixed in advance, so the result is not interpreted after the fact.
 
 In every case the probes are removed by a follow-up change once the result is
 recorded. Nothing in this diagnostic is intended to remain in the codebase.
+
+---
+
+## 6. Result — measured 31 August 2026
+
+Deployment run
+[33349882458](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33349882458)
+on `d44f8e0`. All 26 steps succeeded. `.htaccess` checksum **MATCH**.
+
+| Probe | Path | Status | Bytes | Marker | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| **A** mod_rewrite `[R=403,L]` | `/__semantiq_rewrite_403_probe` | **403** | 33 | `403-errordocument` | **VERIFIED** |
+| **A′** mod_rewrite `[F,L]` | `/__semantiq_apache_deny_probe` | **403** | 33 | `403-errordocument` | **VERIFIED** |
+| **B** mod_alias `RedirectMatch 403` | `/__semantiq_alias_403_probe` | **403** | 33 | `403-errordocument` | **VERIFIED** |
+| **C** `<Files>` + `Require all denied` | `/__semantiq_files_deny_probe.txt` | **403** | 33 | `403-errordocument` | **VERIFIED** |
+| **C-control** unguarded sibling | `/__semantiq_files_control_probe.txt` | **200** | 30 | `probe-file-body` | control held |
+
+Controls: absent path `404` (6586 B, Laravel) · `/` `200` · `/up` `200` ·
+`/console` `302` · `/.well-known/` `200` · `/.env` **403** · `/vendor/` **403**.
+Both probe files removed; independently re-verified from outside the pipeline.
+
+### 6.1 The decisive observation
+
+`.env` and `/vendor/` returned **404 in every previous run** and **403** here,
+with the rewrite rules byte-for-byte unchanged. Rule evaluation does not depend
+on `ErrorDocument`, so those rules **must have been firing all along**.
+
+Mechanism C carries the weight: the guarded file returned 403 while its
+unguarded sibling, in the same directory in the same request cycle, returned 200
+with the diagnostic body. The file was genuinely reachable and the directive
+refused it — a falsifiable positive, not an absence of evidence.
+
+### 6.2 What this changes
+
+- The PR #37 negative was a **false negative** caused by ErrorDocument masking.
+  Adding the instrument was what prevented the wrong question being taken to the
+  hosting provider.
+- `AllowOverride` was never the cause. Declining to assert it as fact was right.
+- The security objection to the permanent `public_html` root layout is
+  **resolved**: Apache refuses at the document root by four mechanisms, and
+  mechanism C proves the refusal holds against a file that genuinely exists —
+  the exact condition after the forwarder is removed.
+
+### 6.3 What became permanent
+
+| Kept | Why |
+| --- | --- |
+| `ErrorDocument 403`, neutral literal body | Without it a denial reports 404 and the boundary is unobservable. It reveals no framework, path, trace or configuration |
+| Exposure gate **requires 403** | A 404 now means a fall-through into Laravel — a boundary regression — and fails the deployment |
+| `.htaccess` SHA-256 verification | Under D-08B this file *is* the boundary; the server copy must be the reviewed copy |
+| `ApacheDenialBoundaryTest` | Eight guards, each deliberately broken and observed to fail |
+
+Every synthetic probe path, the marker string and the diagnostic workflow step
+were removed. No diagnostic endpoint remains in production, and a test enforces
+that.
+
+---
+
+## 7. Permanent hosting architecture
+
+```text
+cPanel document root          = public_html
+deployment root               = public_html
+production front controller   = public_html/index.php
+public_html/public            = NOT a required production layer
+```
+
+`public_html/public/` was only an early pre-project Git-to-cPanel
+synchronisation test location. It is not part of the intended production
+architecture and the document root will not be repointed to it. The repository
+keeps its normal Laravel `public/` directory where build, Vite and local
+development conventions need it — that is a repository concern, and it does not
+imply production serving through `public_html/public/`.

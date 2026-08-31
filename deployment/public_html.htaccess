@@ -1,68 +1,35 @@
 # SemantIQ cPanel front door.
 #
-# D-08B is in force: the document root is public_html and the whole Laravel tree
-# is deployed inside it, so this file is the security boundary rather than a
-# defence-in-depth extra. Only public/ is ever meant to be reachable.
+# D-08B is in force and permanent: the cPanel document root is public_html, the
+# deployment root is public_html, and the whole Laravel tree is deployed inside
+# it. This file is therefore the security boundary, not a defence-in-depth
+# extra. public_html/public is NOT part of the intended production architecture.
 #
-# EVERY production rule below lives in mod_rewrite, deliberately. The first
-# version mixed mod_rewrite with mod_alias RedirectMatch and mod_authz
-# FilesMatch, and the live exposure test showed the denials never fired:
-# protected paths answered 404 from Laravel rather than 403 from Apache,
-# because the forwarder had already rewritten them into public/ where they do
-# not exist. Nothing was exposed, but only one guard was doing any work. Rules
-# in a single module run in written order, so the denials now genuinely precede
-# the forwarder.
-#
-# The FilesMatch block is kept afterwards as a second, independent mechanism -
-# real defence in depth this time, because it is a different module and not a
-# rule the forwarder can outrun.
+# EVERY rule below lives in mod_rewrite, deliberately. An earlier version mixed
+# mod_rewrite with mod_alias RedirectMatch and mod_authz FilesMatch. Rules in a
+# single module run in written order, so the denials genuinely precede the
+# forwarder. The FilesMatch block afterwards is a second, independent mechanism.
 #
 # No RewriteBase, domain or absolute path, so the same file works across domains
 # and subdomains.
 
-# =====================================================================
-# TEMPORARY DIAGNOSTIC - Apache denial-capability matrix
-# =====================================================================
-# Authorised as one final diagnostic. Everything between this banner and the
-# matching END banner is synthetic, carries no secret, changes no application
-# behaviour, and is removed once the question is answered.
+# Denials must stay visible as 403.
 #
-# The question: when the front controller moves to public_html/index.php and
-# the catch-all forwarder disappears, these deny rules become load-bearing.
-# Today not one of them has ever been observed to fire. Every protected path
-# answers 404 from Laravel; none answers 403 from Apache. Before that migration
-# the capability has to be demonstrated, not assumed.
+# This is a security control, not cosmetics. Apache serves a denial through its
+# ErrorDocument chain; a PATH-valued ErrorDocument re-enters the rewrite engine,
+# meets the forwarder, lands in Laravel and returns 404 - which is exactly what
+# happened here for weeks and led to the false conclusion that the deny rules
+# were not firing at all. PR #38 proved they were: the rules executed, and only
+# the reported status was wrong.
 #
-# Three independent mechanisms are tested, because "denial" is not one feature:
+# A quoted LITERAL is answered from memory - no internal redirect, no rewrite
+# pass, no Laravel - so the status arrives intact. The deployment's exposure
+# gate now REQUIRES 403 on every protected path, so replacing this with a path
+# would mask the boundary again and fail that gate. Keep it a literal.
 #
-#   A  mod_rewrite, explicit status form   [R=403,L]
-#   B  mod_alias, RedirectMatch 403
-#   C  mod_authz_core, <Files> + Require all denied
-#
-# The previous [F,L] probe is retained alongside A as a same-run control, so
-# [F] and [R=403] are compared under identical conditions rather than across
-# two deployments.
-#
-# ---------------------------------------------------------------------
-# INSTRUMENT, not a fourth mechanism.
-#
-# Without this line all three probes could report 404 while a denial was in
-# fact firing. Apache serves a denial through its ErrorDocument chain; if that
-# chain resolves to a local URL it re-enters the rewrite engine, hits the
-# catch-all below, lands in Laravel and comes back as Laravel's 404 page. PR
-# #37 measured exactly that shape: the [F] probe returned 404 with a body
-# byte-identical to an ordinary Laravel 404, which is equally consistent with
-# "the rule never fired" and with "the rule fired and the status was masked".
-# The response body cannot separate those two, so the instrument has to.
-#
-# A literal-string ErrorDocument short-circuits the chain: Apache answers from
-# memory, no internal redirect, no rewrite engine, no Laravel. If a denial is
-# firing, the status arrives intact and the marker appears in the body.
-#
-# Blast radius is nil: nothing on this site currently returns 403 - that is the
-# finding being investigated. It is removed with the probes.
-ErrorDocument 403 "SEMANTIQ_403_ERRORDOCUMENT_MARKER"
-# =====================================================================
+# The text is deliberately bare: no framework name, version, server path, stack
+# trace, configuration detail or internal marker.
+ErrorDocument 403 "Forbidden"
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
@@ -71,16 +38,6 @@ ErrorDocument 403 "SEMANTIQ_403_ERRORDOCUMENT_MARKER"
     # renews the TLS certificate; blocking it breaks HTTPS renewal silently,
     # weeks later, in a way nobody connects back to this file.
     RewriteRule ^\.well-known/ - [L]
-
-    # ---- TEMPORARY DIAGNOSTIC: mechanism A and its [F] control -----------
-    # A: explicit status form. Documented as equivalent to [F], but they take
-    #    different paths through the server, and only measurement settles it.
-    RewriteRule ^__semantiq_rewrite_403_probe(/|$) - [R=403,L]
-
-    # Control: the [F] form measured in PR #37, kept so both forms are observed
-    # in the same request cycle against the same server state.
-    RewriteRule ^__semantiq_apache_deny_probe(/|$) - [F,L]
-    # ---- END TEMPORARY DIAGNOSTIC ---------------------------------------
 
     # Every other dotfile, at any depth: .env, .git, .gitignore and friends.
     RewriteRule (^|/)\. - [F,L]
@@ -95,55 +52,16 @@ ErrorDocument 403 "SEMANTIQ_403_ERRORDOCUMENT_MARKER"
     RewriteRule ^(app|bootstrap|config|database|doc|deployment|node_modules|resources|routes|storage|tests|vendor)(/|$) - [F,L]
 
     # Everything that survives goes to Laravel's front controller.
+    #
+    # This forwarder is transitional. The permanent layout serves the
+    # application directly from public_html/index.php with no public/ hop; that
+    # migration is a separate, self-contained change.
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
 
-# ---- TEMPORARY DIAGNOSTIC: mechanism B ------------------------------
-# mod_alias is a different module from mod_rewrite, so it is not something the
-# forwarder above can outrun by winning a race inside one rule list. Its
-# position in this file does not decide when it runs; module ordering does.
-# That is the point of testing it separately.
-# The leading slash is optional on purpose. In server context mod_alias matches
-# the full URL-path; in .htaccess context the directory prefix can be stripped
-# first, leaving no leading slash. Anchoring on "^/" alone would miss in one of
-# those two cases and report a false negative - the exact failure mode this
-# whole diagnostic exists to rule out.
-<IfModule mod_alias.c>
-    RedirectMatch 403 ^/?__semantiq_alias_403_probe(/|$)
-</IfModule>
-# ---- END TEMPORARY DIAGNOSTIC ---------------------------------------
-
 # Second, independent mechanism. Different module, so a mistake in the rewrite
-# rules above does not silently disable this too.
+# rules above does not silently disable this too. PR #38 confirmed <Files> +
+# Require all denied is honoured on this host.
 <FilesMatch "(?i)^(\.env.*|composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml|vite\.config\.js|.*\.md|.*\.ya?ml|.*\.sqlite|.*\.log)$">
     Require all denied
 </FilesMatch>
-
-# ---- TEMPORARY DIAGNOSTIC: mechanism C ------------------------------
-# The only probe of the three that can produce a MEANINGFUL negative.
-#
-# A and B deny a path where nothing exists. If they fail, the request falls
-# through to the forwarder and Laravel answers 404 - the same 404 the path
-# would have produced with no rule at all. The negative is unfalsifiable.
-#
-# C is built the other way round. The deploy workflow writes a real, harmless
-# file at public/__semantiq_files_deny_probe.txt - inside public/, where the
-# forwarder genuinely serves it - containing one marker line and nothing else.
-# So:
-#
-#   403 with the ErrorDocument marker => <Files> + Require all denied WORKS.
-#   200 with SEMANTIQ_DENY_DIAGNOSTIC_ONLY => the file was reachable and the
-#       deny did NOT fire. A real negative, not an absence of evidence.
-#   404 => the file was never written. INCONCLUSIVE; the probe did not run.
-#
-# A sibling control file with no deny rule is fetched in the same step and must
-# return 200. Without it, a 403 here could be some unrelated blanket refusal of
-# .txt under public/ rather than this directive doing its job.
-#
-# Both files are created over SSH after the sync, removed by a trap that fires
-# whatever the outcome, and are absent from the repository - so the next rsync
-# --delete would sweep them even if the trap were somehow skipped.
-<Files "__semantiq_files_deny_probe.txt">
-    Require all denied
-</Files>
-# ---- END TEMPORARY DIAGNOSTIC ---------------------------------------
