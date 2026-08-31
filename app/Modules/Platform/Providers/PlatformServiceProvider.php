@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Providers;
 
+use App\Modules\Organisation\Support\SystemAdministratorNavigationAuthorizer;
 use App\Modules\Platform\Console\Commands\IssueBootstrapGrantCommand;
 use App\Modules\Platform\Console\HealthCommand;
 use App\Modules\Platform\Identity\IdentityProvider;
@@ -11,7 +12,6 @@ use App\Modules\Platform\Identity\Microsoft\EntraDiscovery;
 use App\Modules\Platform\Identity\Microsoft\EntraProvider;
 use App\Modules\Platform\Identity\Microsoft\IdTokenValidator;
 use App\Shared\Navigation\Contracts\NavigationAuthorizer;
-use App\Shared\Navigation\DenyAllNavigationAuthorizer;
 use App\Shared\Navigation\NavigationRegistry;
 use Illuminate\Contracts\Routing\Registrar;
 use Illuminate\Support\ServiceProvider;
@@ -28,7 +28,11 @@ final class PlatformServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->bind(NavigationAuthorizer::class, DenyAllNavigationAuthorizer::class);
+        /*
+         * P1-01 replaces DenyAllNavigationAuthorizer: there is now something to
+         * navigate to. Still UX only - every route re-authorises on its own.
+         */
+        $this->app->bind(NavigationAuthorizer::class, SystemAdministratorNavigationAuthorizer::class);
 
         $this->app->singleton(NavigationRegistry::class, fn ($app): NavigationRegistry => new NavigationRegistry(
             $app->make(NavigationAuthorizer::class),
@@ -73,8 +77,8 @@ final class PlatformServiceProvider extends ServiceProvider
             $this->commands([HealthCommand::class, IssueBootstrapGrantCommand::class]);
         }
 
-        // P1-BASE registers NO navigation nodes. There is nothing implemented to
-        // navigate to, and a node pointing at nothing is exactly the placeholder
-        // the design forbids. Later units register their own here.
+        // The Platform module still registers NO navigation nodes: Identity and
+        // SSO administration screens are P1-02. P1-01 registers Organisation in
+        // its own provider, which is the pattern - a module owns its nodes.
     }
 }

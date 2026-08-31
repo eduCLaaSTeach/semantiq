@@ -38,7 +38,16 @@ final class NavigationRegistry
      */
     public function add(NavigationNode $node): void
     {
-        if ($this->router->getRoutes()->getByName($node->routeName) === null) {
+        $routes = $this->router->getRoutes();
+
+        // A route is named fluently - Route::get(...)->name('x') - so it is
+        // added to the collection before its name is set, and the collection's
+        // name lookup is stale until refreshed. Without this the guard below
+        // rejects every correctly registered node. P1-BASE registered no nodes,
+        // so nothing exercised it until P1-01 registered the first one.
+        $routes->refreshNameLookups();
+
+        if ($routes->getByName($node->routeName) === null) {
             throw new RuntimeException(
                 "Navigation node [{$node->label}] points at route [{$node->routeName}], which is "
                 .'not defined. Register the route before the node, or do not register the node.'

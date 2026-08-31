@@ -15,10 +15,15 @@ use PHPUnit\Framework\TestCase;
  */
 final class NoBusinessSchemaTest extends TestCase
 {
+    /*
+     * organisations, teams and business_units were transferred to P1-01 on
+     * 31 August 2026 as a reviewed transfer - the same way users moved to P1-00.
+     * They are delivered, so forbidding them would now be false. Everything
+     * still listed belongs to a unit that has NOT been delivered.
+     */
     private const FORBIDDEN = [
         'roles', 'permissions', 'domains', 'business_domains', 'scopes',
-        'sensitivity', 'entitlements', 'organisations', 'organizations', 'teams',
-        'business_units', 'audit', 'access_reviews', 'fabric',
+        'sensitivity', 'entitlements', 'audit', 'access_reviews', 'fabric',
     ];
 
     public function test_no_migration_creates_business_schema(): void
@@ -39,14 +44,25 @@ final class NoBusinessSchemaTest extends TestCase
         $this->assertTrue(true);
     }
 
-    public function test_only_the_platform_module_exists(): void
+    /**
+     * Exactly the modules that have been delivered, and no others.
+     *
+     * The point is unchanged from P1-BASE: a directory is not pre-created to
+     * reserve a name. Identity administration, Access and Audit still have no
+     * module here, and adding one before its unit is approved is the failure
+     * this catches.
+     */
+    public function test_only_delivered_modules_exist(): void
     {
         $modules = array_map('basename', glob(__DIR__.'/../../app/Modules/*', GLOB_ONLYDIR) ?: []);
 
+        sort($modules);
+
         $this->assertSame(
-            ['Platform'],
+            ['Organisation', 'Platform'],
             $modules,
-            'P1-BASE creates exactly one module. Directories are not pre-created to reserve them.'
+            'A module directory appeared for a unit that has not been delivered. '
+            .'Directories are not pre-created to reserve them.'
         );
     }
 }

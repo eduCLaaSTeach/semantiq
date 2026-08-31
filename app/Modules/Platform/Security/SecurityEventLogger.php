@@ -39,6 +39,57 @@ final class SecurityEventLogger
 
     public const SESSION_EXPIRED = 'auth.session.expired';
 
+    /*
+     * P1-01 scope-affecting events.
+     *
+     * Structural identifiers only - no personal data beyond a user reference and
+     * no free text. The *.moved events carry the most weight: a move is the
+     * change most likely to alter someone's future scope.
+     */
+    public const ORGANISATION_CREATED = 'organisation.created';
+
+    public const ORGANISATION_UPDATED = 'organisation.updated';
+
+    public const LEGAL_ENTITY_CREATED = 'legal_entity.created';
+
+    public const LEGAL_ENTITY_UPDATED = 'legal_entity.updated';
+
+    public const LEGAL_ENTITY_DEACTIVATED = 'legal_entity.deactivated';
+
+    public const BUSINESS_UNIT_CREATED = 'business_unit.created';
+
+    public const BUSINESS_UNIT_UPDATED = 'business_unit.updated';
+
+    public const BUSINESS_UNIT_DEACTIVATED = 'business_unit.deactivated';
+
+    public const DEPARTMENT_CREATED = 'department.created';
+
+    public const DEPARTMENT_UPDATED = 'department.updated';
+
+    public const DEPARTMENT_DEACTIVATED = 'department.deactivated';
+
+    public const DEPARTMENT_MOVED = 'department.moved';
+
+    public const TEAM_CREATED = 'team.created';
+
+    public const TEAM_UPDATED = 'team.updated';
+
+    public const TEAM_DEACTIVATED = 'team.deactivated';
+
+    public const TEAM_MOVED = 'team.moved';
+
+    public const TEAM_MEMBER_ADDED = 'team.member.added';
+
+    public const TEAM_MEMBER_REMOVED = 'team.member.removed';
+
+    public const MANAGEMENT_RELATIONSHIP_SET = 'management.relationship.set';
+
+    public const MANAGEMENT_RELATIONSHIP_CLEARED = 'management.relationship.cleared';
+
+    public const BUSINESS_UNIT_LEGAL_ENTITY_ASSOCIATED = 'business_unit.legal_entity.associated';
+
+    public const BUSINESS_UNIT_LEGAL_ENTITY_DISSOCIATED = 'business_unit.legal_entity.dissociated';
+
     private const EVENTS = [
         self::BOOTSTRAP_GRANT_ISSUED,
         self::BOOTSTRAP_COMPLETED,
@@ -50,10 +101,41 @@ final class SecurityEventLogger
         self::LOGIN_REFUSED_PROTOCOL,
         self::LOGOUT,
         self::SESSION_EXPIRED,
+        self::ORGANISATION_CREATED,
+        self::ORGANISATION_UPDATED,
+        self::LEGAL_ENTITY_CREATED,
+        self::LEGAL_ENTITY_UPDATED,
+        self::LEGAL_ENTITY_DEACTIVATED,
+        self::BUSINESS_UNIT_CREATED,
+        self::BUSINESS_UNIT_UPDATED,
+        self::BUSINESS_UNIT_DEACTIVATED,
+        self::DEPARTMENT_CREATED,
+        self::DEPARTMENT_UPDATED,
+        self::DEPARTMENT_DEACTIVATED,
+        self::DEPARTMENT_MOVED,
+        self::TEAM_CREATED,
+        self::TEAM_UPDATED,
+        self::TEAM_DEACTIVATED,
+        self::TEAM_MOVED,
+        self::TEAM_MEMBER_ADDED,
+        self::TEAM_MEMBER_REMOVED,
+        self::MANAGEMENT_RELATIONSHIP_SET,
+        self::MANAGEMENT_RELATIONSHIP_CLEARED,
+        self::BUSINESS_UNIT_LEGAL_ENTITY_ASSOCIATED,
+        self::BUSINESS_UNIT_LEGAL_ENTITY_DISSOCIATED,
     ];
 
-    /** Only these keys may ever appear in an event's context. */
-    private const ALLOWED_KEYS = ['provider', 'subject', 'tenant', 'user_id', 'result', 'reason', 'expires_at'];
+    /**
+     * Only these keys may ever appear in an event's context.
+     *
+     * P1-01 adds structural identifiers only. There is deliberately no key for a
+     * name, a description or any free text: a name is business content, and a
+     * free-text key is where a leak eventually goes.
+     */
+    private const ALLOWED_KEYS = [
+        'provider', 'subject', 'tenant', 'user_id', 'result', 'reason', 'expires_at',
+        'organisation_id', 'entity_type', 'entity_id', 'related_id',
+    ];
 
     /**
      * @param  array<string, scalar|null>  $context

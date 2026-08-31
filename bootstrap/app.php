@@ -1,12 +1,17 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Modules\Organisation\Http\Middleware\RequireOrganisation;
+use App\Modules\Organisation\Http\Middleware\RequireSystemAdministrator;
+use App\Modules\Organisation\Providers\OrganisationServiceProvider;
+use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
 use App\Modules\Platform\Providers\PlatformServiceProvider;
 use App\Modules\Platform\Support\DeploymentLayout;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Support\Facades\Route;
 
 $app = Application::configure(basePath: dirname(__DIR__))
@@ -20,11 +25,33 @@ $app = Application::configure(basePath: dirname(__DIR__))
     )
     ->withProviders([
         PlatformServiceProvider::class,
+
+        // P1-01. Registered after Platform because its navigation node points at
+        // a route, and the registry refuses a node whose route does not resolve.
+        OrganisationServiceProvider::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             HandleInertiaRequests::class,
         ]);
+
+        /*
+         * Authenticate and authorise BEFORE route-model binding.
+         *
+         * By default SubstituteBindings runs in the web group, ahead of route
+         * middleware. That made an anonymous request to a protected record
+         * answer 302 when the record existed and 404 when it did not - a
+         * directory-enumeration oracle that let an unauthenticated visitor map
+         * the organisation by probing identifiers, without ever being allowed
+         * to read one. It was found by the P1-01 anonymous sweep, not by review.
+         *
+         * With this priority the session and role gates decide first, so both
+         * cases return the same refusal and existence is disclosed to nobody who
+         * is not permitted to see it.
+         */
+        $middleware->prependToPriorityList(SubstituteBindings::class, RequireOrganisation::class);
+        $middleware->prependToPriorityList(RequireOrganisation::class, RequireSystemAdministrator::class);
+        $middleware->prependToPriorityList(RequireSystemAdministrator::class, EnsureSessionIsCurrent::class);
 
         // Laravel's maintenance mode runs before routing, so /up is NOT exempt
         // by default. Without this, a deploy-time probe would be reporting on
