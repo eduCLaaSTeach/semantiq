@@ -1,0 +1,68 @@
+# Read-only bootstrap state verification.
+#
+# Manual dispatch only. It NEVER issues a grant and never reads a secret: it
+# reports counts and a state word, which is everything needed to prove that a
+# grant was consumed and that bootstrap is closed, and nothing more.
+#
+# It exists because the grant itself must never reach a CI log - so the grant is
+# issued by an operator at a terminal, and this workflow proves the outcome
+# afterwards without ever handling the value.
+name: Verify bootstrap state (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Report bootstrap state over SSH
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+    steps:
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+          chmod 600 ~/.ssh/cpanel_deploy_key
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Counts and a state word. No identity, no grant, no secret, no token.
+      - name: Report bootstrap state
+        run: |
+          set -euo pipefail
+
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
+              \$admins = \App\Modules\Platform\Models\User::query()->activeSystemAdministrators()->count();
+              \$state  = app(\App\Modules\Platform\Bootstrap\BootstrapState::class);
+              echo json_encode([
+                \"bootstrap_state\"       => \$state->isConfigured() ? \"CONFIGURED\" : \"UNCONFIGURED\",
+                \"active_system_admins\"  => \$admins,
+                \"users_total\"           => \App\Modules\Platform\Models\User::query()->count(),
+                \"grants_total\"          => \App\Modules\Platform\Models\BootstrapGrant::query()->count(),
+                \"grants_consumed\"       => \App\Modules\Platform\Models\BootstrapGrant::query()->whereNotNull(\"consumed_at\")->count(),
+                \"grants_still_open\"     => \App\Modules\Platform\Models\BootstrapGrant::query()->whereNull(\"consumed_at\")->where(\"expires_at\", \">\", now())->count(),
+              ]), PHP_EOL;'")"
+
+          echo "$out" | tail -1 | tee /tmp/state.json
+
+          # A grant value is 64 characters of base64-ish text. Nothing of that
+          # shape may ever appear here; if it does, something printed a secret.
+          if grep -qE '[A-Za-z0-9]{40,}' /tmp/state.json; then
+            echo "::error::The state report contains a long opaque string. Refusing to display it."
+            exit 1
+          fi
+
+          echo "::notice::Bootstrap state reported. Counts only; no identity, grant or secret was read."

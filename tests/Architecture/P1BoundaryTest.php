@@ -52,18 +52,31 @@ final class P1BoundaryTest extends TestCase
      * ever invoked the command, that secret would be printed into a CI log many
      * people can read.
      */
-    public function test_the_deployment_never_issues_a_bootstrap_grant(): void
+    public function test_no_workflow_ever_issues_a_bootstrap_grant(): void
     {
-        foreach (['deploy.yml', 'ci.yml'] as $workflow) {
-            $contents = file_get_contents(__DIR__."/../../.github/workflows/{$workflow}");
+        $workflows = glob(__DIR__.'/../../.github/workflows/*.yml') ?: [];
 
+        $this->assertNotEmpty($workflows);
+
+        foreach ($workflows as $workflow) {
+            $name = basename($workflow);
+            $contents = file_get_contents($workflow);
+
+            // Named workflows are not enough: this guard has to cover every
+            // workflow that exists now and every one added later, because the
+            // grant is a privilege-granting secret and a CI log is readable by
+            // everyone with repository access.
             $this->assertStringNotContainsString(
                 'semantiq:bootstrap-grant',
                 $contents,
-                "{$workflow} issues a bootstrap grant. The grant would be printed into the run log."
+                "{$name} issues a bootstrap grant. The grant would be printed into the run log."
             );
 
-            $this->assertStringNotContainsString('storage:link', $contents);
+            $this->assertStringNotContainsString(
+                'storage:link',
+                $contents,
+                "{$name} runs storage:link, which under the root layout targets the real storage directory."
+            );
         }
     }
 
