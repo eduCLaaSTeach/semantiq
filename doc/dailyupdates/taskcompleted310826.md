@@ -1,7 +1,7 @@
 # Daily Development Handover — 31 August 2026
 
 **Project:** SemantIQ v2.2
-**Current phase:** Phase 1 — P1-BASE Application Baseline
+**Current phase:** Phase 1 — P1-01 Organisation (implemented, awaiting acceptance)
 **Session date as recorded by the product owner:** 31 August 2026
 
 > **Timestamp note.** Every GitHub Actions run and commit referenced below carries a
@@ -491,16 +491,220 @@ Test suite at acceptance: **121 tests, 464 assertions.**
 
 ---
 
-## 13. What must NOT happen next
+## 13. P1-01 — Organisation
 
-P1-BASE and P1-00 are both accepted and closed. **P1-01 — Organisation is
-unlocked for PLAN ONLY.**
+### Lifecycle
+
+| Stage | Outcome |
+| --- | --- |
+| PLAN | **APPROVED** — D-14 corrected to optional many-to-many, D-15 `users` only |
+| DESIGN | **APPROVED** — including **D-16**, `users.organisation_id` |
+| EXECUTE | Complete, merged and deployed |
+| TEST | 170 tests, 1703 assertions; 28 mutations applied across the unit, 28 caught |
+| VERIFY | **UNFINISHED** — Product Owner live verification in progress |
+| ACCEPT | **NOT ACCEPTED** |
+
+### The pull requests, in order
+
+| PR | Subject | Merge |
+| --- | --- | --- |
+| [#50](https://github.com/eduCLaaSTeach/semantiq/pull/50) | P1-01 implementation | `9afe33d` |
+| [#51](https://github.com/eduCLaaSTeach/semantiq/pull/51) | Read-only verification workflow | `84463d4` |
+| [#52](https://github.com/eduCLaaSTeach/semantiq/pull/52) | Production evidence | `579c25c` |
+| [#53](https://github.com/eduCLaaSTeach/semantiq/pull/53) | Management-cycle live-verification correction and carried gate | `8f65647` |
+| [#54](https://github.com/eduCLaaSTeach/semantiq/pull/54) | Aggregate verification counters | `44fa84b` |
+| [#55](https://github.com/eduCLaaSTeach/semantiq/pull/55) | Baseline and real-production-data constraint | `b1a75e2` |
+| [#56](https://github.com/eduCLaaSTeach/semantiq/pull/56) | `/console` shell and navigation integration defect | `4f99c46` |
+| [#57](https://github.com/eduCLaaSTeach/semantiq/pull/57) | Verification record correction | `7b3f445` |
+| [#58](https://github.com/eduCLaaSTeach/semantiq/pull/58) | UI presentation and professional-quality correction | **`1b4c6384719b66048d97d00f5911a4279ecf6646`** |
+
+### The decisions
+
+**D-14 — Business Unit ↔ Legal Entity: optional many-to-many via a junction.**
+The many-to-one model was proposed and **rejected by the Product Owner** as
+self-contradictory: the plan itself stated the two axes do not align. The
+junction carries the two keys and nothing else.
+
+**D-15 — `users` only.** No `people` table.
+
+**D-16 — `users.organisation_id`**, nullable, FK to `organisations`, indexed,
+owned by P1-01. Raised because the same-organisation rule could not be
+implemented honestly: `users` carried no SemantIQ organisation key, and the
+nearest available column — Entra `tenant_id` — would have made every test pass
+for the wrong reason. Populated at exactly one place, Company Profile creation.
+No seed, no backfill, no manual database write, no bootstrap change.
+
+### Defects found during P1-01, kept rather than smoothed over
+
+**1. A directory-enumeration oracle (found by the anonymous route sweep).**
+Route-model binding ran before the session gate, so an anonymous request to a
+protected record answered **302 when the record existed and 404 when it did
+not** — letting an unauthenticated visitor map the organisation by probing
+identifiers. Authentication and authorisation now run ahead of
+`SubstituteBindings`. Verified live: ids `1`, `999999` and `2147483647` all
+answer 302.
+
+**2. `NavigationRegistry` rejected every valid node.** Routes are named
+fluently, so the collection's name lookup is stale until refreshed. P1-BASE
+registered zero nodes, so nothing had exercised the guard.
+
+**3. Organisation was unreachable after sign-in (found by Product Owner live
+review, PR #56).** Two causes. `/console` still rendered the P1-00 standalone
+card, never moved onto `AppShell`. Worse and hidden by the first,
+`SystemAdministratorNavigationAuthorizer` took `Request` through its
+constructor while `NavigationRegistry` is a singleton — so it read
+`semantiq_user` from a request captured at construction. **Every node was
+denied and `productAreas` resolved to `[]` on every page, the Organisation
+screens included.** Their sidebars were empty too; nobody had looked.
+
+**4. The sidebar exposed the raw internal icon key `building` (found by Product
+Owner live review, PR #58).**
+
+- `AppShell` rendered `{node.icon}` directly, so a **registry key became
+  visible user-facing text**.
+- Every automated test passed: the node was registered, the route resolved, the
+  authorisation was correct. Nobody had asked what the screen actually said.
+- Replaced by the approved implementation: one central inline-SVG registry
+  (`resources/js/Components/Icon.jsx`) per the shared standard — 24px viewBox,
+  2px stroke, round caps and joins, outline, `i-<concept>` ids, rendered at
+  `1em` and sized by `font-size`. Organisation declares `i-sitemap`.
+- **An unknown key now renders nothing**, never its own name.
+- **Additional obvious P1-01 UI-polish defects were found and corrected in the
+  same pass:** a primary button stretched the full width of its card;
+  add-forms had no heading, so a row of inputs was explained only by its button;
+  the actions column header was empty; a two-character country field was 590px
+  wide.
+
+Defects 3 and 4 were both found by the Product Owner looking at the screen, not
+by any test. That is the reason for the new delivery rules in section 15.
+
+### Carried gate to P1-03
+
+The **live multi-user management-cycle check** is deferred to **P1-03**.
+Self-management is refused before the chain walk runs, so a genuine cycle needs
+at least two SemantIQ users; production has one, and P1-03 provisions the
+second. It was **not** solved by inserting a user, reopening bootstrap, writing
+to MySQL, building P1-03 early, or weakening the rule. P1-01 keeps its
+mutation-proven automated coverage as the evidence for the rule. Recorded in
+`PHASE-1-PLAN.md` §10.
+
+---
+
+## 14. Production state at end of day — READ THIS BEFORE RESUMING
+
+Read from the server by `verify-organisation.yml` run
+[33385154456](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33385154456)
+at day end. Read-only; aggregates only.
+
+```json
+{"row_counts":{"organisations":1,"legal_entities":0,"business_units":1,
+ "business_unit_legal_entity":0,"departments":0,"teams":0,
+ "team_memberships":0,"management_relationships":0},
+ "d16_column_exists":true,"d16_column_nullable":true,
+ "d16_foreign_key_target":"organisations",
+ "users_total":1,"users_with_organisation":1,
+ "team_memberships_current":0,"team_memberships_ended":0,
+ "business_units_with_multiple_legal_entities":0,
+ "legal_entities_with_multiple_business_units":0,
+ "business_units_active":0,"business_units_inactive":1,
+ "department_moved_events":0,"organisation_delete_routes":0}
+```
+
+> **CORRECTION TO THE DAY-END BRIEF.** The day-end instruction stated that no
+> Organisation or business-structure data had been entered and that the
+> verification baseline therefore remained valid. **The server says otherwise,
+> and the server is authoritative.** Recording the stated position would have
+> put a false statement into the permanent record.
+
+**The zero baseline captured in run
+[33381020970](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33381020970)
+is SUPERSEDED. Do not compare against it again.** The reading above is the new
+reference point.
+
+### What the numbers actually prove — three checks passed live
+
+| Check | Evidence | Result |
+| --- | --- | --- |
+| 2 — System Administrator reaches Organisation | Product Owner screenshot of `/console/organisation` | **PASS** |
+| 3 — Create the organisation | `organisations: 1`, `business_units: 1` | **PASS** |
+| **5a — D-16 association** | `users_with_organisation` **0 → 1** while `users_total` stays **1** | **PASS** |
+
+`users_with_organisation = 1` is the direct live proof of D-16's population
+rule: creating the Company Profile associated the administrator who created it,
+in the same transaction. No seed, no backfill, no manual write.
+
+`business_units_active: 0` with `business_units_inactive: 1` means a business
+unit was created and then deactivated. It had **no departments**, so this was a
+**leaf deactivation, which the design permits** (§3: *deactivate a leaf —
+permitted*). **It is not evidence for check 7**, which requires deactivating a
+business unit that still has an **active department** and observing the refusal.
+
+### Still outstanding for P1-01
+
+| # | Check | State |
+| --- | --- | --- |
+| 7 | Deactivate a business unit **with an active department** → refused, children named | **Not yet observed** |
+| 4 | D-14 both directions | Conditional on the real organisation having that shape |
+| 9 | Move a department between business units | Conditional on a legitimate move existing |
+| 5 | Add a team member, then remove | Conditional on the membership being factually correct |
+| 6 | Live management cycle | **Carried to P1-03** |
+
+---
+
+## 15. New permanent delivery rules — `CLAUDE.md`
+
+`CLAUDE.md` was created today and now holds the durable delivery protocol. It
+references the existing authoritative documents rather than restating them.
+**These rules are mandatory for all future work:**
+
+1. **Every completed feature, corrective task or delivery unit must ship with a
+   Product Owner Test Script before acceptance is requested** — twelve required
+   parts, written for the Product Owner, including a warning wherever test data
+   is permanent.
+2. **Green CI alone is never sufficient for handover.**
+3. **UI work requires a professional-polish review** before handover — the full
+   inspection list, ending with: *would a professional SaaS product team be
+   comfortable showing this exact screen to a customer?* It is a quality gate,
+   **not** licence to expand scope.
+4. **UI work requires actual visual verification in a real browser**, at desktop
+   and small-screen width, recording what was actually observed.
+5. **Internal or developer terminology must never leak into user-facing UI** —
+   icon keys, enum values, route names, debug text. Enforced by
+   `NavigationPresentationTest`.
+6. **Automated test evidence must never be reported as observed production
+   evidence.** A passing test is a different claim.
+7. **The Product Owner must never be asked to create inaccurate or misleading
+   permanent business data solely to satisfy a test.** Where a check cannot be
+   exercised on real data, mark it **NOT CURRENTLY OBSERVABLE WITH REAL
+   PRODUCTION DATA**, keep its automated evidence, and carry the live
+   observation forward.
+
+---
+
+## 16. End-of-day lifecycle state
+
+```
+P1-BASE   ACCEPTED — 31 August 2026 — closed
+P1-00     ACCEPTED — 31 August 2026 — closed
+P1-01     NOT ACCEPTED — Product Owner live verification pending
+P1-02     NOT STARTED — locked
+```
+
+**P1-00 detail:** real Microsoft Entra login and first System Administrator
+bootstrap verified live. The PR #46 production JWKS defect is retained in this
+document's history at §12. Bootstrap is CONFIGURED and closed.
+
+---
+
+## 17. What must NOT happen next
+
+P1-BASE and P1-00 are both accepted and closed. **P1-01 is implemented and
+deployed but NOT ACCEPTED. P1-02 is locked.**
 
 The lifecycle is unchanged: `PLAN → APPROVE → DESIGN → APPROVE → EXECUTE →
 TEST → VERIFY → ACCEPT`.
 
-- Do **not** begin P1-01 DESIGN or write any P1-01 code until the PLAN is
-  approved.
+- Do **not** start P1-02. It unlocks only on explicit P1-01 acceptance.
 - Do **not** create roles, permissions, business domains, scopes, sensitivity or
   the access engine — those are P1-04 and P1-05.
 - Do **not** build user or group administration — that is P1-03.
@@ -522,21 +726,35 @@ Settled unless a verified technical impossibility appears.
 
 ## Resume Here Next Session
 
-1. **Read this daily update first.**
-2. Read `doc/v2/phase-1/P1-BASE-APPLICATION-BASELINE-VERIFICATION.md` — it records
-   `P1-BASE ACCEPTED — 31 August 2026`.
-3. Read `doc/v2/phase-1/HOSTING-ARCHITECTURE.md` for the final layout.
-4. Read `doc/v2/phase-1/P1-00-LOGIN-BOOTSTRAP-PLAN.md` — the P1-00 PLAN,
-   awaiting Product Owner review.
-5. `main` should be at or after `3d075bf`.
-6. **D-03** (first-administrator bootstrap) and **D-04** (Microsoft Entra ID
-   registration) are live P1-00 blockers. Both are presented in the PLAN with
-   options and required decisions; **neither may be chosen unilaterally.**
-7. Wait for explicit PLAN approval before DESIGN.
+### DO NOT START P1-02.
+
+**The next session begins by completing P1-01 Product Owner live verification.**
+
+1. **Read this daily update first**, especially §14 — the zero baseline is
+   superseded and real data now exists.
+2. Read `CLAUDE.md` — the mandatory delivery rules created today.
+3. Read `doc/v2/phase-1/P1-01-ORGANISATION-VERIFICATION.md`.
+4. `main` should be at or after `1b4c638`.
+
+### The first Product Owner test
+
+1. **Sign in.**
+2. **Inspect `/console`.**
+3. **Confirm `SYSTEM ADMINISTRATION → Organisation` is present.**
+4. **Confirm a real icon is shown and the word `building` is absent.**
+
+**Only after that passes** should the Product Owner proceed with real
+Organisation data — and only data that is genuinely true, because P1-01 has no
+hard delete and everything created is permanent.
+
+Then the remaining checks in §14, of which **check 7** is the one that can be
+done today with the structure already present.
+
+**P1-01 must receive explicit Product Owner acceptance before P1-02 unlocks.**
 
 ---
 
-## 14. Evidence references
+## 18. Evidence references
 
 | Item | Reference |
 | --- | --- |
@@ -555,13 +773,23 @@ Settled unless a verified technical impossibility appears.
 | Architecture baseline | `doc/SemantIQ_v2.2_Ground_Zero_Architecture_Reset_Three_Phase_Blueprint.md` |
 | Phase 1 authority | `doc/SemantIQ_v2_PHASE_1_System_Administration.md` |
 | UI standard | `doc/design-system/ui-and-ux-layout-template-shared.md` |
+| PR #58 — UI presentation correction | https://github.com/eduCLaaSTeach/semantiq/pull/58 |
+| PR #58 merge commit | `1b4c6384719b66048d97d00f5911a4279ecf6646` |
+| PR #58 CI | [33384567666](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33384567666) — success |
+| PR #58 deployment | [33384679794](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33384679794) — success |
+| End-of-day production state | [33385154456](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33385154456) — read-only |
+| Superseded zero baseline | [33381020970](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33381020970) |
+| P1-01 plan | `doc/v2/phase-1/P1-01-ORGANISATION-PLAN.md` |
+| P1-01 design | `doc/v2/phase-1/P1-01-ORGANISATION-DESIGN.md` |
+| P1-01 verification | `doc/v2/phase-1/P1-01-ORGANISATION-VERIFICATION.md` |
+| Delivery protocol | `CLAUDE.md` |
 
 No credential, `APP_KEY` value, database credential, SSH material, `.env` content or
 other secret appears in this document, and none may be added to it.
 
 ---
 
-## 15. Daily update convention
+## 19. Daily update convention
 
 From now on, at the end of every working day or session, maintain exactly one file:
 
