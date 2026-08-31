@@ -1,8 +1,11 @@
 # P1-BASE — Application Baseline — VERIFICATION
 
-**Status:** PARTIAL — build, tests, CI and UI verified. Deployment and live
-web-exposure verification are **NOT VERIFIED**, blocked on the D-05 one-time
-database provisioning. See §7.
+**Status:** BUILD VERIFIED — every P1-BASE gate has been executed against the
+live deployment and passed. One unresolved risk is recorded in §7.1; it does not
+fail a gate but is a real weakness in the D-08B posture and is the product
+owner's to weigh.
+
+Awaiting product-owner acceptance. Successful deployment is not acceptance.
 
 **Unit:** P1-BASE
 **Design:** `P1-BASE-APPLICATION-BASELINE-DESIGN.md` (approved with four corrections)
@@ -37,27 +40,27 @@ Six tests existed and had never run. Registering the suite is part of this unit.
 
 ## 2. CI
 
-Every CI run on this branch is listed, newest first, so the record shows which
-run belongs to which head rather than a single claim that ages badly.
+Every CI run is listed, newest first, so the record shows which run belongs to
+which head rather than a single claim that ages badly.
 
 | Head | Run | Conclusion | Contents |
 | --- | --- | --- | --- |
-| `8d01db3` | [33321421385](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321421385) | **success**, 13/13 steps | Gate 4 path list completed; evidence ledger |
-| `bb8c765` | [33321180460](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321180460) | success, 13/13 | Verification document added |
-| `e096b62` | [33321086991](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321086991) | success, 13/13 | CI and deployment workflows |
+| **`6f68a62` (main, merge of #35)** | [33322650103](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33322650103) | **success** | **CI on main after the exposure fix** |
+| `996cd9f` (main, merge of #34) | [33322144289](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33322144289) | success | CI on main, first P1-BASE merge |
+| `a71fad3` | [33322439196](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33322439196) | success | Exposure fix, pre-merge |
+| `570ddc5` | [33322074490](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33322074490) | success | D-08B recorded |
+| `a38a73e` | [33321842164](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321842164) | success | APP_KEY bootstrap |
+| `0c84947` | [33321561118](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321561118) | success | Run ledger |
+| `8d01db3` | [33321421385](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321421385) | success | Gate 4 list completed |
+| `bb8c765` | [33321180460](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321180460) | success | Verification document |
+| `e096b62` | [33321086991](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33321086991) | success | CI and deployment workflows |
 
-**Currency rule.** A green run on a head that is no longer current proves
-nothing about the head being accepted, so the ledger above is kept rather than
-overwritten. The commit that adds each ledger entry is itself documentation-only
-and changes no application file, which is why the entry can be trusted about the
-code it describes.
+**Currency rule.** A green run on a head that is no longer current proves nothing
+about the head being accepted, so the ledger is kept rather than overwritten. The
+definitive evidence is the run on **`6f68a62`**, the merge commit now deployed to
+production.
 
-The definitive pre-merge evidence is the CI run on the **final** head at merge
-time, confirmed in the acceptance report rather than predicted here. This
-document cannot cite the SHA of the commit that creates it.
-
-All three runs above executed the same 13 steps, including migrations against
-MySQL 8.4:
+Every run executed the same 13 steps, including migrations against MySQL 8.4:
 
 | Step | Result |
 | --- | --- |
@@ -72,7 +75,7 @@ MySQL 8.4:
 | # | Item | Result |
 | --- | --- | --- |
 | B3 | CI green on the pull request, on the current head | **PASS** — run 33321180460 on `bb8c765` |
-| B4 | CI green on `main` | **NOT VERIFIED** — the branch is not merged |
+| B4 | CI green on `main` | **PASS** — run 33322650103 on `6f68a62` |
 | B5 | Migrations apply against real MySQL | **PASS** — CI step 12 |
 
 ---
@@ -155,90 +158,126 @@ Google Fonts URL.
 
 ---
 
-## 7. NOT VERIFIED
+## 7. Live deployment verification — EXECUTED
 
-Each item below could not be executed. None is assumed to pass.
+Two deployments ran, exercising both paths of the state machine.
 
-### D — Deployment (D8–D12)
+| | Run | State | Result |
+| --- | --- | --- | --- |
+| Merge `996cd9f` (PR #34) | [33322144286](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33322144286) | **INITIAL** | 23/24 steps; **exposure gate FAILED** on `/app/` returning 302 |
+| Merge `6f68a62` (PR #35) | [33322650107](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33322650107) | **EXISTING** | **All 24 steps succeeded** |
 
-**NOT VERIFIED.** Blocked on the **D-05 one-time database provisioning**, which
-is an infrastructure administration action outside this repository and outside
-what this session can perform. The server `.env` must carry `DB_DATABASE`,
-`DB_USERNAME` and `DB_PASSWORD` before a deployment can migrate.
+The first failure is kept rather than erased: it is the evidence that the gate
+works. It also produced the finding in §7.2.
 
-The deployment workflow fails deliberately and clearly in that state: the
-"Verify the server environment file" step reports *"No .env on the server.
-Complete the one-time provisioning (D-05) first"* rather than surfacing a
-confusing migration error.
+### Deployment steps, second run — all observed
 
-The branch is also not merged, and `deploy.yml` fires on push to `main`.
-
-Unverified: D8 deploy completes · D9 Laravel answers at the site root ·
-D10 `.env` survives · D11 `.well-known/` survives · D12 `storage/` preserved.
-
-### E — Live web-exposure tests (E13, E14)
-
-**NOT VERIFIED.** These must run against the deployed application. Until
-Laravel is on the server there is nothing to test: the checks would pass
-trivially against the static page and prove nothing.
-
-The tests are implemented in `deploy.yml` and run automatically on the first
-deployment. They cover the Gate 4 minimum list in full, treat any status other
-than 403/404 as failure, explicitly reject a redirect as proof, cache-bust every
-request, and assert `.well-known/` stays reachable. Each response body is also
-scanned for `APP_KEY`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`,
-`MICROSOFT_CLIENT_SECRET`, connection strings and server paths - a 403 that
-still returns a body carrying one of those is a failure.
-
-**Current live server state**, observed 30 August 2026 (cache-busted), *before*
-any P1-BASE deployment:
-
-| Path | Status |
+| Step | Result |
 | --- | --- |
-| `/` | 200 — still the static deploy-test page |
-| `/up` | 404 — Laravel not deployed |
-| `/.env` | 403 |
-| `/vendor/` | 404 |
-| `/.well-known/` | 200 |
+| Rsync exclusion pre-flight | success |
+| SSH authentication | success |
+| Installation-state detection | success — **EXISTING** |
+| Open maintenance window | success — ran, correctly, on this path |
+| Sync to cPanel | success |
+| Runtime directories | success |
+| Environment + APP_KEY | success — **preserved, not regenerated** |
+| `migrate --force --no-interaction` | success |
+| `optimize:clear` | success |
+| `semantiq:health` over SSH | success |
+| Close maintenance window | success |
+| HTTPS site verification | success |
+| **Web-exposure negative tests** | **success** |
 
-### G — Deploy-test retirement (G19–G23)
+**Both deployment paths are now proven.** INITIAL skipped maintenance mode
+because there was nothing to put into it; EXISTING opened and closed it around
+the sync and migration. The APP_KEY step took the preservation branch on both,
+because the key supplied during D-05 provisioning was already valid — the
+generation branch has never fired against this server and, by design, never will
+while a valid key is present.
 
-**PARTIAL.**
+### Application boundary, verified independently over HTTPS
 
-| Item | Result |
+| Check | Observed |
 | --- | --- |
-| G19 static proof known good before rollout | **PASS** — run 33317821620 green, page served the merge commit |
-| G20 `public/index.html` and `deploy-test.yml` removed in the implementation commit | **PASS** — commits `1f30760` and `e096b62` |
-| G21 first deployment removes the obsolete server root `index.html` | **NOT VERIFIED** — no deployment yet |
-| G22 Laravel is the site root | **NOT VERIFIED** |
-| G23 no artefact can shadow `public/index.php` | **NOT VERIFIED** on the server; **PASS** in the repository |
+| `/` | 200, Laravel Inertia pre-auth page (`<title inertia>SemantIQ`) |
+| `/up` | 200, body `ok` |
+| `/console` browser | 302 → `/` (deny-by-default) |
+| `/console` JSON | 401, `{"message":"Unauthenticated."}` |
+| Shell / navigation leak on `/` | 0 matches |
+| Old static test page | gone |
 
-### J — D-08 document root (J24) — **RESOLVED: D-08B**
+### Exposure suite — 29 paths, cache-busted, all PASS
 
-**D-08B CONFIRMED** by the product owner, 30 August 2026, from cPanel.
+`/.env` · `/.git/` · `/.git/config` · `/composer.json` · `/composer.lock` ·
+`/package.json` · `/package-lock.json` · `/artisan` · `/phpunit.xml` ·
+`/vite.config.js` · `/app` · `/app/` · a real controller file below `/app/` ·
+`/bootstrap/` · `/config/` · `/database/` · `/doc/` · `/deployment/` ·
+`/node_modules/` · `/resources/` · `/routes/` · `/storage/` · `/tests/` ·
+`/vendor/` · `/README.md` · `/deployment/public_html.htaccess` ·
+`/storage/logs/laravel.log`
 
-| | |
+Every one returned **404** with an identical 6586-byte body — Laravel's error
+page — and **zero** occurrences of `APP_KEY`, `DB_DATABASE`, `DB_USERNAME`,
+`DB_PASSWORD`, `MICROSOFT_CLIENT_SECRET`, a connection string, a server path, a
+stack trace or `<?php`.
+
+`/.well-known/` returned **200**: ACME renewal is intact.
+
+### Persistence, observed
+
+| Item | Evidence |
 | --- | --- |
-| Document root | `public_html` |
-| `public_html/public` available | No — cPanel does not offer the required arrangement for this deployment |
-| Architecture in force | Hardened root forwarder, `deployment/public_html.htaccess` |
+| `.env` survived | The environment step read it and confirmed a valid key; it exits non-zero if absent |
+| **APP_KEY preserved** | Same step took the "present, leaving it untouched" branch. Value never printed |
+| `.well-known/` survived | 200 over HTTPS after deployment |
+| `storage/` survived | Health check reports runtime directories writable |
+| Runtime permissions | Health check passed on the deployed release |
 
-**This raises the stakes on two gates rather than lowering them.** Under D-08A
-the application tree would sit physically outside the web root and no rewrite
-rule could expose it. Under D-08B the tree is *inside* `public_html`, so the
-root `.htaccess` is the only thing standing between a request and `.env`,
-`vendor/`, `config/` and the rest.
+### 7.1 Unresolved risk — the second guard is still not firing
 
-Consequently, for P1-BASE acceptance:
+> **Update.** The product owner has since fixed **D-08B as the permanent hosting
+> model**. D-08A is closed and the hosting provider will not be asked to repoint the
+> document root, so option 2 below is withdrawn. The remaining question — whether an
+> Apache denial can fire at all on this host — is now more important, not less,
+> because `DEPLOYMENT-LAYOUT-AMENDMENT.md` proposes removing the forwarder that is
+> currently doing all of the protecting. That amendment makes proving a 403 a
+> prerequisite rather than a follow-up.
 
-- the root `.htaccess` security boundary is a **mandatory** acceptance gate, not
-  a defence-in-depth extra;
-- the complete live web-exposure test suite (§E) is **mandatory** and must be
-  executed against the deployed application, not inferred from the `.htaccess`
-  source.
 
-Correct-looking Apache configuration is not evidence. Only observed HTTPS
-responses are.
+**Every gate passes. This is not a gate failure. It is a weakness worth a
+decision.**
+
+Of the 29 protected paths, **0 returned 403 and 29 returned 404**. A 403 would
+mean an Apache denial in `deployment/public_html.htaccess` fired. A 404 with
+Laravel's error page means the request reached Laravel — the forwarder rewrote
+it into `public/`, the file was not there, and the router refused it.
+
+So the protection is real but **single-layered**. The forwarder is doing all of
+it; the deny rules contribute nothing observable.
+
+PR #35 rewrote those rules into a single `mod_rewrite` block specifically to fix
+this, on the reasoning that mixing modules had made ordering unreliable. **That
+prediction was wrong.** The live result is identical: still 0 × 403. The cause is
+therefore something not visible from outside the panel — most plausibly
+`AllowOverride` restricting which directives the host honours in `.htaccess`.
+
+Under D-08B the tree sits inside the document root, so if the forwarder rewrite
+were ever broken or removed, requests would map straight onto real files with no
+second mechanism to stop them. That is the risk.
+
+It is recorded rather than fixed because fixing it requires either host
+configuration knowledge this session cannot obtain, or the D-08A document-root
+change the host does not offer. **Product-owner decision.** Options: ask the host
+what `AllowOverride` is set to for this domain; or re-open D-08A with the host;
+or accept single-layer protection with the forwarder treated as a
+change-controlled file.
+
+### 7.2 What the first deployment's failure proved
+
+The `/app/` 302 was a route-prefix collision, not a leak — every file beneath
+`/app/` returned 404 with no source throughout. It is listed among the defects in
+§8 because it was found the same way the others were: by a check that was allowed
+to fail.
 
 ---
 

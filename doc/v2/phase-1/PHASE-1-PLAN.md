@@ -225,6 +225,27 @@ server-managed files impossible. The design states explicitly which paths are
 source-controlled, server-managed, persistent runtime data, secrets, or generated
 build artefacts. Nothing here is left to assumption.
 
+### D-08 — Document root — **FINAL: D-08B, permanent**
+
+```
+SemantIQ cPanel document root : public_html
+SemantIQ deployment root      : public_html
+D-08A                         : CLOSED / NOT TO BE PURSUED
+D-08B                         : APPROVED PERMANENT HOSTING MODEL
+```
+
+The product owner has fixed this permanently. The hosting provider is **not** to be
+asked to repoint the document root to `public_html/public`, and D-08A is not to be
+reopened. Future design work must not assume `public_html/public` is the document
+root.
+
+Because the Laravel application tree therefore sits inside the web document root,
+the hardened root `.htaccess` and the live exposure suite are **mandatory security
+controls**, not defence-in-depth extras.
+
+A separate decision follows on where the front controller lives — see
+`DEPLOYMENT-LAYOUT-AMENDMENT.md`, which is drafted and awaiting approval.
+
 ### Decisions opened by the design
 
 Two architectural questions surfaced while writing the P1-BASE design. Neither
