@@ -66,10 +66,10 @@ final class IdTokenValidator
         JWT::$leeway = self::LEEWAY_SECONDS;
 
         foreach ([false, true] as $forceRefresh) {
-            try {
-                $keys = JWK::parseKeySet(['keys' => $this->discovery->signingKeys($forceRefresh)]);
+            $keys = $this->signingKeys($forceRefresh);
 
-                return (array) JWT::decode($idToken, $this->restrictToRs256($keys));
+            try {
+                return (array) JWT::decode($idToken, $keys);
             } catch (Throwable $e) {
                 // An unknown key id is the one failure worth retrying: Microsoft
                 // rotates signing keys without notice. Everything else is a real
@@ -84,26 +84,82 @@ final class IdTokenValidator
     }
 
     /**
-     * @param  array<string, Key>  $keys
+     * The tenant's signing keys: RSA signature keys only, parsed with RS256 as
+     * the default algorithm.
+     *
+     * THE DEFAULT ALGORITHM IS NOT OPTIONAL, and omitting it is what broke
+     * production. Microsoft's real JWKS omits the per-key "alg" field, and
+     * php-jwt refuses to parse such a key without a default - so the entire key
+     * set failed to parse and every sign-in was refused as
+     * "token_signature_invalid" before a signature was ever checked. The test
+     * JWKS included "alg", so CI never saw it: the fixture was more helpful
+     * than reality, which is the only reason this reached production.
+     *
+     * Supplying the default does NOT weaken verification. Keys are filtered
+     * first, so only RSA signature keys reach the parser, and the token
+     * header's own algorithm is still never trusted to choose the verification
+     * method - php-jwt requires the header algorithm to match the key's, which
+     * is fixed at RS256 here.
+     *
      * @return array<string, Key>
      */
-    private function restrictToRs256(array $keys): array
+    private function signingKeys(bool $forceRefresh): array
     {
-        $restricted = [];
+        $usable = array_values(array_filter(
+            $this->discovery->signingKeys($forceRefresh),
+            fn (array $key): bool => $this->isRsaSignatureKey($key),
+        ));
 
-        foreach ($keys as $kid => $key) {
-            if ($key->getAlgorithm() !== self::ALLOWED_ALGORITHM) {
-                continue;
-            }
-
-            $restricted[$kid] = $key;
-        }
-
-        if ($restricted === []) {
+        if ($usable === []) {
             throw AuthenticationFailed::protocol('no_rs256_signing_key');
         }
 
-        return $restricted;
+        try {
+            return JWK::parseKeySet(['keys' => $usable], self::ALLOWED_ALGORITHM);
+        } catch (Throwable) {
+            // A key set we cannot parse is not a bad signature, and reporting it
+            // as one is what sent the first investigation of this defect after
+            // the wrong cause.
+            //
+            // Honest note on coverage: php-jwt's parser is lenient. It accepts
+            // an RSA key with a malformed modulus and only fails later, at
+            // verification - so with the filter above already guaranteeing
+            // kty/kid/n/e, this branch is not reachable by any input we could
+            // write a test for. It is kept as a genuine guard against a future
+            // parser that is stricter, not presented as a tested path. The
+            // distinct reason that IS reachable, and is tested, is
+            // no_rs256_signing_key.
+            throw AuthenticationFailed::protocol('signing_key_format_invalid');
+        }
+    }
+
+    /**
+     * Only RSA keys intended for signatures are admitted.
+     *
+     * An encryption key, an EC key, or a key advertising a different algorithm
+     * must never reach the parser carrying an RS256 default, because that
+     * default would be describing it wrongly.
+     *
+     * @param  array<string, mixed>  $key
+     */
+    private function isRsaSignatureKey(array $key): bool
+    {
+        if (($key['kty'] ?? null) !== 'RSA') {
+            return false;
+        }
+
+        // "use" is optional; when present it must say signature.
+        if (isset($key['use']) && $key['use'] !== 'sig') {
+            return false;
+        }
+
+        // "alg" is optional - Microsoft omits it - but when present it must be
+        // the one algorithm we accept.
+        if (isset($key['alg']) && $key['alg'] !== self::ALLOWED_ALGORITHM) {
+            return false;
+        }
+
+        return isset($key['kid'], $key['n'], $key['e']);
     }
 
     private function looksLikeUnknownKey(Throwable $e): bool
