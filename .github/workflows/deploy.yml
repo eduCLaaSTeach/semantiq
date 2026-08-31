@@ -63,8 +63,64 @@ jobs:
       - name: Remove node_modules before deployment
         run: rm -rf node_modules
 
-      - name: Stage the public_html forwarder
-        run: cp deployment/public_html.htaccess .htaccess
+      # Assemble the exact tree the server should hold, on the runner, then
+      # transfer that. The production layout is not the repository layout, and
+      # building it here rather than fixing it up over SSH afterwards is what
+      # makes rsync --delete able to remove the old public/ directory on its
+      # own: a path absent from the source is a path --delete prunes.
+      #
+      # Repository                        Server
+      #   public/index.php        ->        (gone - not the production entry)
+      #   public/.htaccess        ->        (gone - merged into the root one)
+      #   public/build/           ->        build/
+      #   public/favicon.ico      ->        favicon.ico
+      #   public/robots.txt       ->        robots.txt
+      #   deployment/public_html.index.php -> index.php
+      #   deployment/public_html.htaccess  -> .htaccess
+      - name: Assemble the production tree
+        run: |
+          set -euo pipefail
+
+          rm -rf _deploy
+          mkdir -p _deploy
+          rsync -a --exclude '.git/' --exclude '_deploy/' ./ _deploy/
+
+          # Web-facing assets move from the repository's public/ to the
+          # deployment root, which is what the server serves from.
+          for asset in build favicon.ico robots.txt; do
+            if [ -e "_deploy/public/$asset" ]; then
+              mv "_deploy/public/$asset" "_deploy/$asset"
+            fi
+          done
+
+          cp deployment/public_html.index.php _deploy/index.php
+          cp deployment/public_html.htaccess  _deploy/.htaccess
+
+          # The repository's public/ has no role on the server. Removing it here
+          # means the transfer never carries it and --delete prunes the old one.
+          rm -rf _deploy/public
+
+          # Fail before transferring rather than after. Each of these is a
+          # white-screen production outage if it is wrong.
+          missing=0
+          [ -f _deploy/index.php ]            || { echo "::error::No front controller at the deployment root."; missing=1; }
+          [ -f _deploy/.htaccess ]            || { echo "::error::No .htaccess at the deployment root."; missing=1; }
+          [ -f _deploy/build/manifest.json ]  || { echo "::error::No build/manifest.json at the deployment root; assets would 404."; missing=1; }
+          [ -f _deploy/vendor/autoload.php ]  || { echo "::error::No vendor/autoload.php."; missing=1; }
+          [ -f _deploy/bootstrap/app.php ]    || { echo "::error::No bootstrap/app.php."; missing=1; }
+          [ ! -d _deploy/public ]             || { echo "::error::_deploy/public still exists; the old layout would be re-created."; missing=1; }
+          [ "$missing" -eq 0 ] || exit 1
+
+          # The front controller must resolve its siblings, not walk up out of
+          # the deployment root the way the stock public/ controller does.
+          grep -q "__DIR__.'/vendor/autoload.php'" _deploy/index.php \
+            || { echo "::error::The staged front controller does not resolve vendor/autoload.php as a sibling."; exit 1; }
+          if grep -q "__DIR__.'/\.\./" _deploy/index.php; then
+            echo "::error::The staged front controller walks up out of the deployment root."
+            exit 1
+          fi
+
+          echo "::notice::Production tree assembled: root front controller, root .htaccess, assets at build/, no public/ layer."
 
       # Correction 3. The exclusion contract is enforced here, on the runner,
       # before anything is transferred. A missing entry fails the job rather than
@@ -170,7 +226,7 @@ jobs:
             --exclude ".gitignore" \
             --exclude ".gitattributes" \
             --exclude ".env.example" \
-            ./ "$CPANEL_USER@$CPANEL_HOST:$CPANEL_DEPLOY_PATH/"
+            _deploy/ "$CPANEL_USER@$CPANEL_HOST:$CPANEL_DEPLOY_PATH/"
 
       # Permanent security control. Under D-08B this one file IS the security
       # boundary, so every claim about what is protected rests on the server
@@ -207,6 +263,62 @@ jobs:
           fi
 
           echo "::notice::.htaccess integrity verified - the deployed file is the repository file."
+
+      # The same permanent control as the .htaccess check, for the other file
+      # the production layout depends on. A hand-edited index.php on the server
+      # is the change nobody would otherwise notice.
+      - name: Verify the deployed front controller matches the repository copy
+        run: |
+          set -euo pipefail
+
+          expected="$(sha256sum deployment/public_html.index.php | cut -d' ' -f1)"
+
+          actual="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && { sha256sum index.php 2>/dev/null || shasum -a 256 index.php 2>/dev/null; } | grep -oE '[0-9a-f]{64}' | head -1")"
+
+          echo "expected (repository) : ${expected:-<none>}"
+          echo "actual   (server)     : ${actual:-<none>}"
+
+          if [ -z "$actual" ]; then
+            echo "::error::No front controller at the deployment root on the server."
+            exit 1
+          fi
+
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::The deployed index.php does NOT match deployment/public_html.index.php."
+            exit 1
+          fi
+
+          echo "::notice::Front controller integrity verified."
+
+      # rsync --delete prunes public/ because the assembled tree has none - but
+      # the exclusion contract protects public/storage from deletion, so a
+      # leftover symlink there could keep the directory alive. Remove it
+      # explicitly, then prove it is gone: if public_html/public does not exist
+      # and the site answers, nothing can be depending on it.
+      - name: Remove the legacy public/ layer and prove it is not required
+        run: |
+          set -euo pipefail
+
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && rm -rf ./public"
+
+          state="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && if [ -e ./public ]; then echo SEMANTIQ_PUBLIC_PRESENT; else echo SEMANTIQ_PUBLIC_ABSENT; fi")"
+
+          case "$state" in
+            *SEMANTIQ_PUBLIC_ABSENT*)
+              echo "::notice::public_html/public does not exist. The application cannot be depending on it." ;;
+            *SEMANTIQ_PUBLIC_PRESENT*)
+              echo "::error::public_html/public still exists. The old layout has not been removed."
+              exit 1 ;;
+            *)
+              echo "::error::Could not determine whether public_html/public exists."
+              exit 1 ;;
+          esac
 
       - name: Ensure runtime directories exist and are writable
         run: |
@@ -281,7 +393,43 @@ jobs:
           up="$(curl -fsS --retry 3 --retry-delay 5 --retry-all-errors "$APP_URL/up?deploy=${GITHUB_SHA}")"
           [ "$up" = "ok" ] || { echo "::error::/up returned [$up]"; exit 1; }
 
-          echo "::notice::Site root 200 and /up ok."
+          # The built asset the page actually references must load, or the site
+          # is "up" while rendering unstyled. Under the root layout these live
+          # at /build/... rather than behind the old forwarder, so this is the
+          # check that the asset move landed.
+          # Manifest "file" values are relative to the build directory
+          # (assets/app-XXXX.js), not rooted paths - so the /build prefix is
+          # added here. Reading it the other way round silently matched nothing
+          # and would have turned this check into an unconditional failure.
+          asset="$(grep -oE 'assets/[A-Za-z0-9._-]+\.(js|css)' _deploy/build/manifest.json | head -1)"
+
+          if [ -z "$asset" ]; then
+            echo "::error::Could not read an asset path out of the build manifest."
+            exit 1
+          fi
+
+          acode="$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 --retry-all-errors "$APP_URL/build/$asset")"
+          [ "$acode" = "200" ] || { echo "::error::Built asset /build/$asset returned $acode"; exit 1; }
+          echo "::notice::Built asset /build/$asset served 200 from the deployment root."
+
+          # Directory listing must be off now that assets are served from the
+          # document root, or /build/ enumerates the bundle.
+          bcode="$(curl -s -o /tmp/blist -w '%{http_code}' "$APP_URL/build/?cb=${GITHUB_SHA}")"
+          case "$bcode" in
+            403|404) ;;
+            *) echo "::error::/build/ returned $bcode; directory listing may be enabled"; exit 1 ;;
+          esac
+          if grep -qE 'Index of|<a href="[^"]*\.js"' /tmp/blist 2>/dev/null; then
+            echo "::error::/build/ returned a directory listing."
+            exit 1
+          fi
+
+          # The old layout must not still be serving. If public_html/public is
+          # gone, a 403 from the deny rule is the only correct answer here.
+          pcode="$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/public/index.php?cb=${GITHUB_SHA}")"
+          [ "$pcode" = "403" ] || { echo "::error::/public/index.php returned $pcode; expected 403. The legacy layer may still be reachable."; exit 1; }
+
+          echo "::notice::Site root 200, /up ok, assets served from the deployment root, no legacy public/ layer."
 
       # Correction: a redirect is not proof. A 302 means the request reached the
       # application; the requirement is that these files are never served.
@@ -314,7 +462,7 @@ jobs:
             "composer.json" "composer.lock" "package.json" "package-lock.json" \
             "artisan" "phpunit.xml" "vite.config.js" \
             "app/" "bootstrap/" "config/" "database/" "resources/" "routes/" \
-            "storage/" "tests/" "vendor/" "deployment/" "doc/" \
+            "storage/" "tests/" "vendor/" "deployment/" "doc/" "public/" \
             "README.md" "deployment/public_html.htaccess" "storage/logs/laravel.log"
           do
             code="$(curl -s -o /tmp/body -w '%{http_code}' "$APP_URL/$path?cb=${GITHUB_SHA}")"

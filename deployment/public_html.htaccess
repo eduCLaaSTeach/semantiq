@@ -1,42 +1,64 @@
-# SemantIQ cPanel front door.
+# SemantIQ production front door.
 #
-# D-08B is in force and permanent: the cPanel document root is public_html, the
-# deployment root is public_html, and the whole Laravel tree is deployed inside
-# it. This file is therefore the security boundary, not a defence-in-depth
-# extra. public_html/public is NOT part of the intended production architecture.
+# D-08B, permanent: the cPanel document root is public_html, the deployment root
+# is public_html, and the production front controller is public_html/index.php.
+# There is no public_html/public layer - that path was only an early
+# Git-to-cPanel synchronisation test location and is not part of the
+# architecture. The whole Laravel tree sits inside the document root, so this
+# file is the security boundary.
 #
-# EVERY rule below lives in mod_rewrite, deliberately. An earlier version mixed
-# mod_rewrite with mod_alias RedirectMatch and mod_authz FilesMatch. Rules in a
-# single module run in written order, so the denials genuinely precede the
-# forwarder. The FilesMatch block afterwards is a second, independent mechanism.
+# THE CRITICAL DIFFERENCE FROM THE PREVIOUS LAYOUT
+#
+# Until this change a catch-all rewrote every request into public/, where app/,
+# vendor/ and .env do not exist - so even a request that slipped past a deny
+# rule found nothing. That safety net is gone. A standard root front controller
+# serves any file that exists rather than rewriting it away, which means /.env
+# would be served as text and application PHP would execute outside its entry
+# point if these deny rules did not fire.
+#
+# They do fire. PR #38 measured four independent mechanisms at this document
+# root and all four returned 403: mod_rewrite [R=403,L], mod_rewrite [F,L],
+# mod_alias RedirectMatch 403, and <Files> + Require all denied. The decisive
+# control was a real guarded file returning 403 while its unguarded sibling in
+# the same directory returned 200 - proof the file was reachable and the
+# directive refused it. Only mechanisms verified there are used below.
+#
+# Every deny rule therefore precedes the file-serving rules, in one module so
+# written order is the order they run.
 #
 # No RewriteBase, domain or absolute path, so the same file works across domains
 # and subdomains.
 
 # Denials must stay visible as 403.
 #
-# This is a security control, not cosmetics. Apache serves a denial through its
-# ErrorDocument chain; a PATH-valued ErrorDocument re-enters the rewrite engine,
-# meets the forwarder, lands in Laravel and returns 404 - which is exactly what
-# happened here for weeks and led to the false conclusion that the deny rules
-# were not firing at all. PR #38 proved they were: the rules executed, and only
-# the reported status was wrong.
-#
-# A quoted LITERAL is answered from memory - no internal redirect, no rewrite
-# pass, no Laravel - so the status arrives intact. The deployment's exposure
-# gate now REQUIRES 403 on every protected path, so replacing this with a path
-# would mask the boundary again and fail that gate. Keep it a literal.
-#
-# The text is deliberately bare: no framework name, version, server path, stack
-# trace, configuration detail or internal marker.
+# A PATH-valued ErrorDocument re-enters the rewrite engine and can return as a
+# 404, which is what masked this boundary for weeks and produced the confident,
+# wrong conclusion that the deny rules were dead. A quoted LITERAL is answered
+# from memory, so the status survives. The deployment gate requires 403 on every
+# protected path, so this must stay a literal. The text names no framework,
+# version, path, trace or configuration.
 ErrorDocument 403 "Forbidden"
+
+<IfModule mod_negotiation.c>
+    # -Indexes stops /build/ and friends listing their contents now that they
+    # are served from the document root. -MultiViews stops /foo quietly
+    # resolving to /foo.php.
+    #
+    # Safe under this host's AllowOverride: public/.htaccess has carried these
+    # same directives for every request served so far, and AllowOverride is
+    # granted on a directory and inherited downwards - so a child honouring
+    # Options means the parent grants it.
+    Options -MultiViews -Indexes
+</IfModule>
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # FIRST, before any dotfile rule. .well-known carries the ACME challenge that
-    # renews the TLS certificate; blocking it breaks HTTPS renewal silently,
-    # weeks later, in a way nobody connects back to this file.
+    # ---- DENY FIRST. Nothing below may serve a file these rules refuse. ----
+
+    # .well-known carries the ACME challenge that renews the TLS certificate.
+    # Blocking it breaks HTTPS renewal silently, weeks later, in a way nobody
+    # connects back to this file. It must stay above the dotfile rule.
     RewriteRule ^\.well-known/ - [L]
 
     # Every other dotfile, at any depth: .env, .git, .gitignore and friends.
@@ -49,19 +71,38 @@ ErrorDocument 403 "Forbidden"
     # Directories holding code, configuration, dependencies or runtime state.
     # A route may not begin with any of these; RoutePrefixCollisionTest enforces
     # that, because a URL this blocks is a URL the application cannot serve.
-    RewriteRule ^(app|bootstrap|config|database|doc|deployment|node_modules|resources|routes|storage|tests|vendor)(/|$) - [F,L]
-
-    # Everything that survives goes to Laravel's front controller.
     #
-    # This forwarder is transitional. The permanent layout serves the
-    # application directly from public_html/index.php with no public/ hop; that
-    # migration is a separate, self-contained change.
-    RewriteRule ^(.*)$ public/$1 [L]
+    # public is listed too. Nothing should exist at public_html/public any more,
+    # and if anything ever reappears there it must not become reachable and
+    # quietly resurrect the old layout.
+    RewriteRule ^(app|bootstrap|config|database|doc|deployment|node_modules|public|resources|routes|storage|tests|vendor)(/|$) - [F,L]
+
+    # ---- Then serve. ----
+
+    # Headers Laravel reads that some CGI/FastCGI setups drop.
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    # Redirect trailing slashes if not a folder...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # Anything that exists and survived the denials is a real public asset -
+    # /build/..., /favicon.ico, /robots.txt - and is served directly. Everything
+    # else goes to the front controller at this directory's root.
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
 </IfModule>
 
-# Second, independent mechanism. Different module, so a mistake in the rewrite
-# rules above does not silently disable this too. PR #38 confirmed <Files> +
-# Require all denied is honoured on this host.
+# Second, independent mechanism, and no longer only belt and braces: with the
+# forwarder gone this is what still refuses these files if the rewrite rules
+# above are ever broken. PR #38 confirmed <Files> + Require all denied is
+# honoured on this host.
 <FilesMatch "(?i)^(\.env.*|composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml|vite\.config\.js|.*\.md|.*\.ya?ml|.*\.sqlite|.*\.log)$">
     Require all denied
 </FilesMatch>

@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Platform\Support\DeploymentLayout;
+
 return [
 
     /*
@@ -87,8 +89,24 @@ return [
     |
     */
 
-    'links' => [
-        public_path('storage') => storage_path('app/public'),
-    ],
+    /*
+     * Empty under the production root layout, and that is a safety requirement
+     * rather than a preference.
+     *
+     * There, public_path() IS the deployment root, so the conventional link
+     * location public_path('storage') resolves to public_html/storage - the
+     * application's real storage directory, holding logs, cache, sessions and
+     * compiled views. Running storage:link would try to replace live runtime
+     * state with a symlink to a subset of itself. The route that would have
+     * served those files is already disabled for the same collision; see
+     * RoutePrefixCollisionTest. Any later need to serve user files goes through
+     * an authorised controller, which this security model requires anyway.
+     *
+     * In the repository, CI and local development the layout keeps public/ as a
+     * distinct directory, so the conventional link is correct and is declared.
+     */
+    'links' => DeploymentLayout::allowsPublicStorageLink(base_path())
+        ? [public_path('storage') => storage_path('app/public')]
+        : [],
 
 ];

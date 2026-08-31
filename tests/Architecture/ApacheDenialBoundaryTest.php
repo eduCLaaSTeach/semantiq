@@ -52,9 +52,27 @@ final class ApacheDenialBoundaryTest extends TestCase
             'composer.json', 'composer.lock', 'package.json', 'package-lock.json',
             'artisan', 'phpunit.xml', 'vite.config.js',
             'app/', 'bootstrap/', 'config/', 'database/', 'resources/', 'routes/',
-            'storage/', 'tests/', 'vendor/', 'deployment/', 'doc/',
+            'storage/', 'tests/', 'vendor/', 'deployment/', 'doc/', 'public/',
             'README.md', 'deployment/public_html.htaccess', 'storage/logs/laravel.log',
         ];
+    }
+
+    /**
+     * Just the web-exposure step. Scoping matters: other steps legitimately
+     * accept "403 or 404" - a directory with listing disabled answers either -
+     * and a whole-file search would either miss the real regression or fail on
+     * an unrelated line.
+     */
+    private function exposureStep(): string
+    {
+        $workflow = $this->workflow();
+
+        $start = strpos($workflow, '- name: Web-exposure negative tests');
+        $this->assertNotFalse($start, 'The web-exposure step is missing from the deployment.');
+
+        $next = strpos($workflow, "\n      - name:", $start + 10);
+
+        return $next === false ? substr($workflow, $start) : substr($workflow, $start, $next - $start);
     }
 
     private function htaccess(): string
@@ -124,7 +142,7 @@ final class ApacheDenialBoundaryTest extends TestCase
         foreach ([
             'RewriteRule ^\\.well-known/ - [L]',
             'RewriteRule (^|/)\\. - [F,L]',
-            'RewriteRule ^(app|bootstrap|config|database|doc|deployment|node_modules|resources|routes|storage|tests|vendor)(/|$) - [F,L]',
+            'RewriteRule ^(app|bootstrap|config|database|doc|deployment|node_modules|public|resources|routes|storage|tests|vendor)(/|$) - [F,L]',
             'Require all denied',
         ] as $rule) {
             $this->assertStringContainsString($rule, $htaccess, "Missing production rule: {$rule}");
@@ -149,16 +167,35 @@ final class ApacheDenialBoundaryTest extends TestCase
         $acme = strpos($htaccess, 'RewriteRule ^\\.well-known/');
         $dotfiles = strpos($htaccess, 'RewriteRule (^|/)\\. - [F,L]');
         $directories = strpos($htaccess, 'RewriteRule ^(app|bootstrap|config');
-        $catchAll = strpos($htaccess, 'RewriteRule ^(.*)$ public/$1');
+        $frontController = strpos($htaccess, 'RewriteRule ^ index.php [L]');
 
-        $this->assertNotFalse($acme);
-        $this->assertNotFalse($dotfiles);
-        $this->assertNotFalse($directories);
-        $this->assertNotFalse($catchAll);
+        $this->assertNotFalse($acme, 'The .well-known passthrough is missing.');
+        $this->assertNotFalse($dotfiles, 'The dotfile deny is missing.');
+        $this->assertNotFalse($directories, 'The directory deny is missing.');
+        $this->assertNotFalse($frontController, 'The root front-controller rule is missing.');
 
         $this->assertLessThan($dotfiles, $acme, '.well-known must precede the dotfile deny, or ACME renewal breaks.');
-        $this->assertLessThan($catchAll, $dotfiles, 'The dotfile deny must precede the catch-all, or it never runs.');
-        $this->assertLessThan($catchAll, $directories, 'The directory deny must precede the catch-all, or it never runs.');
+
+        // Under the root layout this ordering is load-bearing in a way it never
+        // was before. There is no forwarder to rewrite a slipped-through
+        // request into a directory where nothing exists: a deny rule placed
+        // after the serving rules would let Apache serve the real file.
+        $this->assertLessThan($frontController, $dotfiles, 'The dotfile deny must precede the serving rules.');
+        $this->assertLessThan($frontController, $directories, 'The directory deny must precede the serving rules.');
+    }
+
+    /**
+     * The old catch-all is what used to make a failed denial harmless. It is
+     * gone, and it must not come back: reintroducing it would restore the
+     * public/ layer that production no longer has.
+     */
+    public function test_no_forwarder_into_a_public_subdirectory_remains(): void
+    {
+        $this->assertStringNotContainsString(
+            'public/$1',
+            $this->htaccess(),
+            'The forwarder into public/ is back. Production serves directly from the deployment root.'
+        );
     }
 
     /**
@@ -193,16 +230,18 @@ final class ApacheDenialBoundaryTest extends TestCase
     {
         $workflow = $this->workflow();
 
+        $step = $this->exposureStep();
+
         $this->assertStringNotContainsString(
             '403|404)',
-            $workflow,
+            $step,
             'The exposure gate still accepts 404 as a pass. A 404 means the request reached '
             .'Laravel instead of being denied by Apache.'
         );
 
         $this->assertMatchesRegularExpression(
             '/404\)\s*\n\s*echo "::error/',
-            $workflow,
+            $step,
             'The exposure gate must treat 404 as an explicit failure.'
         );
     }
