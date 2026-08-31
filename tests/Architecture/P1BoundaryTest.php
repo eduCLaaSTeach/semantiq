@@ -108,19 +108,26 @@ final class P1BoundaryTest extends TestCase
 
         $this->assertNotEmpty($declared);
 
+        // P1-01 adds the structural event families. Anything outside this list
+        // is an event nobody reviewed.
+        $families = 'auth|bootstrap|organisation|legal_entity|business_unit|department|team|management';
+
         foreach ($declared as $event) {
-            $this->assertMatchesRegularExpression('/^(auth|bootstrap)\./', $event);
+            $this->assertMatchesRegularExpression('/^('.$families.')\./', $event);
         }
     }
 
     /**
-     * P1-00 owns identity. It does not own roles, domains, scopes, sensitivity,
-     * organisations or teams, and no migration may create them.
+     * P1-00 owns identity. It does not own roles, domains, scopes or
+     * sensitivity, and no migration may create them.
      */
     public function test_p1_00_creates_no_later_unit_schema(): void
     {
+        // organisations, teams and business_units were transferred to P1-01 on
+        // 31 August 2026 as a reviewed transfer. What remains belongs to units
+        // that have not been delivered.
         $forbidden = ['roles', 'permissions', 'domains', 'business_domains', 'scopes',
-            'sensitivity', 'entitlements', 'organisations', 'teams', 'business_units', 'audit'];
+            'sensitivity', 'entitlements', 'audit'];
 
         foreach (glob(__DIR__.'/../../database/migrations/*.php') ?: [] as $file) {
             preg_match_all("/Schema::create\(\s*'([^']+)'/", file_get_contents($file), $created);

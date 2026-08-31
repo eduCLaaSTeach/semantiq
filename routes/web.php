@@ -2,6 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Modules\Organisation\Http\Controllers\BusinessUnitController;
+use App\Modules\Organisation\Http\Controllers\DepartmentController;
+use App\Modules\Organisation\Http\Controllers\HierarchyController;
+use App\Modules\Organisation\Http\Controllers\LegalEntityController;
+use App\Modules\Organisation\Http\Controllers\ProfileController;
+use App\Modules\Organisation\Http\Controllers\TeamController;
+use App\Modules\Organisation\Http\Middleware\RequireOrganisation;
+use App\Modules\Organisation\Http\Middleware\RequireSystemAdministrator;
 use App\Modules\Platform\Http\Controllers\Auth\CallbackController;
 use App\Modules\Platform\Http\Controllers\Auth\LogoutController;
 use App\Modules\Platform\Http\Controllers\Auth\RedirectController;
@@ -72,4 +80,70 @@ Route::prefix('console')
     ->middleware(EnsureSessionIsCurrent::class)
     ->group(function (): void {
         Route::get('/', ConsoleController::class)->name('console.home');
+
+        /*
+         * P1-01 - Organisation.
+         *
+         * Every route re-authorises through RequireSystemAdministrator. Menu
+         * visibility is never the control: if the navigation filter were wrong,
+         * the request would still be refused here.
+         *
+         * The prefix is 'organisation', which is deliberately NOT one of the
+         * directories the Apache boundary refuses - RoutePrefixCollisionTest
+         * guards that in both directions.
+         *
+         * NO DELETE VERB IS REGISTERED ANYWHERE IN THIS GROUP. P1-01 offers no
+         * hard delete on any type, and OrganisationBoundaryTest asserts the
+         * route table contains none.
+         */
+        Route::middleware(RequireSystemAdministrator::class)
+            ->prefix('organisation')
+            ->name('organisation.')
+            ->group(function (): void {
+                // The Company Profile is outside RequireOrganisation: it is the
+                // screen that creates the organisation, so requiring one would
+                // make it unreachable.
+                Route::get('/', [ProfileController::class, 'show'])->name('profile');
+                Route::post('/', [ProfileController::class, 'store'])->name('profile.store');
+                Route::put('/', [ProfileController::class, 'update'])->name('profile.update');
+
+                Route::middleware(RequireOrganisation::class)->group(function (): void {
+                    Route::get('legal-entities', [LegalEntityController::class, 'index'])->name('legal-entities');
+                    Route::post('legal-entities', [LegalEntityController::class, 'store'])->name('legal-entities.store');
+                    Route::patch('legal-entities/{legalEntity}/deactivate', [LegalEntityController::class, 'deactivate'])->name('legal-entities.deactivate');
+                    Route::patch('legal-entities/{legalEntity}/reactivate', [LegalEntityController::class, 'reactivate'])->name('legal-entities.reactivate');
+
+                    Route::get('business-units', [BusinessUnitController::class, 'index'])->name('business-units');
+                    Route::post('business-units', [BusinessUnitController::class, 'store'])->name('business-units.store');
+                    Route::get('business-units/{businessUnit}', [BusinessUnitController::class, 'show'])->name('business-unit');
+                    Route::patch('business-units/{businessUnit}/deactivate', [BusinessUnitController::class, 'deactivate'])->name('business-units.deactivate');
+                    Route::patch('business-units/{businessUnit}/reactivate', [BusinessUnitController::class, 'reactivate'])->name('business-units.reactivate');
+
+                    // D-14: associate and dissociate, both directions many.
+                    Route::post('business-units/{businessUnit}/legal-entities', [BusinessUnitController::class, 'associate'])->name('business-units.associate');
+                    Route::patch('business-units/{businessUnit}/legal-entities/{legalEntity}/dissociate', [BusinessUnitController::class, 'dissociate'])->name('business-units.dissociate');
+
+                    Route::get('departments', [DepartmentController::class, 'index'])->name('departments');
+                    Route::post('departments', [DepartmentController::class, 'store'])->name('departments.store');
+                    Route::patch('departments/{department}/move', [DepartmentController::class, 'move'])->name('departments.move');
+                    Route::patch('departments/{department}/deactivate', [DepartmentController::class, 'deactivate'])->name('departments.deactivate');
+                    Route::patch('departments/{department}/reactivate', [DepartmentController::class, 'reactivate'])->name('departments.reactivate');
+
+                    Route::get('teams', [TeamController::class, 'index'])->name('teams');
+                    Route::post('teams', [TeamController::class, 'store'])->name('teams.store');
+                    Route::get('teams/{team}', [TeamController::class, 'show'])->name('team');
+                    Route::patch('teams/{team}/move', [TeamController::class, 'move'])->name('teams.move');
+                    Route::patch('teams/{team}/deactivate', [TeamController::class, 'deactivate'])->name('teams.deactivate');
+                    Route::patch('teams/{team}/reactivate', [TeamController::class, 'reactivate'])->name('teams.reactivate');
+
+                    // Removing a member sets left_at and retains the row, so this
+                    // is a PATCH and not a DELETE. The verb is the honest one.
+                    Route::post('teams/{team}/members', [TeamController::class, 'addMember'])->name('teams.members.add');
+                    Route::patch('teams/{team}/members/{membership}/remove', [TeamController::class, 'removeMember'])->name('teams.members.remove');
+
+                    Route::get('hierarchy', [HierarchyController::class, 'index'])->name('hierarchy');
+                    Route::post('hierarchy', [HierarchyController::class, 'setManager'])->name('hierarchy.set');
+                    Route::patch('hierarchy/{user}/clear', [HierarchyController::class, 'clearManager'])->name('hierarchy.clear');
+                });
+            });
     });

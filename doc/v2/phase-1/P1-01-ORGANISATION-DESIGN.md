@@ -3,6 +3,7 @@
 **Status:** DESIGN — awaiting Product Owner review. **Documentation only.**
 **Unit:** P1-01 (Phase 1 delivery order 3)
 **PLAN:** `P1-01-ORGANISATION-PLAN.md` — **APPROVED**, D-14 and D-15 decided
+**D-16:** **APPROVED 31 August 2026** — `users.organisation_id`, Option A (§2.10)
 **Predecessor:** P1-00 — ACCEPTED 31 August 2026
 **UI standard:** `doc/design-system/ui-and-ux-layout-template-shared.md`
 
@@ -40,6 +41,8 @@ organisations
   │     │           └── team_memberships  → users
   │     └── business_unit_legal_entity    ⇄ legal_entities   (many-to-many, D-14)
   └── management_relationships            → users, users
+
+users.organisation_id  ──────────────────→ organisations            (D-16 seam)
 ```
 
 ### 2.1 `organisations`
@@ -179,6 +182,59 @@ Enforced in the application and asserted by test — a partial unique index is n
 portable across MySQL and the SQLite used by the suite, and a guard that only
 exists in production is a guard nobody has run.
 
+### 2.10 `users.organisation_id` — the D-16 seam
+
+`users` had no SemantIQ organisation key. Every other table in this design
+carries `organisation_id`, so the same-organisation rule read naturally across
+the model and nobody checked the one table P1-01 does not own.
+
+Entra `tenant_id` is **not** that key and must never be substituted for it. It is
+a directory boundary; `organisation_id` is a SemantIQ tenancy boundary. In
+single-tenant Release 1 the two coincide by accident, which means a guard
+written against `tenant_id` would be **green today and wrong the first day a
+second Entra tenant or a second SemantIQ organisation exists** — the same shape
+of vacuous guard mutation testing caught four times in P1-00. Negative test 19
+asserts specifically against that substitution.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `organisation_id` | bigint unsigned, **nullable**, FK → organisations | Added to the existing `users` table |
+
+```text
+INDEX (organisation_id)                 users_organisation_idx
+FK    (organisation_id)                 users_organisation_fk
+```
+
+**Ownership.** The table remains P1-00's; **this column and its rules are owned
+by P1-01**, and the migration ships here. The same pattern as `platform_role`,
+which sits on `users` as the D-09 seam owned by P1-05.
+
+**No junction table.** A `organisation_user` junction would model many-to-many
+and make "which organisation is this user in?" a question with more than one
+answer on day one — the seed of the multi-tenant switching that is out of scope.
+
+**Population.** No seed, no backfill, no manual database write, no change to
+bootstrap. The column is NULL after migration, including for the existing
+production System Administrator. **When the Company Profile is created, the
+administrator creating it is associated with that organisation in the same
+transaction** — one rule, one write.
+
+**Fail closed.** NULL means *not yet associated*, and an unassociated user
+
+- cannot be added to a team, and
+- cannot appear in a management relationship, as either party.
+
+**It grants nothing.** It answers *"whose structure may this row participate
+in"*, never *"may they see Finance"*. SYS-004 is untouched: an
+organisation-associated System Administrator still receives no business-domain
+access, and negative test 21 asserts that against the authorisation boundary
+rather than an empty result.
+
+**P1-03 later.** P1-03 sets the column at provisioning and may tighten it to NOT
+NULL once every user has one. Person-level employing legal entity remains P1-03
+per D-14. Nothing of P1-03 is pre-built here: P1-01 writes this column at
+exactly one place, the Company Profile screen.
+
 ### 2.9 What is deliberately absent
 
 No roles, permissions, domains, scopes, sensitivity, entitlements. No `people`
@@ -228,6 +284,12 @@ affordance; the screen may also prevent it, but the screen is not the control.
 | 8 | One current manager per user | Refused |
 | 9 | A membership's user and team must share an organisation | Refused |
 | 10 | Duplicate current membership of the same team | Refused |
+| 11 | A user with NULL `organisation_id` may not join a team or a management chain | Refused |
+| 12 | Team membership requires `user.organisation_id === team.organisation_id` | Refused |
+| 13 | A management relationship requires both users in the same **non-NULL** organisation | Refused |
+
+Rules 9, 12 and 13 compare `organisation_id` on both sides. **Entra `tenant_id`
+is never read for any of them.**
 
 ### 4.1 Cycle prevention
 
@@ -326,10 +388,20 @@ mutation and none by review, so each row names the mutation.
 | 15 | Duplicate current team membership | Refused | Drop the uniqueness check |
 | 16 | Move recorded as scope-affecting | Event emitted | Stop emitting on move |
 | 17 | Refusal bodies | No trace, framework internals or unauthorised structure | Render the exception message |
+| 18 | User with NULL `organisation_id` added to a team or management chain | **Refused** | Allow a NULL organisation through |
+| 19 | Membership or management across organisations | Refused | Drop the comparison — **and substituting `tenant_id` must also fail this test** |
+| 20 | Company Profile creation associates its creating administrator | `organisation_id` set in the same transaction | Skip the association |
+| 21 | Organisation-associated System Administrator seeks business-domain access | **Refused** | Derive any access from `organisation_id` |
 
 Case 4 is the one most likely to be skipped, exactly as in P1-00: there is no
 business data here to withhold, so a test that merely finds nothing would pass
-for the wrong reason and keep passing after the boundary was removed.
+for the wrong reason and keep passing after the boundary was removed. Case 21 is
+its D-16 counterpart — association must not become entitlement.
+
+Case 19 carries a second mutation deliberately. Dropping the comparison is the
+obvious break; **replacing `organisation_id` with `tenant_id` is the subtle one**,
+and it is the mutation that would otherwise ship, because it passes in
+single-tenant Release 1 for a reason unrelated to what the guard claims.
 
 ---
 
@@ -366,9 +438,11 @@ alter someone's future scope.
 | 6 | `create_teams_table` | 5 |
 | 7 | `create_team_memberships_table` | 6, `users` |
 | 8 | `create_management_relationships_table` | `users` |
+| 9 | `add_organisation_id_to_users_table` — **D-16** | 1, `users` |
 
-All additive; nothing existing is altered, so a rollback to the previous release
-keeps working against this schema. Verified in CI against **real MySQL 8.4** —
+All additive. Migration 9 alters `users` only by adding a **nullable** column, so
+a rollback to the previous release keeps working against this schema and no
+existing row changes. Verified in CI against **real MySQL 8.4** —
 `MigrationIdentifierLengthTest` guards the 64-character index-name limit, and
 the names in §2 are explicit and short for that reason.
 
@@ -389,6 +463,7 @@ recorded in the VERIFICATION document with observed output.
 | 3 | Create organisation, legal entity, business unit, department, team | Persisted |
 | 4 | Associate one business unit with two legal entities, and one legal entity with two business units | Both permitted — the D-14 shape |
 | 5 | Add a team member, then remove | `left_at` set, row retained |
+| 5a | **D-16:** the administrator who created the Company Profile carries that `organisation_id` | Set, non-NULL |
 | 6 | Set a manager, then attempt a cycle | Cycle refused |
 | 7 | Deactivate a business unit with active departments | Refused, children named |
 | 8 | Attempt a hard delete on any route | No such route |
@@ -407,6 +482,8 @@ would fail here, which is exactly why the many-to-one proposal was rejected.
 2. All 17 §7 negative cases automated, each proven non-vacuous by its stated mutation.
 3. No DELETE route exists anywhere in the unit.
 4. No roles, permissions, domains, scopes or sensitivity schema created.
+4a. `users.organisation_id` exists, is nullable, is populated only by Company
+    Profile creation, and Entra `tenant_id` is read nowhere in this unit.
 5. Organisation is the first navigable item; nothing else becomes navigable.
 6. All 11 §10 production checks executed and recorded.
 7. Apache boundary, 403 exposure gate, ACME round trip and both checksums pass unchanged.
@@ -414,11 +491,20 @@ would fail here, which is exactly why the many-to-one proposal was rejected.
 
 ---
 
-## 12. Decisions required
+## 12. Decisions
 
-**None.** D-14 and D-15 are decided and this design follows them. Nothing in
-building it required a choice the source documents or the PLAN do not already
-settle, and inventing one would only hand back work.
+**All decided. None outstanding.**
+
+| Decision | Outcome |
+| --- | --- |
+| **D-14** — Business Unit ↔ Legal Entity | Optional many-to-many via junction (§2.6) |
+| **D-15** — Person representation | `users` only; no `people` table |
+| **D-16** — User ↔ Organisation | Nullable `users.organisation_id`, Option A (§2.10) |
+
+D-16 was raised because the same-organisation rule could not be implemented
+honestly: `users` carried no SemantIQ organisation key, and the nearest
+available column — Entra `tenant_id` — would have made every test pass for the
+wrong reason.
 
 ---
 
