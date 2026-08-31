@@ -233,7 +233,62 @@ stack trace or `<?php`.
 | `storage/` survived | Health check reports runtime directories writable |
 | Runtime permissions | Health check passed on the deployed release |
 
-### 7.1 Unresolved risk — the second guard is still not firing
+### 7.1 SUPERSEDED — the deny rules were firing all along
+
+> **STATUS: SUPERSEDED — 31 August 2026, by PR #38.**
+>
+> The conclusion recorded below is **wrong**, and is retained rather than
+> deleted because the reasoning that produced it was sound and the way it failed
+> is the lesson.
+>
+> **What was observed:** all 29 protected paths returned Laravel 404 and none
+> returned 403. **What was concluded:** the Apache deny rules were not executing,
+> and the catch-all forwarder was the entire security boundary.
+>
+> **What was actually true:** the deny rules *were* executing. Apache serves a
+> denial through its `ErrorDocument` chain; the inherited, path-valued
+> `ErrorDocument` re-entered the rewrite engine, met the forwarder, landed in
+> Laravel and returned **404**. The refusal happened every time — only the
+> reported status was wrong.
+>
+> **How it was settled.** PR #38 added a quoted-literal `ErrorDocument 403`,
+> which Apache answers from memory with no internal redirect, and measured four
+> mechanisms in one request cycle against one server state:
+>
+> | Mechanism | Result |
+> | --- | --- |
+> | mod_rewrite `[R=403,L]` | **403 — verified** |
+> | mod_rewrite `[F,L]` | **403 — verified** |
+> | mod_alias `RedirectMatch 403` | **403 — verified** |
+> | `<Files>` + `Require all denied` | **403 — verified** |
+>
+> The decisive control: a real guarded file returned **403** while its unguarded
+> sibling in the same directory returned **200** with the diagnostic body. The
+> file was genuinely reachable and the directive refused it. `.env`, `/vendor/`
+> and `/app/` returned **403**, having returned 404 in every prior run, with the
+> rewrite rules byte-for-byte unchanged.
+>
+> **Corrections to the record:**
+>
+> - Protection is **not** single-layered. Four independent mechanisms deny.
+> - The forwarder is **not** the only thing protecting the deployment.
+> - `AllowOverride` was **not** the cause. It was named below as a plausible
+>   hypothesis and explicitly not as fact; that caution was warranted.
+> - PR #35's rewrite was not the failure it appeared to be — its result was
+>   simply unobservable, like everything else.
+>
+> **What this cost.** Nothing was ever exposed: no protected path returned
+> anything but a refusal, in any run. The real cost was three weeks of being
+> unable to distinguish a working boundary from a broken one. That is why
+> `ErrorDocument 403` is now a permanent, tested control and the exposure gate
+> **requires 403** rather than accepting 403-or-404: a fall-through into Laravel
+> must fail the deployment instead of passing quietly.
+>
+> The security objection blocking the permanent `public_html` root layout is
+> resolved. See `APACHE-DENIAL-CAPABILITY-DIAGNOSTIC.md`.
+
+<details>
+<summary>Original finding, retained as written (superseded)</summary>
 
 > **Update.** The product owner has since fixed **D-08B as the permanent hosting
 > model**. D-08A is closed and the hosting provider will not be asked to repoint the
@@ -271,6 +326,8 @@ change the host does not offer. **Product-owner decision.** Options: ask the hos
 what `AllowOverride` is set to for this domain; or re-open D-08A with the host;
 or accept single-layer protection with the forwarder treated as a
 change-controlled file.
+
+</details>
 
 ### 7.2 What the first deployment's failure proved
 

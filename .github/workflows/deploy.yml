@@ -172,10 +172,15 @@ jobs:
             --exclude ".env.example" \
             ./ "$CPANEL_USER@$CPANEL_HOST:$CPANEL_DEPLOY_PATH/"
 
-      # Fact A of the diagnostic: prove the .htaccess on the server is the one
-      # under version control. Every claim about the security boundary rests on
-      # that file, and until now nothing checked that what we reason about is
-      # what Apache actually reads. A mismatch fails the deployment.
+      # Permanent security control. Under D-08B this one file IS the security
+      # boundary, so every claim about what is protected rests on the server
+      # copy being the copy under version control. Reviewing the repository file
+      # proves nothing about what Apache actually reads.
+      #
+      # Introduced with the denial diagnostics and kept deliberately: it is what
+      # makes the exposure gate below meaningful, and it catches a hand-edit on
+      # the server - which is exactly the change nobody would otherwise notice.
+      # A mismatch fails the deployment.
       #
       # Hashes only. No file content is printed.
       - name: Verify the deployed .htaccess matches the repository copy
@@ -280,13 +285,32 @@ jobs:
 
       # Correction: a redirect is not proof. A 302 means the request reached the
       # application; the requirement is that these files are never served.
+      # The live security gate. Under D-08B the Laravel tree sits inside the
+      # document root, so this is the check that the boundary is real - not a
+      # convention, not a code review, an observed HTTPS response.
+      #
+      # It requires 403, not "403 or 404".
+      #
+      # Those two used to be treated as equally acceptable, because a 404 was
+      # believed to be the best this host could produce. PR #38 disproved that:
+      # Apache does deny at the document root, by four independent mechanisms,
+      # and the 404s were a path-valued ErrorDocument masking the 403 by
+      # re-entering the rewrite chain. With the literal ErrorDocument in place
+      # the true status is visible, so a 404 here now means something specific
+      # and bad: the request fell THROUGH the Apache boundary into Laravel, and
+      # the deny rule that should have stopped it did not. That is a regression
+      # in the security boundary and it fails the deployment.
       - name: Web-exposure negative tests
         run: |
           set -euo pipefail
           failed=0
-          # The Gate 4 minimum list, in full.
+
+          # Every path here is owned by the Apache boundary in
+          # deployment/public_html.htaccess. All were observed returning 403 in
+          # production before this gate was tightened, so a 404 is a real
+          # regression rather than an untested expectation.
           for path in \
-            ".env" ".git/config" \
+            ".env" ".env.example" ".gitignore" ".git/config" \
             "composer.json" "composer.lock" "package.json" "package-lock.json" \
             "artisan" "phpunit.xml" "vite.config.js" \
             "app/" "bootstrap/" "config/" "database/" "resources/" "routes/" \
@@ -295,214 +319,49 @@ jobs:
           do
             code="$(curl -s -o /tmp/body -w '%{http_code}' "$APP_URL/$path?cb=${GITHUB_SHA}")"
             case "$code" in
-              403|404) ;;
-              *) echo "::error::$path returned $code; expected 403 or 404 (a redirect is not proof)"; failed=1 ;;
+              403) ;;
+              404)
+                echo "::error::$path returned 404. The Apache deny rule did not fire and the request reached Laravel; the security boundary is no longer observable."
+                failed=1 ;;
+              *)
+                echo "::error::$path returned $code; 403 required (a redirect is not proof)"
+                failed=1 ;;
             esac
-            # Secret markers, connection strings and server paths. A 403 or 404
-            # that still returns a body carrying any of these is a failure.
+
+            # A 403 that still leaks something in its body is not a pass. The
+            # denial response must reveal no secret, connection string, server
+            # path, stack trace or framework internals.
             if grep -qE 'APP_KEY|DB_DATABASE|DB_USERNAME|DB_PASSWORD|MICROSOFT_CLIENT_SECRET|mysql://|/home/[a-z0-9]+/public_html' /tmp/body 2>/dev/null; then
               echo "::error::$path response contained a secret marker, connection string or server path"; failed=1
             fi
+            if grep -qE '<\?php|Stack trace:|vendor/laravel|Illuminate\\\\|Whoops' /tmp/body 2>/dev/null; then
+              echo "::error::$path response leaked PHP source, a stack trace or framework internals"; failed=1
+            fi
           done
+
+          # The denial body itself must stay bare. If someone points
+          # ErrorDocument 403 at a path, Apache re-enters the rewrite chain and
+          # the masking returns - so assert the shape of what a denial returns,
+          # not just its status.
+          curl -s -o /tmp/deny -m 20 "$APP_URL/.env?cb=${GITHUB_SHA}" || true
+          deny_bytes="$(wc -c < /tmp/deny | tr -d ' ')"
+          echo "denial body: ${deny_bytes} bytes"
+          if [ "${deny_bytes:-0}" -gt 512 ]; then
+            echo "::error::The 403 body is ${deny_bytes} bytes. A bare denial is expected; this looks like a rendered page, which suggests ErrorDocument is resolving through the application again."
+            failed=1
+          fi
 
           # .well-known must stay reachable or TLS renewal breaks silently.
           wk="$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/.well-known/")"
           case "$wk" in 403) echo "::error::.well-known/ is blocked; ACME renewal will fail"; failed=1 ;; esac
 
+          # The application must still be alive. A boundary that denies
+          # everything, including the site, is not a passing state.
+          for pair in "/:200" "/up:200"; do
+            p="${pair%:*}"; want="${pair##*:}"
+            got="$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL$p?cb=${GITHUB_SHA}")"
+            [ "$got" = "$want" ] || { echo "::error::$p returned $got, expected $want"; failed=1; }
+          done
+
           [ "$failed" -eq 0 ] || exit 1
-          echo "::notice::Web-exposure negative tests passed."
-
-      # =================================================================
-      # TEMPORARY DIAGNOSTIC - Apache denial-capability matrix
-      # =================================================================
-      # One authorised diagnostic, three independent mechanisms, measured in a
-      # single request cycle against one server state.
-      #
-      # It runs AFTER the exposure suite so it cannot influence those results,
-      # and it changes no application behaviour: a deny rule only ever denies
-      # more, and every probe path is synthetic.
-      #
-      # The step does not fail the deployment on a negative result. A negative
-      # is the answer to the question being asked, and what follows from it is
-      # the product owner's decision, not this workflow's.
-      - name: Apache denial-capability matrix (diagnostic)
-        run: |
-          set -uo pipefail
-
-          SSH="ssh -i $HOME/.ssh/cpanel_deploy_key -p $CPANEL_PORT -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 $CPANEL_USER@$CPANEL_HOST"
-
-          deny_file="$CPANEL_DEPLOY_PATH/public/__semantiq_files_deny_probe.txt"
-          ctrl_file="$CPANEL_DEPLOY_PATH/public/__semantiq_files_control_probe.txt"
-
-          # Cleanup runs on every exit path - success, failure, or the runner
-          # cancelling the job - because a public diagnostic file left behind is
-          # a worse outcome than an unanswered question. rsync --delete on the
-          # next deployment is the backstop: neither file is in the repository.
-          cleanup() {
-            echo "--- cleanup ---"
-            $SSH "rm -f '$deny_file' '$ctrl_file'" \
-              || echo "::error::Could not remove the diagnostic probe files over SSH."
-            # An explicit marker, not a parsed count: an SSH login banner on
-            # stdout would turn a count into garbage and report a clean server
-            # as dirty, or worse, the reverse.
-            verify="$($SSH "if [ -e '$deny_file' ] || [ -e '$ctrl_file' ]; then echo SEMANTIQ_PROBE_PRESENT; else echo SEMANTIQ_PROBE_ABSENT; fi" 2>/dev/null)"
-            case "$verify" in
-              *SEMANTIQ_PROBE_ABSENT*)
-                echo "::notice::Diagnostic probe files removed from the server." ;;
-              *SEMANTIQ_PROBE_PRESENT*)
-                echo "::error::Diagnostic probe files are STILL on the server. Remove them; the next deployment's rsync --delete is the backstop." ;;
-              *)
-                echo "::warning::Could not verify probe file removal over SSH. The next deployment's rsync --delete will remove them, as neither file is in the repository." ;;
-            esac
-          }
-          trap cleanup EXIT
-
-          # Mechanism C needs a file that is GENUINELY SERVED when the deny
-          # fails, otherwise its negative result is indistinguishable from the
-          # path simply not existing. Both files go inside public/, where the
-          # forwarder resolves them; one is covered by <Files> + Require all
-          # denied, the sibling is not.
-          echo "--- creating diagnostic files ---"
-          if ! $SSH "printf 'SEMANTIQ_DENY_DIAGNOSTIC_ONLY\n' > '$deny_file' && printf 'SEMANTIQ_DENY_DIAGNOSTIC_ONLY\n' > '$ctrl_file' && ls -l '$deny_file' '$ctrl_file'"; then
-            echo "::error::Could not create the mechanism C probe files. Mechanism C is INCONCLUSIVE."
-            created=no
-          else
-            created=yes
-          fi
-
-          fail=0
-          LEAKED=0
-
-          # Reports status, body size and which known marker (if any) the body
-          # carries. The markers are what make a status readable:
-          #   SEMANTIQ_403_ERRORDOCUMENT_MARKER => Apache denied, status intact.
-          #   SEMANTIQ_DENY_DIAGNOSTIC_ONLY     => the probe file was served.
-          probe() {
-            label="$1"; path="$2"
-            code="$(curl -s -o /tmp/probe_body -w '%{http_code}' -m 25 "$APP_URL$path?cb=${GITHUB_SHA}")"
-            bytes="$(wc -c < /tmp/probe_body 2>/dev/null | tr -d ' ')"
-            marker="-"
-            grep -q 'SEMANTIQ_403_ERRORDOCUMENT_MARKER' /tmp/probe_body 2>/dev/null && marker="403-errordocument"
-            grep -q 'SEMANTIQ_DENY_DIAGNOSTIC_ONLY'     /tmp/probe_body 2>/dev/null && marker="probe-file-body"
-            # Scanned per response, not once at the end: a scan after the loop
-            # only ever sees the last body, and would have missed a leak in any
-            # earlier probe.
-            if grep -qE 'APP_KEY|DB_PASSWORD|DB_USERNAME|DB_DATABASE|MICROSOFT_CLIENT_SECRET|mysql://|/home/[a-z0-9]+/public_html' /tmp/probe_body 2>/dev/null; then
-              echo "::error::$path returned a body carrying a secret marker, connection string or server path."
-              LEAKED=1
-            fi
-            printf '%-34s %-44s %-6s %-9s %s\n' "$label" "$path" "$code" "${bytes:-0}" "$marker"
-            printf '| %s | `%s` | %s | %s | %s |\n' "$label" "$path" "$code" "${bytes:-0}" "$marker" >> "$GITHUB_STEP_SUMMARY"
-            LAST_CODE="$code"; LAST_MARKER="$marker"
-          }
-
-          {
-            echo "### Apache denial-capability matrix"
-            echo
-            echo "| Probe | Path | Status | Bytes | Marker |"
-            echo "| --- | --- | --- | --- | --- |"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          echo "--- matrix ---"
-          printf '%-34s %-44s %-6s %-9s %s\n' "PROBE" "PATH" "STATUS" "BYTES" "MARKER"
-
-          probe "A mod_rewrite [R=403,L]"    "/__semantiq_rewrite_403_probe"
-          a_code="$LAST_CODE"; a_marker="$LAST_MARKER"
-
-          probe "A-control mod_rewrite [F,L]" "/__semantiq_apache_deny_probe"
-          f_code="$LAST_CODE"; f_marker="$LAST_MARKER"
-
-          probe "B mod_alias RedirectMatch"  "/__semantiq_alias_403_probe"
-          b_code="$LAST_CODE"; b_marker="$LAST_MARKER"
-
-          probe "C Files+Require all denied" "/__semantiq_files_deny_probe.txt"
-          c_code="$LAST_CODE"; c_marker="$LAST_MARKER"
-
-          probe "C-control served sibling"   "/__semantiq_files_control_probe.txt"
-          cc_code="$LAST_CODE"; cc_marker="$LAST_MARKER"
-
-          echo "--- controls ---"
-          probe "control nonexistent path"   "/__semantiq_absent_control_path"
-          n_code="$LAST_CODE"
-          probe "control site root"          "/"
-          root_code="$LAST_CODE"
-          probe "control liveness"           "/up"
-          up_code="$LAST_CODE"
-          probe "control console"            "/console"
-          console_code="$LAST_CODE"
-          probe "control acme passthrough"   "/.well-known/"
-          wk_code="$LAST_CODE"
-          probe "control dotfile"            "/.env"
-          env_code="$LAST_CODE"; env_marker="$LAST_MARKER"
-          probe "control directory"          "/vendor/"
-          vendor_code="$LAST_CODE"; vendor_marker="$LAST_MARKER"
-
-          echo
-          echo "--- interpretation ---"
-
-          # A 403 is only a positive if it did not come from the application.
-          # The ErrorDocument marker is what distinguishes an Apache refusal
-          # from anything Laravel could have produced.
-          verdict() {
-            name="$1"; code="$2"; marker="$3"
-            case "$code" in
-              403) echo "$name: VERIFIED - 403 from Apache (marker: $marker)" ;;
-              404) echo "$name: NOT VERIFIED - 404. The request reached the forwarder and Laravel; the rule did not deny." ;;
-              200) echo "$name: NOT VERIFIED - 200. The path was served." ;;
-              *)   echo "$name: UNEXPECTED - $code." ;;
-            esac
-          }
-
-          verdict "A  mod_rewrite [R=403,L]"     "$a_code" "$a_marker"
-          verdict "A' mod_rewrite [F,L]"         "$f_code" "$f_marker"
-          verdict "B  mod_alias RedirectMatch"   "$b_code" "$b_marker"
-
-          # C is read differently, because C is the only probe whose negative
-          # is falsifiable.
-          if [ "$created" != "yes" ]; then
-            echo "C  Files+Require: INCONCLUSIVE - the probe files could not be created."
-          elif [ "$cc_code" != "200" ]; then
-            echo "C  Files+Require: INCONCLUSIVE - the unguarded control file returned $cc_code, not 200."
-            echo "   Files under public/ are not being served as assumed, so a 403 on the guarded file would prove nothing."
-          elif [ "$c_code" = "403" ]; then
-            echo "C  Files+Require: VERIFIED - the guarded file returned 403 while its unguarded sibling returned 200."
-          elif [ "$c_code" = "200" ] && [ "$c_marker" = "probe-file-body" ]; then
-            echo "C  Files+Require: NOT VERIFIED - the guarded file was served in full. This is a real negative: the file was reachable and the directive did not deny it."
-          elif [ "$c_code" = "404" ]; then
-            echo "C  Files+Require: INCONCLUSIVE - 404 while the control returned 200. The guarded file was not found where the control was."
-          else
-            echo "C  Files+Require: UNEXPECTED - $c_code (marker: $c_marker)."
-          fi
-
-          echo
-          echo "controls: absent=$n_code root=$root_code up=$up_code console=$console_code well-known=$wk_code .env=$env_code vendor=$vendor_code"
-
-          # Safety gates. These are failures, not findings.
-          if [ "$env_code" = "200" ] || [ "$vendor_code" = "200" ]; then
-            echo "::error::A real protected path returned 200 during the diagnostic. Security failure."
-            fail=1
-          fi
-          if [ "$env_marker" = "probe-file-body" ] || [ "$vendor_marker" = "probe-file-body" ]; then
-            echo "::error::A protected path returned diagnostic content. Security failure."
-            fail=1
-          fi
-          if [ "$root_code" != "200" ] || [ "$up_code" != "200" ]; then
-            echo "::error::The diagnostic changed live behaviour: site root or liveness is no longer 200."
-            fail=1
-          fi
-          if [ "$wk_code" = "403" ]; then
-            echo "::error::.well-known/ is now blocked; ACME renewal would fail."
-            fail=1
-          fi
-          if [ "$LEAKED" = "1" ]; then
-            echo "::error::At least one probe response carried a secret marker, connection string or server path."
-            fail=1
-          fi
-
-          if [ "$a_code" = "403" ] || [ "$f_code" = "403" ] || [ "$b_code" = "403" ] || [ "$c_code" = "403" ]; then
-            echo "::notice::APACHE ROOT DENIAL MECHANISM VERIFIED - at least one mechanism returned 403."
-          else
-            echo "::warning::HOST-LEVEL APACHE DENIAL CAPABILITY NOT PROVEN through the current .htaccess configuration."
-          fi
-
-          exit "$fail"
+          echo "::notice::Web-exposure gate passed: every protected path returned 403 from Apache."
