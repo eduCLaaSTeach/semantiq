@@ -69,12 +69,55 @@ final class EntraTokenFactory
     }
 
     /**
-     * Stubs discovery, JWKS and the token endpoint so the real provider and the
-     * real validator run unchanged - only the network is replaced.
+     * The JWKS, in Microsoft's REAL production shape.
+     *
+     * Note what is absent: "alg". Entra omits it, and the first version of this
+     * fixture included it - which is precisely why CI passed while production
+     * refused every sign-in. A fixture more helpful than the real thing tests
+     * the fixture, not the system.
+     *
+     * @param  array<string, mixed>  $overrides  applied to the single key
+     * @return list<array<string, mixed>>
      */
-    public function fakeEndpoints(?string $idToken = null): void
+    public function jwks(array $overrides = []): array
     {
         $details = openssl_pkey_get_details(openssl_pkey_get_public($this->publicKey));
+
+        return [array_merge([
+            'kty' => 'RSA',
+            'use' => 'sig',
+            'kid' => self::KID,
+            'n' => rtrim(strtr(base64_encode($details['rsa']['n']), '+/', '-_'), '='),
+            'e' => rtrim(strtr(base64_encode($details['rsa']['e']), '+/', '-_'), '='),
+        ], $overrides)];
+    }
+
+    /**
+     * A token signed with HMAC rather than RSA. The header will claim HS256;
+     * the verification key is fixed at RS256, so it must be refused.
+     */
+    public function hmacToken(): string
+    {
+        return JWT::encode([
+            'iss' => $this->issuer(),
+            'aud' => self::CLIENT_ID,
+            'tid' => self::TENANT,
+            'oid' => 'x',
+            'email' => 'person@example.test',
+            'nonce' => 'test-nonce',
+            'iat' => time() - 10,
+            'exp' => time() + 3600,
+        ], str_repeat('k', 64), 'HS256', self::KID);
+    }
+
+    /**
+     * Stubs discovery, JWKS and the token endpoint so the real provider and the
+     * real validator run unchanged - only the network is replaced.
+     *
+     * @param  list<array<string, mixed>>|null  $keys  override the published key set
+     */
+    public function fakeEndpoints(?string $idToken = null, ?array $keys = null): void
+    {
 
         Http::fake([
             '*/.well-known/openid-configuration' => Http::response([
@@ -83,16 +126,7 @@ final class EntraTokenFactory
                 'token_endpoint' => 'https://login.microsoftonline.test/token',
                 'jwks_uri' => 'https://login.microsoftonline.test/keys',
             ]),
-            '*/keys' => Http::response([
-                'keys' => [[
-                    'kty' => 'RSA',
-                    'kid' => self::KID,
-                    'use' => 'sig',
-                    'alg' => 'RS256',
-                    'n' => rtrim(strtr(base64_encode($details['rsa']['n']), '+/', '-_'), '='),
-                    'e' => rtrim(strtr(base64_encode($details['rsa']['e']), '+/', '-_'), '='),
-                ]],
-            ]),
+            '*/keys' => Http::response(['keys' => $keys ?? $this->jwks()]),
             '*/token' => Http::response(['id_token' => $idToken ?? $this->token()]),
         ]);
     }
