@@ -1,6 +1,7 @@
 # P1-01 — Organisation — VERIFICATION
 
 **Status:** BUILD VERIFIED — awaiting Product Owner acceptance.
+**Deployed:** merge `9afe33d`, deployment [33378638710](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33378638710) — success
 **Unit:** P1-01 (Phase 1 delivery order 3)
 **PLAN:** `P1-01-ORGANISATION-PLAN.md` — approved; D-14, D-15
 **DESIGN:** `P1-01-ORGANISATION-DESIGN.md` — approved; D-16
@@ -216,25 +217,118 @@ pre-created to reserve a name.
 
 ---
 
-## 7. Production verification
+## 7. Production verification — 31 August 2026
 
-**Not yet executed.** This section is completed after deployment, with observed
-output, before acceptance is requested.
+Deployment [33378638710](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33378638710)
+on merge `9afe33d`. Every step succeeded, including **`Run database migrations`**
+against the live cPanel MySQL, **`Verify application health over SSH`**, and the
+**web-exposure negative tests**.
 
-| # | Check | Expected | Observed |
+### 7.1 Observed from outside, with output
+
+Anonymous, cache-busted HTTPS requests to `https://semantiq.claas2saas.com`.
+
+```text
+/console/organisation                      302  -> /
+/console/organisation/legal-entities       302  -> /
+/console/organisation/business-units       302  -> /
+/console/organisation/business-units/1     302  -> /
+/console/organisation/departments          302  -> /
+/console/organisation/teams                302  -> /
+/console/organisation/teams/1              302  -> /
+/console/organisation/hierarchy            302  -> /
+```
+
+```text
+DELETE /console/organisation/teams/1            405
+DELETE /console/organisation/business-units/1   405
+DELETE /console/organisation/legal-entities/1   404
+DELETE /console/organisation/departments/1      404
+```
+
+```text
+GET /console/organisation/business-units/1            302
+GET /console/organisation/business-units/999999       302
+GET /console/organisation/business-units/2147483647   302
+```
+
+| # | Check | Observed | Result |
 | --- | --- | --- | --- |
-| 1 | `/console/organisation` anonymous | Redirect to login; no structure | |
-| 2 | Signed-in System Administrator | Organisation screen renders | |
-| 3 | Create organisation, legal entity, business unit, department, team | Persisted | |
-| 4 | One business unit ↔ two legal entities, and one legal entity ↔ two business units | Both permitted — the D-14 shape | |
-| 5 | Add a team member, then remove | `left_at` set, row retained | |
-| 5a | **D-16:** the administrator who created the profile carries that `organisation_id` | Set, non-NULL | |
-| 6 | Set a manager, then attempt a cycle | Cycle refused | |
-| 7 | Deactivate a business unit with active departments | Refused, children named | |
-| 8 | Attempt a hard delete on any route | No such route | |
-| 9 | Move a department between business units | Permitted, event emitted | |
-| 10 | Exposure gate, ACME, both checksums | Unchanged and passing | |
-| 11 | `semantiq:health` | Green | |
+| 1 | `/console/organisation` and every child route, anonymous | 302 to login; no structure in any body | **PASS** |
+| 8 | Hard delete on any route | **405** where the URI exists for GET, **404** where it does not. No DELETE is registered anywhere | **PASS** |
+| — | **The §2.1 enumeration fix, in production** | An id that exists, one that does not, and one out of range all answer **302**. Before the fix a missing record answered 404 | **PASS** |
+| 10 | Exposure gate, ACME, both checksums | Deployment steps 18, 19, 27 and 28 all succeeded | **PASS** |
+| 11 | `semantiq:health` | Deployment step 25 succeeded | **PASS** |
+
+The 405 responses are the stronger evidence of the two. `console/organisation/teams/{team}` exists for GET, so a registered DELETE would have been dispatched; Laravel answering **Method Not Allowed** is the router stating that no DELETE exists for a URI it otherwise knows.
+
+### 7.2 Schema state, read from the server
+
+`verify-organisation.yml` run
+[33379047787](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33379047787)
+— read-only, manual dispatch. Schema facts and counts; no name, email, identity,
+grant or secret is read. Verbatim output:
+
+```json
+{"tables_present":{"organisations":true,"legal_entities":true,"business_units":true,
+ "business_unit_legal_entity":true,"departments":true,"teams":true,
+ "team_memberships":true,"management_relationships":true},
+ "row_counts":{"organisations":0,"legal_entities":0,"business_units":0,
+ "business_unit_legal_entity":0,"departments":0,"teams":0,
+ "team_memberships":0,"management_relationships":0},
+ "d16_column_exists":true,"d16_column_nullable":true,
+ "d16_foreign_key_target":"organisations",
+ "users_total":1,"users_with_organisation":0,
+ "organisation_delete_routes":0}
+```
+
+| Claim | Evidence | Result |
+| --- | --- | --- |
+| All eight P1-01 tables exist in production | `tables_present` all `true` | **PASS** |
+| **D-16 column exists** | `d16_column_exists = true` | **PASS** |
+| **D-16 column is nullable** | `d16_column_nullable = true` | **PASS** |
+| **D-16 foreign key targets `organisations`** | `d16_foreign_key_target = "organisations"` | **PASS** |
+| **No seed row was created** | every `row_counts` value is `0` | **PASS** |
+| **No backfill ran** | `users_total = 1`, `users_with_organisation = 0` | **PASS** |
+| The existing System Administrator is untouched | `users_total` still `1`, as at P1-00 acceptance | **PASS** |
+| No DELETE route exists in the unit | `organisation_delete_routes = 0` | **PASS** |
+
+The two `users_*` counts together are the direct evidence for D-16's population
+rule: the column exists on the live table, and the one existing administrator
+carries **NULL** — no seed, no backfill, no manual database write, and no change
+to bootstrap. They acquire an organisation only by creating the Company Profile,
+which is check 5a in §7.3.
+
+`users_total = 1` also re-confirms SYS-014/SYS-015 across this deployment: no
+self-registration, and no user appeared as a side effect of the migration.
+
+### 7.3 What could NOT be verified without the Product Owner
+
+Checks 2 to 7, 9 and 5a all require **an authenticated System Administrator
+session**, which means a real interactive Microsoft Entra sign-in:
+
+| # | Check | Why it is not marked PASS |
+| --- | --- | --- |
+| 2 | Signed-in System Administrator sees the Organisation screen | Requires an Entra sign-in |
+| 3 | Create organisation, legal entity, business unit, department, team | Requires an authenticated session |
+| 4 | One business unit ↔ two legal entities, and the reverse — the D-14 shape | Requires an authenticated session |
+| 5 | Add a team member, then remove; `left_at` set, row retained | Requires an authenticated session |
+| 5a | **D-16:** the administrator who created the profile carries that `organisation_id` | Requires the profile to have been created |
+| 6 | Set a manager, then attempt a cycle | Requires an authenticated session |
+| 7 | Deactivate a business unit with active departments; refused, children named | Requires an authenticated session |
+| 9 | Move a department between business units; event emitted | Requires an authenticated session |
+
+I have no credentials for that sign-in and have not asked for any — the standing
+instruction is that no secret is pasted into chat, GitHub or this session, and a
+sign-in I could perform would mean a credential existed somewhere it must not.
+
+**These are left blank rather than inferred.** Each is covered by an automated
+test that was proven non-vacuous by mutation (§3), but a passing test is not the
+same claim as an observed production result, and this document does not mark
+anything PASS that was not executed and observed.
+
+They are completed by the Product Owner signing in and working through §7.3 once,
+after which this section is filled in with the observed outcome.
 
 ---
 
@@ -248,8 +342,8 @@ output, before acceptance is requested.
 | 4 | No roles, permissions, domains, scopes or sensitivity schema | ✅ |
 | 4a | `users.organisation_id` nullable, one writer, `tenant_id` read nowhere | ✅ |
 | 5 | Organisation is the first navigable item; nothing else navigable | ✅ |
-| 6 | All 11 production checks executed and recorded | ⏳ §7 |
-| 7 | Apache boundary, 403 gate, ACME and both checksums pass unchanged | ⏳ §7 |
+| 6 | All 11 production checks executed and recorded | **Partial** — checks 1, 8, 10, 11 and the whole D-16 schema claim observed (§7.1, §7.2); checks 2-7, 9 and 5a need one Product Owner sign-in (§7.3) |
+| 7 | Apache boundary, 403 gate, ACME and both checksums pass unchanged | ✅ §7.1 |
 | 8 | Explicit Product Owner acceptance | ⏳ |
 
 **A green CI run does not unlock P1-02.**
