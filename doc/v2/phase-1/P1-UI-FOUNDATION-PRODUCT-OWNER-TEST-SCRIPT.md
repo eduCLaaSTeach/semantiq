@@ -18,10 +18,22 @@ screen behind the menu. Everything else is a label.
 
 | | |
 | --- | --- |
-| Branch | `claude/semantiq-github-review-a9jaqg` |
-| Commits | `11b6fa9` — *UI, brand and navigation foundation*<br>plus the split Login screen, on the same branch |
-| Merge SHA | **filled in after merge — see the pull request** |
-| Deployed to | production, after CI is green and the branch is merged |
+| Feature merge SHA | **`c3670ff`** — pull request #61, *UI, brand and navigation foundation, with the new Login screen* |
+| Deployed head | **`7f5a00d`** — includes two deployment corrections (#62, #63) that carry no user-visible change |
+| Deployed at | 2026-09-01, deploy run #87, all steps green |
+| Site | https://semantiq.claas2saas.com |
+
+Verified on production before this script was issued:
+
+| Check | Observed |
+| --- | --- |
+| Site root | 200 |
+| Health (`/up`) | `ok` |
+| `/console` while signed out | 302 to the Login page |
+| Both favicons, `robots.txt` | 200 |
+| `.htaccess`, `.env`, `composer.json`, `artisan`, `public/index.php` | 403 — all refused |
+| Login page served to a signed-out browser | contains no menu, no product area, no roadmap label |
+| Deployed JavaScript and CSS | **byte-identical** to the bundle verified in Chromium (SHA-256 match) |
 
 ## 3. Preconditions
 
@@ -244,3 +256,24 @@ now has a guard that was deliberately broken and observed to fail.
 The shell was also brought onto the shared standard's fixed Shell Dimensions
 (240px rail / 56px collapsed, 52px top bar and rail head, 22px wide logo,
 40×34 short-mark slot); it had shipped at 264px and 56px.
+
+### A seventh defect, found on production after the deployment reported success
+
+`favicon-light.ico` and `favicon-dark.ico` returned **404** in production. The
+deployment moved a hardcoded list of files out of `public/` and deleted the
+rest, so both were removed before the transfer. CI was green, all 28 deployment
+steps passed, and nothing looked broken — the browser fell back to
+`favicon.ico`, so the theme-aware favicon simply did not work.
+
+The underlying gap was that **no check connected "this file exists in the
+repository" to "the server serves it"**. All of `public/` now ships, and three
+checks were added: at assemble time, over HTTPS after deployment, and on every
+pull request.
+
+The first attempt at that HTTPS check was itself wrong and failed the very
+deployment that fixed the favicons: it demanded that every file in `public/`
+return 200, including `.htaccess`, which must never be served. It also runs
+before the web-exposure negative tests, so those were skipped and that
+deployment ended without asserting its own security boundary. Corrected in
+`7f5a00d`; the boundary was re-verified directly and every protected path
+returns 403.
