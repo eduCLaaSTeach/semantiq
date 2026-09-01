@@ -213,8 +213,53 @@ final class AuthenticationFlowTest extends TestCase
         $this->assertFalse(method_exists($admin, 'entitlements'));
         $this->assertFalse(method_exists($admin, 'can'));
 
-        foreach (['Sales', 'Finance', 'People', 'Executive', 'Operations'] as $domain) {
-            $response->assertDontSee($domain);
+        // ...and no business domain is REACHABLE. D-19 made the approved roadmap
+        // visible, so "Sales Intelligence" is now a label on the screen. The
+        // security claim was never about the word: it is that administration
+        // confers no business-domain access. Asserting the absence of the word
+        // would now be satisfied by deleting a label, which proves nothing, so
+        // the claim is stated as reachability instead.
+        //
+        // Mutation: give any business-domain entry a route in ApprovedMenu.
+        $areas = $response->viewData('page')['props']['productAreas'] ?? [];
+
+        $this->assertNotSame([], $areas, 'No navigation was rendered, so this test proves nothing.');
+
+        $reachable = [];
+        $walk = function (array $nodes) use (&$walk, &$reachable): void {
+            foreach ($nodes as $node) {
+                if ($node['route'] !== null) {
+                    $reachable[$node['label']] = $node['route'];
+                }
+
+                $walk($node['children']);
+            }
+        };
+
+        foreach ($areas as $area) {
+            $walk($area['nodes']);
+        }
+
+        $this->assertSame(
+            ['Organisation' => '/console/organisation'],
+            $reachable,
+            'A System Administrator was offered a destination beyond Organisation. The role '
+            .'describes the platform; it grants no business-domain capability.'
+        );
+
+        // Nor by URL. No route exists anywhere for a business domain, so the
+        // menu is not the only thing standing between the role and the data.
+        foreach (['sales', 'finance', 'people', 'executive', 'operations'] as $domain) {
+            foreach (['/'.$domain, '/console/'.$domain, '/console/'.$domain.'-intelligence'] as $guess) {
+                $this->assertNotSame(
+                    200,
+                    $this->withSession([
+                        EnsureSessionIsCurrent::SESSION_USER_ID => $admin->id,
+                        EnsureSessionIsCurrent::SESSION_AUTHENTICATED_AT => now()->toIso8601String(),
+                    ])->get($guess)->getStatusCode(),
+                    "[{$guess}] served a business-domain screen to a System Administrator."
+                );
+            }
         }
     }
 

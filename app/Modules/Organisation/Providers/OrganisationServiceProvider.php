@@ -4,45 +4,37 @@ declare(strict_types=1);
 
 namespace App\Modules\Organisation\Providers;
 
-use App\Shared\Navigation\NavigationNode;
+use App\Shared\Navigation\ApprovedMenu;
 use App\Shared\Navigation\NavigationRegistry;
-use App\Shared\Navigation\ProductArea;
 use Illuminate\Support\ServiceProvider;
 
 /**
  * The Organisation module: structure, and nothing that decides access.
  *
- * Adding a module means adding a directory and a provider, not editing a central
- * list - the pattern P1-BASE established so that Identity, Organisation, Access
- * and Audit arrive with their own units.
+ * It also registers the complete approved roadmap menu (D-19), because
+ * Organisation is currently the only delivered capability and therefore the
+ * only module that can register a node whose route resolves. When P1-02
+ * delivers Identity & SSO, its entry moves from locked() to leaf() inside
+ * ApprovedMenu and this registration is unchanged.
  */
 final class OrganisationServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
         /*
-         * The first navigable item in SemantIQ.
-         *
          * Registered after the application has booted, because the registry
-         * refuses a node whose route does not resolve and the route file has not
-         * been loaded while providers are still booting. That guard is worth
-         * working around rather than weakening: it is what makes a menu entry
-         * pointing at nothing fail in a test instead of rendering a link to a
-         * 404.
+         * refuses a node whose route does not resolve and the route file has
+         * not been loaded while providers are still booting. That guard is
+         * worth working around rather than weakening: it is what makes a menu
+         * entry pointing at nothing fail in a test instead of rendering a link
+         * to a 404.
          */
         $this->app->booted(function (): void {
-            $this->app->make(NavigationRegistry::class)->add(new NavigationNode(
-                area: ProductArea::SystemAdministration,
-                label: 'Organisation',
+            $registry = $this->app->make(NavigationRegistry::class);
 
-                // A key into the central icon registry, NOT display text.
-                // The shared standard names symbols i-<concept>; the shell
-                // resolves this to a glyph and renders nothing for an unknown
-                // key, so a bad key can never surface as words in the sidebar.
-                icon: 'i-sitemap',
-                routeName: 'organisation.profile',
-                policyKey: 'organisation.view',
-            ));
+            foreach (ApprovedMenu::roadmap() as $node) {
+                $registry->add($node);
+            }
         });
     }
 }

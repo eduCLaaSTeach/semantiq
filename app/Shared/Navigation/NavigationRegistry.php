@@ -11,13 +11,16 @@ use RuntimeException;
 /**
  * The single source of the sidebar.
  *
- * P1-BASE registers the three product areas and ZERO nodes, because nothing is
- * implemented to navigate to yet. Later units register their own nodes as they
- * deliver real screens.
+ * D-19 changed what this renders. It used to drop any product area holding no
+ * node, which is what kept Fabric Configuration and SemantIQ Workplace out of
+ * the sidebar entirely. The Product Owner now wants the complete approved
+ * structure visible to System Administrators, so the shape of the product is
+ * legible rather than looking like a one-feature application.
  *
- * An area with no visible nodes does not render. That is what keeps Fabric
- * Configuration and SemantIQ Workplace out of the Phase 1 sidebar without any
- * special-casing: they have no nodes, so they do not appear.
+ * Visibility is not access. A locked node carries NO route, so there is nothing
+ * to navigate to and nothing to authorise; NavigationNode refuses to construct
+ * a locked node with a route at all. Every delivered route still re-authorises
+ * on its own.
  */
 final class NavigationRegistry
 {
@@ -32,26 +35,32 @@ final class NavigationRegistry
     /**
      * Register a node.
      *
-     * The route must already exist. Registering a node for a route that has not
-     * been defined is the exact shape of a placeholder menu entry, so it throws
-     * rather than rendering a link to a 404.
+     * A node that links must link somewhere real: registering a leaf for a
+     * route that has not been defined is the exact shape of a placeholder menu
+     * entry, so it throws rather than rendering a link to a 404. A locked node
+     * has no route by construction and skips the check.
      */
     public function add(NavigationNode $node): void
     {
-        $routes = $this->router->getRoutes();
+        foreach ([$node, ...$node->children] as $candidate) {
+            if ($candidate->routeName === null) {
+                continue;
+            }
 
-        // A route is named fluently - Route::get(...)->name('x') - so it is
-        // added to the collection before its name is set, and the collection's
-        // name lookup is stale until refreshed. Without this the guard below
-        // rejects every correctly registered node. P1-BASE registered no nodes,
-        // so nothing exercised it until P1-01 registered the first one.
-        $routes->refreshNameLookups();
+            $routes = $this->router->getRoutes();
 
-        if ($routes->getByName($node->routeName) === null) {
-            throw new RuntimeException(
-                "Navigation node [{$node->label}] points at route [{$node->routeName}], which is "
-                .'not defined. Register the route before the node, or do not register the node.'
-            );
+            // A route is named fluently - Route::get(...)->name('x') - so it is
+            // added to the collection before its name is set, and the name
+            // lookup is stale until refreshed.
+            $routes->refreshNameLookups();
+
+            if ($routes->getByName($candidate->routeName) === null) {
+                throw new RuntimeException(
+                    "Navigation node [{$candidate->label}] points at route "
+                    ."[{$candidate->routeName}], which is not defined. Register the route before "
+                    .'the node, or do not register the node.'
+                );
+            }
         }
 
         $this->nodes[] = $node;
@@ -60,10 +69,7 @@ final class NavigationRegistry
     /**
      * The areas the current actor may see, each with its visible nodes.
      *
-     * Empty areas are dropped. In P1-BASE this returns an empty array, because
-     * the authorizer denies everything and there are no nodes to deny.
-     *
-     * @return list<array{key: string, label: string, nodes: list<array{label: string, icon: string, route: string}>}>
+     * @return list<array{key: string, label: string, expanded: bool, nodes: list<array<string, mixed>>}>
      */
     public function visibleFor(): array
     {
@@ -81,21 +87,44 @@ final class NavigationRegistry
                     continue;
                 }
 
-                $nodes[] = [
-                    'label' => $node->label,
-                    'icon' => $node->icon,
-                    'route' => route($node->routeName, absolute: false),
-                ];
+                $nodes[] = $this->present($node);
             }
 
             if ($nodes === []) {
                 continue;
             }
 
-            $areas[] = ['key' => $area->value, 'label' => $area->label(), 'nodes' => $nodes];
+            $areas[] = [
+                'key' => $area->value,
+                'label' => $area->label(),
+                'expanded' => $area->expandedByDefault(),
+                'nodes' => $nodes,
+            ];
         }
 
         return $areas;
+    }
+
+    /**
+     * One node as the shell receives it.
+     *
+     * route is null for anything locked, so the client has no destination to
+     * render even if it tried.
+     *
+     * @return array<string, mixed>
+     */
+    private function present(NavigationNode $node): array
+    {
+        return [
+            'label' => $node->label,
+            'icon' => $node->icon,
+            'route' => $node->routeName === null ? null : route($node->routeName, absolute: false),
+            'locked' => $node->locked,
+            'children' => array_map(
+                fn (NavigationNode $child): array => $this->present($child),
+                $node->children
+            ),
+        ];
     }
 
     /** @return list<NavigationNode> */
