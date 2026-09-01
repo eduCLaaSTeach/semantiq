@@ -92,9 +92,12 @@ Route::prefix('console')
          * directories the Apache boundary refuses - RoutePrefixCollisionTest
          * guards that in both directions.
          *
-         * NO DELETE VERB IS REGISTERED ANYWHERE IN THIS GROUP. P1-01 offers no
-         * hard delete on any type, and OrganisationBoundaryTest asserts the
-         * route table contains none.
+         * DELETE IS REGISTERED FOR EXACTLY FOUR URIS - the D-24 guarded purge
+         * of a legal entity, business unit, department or team, and nothing
+         * else. There is deliberately no DELETE for the organisation, for team
+         * memberships or for management relationships: those carry the history
+         * the rest of the unit is built to keep. LifecycleCompletenessTest
+         * asserts that exact set, so a fifth DELETE fails the build.
          */
         Route::middleware(RequireSystemAdministrator::class)
             ->prefix('organisation')
@@ -110,12 +113,16 @@ Route::prefix('console')
                 Route::middleware(RequireOrganisation::class)->group(function (): void {
                     Route::get('legal-entities', [LegalEntityController::class, 'index'])->name('legal-entities');
                     Route::post('legal-entities', [LegalEntityController::class, 'store'])->name('legal-entities.store');
+                    Route::put('legal-entities/{legalEntity}', [LegalEntityController::class, 'update'])->name('legal-entities.update');
+                    Route::delete('legal-entities/{legalEntity}', [LegalEntityController::class, 'purge'])->name('legal-entities.purge');
                     Route::patch('legal-entities/{legalEntity}/deactivate', [LegalEntityController::class, 'deactivate'])->name('legal-entities.deactivate');
                     Route::patch('legal-entities/{legalEntity}/reactivate', [LegalEntityController::class, 'reactivate'])->name('legal-entities.reactivate');
 
                     Route::get('business-units', [BusinessUnitController::class, 'index'])->name('business-units');
                     Route::post('business-units', [BusinessUnitController::class, 'store'])->name('business-units.store');
                     Route::get('business-units/{businessUnit}', [BusinessUnitController::class, 'show'])->name('business-unit');
+                    Route::put('business-units/{businessUnit}', [BusinessUnitController::class, 'update'])->name('business-units.update');
+                    Route::delete('business-units/{businessUnit}', [BusinessUnitController::class, 'purge'])->name('business-units.purge');
                     Route::patch('business-units/{businessUnit}/deactivate', [BusinessUnitController::class, 'deactivate'])->name('business-units.deactivate');
                     Route::patch('business-units/{businessUnit}/reactivate', [BusinessUnitController::class, 'reactivate'])->name('business-units.reactivate');
 
@@ -125,6 +132,8 @@ Route::prefix('console')
 
                     Route::get('departments', [DepartmentController::class, 'index'])->name('departments');
                     Route::post('departments', [DepartmentController::class, 'store'])->name('departments.store');
+                    Route::put('departments/{department}', [DepartmentController::class, 'update'])->name('departments.update');
+                    Route::delete('departments/{department}', [DepartmentController::class, 'purge'])->name('departments.purge');
                     Route::patch('departments/{department}/move', [DepartmentController::class, 'move'])->name('departments.move');
                     Route::patch('departments/{department}/deactivate', [DepartmentController::class, 'deactivate'])->name('departments.deactivate');
                     Route::patch('departments/{department}/reactivate', [DepartmentController::class, 'reactivate'])->name('departments.reactivate');
@@ -132,6 +141,8 @@ Route::prefix('console')
                     Route::get('teams', [TeamController::class, 'index'])->name('teams');
                     Route::post('teams', [TeamController::class, 'store'])->name('teams.store');
                     Route::get('teams/{team}', [TeamController::class, 'show'])->name('team');
+                    Route::put('teams/{team}', [TeamController::class, 'update'])->name('teams.update');
+                    Route::delete('teams/{team}', [TeamController::class, 'purge'])->name('teams.purge');
                     Route::patch('teams/{team}/move', [TeamController::class, 'move'])->name('teams.move');
                     Route::patch('teams/{team}/deactivate', [TeamController::class, 'deactivate'])->name('teams.deactivate');
                     Route::patch('teams/{team}/reactivate', [TeamController::class, 'reactivate'])->name('teams.reactivate');

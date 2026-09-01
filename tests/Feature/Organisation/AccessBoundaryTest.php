@@ -159,21 +159,56 @@ final class AccessBoundaryTest extends TestCase
         $this->assertSame($existing->getStatusCode(), $missing->getStatusCode());
     }
 
-    /** Case 13. Mutation: register a DELETE route. */
-    public function test_no_delete_verb_is_registered_anywhere_in_this_unit(): void
+    /**
+     * Case 13, AMENDED BY D-24.
+     *
+     * As originally written this asserted that no DELETE verb was registered
+     * anywhere in the unit. D-24 superseded that for four master types, so the
+     * case now asserts what it was always protecting: that a DELETE reaches only
+     * a record with no history to lose, and never a record that carries some.
+     *
+     * The exact permitted set lives in LifecycleCompletenessTest; this is the
+     * authorisation half - a DELETE must sit behind the System Administrator
+     * gate like every other write in the unit.
+     *
+     * Mutation: register a DELETE outside the administrator group.
+     */
+    public function test_every_delete_verb_sits_behind_the_administrator_gate(): void
     {
+        $found = 0;
+
         foreach (Route::getRoutes() as $route) {
             if (! str_starts_with($route->uri(), 'console/organisation')) {
                 continue;
             }
 
-            $this->assertNotContains(
-                'DELETE',
-                $route->methods(),
-                "Route [{$route->uri()}] registers DELETE. P1-01 offers no hard delete on any type: "
-                .'deactivation and left_at exist so history stays answerable.'
+            if (! in_array('DELETE', $route->methods(), true)) {
+                continue;
+            }
+
+            $found++;
+
+            $this->assertContains(
+                RequireSystemAdministrator::class,
+                $route->gatherMiddleware(),
+                "Route [{$route->uri()}] permanently destroys a record without the System "
+                .'Administrator gate. D-24 grants purge to that role and to no other.'
             );
         }
+
+        $this->assertSame(4, $found, 'The four D-24 purge routes were not found, so this case proves nothing.');
+    }
+
+    /** Case 13b. The unauthenticated boundary, on the verb that destroys. */
+    public function test_an_unauthenticated_request_cannot_purge(): void
+    {
+        $organisation = $this->make->organisation();
+        $unit = $this->make->businessUnit($organisation, 'Untouched');
+
+        $this->delete('/console/organisation/business-units/'.$unit->id)
+            ->assertRedirect(route('entry'));
+
+        $this->assertNotNull($unit->fresh(), 'An unauthenticated request destroyed a business unit.');
     }
 
     /**

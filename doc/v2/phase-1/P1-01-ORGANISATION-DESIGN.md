@@ -247,7 +247,15 @@ reviewed transfer, exactly as `users` moved to P1-00.
 
 ## 3. Lifecycle
 
-Two states, `active` and `inactive`. **No hard delete anywhere, on any route.**
+Two states, `active` and `inactive`.
+
+> **Amended by D-24, 1 September 2026.** This section read *"No hard delete
+> anywhere, on any route."* That is superseded for four master types: a Legal
+> Entity, Business Unit, Department or Team with **no dependency of any kind**
+> may be permanently deleted, guarded, re-checked inside the write transaction
+> and never cascaded. Everything else in this table is unchanged, and the
+> Organisation, team-membership history and management history still have no
+> delete on any route. See §3.1 and `PHASE-1-PLAN.md` D-24.
 
 | Action | Behaviour |
 | --- | --- |
@@ -258,6 +266,7 @@ Two states, `active` and `inactive`. **No hard delete anywhere, on any route.**
 | Move a node to a new parent | Permitted, recorded, **flagged scope-affecting** |
 | Remove a team member | `left_at` set; row retained |
 | End a management relationship | `effective_to` set; row retained |
+| **Purge an unused master record (D-24)** | **Permitted** for a Legal Entity, Business Unit, Department or Team with no dependency; **refused otherwise**, naming the blocker in business language |
 | Hard delete | **Not offered.** No route, no controller action, no model method |
 
 Refusing the cascade is the deliberate choice. A cascade is convenient exactly
@@ -383,7 +392,9 @@ mutation and none by review, so each row names the mutation.
 | 10 | Second current manager for one user | Refused | Drop the single-current-manager check |
 | 11 | Deactivate a node with active children | Refused, children named | Cascade instead of refusing |
 | 12 | Deactivate a node with active memberships | Refused | Drop the membership check |
-| 13 | Hard delete via any route | **No such route** | Register a DELETE route |
+| 13 | Hard delete via any route | ~~**No such route**~~ **D-24:** `DELETE` exists for four guarded master-record purges and nowhere else; never for the Organisation, membership history or management history | Register a DELETE for team memberships |
+| 13a | **D-24:** purge a record with any dependency, active or inactive, current or ended | **Refused**, blocker named, nothing cascaded | Count only active children / only current memberships |
+| 13b | **D-24:** purge re-checks dependencies inside the write transaction | Second check present and locking | Remove the second check |
 | 14 | Junction row crossing organisations | Refused | Drop the junction organisation check |
 | 15 | Duplicate current team membership | Refused | Drop the uniqueness check |
 | 16 | Move recorded as scope-affecting | Event emitted | Stop emitting on move |
@@ -466,7 +477,7 @@ recorded in the VERIFICATION document with observed output.
 | 5a | **D-16:** the administrator who created the Company Profile carries that `organisation_id` | Set, non-NULL |
 | 6 | Set a manager, then attempt a cycle | Cycle refused |
 | 7 | Deactivate a business unit with active departments | Refused, children named |
-| 8 | Attempt a hard delete on any route | No such route |
+| 8 | ~~Attempt a hard delete on any route~~ **D-24:** permanently delete an unused test record; then attempt to purge a record that has a dependency | The first succeeds; the second is refused, names the blocker and changes nothing |
 | 9 | Move a department between business units | Permitted and event emitted |
 | 10 | Exposure gate, ACME, both checksums | Unchanged and passing |
 | 11 | `semantiq:health` | Green |
@@ -480,7 +491,10 @@ would fail here, which is exactly why the many-to-one proposal was rejected.
 
 1. Every §2 table created; every §3 lifecycle rule enforced.
 2. All 17 §7 negative cases automated, each proven non-vacuous by its stated mutation.
-3. No DELETE route exists anywhere in the unit.
+3. ~~No DELETE route exists anywhere in the unit.~~ **D-24:** `DELETE` exists
+   for exactly the four guarded master-record purges, asserted as an equality;
+   the Organisation, team-membership history and management history have no
+   delete on any route, and no purge cascades.
 4. No roles, permissions, domains, scopes or sensitivity schema created.
 4a. `users.organisation_id` exists, is nullable, is populated only by Company
     Profile creation, and Entra `tenant_id` is read nowhere in this unit.

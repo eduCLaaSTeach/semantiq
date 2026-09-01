@@ -88,6 +88,23 @@ final class SecurityEventLogger
 
     public const BUSINESS_UNIT_LEGAL_ENTITY_ASSOCIATED = 'business_unit.legal_entity.associated';
 
+    /*
+     * D-24 guarded permanent deletion.
+     *
+     * A purge is the only operation in P1-01 that destroys a record, so it is
+     * the one that most needs a durable trace. The event carries the entity
+     * type and its identifier and nothing else: the name is gone from the
+     * database by the time anyone reads the log, and putting it in the event to
+     * compensate would make the log the place business content leaks.
+     */
+    public const LEGAL_ENTITY_PURGED = 'legal_entity.purged';
+
+    public const BUSINESS_UNIT_PURGED = 'business_unit.purged';
+
+    public const DEPARTMENT_PURGED = 'department.purged';
+
+    public const TEAM_PURGED = 'team.purged';
+
     public const BUSINESS_UNIT_LEGAL_ENTITY_DISSOCIATED = 'business_unit.legal_entity.dissociated';
 
     private const EVENTS = [
@@ -123,6 +140,10 @@ final class SecurityEventLogger
         self::MANAGEMENT_RELATIONSHIP_CLEARED,
         self::BUSINESS_UNIT_LEGAL_ENTITY_ASSOCIATED,
         self::BUSINESS_UNIT_LEGAL_ENTITY_DISSOCIATED,
+        self::LEGAL_ENTITY_PURGED,
+        self::BUSINESS_UNIT_PURGED,
+        self::DEPARTMENT_PURGED,
+        self::TEAM_PURGED,
     ];
 
     /**

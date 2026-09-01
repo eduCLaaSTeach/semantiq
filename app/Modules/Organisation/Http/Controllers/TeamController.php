@@ -40,8 +40,10 @@ final class TeamController
                 ->map(fn (Team $team): array => [
                     'id' => $team->id,
                     'name' => $team->name,
+                    'code' => $team->code,
                     'status' => $team->status->value,
                     'department' => $team->department?->name,
+                    'departmentId' => $team->department_id,
                     'members' => $team->memberships_count,
                 ])
                 ->all(),
@@ -137,6 +139,27 @@ final class TeamController
         return redirect()->route('organisation.teams');
     }
 
+    /**
+     * Name and code. NOT the department - that is move(), for the same reason
+     * a department's business unit is not editable here.
+     */
+    public function update(Request $request, Team $team): RedirectResponse
+    {
+        /** @var array<string, string|null> $attributes */
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        try {
+            $this->structure->updateTeam($team, $attributes, $this->actor($request));
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.teams');
+    }
+
     public function move(Request $request, Team $team): RedirectResponse
     {
         $validated = $request->validate(['department_id' => ['required', 'integer']]);
@@ -149,6 +172,24 @@ final class TeamController
 
         try {
             $this->structure->moveTeam($team, $target, $this->actor($request));
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.teams');
+    }
+
+    /**
+     * D-24 guarded permanent delete.
+     *
+     * The confirmation happened in the browser and proves only that a person
+     * clicked twice. The dependency check that decides this is in the service,
+     * and it runs again inside the write transaction.
+     */
+    public function purge(Request $request, Team $team): RedirectResponse
+    {
+        try {
+            $this->structure->purgeTeam($team, $this->actor($request));
         } catch (StructureViolation $violation) {
             return $this->refuse($violation);
         }

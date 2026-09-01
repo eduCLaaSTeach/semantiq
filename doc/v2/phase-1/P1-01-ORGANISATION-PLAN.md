@@ -186,6 +186,15 @@ keys** — the same lesson as P1-00, where email is carried but `oid` is the key
 Every structural record has **active** or **inactive**. Nothing is hard-deleted
 by default.
 
+> **Amended by D-24, 1 September 2026.** "By default" is now literal rather than
+> absolute. A Legal Entity, Business Unit, Department or Team may be permanently
+> deleted **only when nothing uses it** — no children active or inactive, no
+> associations, no membership history, no other durable reference. Everything
+> below still governs every record that is used, and the reason it gives is the
+> reason the exception is guarded: a deleted row that something still pointed at
+> is precisely what makes past decisions unexplainable. See `PHASE-1-PLAN.md`
+> D-24.
+
 | Rule | Reason |
 | --- | --- |
 | Deactivation is the normal end state | Structure is referenced by later access decisions and by audit; a deleted row makes past decisions unexplainable |
@@ -225,7 +234,8 @@ inherits a wider scope later. So the rules are set now, while they are cheap:
 | --- | --- |
 | Deactivate a node with active children | **Refused** — deactivate or move children first, explicitly |
 | Move a node to a new parent | Permitted, recorded, and **flagged as a scope-affecting change** for the later audit catalogue |
-| Hard delete | **Not offered.** Deactivation only |
+| Hard delete of a **used** record | **Not offered.** Deactivation only |
+| Hard delete of an **unused** master record | **D-24:** permitted for a Legal Entity, Business Unit, Department or Team with no dependency of any kind. Guarded, re-checked inside the write transaction, never cascaded, and audited as `*.purged`. Never for the Organisation, membership history or management history |
 | Remove a team member | Membership end-dated, not erased |
 | Remove a manager relationship | End-dated, not erased |
 
@@ -291,7 +301,7 @@ every one was caught by mutation, none by review.
 | 2 | Team membership and management relationships can be set and ended, with history retained |
 | 3 | Every §7 validation rule refuses invalid input, proven by negative test |
 | 4 | Deactivating a node with active children is refused |
-| 5 | No hard delete exists on any route |
+| 5 | ~~No hard delete exists on any route~~ **D-24:** `DELETE` exists for exactly four master-record purges and for nothing else; each is refused unless the record is completely unused; the Organisation, membership history and management history have no delete on any route |
 | 6 | Structural moves are recorded as scope-affecting events |
 | 7 | **No business-domain access is granted anywhere in this unit** |
 | 8 | A System Administrator gains no business data through organisation context |

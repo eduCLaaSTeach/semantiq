@@ -10,6 +10,8 @@ use App\Modules\Organisation\Models\LegalEntity;
 use App\Modules\Organisation\Models\Organisation;
 use App\Modules\Organisation\Models\StructureStatus;
 use App\Modules\Organisation\Models\Team;
+use App\Modules\Organisation\Support\Jurisdictions;
+use App\Modules\Organisation\Support\PurgeDependencies;
 use App\Modules\Organisation\Support\StructureViolation;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Security\SecurityEventLogger;
@@ -23,8 +25,10 @@ use Illuminate\Support\Facades\DB;
  * UI affordance - the screen may also prevent it, but the screen is not the
  * control.
  *
- * There is no delete method, on any type. Not "a delete that refuses" - no
- * method at all, so there is nothing for a later route to call.
+ * D-24 replaced the blanket "no hard delete anywhere" rule with a guarded
+ * permanent delete, on four master types only and only when the record is
+ * completely unused. The guard is here, not on the screen: the confirmation
+ * dialog is a courtesy to the person, and the refusal is the control.
  */
 final class StructureService
 {
@@ -241,6 +245,257 @@ final class StructureService
         };
 
         return $this->setStatus($node, StructureStatus::Active, $event, $actor);
+    }
+
+    // -- Update ------------------------------------------------------------
+
+    /*
+     * UPDATE was in the approved scope from the start.
+     *
+     * PHASE-1-PLAN §"Definition of Done" 1: structures "can be created, UPDATED
+     * and deactivated", and the event catalogue names legal_entity.updated,
+     * business_unit.updated, department.updated and team.updated. The events
+     * were declared and the operations were not, so those constants were only
+     * ever emitted by reactivate - a status change - and a typed name could
+     * never be corrected. A Department called "Singapore Retai Sales" had no
+     * route back to "Singapore Retail Sales" except the database.
+     *
+     * EDIT IS NOT MOVE. These methods change a record's OWN attributes and
+     * never its parent. Re-parenting stays in moveDepartment / moveTeam, which
+     * emit *.moved and are flagged scope-affecting for the audit catalogue. If
+     * a spelling correction emitted a move, the catalogue would record a
+     * structural change that never happened.
+     */
+
+    /** @param array<string, string|null> $attributes */
+    public function updateLegalEntity(LegalEntity $entity, array $attributes, User $actor): LegalEntity
+    {
+        return $this->applyUpdate(
+            $entity,
+            $this->only($attributes, ['name', 'registration_number', 'jurisdiction', 'registered_address']),
+            SecurityEventLogger::LEGAL_ENTITY_UPDATED,
+            $actor
+        );
+    }
+
+    /** @param array<string, string|null> $attributes */
+    public function updateBusinessUnit(BusinessUnit $unit, array $attributes, User $actor): BusinessUnit
+    {
+        return $this->applyUpdate(
+            $unit,
+            $this->only($attributes, ['name', 'code']),
+            SecurityEventLogger::BUSINESS_UNIT_UPDATED,
+            $actor
+        );
+    }
+
+    /**
+     * Name and code only.
+     *
+     * business_unit_id is deliberately NOT accepted here. Moving a department
+     * is moveDepartment(), which records a scope-affecting event.
+     *
+     * @param  array<string, string|null>  $attributes
+     */
+    public function updateDepartment(Department $department, array $attributes, User $actor): Department
+    {
+        return $this->applyUpdate(
+            $department,
+            $this->only($attributes, ['name', 'code']),
+            SecurityEventLogger::DEPARTMENT_UPDATED,
+            $actor
+        );
+    }
+
+    /**
+     * Name and code only. department_id belongs to moveTeam(), for the same
+     * reason business_unit_id belongs to moveDepartment().
+     *
+     * @param  array<string, string|null>  $attributes
+     */
+    public function updateTeam(Team $team, array $attributes, User $actor): Team
+    {
+        return $this->applyUpdate(
+            $team,
+            $this->only($attributes, ['name', 'code']),
+            SecurityEventLogger::TEAM_UPDATED,
+            $actor
+        );
+    }
+
+    /**
+     * The one update path.
+     *
+     * A rejected update leaves the record untouched: the guards run before
+     * anything is written, and the write is a single save inside a transaction.
+     *
+     * @template T of Model
+     *
+     * @param  T  $node
+     * @param  array<string, string|null>  $attributes
+     * @return T
+     */
+    private function applyUpdate(Model $node, array $attributes, string $event, User $actor): Model
+    {
+        /*
+         * The record must be in the ACTOR'S organisation.
+         *
+         * Route-model binding resolves a record by id alone, so without this an
+         * administrator could edit another organisation's structure by URL. The
+         * screen never offers it, but the screen is not the control. Release 1
+         * is single-tenant, which makes this unreachable today and exactly the
+         * kind of guard that is missing when it stops being unreachable.
+         *
+         * D-16: the comparison is organisation_id on both sides. The Entra
+         * tenant is a directory boundary and is never substituted for it.
+         */
+        $this->requireSameOrganisation(
+            $node->getAttribute('organisation_id'),
+            $actor->organisation_id
+        );
+
+        if (array_key_exists('name', $attributes) && trim((string) $attributes['name']) === '') {
+            throw StructureViolation::because('invalid_name', 'A name is required.');
+        }
+
+        if (array_key_exists('jurisdiction', $attributes)
+            && ! Jurisdictions::permits($attributes['jurisdiction'])) {
+            throw StructureViolation::because(
+                'unknown_jurisdiction',
+                'That jurisdiction is not on the approved list.'
+            );
+        }
+
+        return DB::transaction(function () use ($node, $attributes, $event, $actor): Model {
+            foreach ($attributes as $key => $value) {
+                $node->setAttribute($key, $value);
+            }
+
+            $node->save();
+
+            $this->record($event, $node, $actor, 'updated');
+
+            return $node;
+        });
+    }
+
+    /**
+     * The attributes this operation is allowed to touch, and no others.
+     *
+     * Whitelisted rather than blacklisted: a field added to the model later is
+     * not silently updatable, and a parent key posted by a caller is ignored
+     * instead of quietly re-parenting the record.
+     *
+     * @param  array<string, string|null>  $attributes
+     * @param  list<string>  $allowed
+     * @return array<string, string|null>
+     */
+    private function only(array $attributes, array $allowed): array
+    {
+        return array_intersect_key($attributes, array_flip($allowed));
+    }
+
+    // -- D-24 guarded permanent delete -------------------------------------
+
+    /*
+     * Purge is not delete-with-a-confirmation, and it is not a better
+     * Deactivate. It exists for one case the Product Owner named: a master
+     * record entered by mistake, which nothing uses and which would otherwise
+     * be permanent garbage. Everything else keeps its record.
+     *
+     * There is no purge for the Organisation, for team memberships or for
+     * management relationships. The first is the tenancy root; the other two are
+     * the history whose retention the rest of the unit is built around, and a
+     * way to destroy them would make `left_at` and `effective_to` decorative.
+     */
+
+    public function purgeLegalEntity(LegalEntity $entity, User $actor): void
+    {
+        $this->applyPurge($entity, 'legal entity', SecurityEventLogger::LEGAL_ENTITY_PURGED, $actor);
+    }
+
+    public function purgeBusinessUnit(BusinessUnit $unit, User $actor): void
+    {
+        $this->applyPurge($unit, 'business unit', SecurityEventLogger::BUSINESS_UNIT_PURGED, $actor);
+    }
+
+    public function purgeDepartment(Department $department, User $actor): void
+    {
+        $this->applyPurge($department, 'department', SecurityEventLogger::DEPARTMENT_PURGED, $actor);
+    }
+
+    public function purgeTeam(Team $team, User $actor): void
+    {
+        $this->applyPurge($team, 'team', SecurityEventLogger::TEAM_PURGED, $actor);
+    }
+
+    /**
+     * The one purge path.
+     *
+     * The dependency check runs TWICE, and the second run is the one that
+     * matters. D-24 §4 requires it: between the moment the screen offered the
+     * confirmation and the moment the row is destroyed, somebody else can add
+     * the first department to that business unit. The first check answers the
+     * screen; only the check inside the write transaction answers the delete.
+     *
+     * Nothing is cascaded, ever. If a dependency exists the answer is a refusal
+     * naming it, never a wider delete that makes the refusal go away - and the
+     * foreign keys are RESTRICT beneath this, so the database refuses too if
+     * this guard is ever wrong.
+     */
+    private function applyPurge(Model $node, string $noun, string $event, User $actor): void
+    {
+        $this->requireSameOrganisation(
+            $node->getAttribute('organisation_id'),
+            $actor->organisation_id
+        );
+
+        $this->refuseIfInUse($node, $noun);
+
+        DB::transaction(function () use ($node, $noun, $event, $actor): void {
+            $this->refuseIfInUse($node, $noun, locking: true);
+
+            $node->delete();
+
+            // Recorded from the attributes still in memory. The row is gone, so
+            // this event is the only remaining trace that it existed - which is
+            // why a purge is logged even though nothing else in P1-01 destroys
+            // anything worth tracing.
+            $this->record($event, $node, $actor, 'purged');
+        });
+    }
+
+    private function refuseIfInUse(Model $node, string $noun, bool $locking = false): void
+    {
+        $blocking = PurgeDependencies::blocking($node, $locking);
+
+        if ($blocking === []) {
+            return;
+        }
+
+        throw StructureViolation::blockedByChildren(
+            'in_use',
+            sprintf(
+                'This %s cannot be permanently deleted because %s. Deactivate it instead.',
+                $noun,
+                $this->readAsList($blocking)
+            ),
+            $blocking
+        );
+    }
+
+    /**
+     * @param  list<string>  $clauses
+     */
+    private function readAsList(array $clauses): string
+    {
+        if (count($clauses) === 1) {
+            return $clauses[0];
+        }
+
+        $last = array_pop($clauses);
+
+        return implode(', ', $clauses).' and '.$last;
     }
 
     // -- D-14 associations -------------------------------------------------

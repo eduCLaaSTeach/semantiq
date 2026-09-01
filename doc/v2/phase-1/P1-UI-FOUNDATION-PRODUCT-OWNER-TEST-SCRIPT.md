@@ -79,10 +79,16 @@ This script asks you to enter **no data at all**, so nothing permanent is
 created by following it.
 
 One standing warning still applies, because step 33 puts you on a screen that
-can save: **SemantIQ has no hard delete for organisation structure.** If you
-type into the Company Profile form and press *Save changes*, that change is
-real and is recorded. **Do not save anything during this test.** Look at the
-screen and move on.
+can save: **the Company Profile can never be deleted, by anyone.** If you type
+into it and press *Save changes*, that change is real and is recorded, and there
+is no screen that will take it back. **Do not save anything during this test.**
+Look at the screen and move on.
+
+*(Amended 1 September 2026. This read "SemantIQ has no hard delete for
+organisation structure". D-24 added a guarded permanent delete for unused legal
+entities, business units, departments and teams — but never for the Company
+Profile, which is the screen this step puts you on, so the warning stands as
+written for the record that matters here.)*
 
 ## 6–7. Numbered steps and expected results
 

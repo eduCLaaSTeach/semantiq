@@ -6,7 +6,9 @@ namespace App\Modules\Organisation\Http\Controllers;
 
 use App\Modules\Organisation\Http\Controllers\Concerns\InteractsWithStructure;
 use App\Modules\Organisation\Models\LegalEntity;
+use App\Modules\Organisation\Rules\ApprovedJurisdiction;
 use App\Modules\Organisation\Services\StructureService;
+use App\Modules\Organisation\Support\Jurisdictions;
 use App\Modules\Organisation\Support\StructureViolation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +26,9 @@ final class LegalEntityController
         $organisation = $this->organisation($request);
 
         return Inertia::render('Organisation/LegalEntities', [
+            // The approved jurisdiction list travels with the page, so the
+            // dropdown needs no request of its own and no external call.
+            'jurisdictions' => Jurisdictions::all(),
             'legalEntities' => LegalEntity::query()
                 ->where('organisation_id', $organisation->id)
                 ->orderBy('name')
@@ -33,6 +38,7 @@ final class LegalEntityController
                     'name' => $entity->name,
                     'registration_number' => $entity->registration_number,
                     'jurisdiction' => $entity->jurisdiction,
+                    'registered_address' => $entity->registered_address,
                     'status' => $entity->status->value,
                 ])
                 ->all(),
@@ -45,12 +51,49 @@ final class LegalEntityController
         $attributes = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'registration_number' => ['nullable', 'string', 'max:64'],
-            'jurisdiction' => ['nullable', 'string', 'max:64'],
+            'jurisdiction' => ['nullable', 'string', 'max:64', new ApprovedJurisdiction],
             'registered_address' => ['nullable', 'string'],
         ]);
 
         try {
             $this->structure->createLegalEntity($this->organisation($request), $attributes, $this->actor($request));
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.legal-entities');
+    }
+
+    public function update(Request $request, LegalEntity $legalEntity): RedirectResponse
+    {
+        /** @var array<string, string|null> $attributes */
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'registration_number' => ['nullable', 'string', 'max:64'],
+            'jurisdiction' => ['nullable', 'string', 'max:64', new ApprovedJurisdiction],
+            'registered_address' => ['nullable', 'string'],
+        ]);
+
+        try {
+            $this->structure->updateLegalEntity($legalEntity, $attributes, $this->actor($request));
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.legal-entities');
+    }
+
+    /**
+     * D-24 guarded permanent delete.
+     *
+     * The confirmation happened in the browser and proves only that a person
+     * clicked twice. The dependency check that decides this is in the service,
+     * and it runs again inside the write transaction.
+     */
+    public function purge(Request $request, LegalEntity $legalEntity): RedirectResponse
+    {
+        try {
+            $this->structure->purgeLegalEntity($legalEntity, $this->actor($request));
         } catch (StructureViolation $violation) {
             return $this->refuse($violation);
         }

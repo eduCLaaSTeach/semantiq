@@ -33,6 +33,7 @@ final class DepartmentController
                 ->map(fn (Department $department): array => [
                     'id' => $department->id,
                     'name' => $department->name,
+                    'code' => $department->code,
                     'status' => $department->status->value,
                     'businessUnit' => $department->businessUnit?->name,
                     'businessUnitId' => $department->business_unit_id,
@@ -77,6 +78,28 @@ final class DepartmentController
         return redirect()->route('organisation.departments');
     }
 
+    /**
+     * Name and code. NOT the business unit - that is move(), below, which
+     * records a scope-affecting event. Correcting a typo must not look like a
+     * restructure in the audit catalogue.
+     */
+    public function update(Request $request, Department $department): RedirectResponse
+    {
+        /** @var array<string, string|null> $attributes */
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        try {
+            $this->structure->updateDepartment($department, $attributes, $this->actor($request));
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.departments');
+    }
+
     public function move(Request $request, Department $department): RedirectResponse
     {
         $validated = $request->validate(['business_unit_id' => ['required', 'integer']]);
@@ -89,6 +112,24 @@ final class DepartmentController
 
         try {
             $this->structure->moveDepartment($department, $target, $this->actor($request));
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.departments');
+    }
+
+    /**
+     * D-24 guarded permanent delete.
+     *
+     * The confirmation happened in the browser and proves only that a person
+     * clicked twice. The dependency check that decides this is in the service,
+     * and it runs again inside the write transaction.
+     */
+    public function purge(Request $request, Department $department): RedirectResponse
+    {
+        try {
+            $this->structure->purgeDepartment($department, $this->actor($request));
         } catch (StructureViolation $violation) {
             return $this->refuse($violation);
         }

@@ -353,6 +353,76 @@ numbering in blueprint section 2.4, neither of which had ever stated a
 navigation order explicitly. Blueprint section 2.4a now states both orderings so
 they cannot disagree.
 
+### D-24 — Guarded permanent delete / purge — **APPROVED 1 September 2026**
+
+**Supersedes the blanket "no hard delete anywhere" rule, for four P1-01 master
+record types only.** The earlier rule is not withdrawn as a mistake: it was the
+right default, it still governs everything it is not explicitly superseded for,
+and the reasoning behind it — *"a deleted row makes past decisions
+unexplainable"* — is exactly why the exception is guarded rather than general.
+
+What changed is the case it did not anticipate: a master record created by a
+human-entry mistake, used by nothing, which the old rule made **permanent
+garbage**.
+
+**The business rule.** A System Administrator may permanently delete a
+structural master record only when that record is completely safe to remove. If
+it is used, or has dependent operational or history records, permanent deletion
+is refused and Deactivate remains the only lifecycle action available.
+
+> Unused master record → may purge. Used or referenced master record → cannot
+> purge, deactivate only. **No cascade delete, ever.**
+
+| Type | Permanent delete | Guard |
+| --- | --- | --- |
+| Legal Entity | **Permitted, guarded** | no business-unit association, and no other durable P1-01 record referencing it |
+| Business Unit | **Permitted, guarded** | zero departments **including inactive**, zero legal-entity associations, no other reference |
+| Department | **Permitted, guarded** | zero teams **including inactive**, no other reference |
+| Team | **Permitted, guarded** | zero team-membership rows, **current or ended**, no other reference |
+| Organisation / Company Profile | **Never** | the tenancy root |
+| Team membership history | **Never** | ends with `left_at`; the row is retained |
+| Management relationship history | **Never** | ends with `effective_to`; the row is retained |
+
+An inactive child still counts as a dependency. A historical membership still
+counts as usage. Neither is ever removed to make a purge succeed.
+
+**Safety flow.** The action is `Delete permanently` on the record. The
+confirmation names the record and states plainly that it cannot be undone. On
+confirmation the server **re-checks the dependency state inside the write
+transaction** — the frontend guard is never relied on, and the first check is
+not sufficient, because a dependency can appear between the confirmation and the
+delete.
+
+**Refusal.** Business language, naming the blocker and pointing at Deactivate.
+No database or foreign-key terminology reaches the screen.
+
+**Audit.** A successful purge emits `legal_entity.purged`,
+`business_unit.purged`, `department.purged` or `team.purged` through the
+existing P1 security-event mechanism — actor, entity type, entity identifier,
+timestamp, outcome. **This does not implement P1-08 early**; no audit table is
+created.
+
+**Routes.** `DELETE` is permitted for exactly these four master-record purges
+and nowhere else in P1-01. `LifecycleCompletenessTest` asserts the set as an
+equality, so a fifth `DELETE` fails the build.
+
+**Role.** The current role name is **System Administrator**. No Super Admin role
+is introduced in P1-01; P1-05 owns the future role model.
+
+**Purge is not a replacement for Deactivate**, and the distinction is stated on
+every affected screen:
+
+| Action | For |
+| --- | --- |
+| **Edit** | a wrong name, code, jurisdiction, address or other detail |
+| **Deactivate** | a legitimate record that is no longer operational — retained, with its history |
+| **Delete permanently** | an erroneous or unneeded record with no dependencies and no history |
+
+Superseded text, all amended rather than deleted so the original reasoning
+survives: `P1-01-ORGANISATION-PLAN.md` §6, §8 and §11 criterion 5;
+`P1-01-ORGANISATION-DESIGN.md` §7.1, negative case 13 and §10 criterion 3; and
+the "no hard delete" warnings in both Product Owner test scripts.
+
 ---
 
 ## 10. Carried verification gates
