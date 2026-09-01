@@ -108,6 +108,10 @@ if any one of them fails; note which.
 
 ### C. The navigation
 
+The approved roadmap is **43 entries**: 19 under SemantIQ Workplace (11
+top-level plus the 8 inside My Intelligence), 14 under Fabric Configuration and
+10 under System Administration. Steps 22 to 26 walk all 43.
+
 | # | Step | Expected result | PASS / FAIL |
 | --- | --- | --- | --- |
 | 20 | Look at the left-hand navigation. | Three headings, top to bottom: **SemantIQ Workplace**, then **Fabric Configuration**, then **System Administration**. | |
@@ -120,6 +124,7 @@ if any one of them fails; note which.
 | 27 | **Read every label in the whole menu.** | Every label is fully readable. **Nothing is cut off** with a "…". Long names may run onto a second line; none is hidden. | |
 | 28 | Check every icon. | Every entry has an icon. No missing icons, no broken image boxes, and **no entry shows a word like `building` or `i-sitemap` where an icon belongs**. | |
 | 29 | Close each heading again by clicking it. | Each closes cleanly. | |
+| 29a | Count what you have seen across steps 22, 24, 25 and 26. | **43 entries in total** — 19 Workplace, 14 Fabric, 10 System Administration. **Exactly one** of them, Organisation, is enabled. | |
 
 ### D. Locked entries grant nothing (negative and security cases)
 
