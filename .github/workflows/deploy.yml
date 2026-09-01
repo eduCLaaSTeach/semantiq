@@ -87,10 +87,28 @@ jobs:
 
           # Web-facing assets move from the repository's public/ to the
           # deployment root, which is what the server serves from.
-          for asset in build favicon.ico robots.txt; do
-            if [ -e "_deploy/public/$asset" ]; then
-              mv "_deploy/public/$asset" "_deploy/$asset"
+          #
+          # EVERYTHING in public/ moves, not a hardcoded list. The list silently
+          # dropped favicon-light.ico and favicon-dark.ico: they were added to
+          # public/, were not named here, and so were deleted by the rm below
+          # before the transfer. Both 404'd in production while every check
+          # passed. public/ IS the web root, so its whole contents belong at the
+          # deployment root - a file added there must never need this step
+          # edited to reach the server.
+          #
+          # index.php is the exception: the deployment root gets its own front
+          # controller from deployment/, because the stock one walks up out of
+          # the root (see the guard below).
+          for asset in _deploy/public/* _deploy/public/.[!.]*; do
+            [ -e "$asset" ] || continue
+
+            name="$(basename "$asset")"
+
+            if [ "$name" = 'index.php' ]; then
+              continue
             fi
+
+            mv "$asset" "_deploy/$name"
           done
 
           cp deployment/public_html.index.php _deploy/index.php
@@ -109,6 +127,15 @@ jobs:
           [ -f _deploy/vendor/autoload.php ]  || { echo "::error::No vendor/autoload.php."; missing=1; }
           [ -f _deploy/bootstrap/app.php ]    || { echo "::error::No bootstrap/app.php."; missing=1; }
           [ ! -d _deploy/public ]             || { echo "::error::_deploy/public still exists; the old layout would be re-created."; missing=1; }
+
+          # Every web-facing file the repository ships must have arrived at the
+          # deployment root. This is the check that was missing when the two
+          # favicons were dropped.
+          for name in $(ls -A public); do
+            [ "$name" = 'index.php' ] && continue
+            [ -e "_deploy/$name" ] || { echo "::error::public/$name did not reach the deployment root; it would 404."; missing=1; }
+          done
+
           [ "$missing" -eq 0 ] || exit 1
 
           # The front controller must resolve its siblings, not walk up out of
@@ -481,7 +508,22 @@ jobs:
           pcode="$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/public/index.php?cb=${GITHUB_SHA}")"
           [ "$pcode" = "403" ] || { echo "::error::/public/index.php returned $pcode; expected 403. The legacy layer may still be reachable."; exit 1; }
 
-          echo "::notice::Site root 200, /up ok, assets served from the deployment root, no legacy public/ layer."
+          # Every web-facing file the repository ships must actually serve.
+          #
+          # favicon-light.ico and favicon-dark.ico 404'd in production while the
+          # deployment reported success: the assemble step moved a hardcoded
+          # list and dropped them, and nothing here looked. A file that the
+          # application references and the server does not have is a defect the
+          # deployment should catch, not the Product Owner.
+          for name in $(ls -A public); do
+            [ "$name" = 'index.php' ] && continue
+            [ -d "public/$name" ] && continue
+
+            fcode="$(curl -s -o /dev/null -w '%{http_code}' --retry 2 --retry-delay 3 --retry-all-errors "$APP_URL/$name?deploy=${GITHUB_SHA}")"
+            [ "$fcode" = "200" ] || { echo "::error::/$name returned $fcode; a web-facing file the repository ships is not being served."; exit 1; }
+          done
+
+          echo "::notice::Site root 200, /up ok, assets served from the deployment root, every public/ file serves, no legacy public/ layer."
 
       # Correction: a redirect is not proof. A 302 means the request reached the
       # application; the requirement is that these files are never served.

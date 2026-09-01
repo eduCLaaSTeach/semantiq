@@ -197,4 +197,62 @@ final class RootDeploymentLayoutTest extends TestCase
             'The production front controller does not check for maintenance mode.'
         );
     }
+
+    /**
+     * Every web-facing file the repository ships reaches the deployment root.
+     *
+     * The assemble step used to move a HARDCODED LIST out of public/ and then
+     * delete what was left. favicon-light.ico and favicon-dark.ico were added to
+     * public/, were not on that list, and were deleted before the transfer.
+     * They 404'd in production while CI was green, the deployment reported
+     * success, and every test here passed - because nothing connected "a file
+     * exists in public/" to "the server has it".
+     *
+     * This is that connection, made on every pull request rather than after a
+     * deployment. Mutation: put the hardcoded list back, or add a file to
+     * public/ that the workflow cannot carry.
+     */
+    public function test_every_web_facing_file_reaches_the_deployment_root(): void
+    {
+        $workflow = file_get_contents(__DIR__.'/../../.github/workflows/deploy.yml');
+
+        // The move must be driven by what is IN public/, not by a fixed list.
+        $this->assertMatchesRegularExpression(
+            '/for asset in _deploy\/public\/\*/',
+            $workflow,
+            'The assemble step moves a fixed list out of public/ rather than its actual contents, '
+            .'so a newly added web-facing file is deleted before the transfer instead of shipped.'
+        );
+
+        $this->assertStringNotContainsString(
+            'for asset in build favicon.ico robots.txt',
+            $workflow,
+            'The hardcoded asset list is back. It is what dropped the two favicons.'
+        );
+
+        // And the assemble step must verify the arrival rather than assume it.
+        $this->assertStringContainsString(
+            'did not reach the deployment root',
+            $workflow,
+            'Nothing checks that public/ actually arrived at the deployment root.'
+        );
+
+        // Finally, the files themselves: everything the root view references
+        // must exist to be shipped in the first place.
+        $view = file_get_contents(__DIR__.'/../../resources/views/app.blade.php');
+
+        preg_match_all('/href="\/([A-Za-z0-9._-]+\.(?:ico|png|svg|webmanifest))"/', $view, $referenced);
+
+        $this->assertNotEmpty(
+            $referenced[1] ?? [],
+            'The root view references no web-facing files, so this guard proves nothing.'
+        );
+
+        foreach (array_unique($referenced[1]) as $file) {
+            $this->assertFileExists(
+                __DIR__.'/../../public/'.$file,
+                "The root view references /{$file}, which is not in public/, so it can only 404."
+            );
+        }
+    }
 }
