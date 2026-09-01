@@ -9,6 +9,7 @@ use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
 use App\Shared\Navigation\ProductArea;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use Tests\Support\OrganisationFactory;
 use Tests\TestCase;
@@ -128,7 +129,41 @@ final class ConsoleNavigationTest extends TestCase
         $this->actingAsUser($admin)->get('/console')->assertRedirect(route('auth.account-inactive'));
     }
 
-    /** 5. No future-phase area becomes visible. */
+    /**
+     * 2. A future cluster is non-navigable.
+     *
+     * Today that is true because neither area has any node at all, so the
+     * cluster does not render. Once the roadmap menu lands its items will
+     * render disabled, and this guard becomes the one that proves they still
+     * cannot be reached: NO ROUTE EXISTS for any of them.
+     *
+     * Mutation: register a route under either area's prefix.
+     */
+    public function test_no_future_phase_area_has_any_reachable_route(): void
+    {
+        // '' is the root route, whose URI trims to nothing.
+        $delivered = ['', 'console', 'auth', 'first-run', 'up'];
+
+        foreach (Route::getRoutes() as $route) {
+            $first = explode('/', trim($route->uri(), '/'))[0] ?? '';
+
+            $this->assertContains(
+                $first,
+                $delivered,
+                "Route [{$route->uri()}] is outside every delivered area. Fabric Configuration "
+                .'and SemantIQ Workplace are Phase 2 and Phase 3; a route for either would be a '
+                .'placeholder for functionality that does not exist.'
+            );
+        }
+    }
+
+    /**
+     * 5. No future-phase area becomes visible in the CURRENT sidebar.
+     *
+     * This asserts today's rendered state. It is deliberately separate from
+     * ProductAreaOrderTest, which asserts the declared order of all three areas
+     * whether or not they currently render.
+     */
     public function test_no_future_phase_navigation_appears(): void
     {
         $organisation = $this->make->organisation();
@@ -142,6 +177,29 @@ final class ConsoleNavigationTest extends TestCase
             'An area beyond System Administration is rendering. Fabric Configuration is Phase 2 '
             .'and SemantIQ Workplace is Phase 3; neither has any delivered screen.'
         );
+    }
+
+    /**
+     * 5. The reorder moved no access or phase boundary.
+     *
+     * Organisation is still gated by the platform role and nothing else, and
+     * the areas still own the phases they owned before D-23.
+     */
+    public function test_the_navigation_reorder_moved_no_access_or_phase_boundary(): void
+    {
+        $organisation = $this->make->organisation();
+
+        // Unchanged: a non-administrator is offered nothing and refused the route.
+        $member = $this->make->user($organisation);
+        $this->assertSame([], $this->productAreas($this->actingAsUser($member)->get('/console')));
+        $this->actingAsUser($member)
+            ->get('/console/organisation')
+            ->assertRedirect(route('auth.access-denied'));
+
+        // Unchanged: phase ownership.
+        $this->assertSame(1, ProductArea::SystemAdministration->deliveryPhase());
+        $this->assertSame(2, ProductArea::FabricConfiguration->deliveryPhase());
+        $this->assertSame(3, ProductArea::SemantiqWorkplace->deliveryPhase());
     }
 
     /** The SYS-004 statement must survive the move onto the shell. */
