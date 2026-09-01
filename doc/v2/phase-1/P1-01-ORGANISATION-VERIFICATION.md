@@ -405,14 +405,90 @@ verification is judged on a before/after delta rather than an absolute reading.
 
 All structural row counts are `0`, and every table is present.
 
+### 7.3b Second reading — 1 September 2026, after the UI foundation
+
+`verify-organisation.yml` run
+[33474494282](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33474494282)
+on `c5cec56`, taken to confirm the UI, Brand and Navigation Foundation preserved
+the P1-01 baseline. It did not: **the Product Owner has since entered real
+data**, and the delta is the evidence.
+
+```json
+{"tables_present":{"organisations":true,"legal_entities":true,"business_units":true,
+ "business_unit_legal_entity":true,"departments":true,"teams":true,
+ "team_memberships":true,"management_relationships":true},
+ "row_counts":{"organisations":1,"legal_entities":0,"business_units":1,
+ "business_unit_legal_entity":0,"departments":0,"teams":0,
+ "team_memberships":0,"management_relationships":0},
+ "d16_column_exists":true,"d16_column_nullable":true,
+ "d16_foreign_key_target":"organisations",
+ "users_total":1,"users_with_organisation":1,
+ "team_memberships_current":0,"team_memberships_ended":0,
+ "business_units_with_multiple_legal_entities":0,
+ "legal_entities_with_multiple_business_units":0,
+ "business_units_active":0,"business_units_inactive":1,
+ "department_moved_events":0,
+ "organisation_delete_routes":0}
+```
+
+Read against the §7.3a baseline, and **only** what the counts actually support:
+
+| Movement | 31 Aug | 1 Sep | What it does and does not show |
+| --- | --- | --- | --- |
+| `organisations` | 0 | **1** | A Company Profile was created through the screen. Check 3 is **begun**, not complete. |
+| `users_with_organisation` | 0 | **1** | **Check 5a is OBSERVED.** The administrator who created the profile acquired that `organisation_id`, by the one writer, with no seed, backfill or manual write. |
+| `business_units` | 0 | **1** | One business unit exists. |
+| `business_units_inactive` | 0 | **1** | The business unit was deactivated **and the deactivation was permitted**. With `departments = 0` this is the *allowed* case, **not** check 7 — check 7 needs a business unit with an active department and expects a **refusal**. |
+| `legal_entities`, `departments`, `teams`, `team_memberships`, `management_relationships` | 0 | 0 | Checks 4, 5, 7 and 9 have **not** been exercised. |
+| `organisation_delete_routes` | 0 | 0 | Still no DELETE route anywhere in the unit. |
+
+`users_total` is still **1**, so §7.3 stands unchanged: check 6 remains carried
+to P1-03.
+
+**Nothing in this reading is inferred from a passing test.** Counts are the only
+evidence, no name or identity was read, and where the counts cannot distinguish
+two outcomes the check is left unobserved rather than assumed.
+
+### 7.3c P1-01 screens re-verified under the new shell — 1 September 2026
+
+The UI foundation replaced the shell every Organisation screen renders inside,
+so all six were re-opened in a browser at 1440px and 390px:
+
+| Screen | Heading | Shell | Active item | Sideways scroll | Console errors |
+| --- | --- | --- | --- | --- | --- |
+| `/console/organisation` | Company Profile | ✅ | Organisation | none | 0 |
+| `…/legal-entities` | Legal Entities | ✅ | Organisation | none | 0 |
+| `…/business-units` | Business Units | ✅ | Organisation | none | 0 |
+| `…/departments` | Departments | ✅ | Organisation | none | 0 |
+| `…/teams` | Teams | ✅ | Organisation | none | 0 |
+| `…/hierarchy` | Management Hierarchy | ✅ | Organisation | none | 0 |
+
+No implementation wording reaches any screen, and nothing is clipped. The one
+element reported as overflowing is the visually-hidden `Actions` column header,
+which is 1px wide by design for screen readers — checked rather than assumed.
+
+**No P1-01 behaviour was changed by the foundation.** The routes, the
+authorisation and the refusal paths are exactly as delivered.
+
 ### 7.4 Outstanding for P1-01 — executable now
 
-Seven checks remain, all executable in a browser by the existing System
-Administrator: **2, 3, 4, 5, 5a, 7 and 9**. They are listed in §7.5.
+**Check 5a is now observed** (§7.3b). Six checks remain — **2, 3, 4, 5, 7 and
+9** — all executable in a browser by the existing System Administrator, and all
+subject to the real-data rule below.
 
 They are recorded as **not yet observed** rather than inferred. Each is covered
 by a test proven non-vacuous by mutation, but a passing test is not the same
 claim as an observed production result.
+
+Checks 4, 5 and 9 are **conditional on the real organisation genuinely having
+that shape**. If it does not, they are marked NOT CURRENTLY OBSERVABLE WITH REAL
+PRODUCTION DATA and carried forward — that is a data condition, not an
+implementation defect.
+
+The steps are written for the Product Owner in
+`P1-01-ORGANISATION-PRODUCT-OWNER-TEST-SCRIPT.md`, which carries the permanent-
+data warning in full: P1-01 has no hard delete, so every record created to
+satisfy a check is permanent.
 
 ### 7.5 The seven checks
 
@@ -436,7 +512,7 @@ permanent.
 | --- | --- | --- | --- | --- |
 | 2 | Signed-in System Administrator reaches Organisation | Unconditional | Screen renders | |
 | 3 | Create the organisation, and the legal entities, business units, departments and teams that genuinely exist | Unconditional | Persisted | |
-| 5a | **D-16:** the administrator who created the profile carries that `organisation_id` | Follows from 3 | `users_with_organisation` 0 → 1 | |
+| 5a | **D-16:** the administrator who created the profile carries that `organisation_id` | Follows from 3 | `users_with_organisation` 0 → 1 | **OBSERVED** 1 Sep 2026 — §7.3b |
 | 7 | Deactivate a business unit that genuinely has an active department | Needs one real business unit with one real department. **No data change either way** | Refused, children named | |
 | 4 | One business unit ↔ two legal entities, and one legal entity ↔ two business units | **Only if the real organisation genuinely has that shape** | Both permitted | |
 | 9 | Move a department between business units | **Only if a legitimate structural move exists** | Permitted, event emitted | |
@@ -454,7 +530,7 @@ permanent.
 | 4 | No roles, permissions, domains, scopes or sensitivity schema | ✅ |
 | 4a | `users.organisation_id` nullable, one writer, `tenant_id` read nowhere | ✅ |
 | 5 | Organisation is the first navigable item; nothing else navigable | ✅ |
-| 6 | All production checks executed and recorded | **Partial** — checks 1, 8, 10, 11 and the D-16 schema claim observed (§7.1, §7.2); checks 2, 3, 4, 5, 5a, 7, 9 outstanding (§7.5); **check 6 deferred to P1-03** (§7.3) |
+| 6 | All production checks executed and recorded | **Partial** — checks 1, 8, 10, 11, the D-16 schema claim and **5a** observed (§7.1, §7.2, §7.3b); checks 2, 3, 4, 5, 7, 9 outstanding (§7.5, and the Product Owner Test Script); **check 6 deferred to P1-03** (§7.3) |
 | 7 | Apache boundary, 403 gate, ACME and both checksums pass unchanged | ✅ §7.1 |
 | 8 | Explicit Product Owner acceptance | ⏳ |
 
