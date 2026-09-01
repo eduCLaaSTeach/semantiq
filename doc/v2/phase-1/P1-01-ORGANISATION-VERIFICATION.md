@@ -470,6 +470,56 @@ which is 1px wide by design for screen readers — checked rather than assumed.
 **No P1-01 behaviour was changed by the foundation.** The routes, the
 authorisation and the refusal paths are exactly as delivered.
 
+### 7.3d Organisation tab navigation — 1 September 2026
+
+A presentation and navigation correction only. **No schema, service, lifecycle
+rule, validation, authorisation or D-14/D-15/D-16 behaviour was touched**, and
+no production data was read or written.
+
+The five section buttons at the foot of Company Profile are replaced by one
+route-backed tab strip on every Organisation screen, per the shared standard's
+Pattern B: real `<a href>` links in a `<nav>` landmark with `aria-current="page"`
+on the active tab, never the ARIA tab widget, which the standard forbids mixing
+with links on one strip.
+
+Walked in a browser at 1440px and 390px. Every line is an observation:
+
+| Behaviour | Observed |
+| --- | --- |
+| Six tabs, approved order | Company Profile · Legal Entities · Business Units · Departments · Teams · Management Hierarchy |
+| All real links | yes — every tab is an `<a>` with an `href` |
+| Exactly one active tab | yes, on every screen |
+| Click across | `/console/organisation` → `…/business-units` → `…/departments`, URL changing each time |
+| Browser Back ×2 | `…/business-units`, then `/console/organisation` — tab follows |
+| Browser Forward | `…/business-units` — tab follows |
+| Refresh | stays on the section, tab still selected |
+| Cold URL | `…/hierarchy` opens with **Management Hierarchy** selected |
+| Detail screen | `…/business-units/1` keeps **Business Units** selected and shows *← Back to Business Units*; the link and browser Back both return to the list |
+| Old button row | gone |
+| Keyboard | the strip is reachable by Tab and shows a 2px focus ring |
+| Narrow screen | the strip scrolls **within itself**; the page does **not** scroll sideways |
+| Console errors | 0 |
+
+The Company Profile card was made compact — Name beside Legal name, Country
+beside Timezone — so it is sized to its content instead of running the width of
+the canvas.
+
+**One deliberate departure from the standard, recorded rather than hidden.**
+Pattern C returns from a detail screen through the breadcrumb and says there is
+no separate back link. D-21 defers breadcrumbs, so following that literally
+would leave a detail screen with no visible way back at all. A local contextual
+back link is used instead, on that screen only. It is **not** a global
+breadcrumb system and D-21 is unchanged.
+
+**The list screens keep their inline create form** rather than moving a primary
+action beside the section title. Converting an inline form into a button would
+change how the screen behaves, and this correction is presentation only.
+
+Ten regression tests cover the strip; seven mutations were applied and all
+seven were caught. One of them survived first time round — the route checks were
+asserting the test's own constant instead of the component's declared hrefs, so
+pointing a tab at a route that did not exist passed. They now read the component.
+
 ### 7.4 Outstanding for P1-01 — executable now
 
 **Check 5a is now observed** (§7.3b). Six checks remain — **2, 3, 4, 5, 7 and

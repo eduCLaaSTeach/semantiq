@@ -547,13 +547,116 @@ button.shell-link:hover .icon { color: var(--accent); }
   max-width: 1100px;
 }
 
-.org-header h1 {
+/* FEATURE -> TAB -> CONTENT, so the three levels are visually obvious. The
+   feature names itself once, the strip says which section you are in, and the
+   section heading sits one step down from the feature heading. */
+.org-feature h1 {
   font-family: var(--font-heading);
   font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.org-feature p {
+  max-width: 68ch;
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/*
+ * Shared standard, Pattern B. Route-backed links, curved browser-tab shape:
+ * rounded 10px top corners, an always-visible resting tint, and an active tab
+ * that fills with the card surface, takes a hairline border with NO bottom
+ * border, and visibly breaks the strip's rule. Fill, border, attachment and
+ * weight carry the active state - never colour alone.
+ */
+.org-tabs {
+  margin-top: calc(var(--space-2) * -1);
+  border-bottom: 1px solid var(--card-border-strong);
+  /* Narrow screens scroll the strip itself, pinned to one axis, so the page
+     never scrolls sideways and the strip never wraps to a second row. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.org-tabs::-webkit-scrollbar { height: 0; }
+
+.org-tabs ul {
+  display: flex;
+  gap: 2px;
+  min-width: max-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.org-tab {
+  display: inline-flex;
+  align-items: center;
+  /* The standard's 44px touch target. */
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transform: translateY(1px);
+}
+
+.org-tab:hover { background: var(--chrome-hover); color: var(--text); }
+
+.org-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.org-tab-active,
+.org-tab-active:hover {
+  background: var(--card);
+  border-color: var(--card-border-strong);
+  color: var(--text);
+}
+
+.org-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.org-section-head h2 {
+  font-family: var(--font-heading);
+  font-size: 16px;
   font-weight: 600;
   color: var(--text);
   margin: 0;
 }
+
+.org-section-actions { display: flex; gap: var(--space-2); flex: 0 0 auto; }
+
+/* A local contextual return for one detail screen. D-21 defers breadcrumbs, so
+   without this a detail page offers no visible way back. Not a global system. */
+.org-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.org-back:hover { text-decoration: underline; }
+
+.org-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .org-description,
 .org-meta {
@@ -659,7 +762,32 @@ button.shell-link:hover .icon { color: var(--accent); }
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
   padding: var(--space-4);
-  max-width: 640px;
+  /* Sized to its content rather than to the canvas: the card used to run the
+     full width with four short fields stacked down its left edge. */
+  max-width: 560px;
+  width: 100%;
+}
+
+/* Company Profile: two columns once there is room, so Name sits beside Legal
+   name and Country beside Timezone instead of four rows of white space. */
+.org-form-profile {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-3) var(--space-4);
+  max-width: 520px;
+}
+
+.org-form-profile label { max-width: none; width: 100%; }
+
+.org-form-profile input { min-width: 0; width: 100%; }
+
+.org-form-profile .org-action { grid-column: 1 / -1; justify-self: start; }
+
+.org-form-profile .org-field-error { grid-column: 1 / -1; margin: 0; }
+
+@media (max-width: 620px) {
+  .org-form-profile { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Every add-form says what it creates. A bare row of inputs with the only
