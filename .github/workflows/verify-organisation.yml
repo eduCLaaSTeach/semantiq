@@ -5,7 +5,8 @@
 # how many rows each structural table holds.
 #
 # It never reads a name, an email, an identity, a grant or a secret. Structure
-# is business content and none of it is printed - the questions this answers are
+# is business content and none of it is printed - including WHICH legal entity is
+# the organisation's primary, which is reported only as a count - the questions this answers are
 # "did the schema land" and "how many rows", which is what production evidence
 # for P1-01 requires and nothing more.
 #
@@ -83,6 +84,17 @@ jobs:
               \$seam = collect(\Illuminate\Support\Facades\Schema::getColumns(\"users\"))
                 ->firstWhere(\"name\", \"organisation_id\");
 
+              // D-25. Schema facts and a COUNT - never which entity is chosen,
+              // which would be business content.
+              \$primary = collect(\Illuminate\Support\Facades\Schema::getColumns(\"organisations\"))
+                ->firstWhere(\"name\", \"primary_legal_entity_id\");
+
+              \$primaryFk = collect(\Illuminate\Support\Facades\Schema::getForeignKeys(\"organisations\"))
+                ->first(fn (\$k) => \$k[\"columns\"] === [\"primary_legal_entity_id\"]);
+
+              \$primarySet = \Illuminate\Support\Facades\DB::table(\"organisations\")
+                ->whereNotNull(\"primary_legal_entity_id\")->count();
+
               \$fk = collect(\Illuminate\Support\Facades\Schema::getForeignKeys(\"users\"))
                 ->first(fn (\$k) => \$k[\"columns\"] === [\"organisation_id\"]);
 
@@ -125,6 +137,10 @@ jobs:
                 \"d16_column_exists\"       => \$seam !== null,
                 \"d16_column_nullable\"     => \$seam[\"nullable\"] ?? null,
                 \"d16_foreign_key_target\"  => \$fk[\"foreign_table\"] ?? null,
+                \"d25_column_exists\"       => \$primary !== null,
+                \"d25_column_nullable\"     => \$primary[\"nullable\"] ?? null,
+                \"d25_foreign_key_target\"  => \$primaryFk[\"foreign_table\"] ?? null,
+                \"organisations_with_primary_legal_entity\" => \$primarySet,
                 \"users_total\"             => \App\Modules\Platform\Models\User::query()->count(),
                 \"users_with_organisation\" => \App\Modules\Platform\Models\User::query()->whereNotNull(\"organisation_id\")->count(),
                 \"team_memberships_current\" => \$membershipsCurrent,
