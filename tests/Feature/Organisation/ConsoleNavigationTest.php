@@ -119,6 +119,19 @@ final class ConsoleNavigationTest extends TestCase
             $this->nodeLabels($areas),
             'The rendered menu is not the approved menu.'
         );
+
+        // The Product Owner states the roadmap as 43 entries. Asserted as a
+        // number as well as a list, because the number is what gets quoted in a
+        // status report and is therefore what gets quoted wrongly.
+        $this->assertCount(43, $this->flatten($areas), 'The roadmap is not 43 entries.');
+
+        $perArea = array_map(fn (array $area): int => count($this->flatten([$area])), $areas);
+
+        $this->assertSame(
+            [19, 14, 10],
+            $perArea,
+            'The per-area counts are not 19 Workplace, 14 Fabric, 10 System Administration.'
+        );
     }
 
     /**
