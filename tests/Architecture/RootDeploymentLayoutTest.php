@@ -237,6 +237,25 @@ final class RootDeploymentLayoutTest extends TestCase
             'Nothing checks that public/ actually arrived at the deployment root.'
         );
 
+        // The live check must NOT demand that .htaccess is served. It is the
+        // server's own configuration; demanding 200 for it failed the very
+        // deployment that fixed the favicons, and a rule that made it serve
+        // would hand over the security boundary.
+        // Matched against the .htaccess check specifically. Looking for
+        // "expected 403" alone passed against a DIFFERENT check already in this
+        // workflow, so the guard reported safety it was not providing.
+        $this->assertMatchesRegularExpression(
+            '/hcode.*\.htaccess.*\n\s*\[ "\$hcode" = "403" \]/',
+            $workflow,
+            'Nothing asserts that /.htaccess itself is refused with 403.'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/case "\$name" in \.\*\) continue/',
+            $workflow,
+            'The live check does not skip dotfiles, so it demands that .htaccess be served.'
+        );
+
         // Finally, the files themselves: everything the root view references
         // must exist to be shipped in the first place.
         $view = file_get_contents(__DIR__.'/../../resources/views/app.blade.php');

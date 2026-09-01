@@ -96,17 +96,20 @@ jobs:
           # deployment root - a file added there must never need this step
           # edited to reach the server.
           #
-          # index.php is the exception: the deployment root gets its own front
-          # controller from deployment/, because the stock one walks up out of
-          # the root (see the guard below).
+          # index.php and .htaccess are the two exceptions: the deployment root
+          # takes both from deployment/ instead, because the stock front
+          # controller walks up out of the root (see the guard below) and the
+          # root .htaccess is the security boundary. They are skipped here
+          # rather than moved and then overwritten, so the outcome does not
+          # depend on the order of the two statements below.
           for asset in _deploy/public/* _deploy/public/.[!.]*; do
             [ -e "$asset" ] || continue
 
             name="$(basename "$asset")"
 
-            if [ "$name" = 'index.php' ]; then
-              continue
-            fi
+            case "$name" in
+              index.php|.htaccess) continue ;;
+            esac
 
             mv "$asset" "_deploy/$name"
           done
@@ -131,8 +134,10 @@ jobs:
           # Every web-facing file the repository ships must have arrived at the
           # deployment root. This is the check that was missing when the two
           # favicons were dropped.
+          # index.php and .htaccess are the two the deployment root takes from
+          # deployment/ instead, so they are checked separately above.
           for name in $(ls -A public); do
-            [ "$name" = 'index.php' ] && continue
+            case "$name" in .*|index.php) continue ;; esac
             [ -e "_deploy/$name" ] || { echo "::error::public/$name did not reach the deployment root; it would 404."; missing=1; }
           done
 
@@ -515,13 +520,24 @@ jobs:
           # list and dropped them, and nothing here looked. A file that the
           # application references and the server does not have is a defect the
           # deployment should catch, not the Product Owner.
+          # Dotfiles are excluded deliberately: public/.htaccess is Apache
+          # configuration that MUST never be served, and demanding 200 for it
+          # failed this step on the very deployment that fixed the favicons.
+          # The negative tests that follow assert it is refused.
           for name in $(ls -A public); do
+            case "$name" in .*) continue ;; esac
             [ "$name" = 'index.php' ] && continue
             [ -d "public/$name" ] && continue
 
             fcode="$(curl -s -o /dev/null -w '%{http_code}' --retry 2 --retry-delay 3 --retry-all-errors "$APP_URL/$name?deploy=${GITHUB_SHA}")"
             [ "$fcode" = "200" ] || { echo "::error::/$name returned $fcode; a web-facing file the repository ships is not being served."; exit 1; }
           done
+
+          # And the one that must NOT be served, asserted here rather than
+          # assumed: the file the loop above skips is the file whose exposure
+          # would hand over the server's own rules.
+          hcode="$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/.htaccess?deploy=${GITHUB_SHA}")"
+          [ "$hcode" = "403" ] || { echo "::error::/.htaccess returned $hcode; expected 403."; exit 1; }
 
           echo "::notice::Site root 200, /up ok, assets served from the deployment root, every public/ file serves, no legacy public/ layer."
 
