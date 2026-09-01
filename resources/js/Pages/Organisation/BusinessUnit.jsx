@@ -27,6 +27,7 @@ export default function BusinessUnit({ businessUnit, associated, available, depa
         <OrganisationPage
             productAreas={productAreas}
             errors={errors}
+            back={{ label: 'Business Units', href: '/console/organisation/business-units' }}
             title={businessUnit.name}
             description="Business unit detail. Legal-entity associations are recorded here and grant no access."
         >

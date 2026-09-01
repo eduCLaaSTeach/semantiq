@@ -1,4 +1,4 @@
-import { router, useForm, usePage } from '@inertiajs/react'
+import { useForm, usePage } from '@inertiajs/react'
 import OrganisationPage from '../../Components/OrganisationPage'
 
 /**
@@ -43,7 +43,7 @@ export default function Profile({ organisation, associated }) {
                 </div>
             ) : null}
 
-            <form className="org-form" onSubmit={submit}>
+            <form className="org-form org-form-profile" onSubmit={submit}>
                 <label>
                     Name
                     <input value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} required />
@@ -55,7 +55,7 @@ export default function Profile({ organisation, associated }) {
                     <input value={form.data.legal_name} onChange={(e) => form.setData('legal_name', e.target.value)} />
                 </label>
 
-                <label className="org-field-sm">
+                <label>
                     Country
                     <input
                         value={form.data.country}
@@ -65,7 +65,7 @@ export default function Profile({ organisation, associated }) {
                     />
                 </label>
 
-                <label className="org-field-md">
+                <label>
                     Timezone
                     <input
                         value={form.data.timezone}
@@ -79,29 +79,6 @@ export default function Profile({ organisation, associated }) {
                 </button>
             </form>
 
-            {existing ? (
-                <nav aria-label="Organisation sections">
-                    <h2 className="org-next-title">Organisation sections</h2>
-
-                    <div className="org-next">
-                        <button type="button" onClick={() => router.get('/console/organisation/legal-entities')}>
-                            Legal Entities
-                        </button>
-                        <button type="button" onClick={() => router.get('/console/organisation/business-units')}>
-                            Business Units
-                        </button>
-                        <button type="button" onClick={() => router.get('/console/organisation/departments')}>
-                            Departments
-                        </button>
-                        <button type="button" onClick={() => router.get('/console/organisation/teams')}>
-                            Teams
-                        </button>
-                        <button type="button" onClick={() => router.get('/console/organisation/hierarchy')}>
-                            Management Hierarchy
-                        </button>
-                    </div>
-                </nav>
-            ) : null}
         </OrganisationPage>
     )
 }

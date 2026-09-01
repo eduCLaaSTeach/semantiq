@@ -25,6 +25,7 @@ and 9** of `P1-01-ORGANISATION-VERIFICATION.md` §7.5.
 | --- | --- |
 | P1-01 merge SHA | `9afe33d` — *P1-01 Organisation — EXECUTE* |
 | Correction | `4f99c46` — Organisation was not reachable after sign-in |
+| Tab navigation | see the pull request for this change — presentation and navigation only |
 | Deployed head at issue | `c5cec56` |
 | Site | https://semantiq.claas2saas.com |
 
@@ -95,6 +96,27 @@ Steps 1 to 4 and step 12 change nothing and are safe to run at any time.
 
 Record PASS / FAIL / NOT APPLICABLE for every step.
 
+### A0. Organisation tab navigation — UX check (no data is created)
+
+Added 1 September 2026. The five section buttons that used to sit at the bottom
+of Company Profile are gone; every Organisation screen now carries one tab strip
+directly below the page heading.
+
+| # | Step | Expected result | Result |
+| --- | --- | --- | --- |
+| A1 | Open Organisation. | Below the heading **Organisation** and its one-line description, a strip of **six tabs**: Company Profile · Legal Entities · Business Units · Departments · Teams · Management Hierarchy. | |
+| A2 | Look at which tab is selected. | **Company Profile**, and only that one — it is filled, outlined and joined to the content below it. The section title *Company Profile* sits beneath the strip, one step down from *Organisation*. | |
+| A3 | Look at the bottom of the page. | The old **ORGANISATION SECTIONS** heading and its row of buttons are **gone**. | |
+| A4 | Click **Business Units**, then **Departments**. | Each click changes the address in the browser bar to that section's own URL, and the clicked tab becomes the selected one. | |
+| A5 | Press the browser **Back** button twice. | You return to Business Units, then to Company Profile — and the selected tab follows you each time. | |
+| A6 | Press the browser **Forward** button. | You go forward to Business Units, tab selected correctly. | |
+| A7 | **Refresh** the page. | You stay on the same section with the same tab selected. | |
+| A8 | Copy a section URL, open it in a new browser tab, and sign in if asked. | It opens that section directly with the correct tab selected. | |
+| A9 | Open **Business Units** and click a business unit's name. | The detail screen opens, **Business Units stays the selected tab**, and a **← Back to Business Units** link sits above the title. Click it — you return to the list. Browser Back does the same. | |
+| A10 | Press **Tab** on the keyboard from the top of the page. | Focus reaches the tab strip and each tab shows a clear focus ring. | |
+| A11 | Narrow the browser to a phone width. | The tab strip **scrolls sideways within itself**. It never wraps onto a second row, and **the page itself never scrolls sideways**. | |
+| A12 | Look at the Company Profile form. | Compact: Name beside Legal name, Country beside Timezone, and the card sized to its content rather than running the width of the screen. | |
+
 ### A. Reaching the screens — check 2 (no data is created)
 
 | # | Step | Expected result | Result |
@@ -143,7 +165,7 @@ automated evidence and are not a substitute for the live observations above.**
 
 ## 9. Visual and UX checks
 
-Steps 2, 3, 4, 13 and 14.
+Steps **A1 to A12** (the tab navigation) plus steps 2, 3, 4, 13 and 14.
 
 ## 10. Evidence to capture
 
@@ -185,7 +207,11 @@ Stated plainly, and **not** inferred from a passing test:
    The organisation you created set your own `organisation_id`, and the counts
    moved 0 → 1 (§7.3b). No further action is needed.
 
-4. **I did not perform any of these steps.** Every one requires real business
+4. **The A-series steps were exercised in a browser** at 1440px and 390px, and
+   the recorded observations are in `P1-01-ORGANISATION-VERIFICATION.md`. Your
+   run of them on production is the acceptance observation.
+
+5. **I did not perform steps 5 to 12.** Every one requires real business
    data, which I must not create. Steps 1, 2, 4, 13, 14, 15 and 16 were
    exercised against a local throwaway database to confirm the screens behave;
    that is a development observation and is **not** recorded as production

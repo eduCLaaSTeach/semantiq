@@ -25,6 +25,7 @@ export default function Team({ team, members, candidates }) {
         <OrganisationPage
             productAreas={productAreas}
             errors={errors}
+            back={{ label: 'Teams', href: '/console/organisation/teams' }}
             title={team.name}
             description={`Team in ${team.department ?? 'no department'}. Membership records structure and grants no access.`}
         >
