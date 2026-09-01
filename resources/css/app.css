@@ -855,7 +855,6 @@ button.shell-link:hover .icon { color: var(--accent); }
 }
 
 .org-action,
-.org-next button,
 .org-table button,
 .org-list button {
   display: inline-flex;
@@ -884,12 +883,10 @@ button.shell-link:hover .icon { color: var(--accent); }
 
 .org-action:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 
-.org-next button:hover,
 .org-table button:hover,
 .org-list button:hover { background: var(--surface-hover); }
 
 .org-action:focus-visible,
-.org-next button:focus-visible,
 .org-table button:focus-visible,
 .org-list button:focus-visible {
   outline: 2px solid var(--accent);
@@ -897,24 +894,6 @@ button.shell-link:hover .icon { color: var(--accent); }
 }
 
 .org-action[disabled] { opacity: 0.6; cursor: not-allowed; }
-
-/* Secondary navigation into the rest of the unit. Given a heading so the row
-   is not five unexplained buttons floating on the canvas. */
-.org-next-title {
-  font-family: var(--font-heading);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin: 0 0 var(--space-2);
-}
-
-.org-next {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
 
 /* Status is never colour alone: the word is always present, so the pill is
    redundant reinforcement rather than the only signal. WCAG AA, 1.4.1. */

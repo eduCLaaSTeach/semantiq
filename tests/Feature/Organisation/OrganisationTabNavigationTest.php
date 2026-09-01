@@ -194,6 +194,14 @@ final class OrganisationTabNavigationTest extends TestCase
             'The "Organisation sections" heading is still on Company Profile.'
         );
 
+        // And its styles are gone too. Leaving them is an invitation to bring
+        // the pattern back, and it is dead weight in every stylesheet download.
+        $this->assertStringNotContainsString(
+            'org-next',
+            file_get_contents(__DIR__.'/../../../resources/css/app.css'),
+            'The removed section-button row still has styles. Nothing renders them.'
+        );
+
         // And no Organisation screen navigates between sections by script.
         foreach (glob(__DIR__.'/../../../resources/js/Pages/Organisation/*.jsx') ?: [] as $page) {
             $source = file_get_contents($page);
