@@ -16,8 +16,15 @@ use App\Shared\Navigation\Contracts\NavigationAuthorizer;
  * request would still be refused. Filtering the menu and authorising the request
  * are deliberately two code paths so they cannot be collapsed into one.
  *
+ * D-19, and this is a TEMPORARY PHASE 1 PRESENTATION RULE. A System
+ * Administrator sees the complete approved roadmap so the shape of the product
+ * is legible. Seeing it grants nothing: every roadmap entry is locked and
+ * carries no route, so there is no destination to reach and nothing to
+ * authorise.
+ *
  * It is not a role framework and does not read the policy key beyond requiring
- * one to exist. P1-05 owns the real implementation.
+ * one to exist. Do not grow the future effective-access navigation model here -
+ * P1-05 owns it, and replacing this class is part of that unit.
  */
 final class SystemAdministratorNavigationAuthorizer implements NavigationAuthorizer
 {

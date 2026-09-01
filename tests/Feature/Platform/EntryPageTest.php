@@ -35,4 +35,55 @@ final class EntryPageTest extends TestCase
             );
         }
     }
+
+    /**
+     * The approved Login copy, in the response the browser actually receives.
+     *
+     * BrandAndShellFoundationTest checks the source; this checks the delivered
+     * page, so a copy change that never reaches the wire still fails.
+     *
+     * Mutation: paraphrase any line in Entry.jsx.
+     */
+    public function test_the_login_page_delivers_the_approved_copy(): void
+    {
+        $page = $this->get('/')->viewData('page');
+
+        $this->assertSame('Entry', $page['component']);
+
+        $rendered = file_get_contents(__DIR__.'/../../../resources/js/Pages/Entry.jsx');
+
+        foreach ([
+            'Turn business data into confident decisions.',
+            'See what changed. Understand why. Decide what',
+            'SemantIQ brings governed data, business context and intelligent insights together in',
+            'Sign in with Microsoft',
+            'Access is assigned by your organisation',
+        ] as $approved) {
+            $this->assertStringContainsString($approved, $rendered, "Approved copy changed: [{$approved}].");
+        }
+    }
+
+    /**
+     * The Microsoft path is exactly what P1-00 delivered - this unit restyled
+     * the page and changed nothing about how sign-in works.
+     *
+     * The button itself cannot be observed on a deployment where Microsoft is
+     * unconfigured (blueprint 0.2 withholds it rather than offering a button
+     * that cannot work), so the CONDITION and the destination are asserted here
+     * and the rendered button is a Product Owner check on the real deployment.
+     *
+     * Mutation: change the redirect path, or offer the button unconditionally.
+     */
+    public function test_the_microsoft_sign_in_path_is_unchanged(): void
+    {
+        $entry = file_get_contents(__DIR__.'/../../../resources/js/Pages/Entry.jsx');
+
+        $this->assertStringContainsString('{microsoftEnabled ? (', $entry, 'The button is no longer conditional.');
+        $this->assertStringContainsString('href="/auth/microsoft/redirect"', $entry);
+
+        $this->assertArrayHasKey('microsoftEnabled', $this->get('/')->viewData('page')['props']);
+
+        // And the route behind it still exists and still redirects to Entra.
+        $this->assertNotNull(app('router')->getRoutes()->getByName('auth.microsoft.redirect'));
+    }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Architecture;
 
+use App\Shared\Navigation\ApprovedMenu;
 use App\Shared\Navigation\NavigationRegistry;
 use PHPUnit\Framework\TestCase;
 
@@ -192,22 +193,38 @@ final class NavigationPresentationTest extends TestCase
         return $this->declaredNavigationAttribute('label');
     }
 
-    /** @return array<string, string> */
+    /**
+     * Every declared node, read from the menu itself rather than scraped.
+     *
+     * This used to regex the module providers for named arguments. When the
+     * roadmap moved into ApprovedMenu the pattern stopped matching anything and
+     * both guards above quietly began asserting over an empty list - passing
+     * while checking nothing. Walking the real nodes cannot go stale that way,
+     * and assertNotEmpty below makes an empty result a failure rather than a
+     * silent pass.
+     *
+     * @return array<string, string>
+     */
     private function declaredNavigationAttribute(string $attribute): array
     {
         $found = [];
 
-        foreach (glob(__DIR__.'/../../app/Modules/*/Providers/*.php') ?: [] as $provider) {
-            preg_match_all(
-                '/'.$attribute."\s*:\s*'([^']+)'/",
-                file_get_contents($provider),
-                $matches
-            );
+        $walk = function (array $nodes, string $trail) use (&$walk, &$found, $attribute): void {
+            foreach ($nodes as $node) {
+                $key = ($trail === '' ? '' : $trail.' > ').$node->label;
 
-            foreach ($matches[1] ?? [] as $index => $value) {
-                $found[basename($provider).'#'.$index] = $value;
+                $found[$key] = $attribute === 'icon' ? $node->icon : $node->label;
+
+                $walk($node->children, $key);
             }
-        }
+        };
+
+        $walk(ApprovedMenu::roadmap(), '');
+
+        $this->assertNotEmpty(
+            $found,
+            'No navigation nodes were found, so the guard using this list proves nothing.'
+        );
 
         return $found;
     }

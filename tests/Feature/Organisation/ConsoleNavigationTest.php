@@ -57,10 +57,18 @@ final class ConsoleNavigationTest extends TestCase
             .'this unit is reachable from the page a System Administrator actually lands on.'
         );
 
-        $this->assertSame(
-            ['Organisation'],
+        $this->assertContains(
+            'Organisation',
             $this->nodeLabels($areas),
-            'Organisation is not the navigation offered on the landing page.'
+            'Organisation is not in the navigation offered on the landing page.'
+        );
+
+        // D-19 shows the whole roadmap. Exactly one entry is a destination.
+        $this->assertSame(
+            ['Organisation' => '/console/organisation'],
+            $this->reachable($areas),
+            'Something other than Organisation is reachable from the sidebar. Organisation is '
+            .'the only capability delivered; every other entry is a roadmap label.'
         );
     }
 
@@ -72,10 +80,98 @@ final class ConsoleNavigationTest extends TestCase
 
         $areas = $this->productAreas($this->actingAsUser($admin)->get('/console'));
 
-        $this->assertSame('/console/organisation', $areas[0]['nodes'][0]['route']);
+        $reachable = $this->reachable($areas);
+
+        $this->assertSame(['Organisation' => '/console/organisation'], $reachable);
 
         // And that href actually serves the screen, rather than merely existing.
-        $this->actingAsUser($admin)->get($areas[0]['nodes'][0]['route'])->assertOk();
+        $this->actingAsUser($admin)->get($reachable['Organisation'])->assertOk();
+    }
+
+    /**
+     * D-19: the complete approved roadmap renders, in the approved order, and
+     * grants nothing.
+     *
+     * Mutation: drop an entry from ApprovedMenu, or reorder the areas.
+     */
+    public function test_the_complete_approved_roadmap_renders_in_the_approved_order(): void
+    {
+        $organisation = $this->make->organisation();
+        $admin = $this->make->user($organisation, administrator: true);
+
+        $areas = $this->productAreas($this->actingAsUser($admin)->get('/console'));
+
+        $this->assertSame(
+            [
+                ProductArea::SemantiqWorkplace->value,
+                ProductArea::FabricConfiguration->value,
+                ProductArea::SystemAdministration->value,
+            ],
+            array_column($areas, 'key'),
+            'The product areas are not in the approved order (D-23).'
+        );
+
+        // Only System Administration opens by default.
+        $this->assertSame([false, false, true], array_column($areas, 'expanded'));
+
+        $this->assertSame(
+            $this->approvedLabels(),
+            $this->nodeLabels($areas),
+            'The rendered menu is not the approved menu.'
+        );
+    }
+
+    /**
+     * Every roadmap entry is inert: no route, and therefore nothing to reach.
+     *
+     * Mutation: turn any locked() entry in ApprovedMenu into a leaf().
+     */
+    public function test_every_roadmap_entry_carries_no_destination(): void
+    {
+        $organisation = $this->make->organisation();
+        $admin = $this->make->user($organisation, administrator: true);
+
+        $areas = $this->productAreas($this->actingAsUser($admin)->get('/console'));
+
+        $inert = 0;
+
+        foreach ($this->flatten($areas) as $node) {
+            if ($node['label'] === 'Organisation') {
+                continue;
+            }
+
+            $this->assertNull($node['route'], "Roadmap entry [{$node['label']}] carries a route.");
+            $this->assertTrue($node['locked'], "Roadmap entry [{$node['label']}] is not marked locked.");
+            $inert++;
+        }
+
+        $this->assertGreaterThan(
+            35,
+            $inert,
+            'Almost nothing was checked, so this guard would pass against an empty menu.'
+        );
+    }
+
+    /**
+     * D-19 is a presentation rule for System Administrators only. Full menu
+     * visibility must never leak to anyone else.
+     *
+     * Mutation: make SystemAdministratorNavigationAuthorizer::allows() return true.
+     */
+    public function test_the_roadmap_is_visible_to_a_system_administrator_only(): void
+    {
+        $organisation = $this->make->organisation();
+
+        $member = $this->make->user($organisation);
+
+        $response = $this->actingAsUser($member)->get('/console');
+
+        $this->assertSame([], $this->productAreas($response));
+
+        // And not merely filtered out of the prop - absent from the delivered HTML.
+        foreach (['Sales Intelligence', 'Semantic Model', 'Access Reviews'] as $roadmapLabel) {
+            $response->assertDontSee($roadmapLabel);
+        }
     }
 
     /** The landing page must render the shell, not the P1-00 standalone card. */
@@ -171,12 +267,20 @@ final class ConsoleNavigationTest extends TestCase
 
         $areas = $this->productAreas($this->actingAsUser($admin)->get('/console'));
 
-        $this->assertSame(
-            [ProductArea::SystemAdministration->value],
-            array_column($areas, 'key'),
-            'An area beyond System Administration is rendering. Fabric Configuration is Phase 2 '
-            .'and SemantIQ Workplace is Phase 3; neither has any delivered screen.'
-        );
+        foreach ($areas as $area) {
+            if ($area['key'] === ProductArea::SystemAdministration->value) {
+                continue;
+            }
+
+            foreach ($this->flatten([$area]) as $node) {
+                $this->assertNull(
+                    $node['route'],
+                    "[{$node['label']}] in area [{$area['key']}] has a destination. Fabric "
+                    .'Configuration is Phase 2 and SemantIQ Workplace is Phase 3; neither has any '
+                    .'delivered screen, so neither may be navigable.'
+                );
+            }
+        }
     }
 
     /**
@@ -234,20 +338,126 @@ final class ConsoleNavigationTest extends TestCase
     }
 
     /**
-     * @param  list<array{key: string, label: string, nodes: list<array{label: string, icon: string, route: string}>}>  $areas
+     * Every label the sidebar renders, groups and children alike, in order.
+     *
+     * @param  list<array<string, mixed>>  $areas
      * @return list<string>
      */
     private function nodeLabels(array $areas): array
     {
-        $labels = [];
+        return array_column($this->flatten($areas), 'label');
+    }
+
+    /**
+     * Every node in the tree, flattened depth-first in render order.
+     *
+     * @param  list<array<string, mixed>>  $areas
+     * @return list<array<string, mixed>>
+     */
+    private function flatten(array $areas): array
+    {
+        $flat = [];
+
+        $walk = function (array $nodes) use (&$walk, &$flat): void {
+            foreach ($nodes as $node) {
+                $flat[] = $node;
+                $walk($node['children']);
+            }
+        };
 
         foreach ($areas as $area) {
-            foreach ($area['nodes'] as $node) {
-                $labels[] = $node['label'];
+            $walk($area['nodes']);
+        }
+
+        return $flat;
+    }
+
+    /**
+     * Label => URL for everything the sidebar can actually navigate to.
+     *
+     * @param  list<array<string, mixed>>  $areas
+     * @return array<string, string>
+     */
+    private function reachable(array $areas): array
+    {
+        $reachable = [];
+
+        foreach ($this->flatten($areas) as $node) {
+            if ($node['route'] !== null) {
+                $reachable[$node['label']] = $node['route'];
             }
         }
 
-        return $labels;
+        return $reachable;
+    }
+
+    /**
+     * The approved menu, written out independently of the code that builds it.
+     *
+     * This list was FIRST written by reading ApprovedMenu, which made it
+     * self-referential: deleting an entry from the menu changed both sides at
+     * once and the test still passed. A mutation proved it. It is restated here
+     * from the phase authority documents instead, so that changing the menu
+     * fails this test and forces the change to be checked against the approved
+     * documents rather than merely against itself.
+     *
+     * Order is depth-first in render order: an area's entries, and a group's
+     * children immediately after the group.
+     *
+     * @return list<string>
+     */
+    private function approvedLabels(): array
+    {
+        return [
+            // SemantIQ Workplace - Phase 3.
+            'Home',
+            'My Intelligence',
+            'Executive Intelligence',
+            'Sales Intelligence',
+            'Finance Intelligence',
+            'People Intelligence',
+            'Operations Intelligence',
+            'Customer Intelligence',
+            'Learning Intelligence',
+            'Custom Intelligence',
+            'Explore',
+            'Ask SemantIQ',
+            'Insights',
+            'Risks & Opportunities',
+            'Recommendations',
+            'Decisions & Alerts',
+            'Reports & Dashboards',
+            'My Workspace',
+            'Help',
+
+            // Fabric Configuration - Phase 2.
+            'Overview',
+            'Data Sources',
+            'Connect Source',
+            'Discovery',
+            'Data Classification',
+            'Ingestion',
+            'Data Quality',
+            'Business Model',
+            'Security Mapping',
+            'Semantic Model',
+            'AI Readiness',
+            'Pipelines & Refresh',
+            'Power BI Publication',
+            'Monitoring',
+
+            // System Administration - Phase 1.
+            'Administration Home',
+            'Organisation',
+            'Users & Groups',
+            'Roles & Access',
+            'Business Domains',
+            'Identity & SSO',
+            'Security Status',
+            'Access Reviews',
+            'Audit',
+            'System Health',
+        ];
     }
 
     private function actingAsUser(User $user): self

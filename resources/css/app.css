@@ -64,8 +64,9 @@
   --font-body: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   /* Shell dimensions */
-  --rail-width: 264px;
-  --topbar-height: 56px;
+  --rail-width: 240px;
+  --rail-width-collapsed: 56px;
+  --topbar-height: 52px;
 }
 
 /*
@@ -157,9 +158,11 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
   text-align: center;
 }
 
+/* The mark is a <span> wrapping the light and dark <img> pair, so the height
+   is set on the image. See the .brand-mark rules in the shell section. */
 .entry-mark {
-  height: 40px;
-  width: auto;
+  display: inline-flex;
+  justify-content: center;
   margin-bottom: var(--space-4);
 }
 
@@ -191,48 +194,159 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
   flex: 0 0 var(--rail-width);
   background: var(--chrome);
   color: var(--chrome-text);
-  box-shadow: 2px 0 10px var(--chrome-edge);
+  border-right: 1px solid var(--chrome-edge);
   display: flex;
   flex-direction: column;
-  padding: var(--space-3);
+  min-height: 0;
 }
 
-/* The cluster heading. Uppercase with tracking is the standard's rail heading
-   treatment; it is a real <h2> so the rail has a heading structure rather than
-   styled divs. */
+/* The rail head is exactly the top bar's height so their bottom borders form
+   one continuous line across the shell, per the standard. */
+.shell-rail-head {
+  height: var(--topbar-height);
+  flex: 0 0 var(--topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--chrome-edge);
+}
+
+/* The brand block is the home link. The mark is used as supplied - never
+   recoloured, boxed, padded, plated or stretched. */
+.shell-brand {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: var(--radius-control);
+}
+
+.shell-brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.brand-mark { display: inline-flex; align-items: center; }
+
+.brand-mark img { display: block; width: auto; }
+
+/* Shell Dimensions, shared standard: the wide logo is height 22px / width auto
+   in the rail head, and the C2S short mark sits in a 40x34 slot with
+   object-fit: contain so it is centred without being stretched. */
+.brand-mark-full img { height: 22px; }
+
+.brand-mark-short img { width: 40px; height: 34px; object-fit: contain; }
+
+/* Both variants ship; CSS picks one, so the mark follows the theme without a
+   re-render or a flash.
+
+   EVERY selector below qualifies the img element. `.brand-mark-dark` alone
+   (0,1,0) loses to `.brand-mark img` (0,1,1), so the dark mark stayed
+   display:block in the light theme and BOTH logos rendered side by side -
+   overflowing the Login card. Automated tests all passed; the browser showed it
+   immediately. Keep the `img.` qualifier on each rule. */
+.brand-mark img.brand-mark-dark { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .brand-mark img.brand-mark-light { display: none; }
+  :root:not([data-theme='light']) .brand-mark img.brand-mark-dark { display: block; }
+}
+
+:root[data-theme='dark'] .brand-mark img.brand-mark-light { display: none; }
+:root[data-theme='dark'] .brand-mark img.brand-mark-dark { display: block; }
+:root[data-theme='light'] .brand-mark img.brand-mark-light { display: block; }
+:root[data-theme='light'] .brand-mark img.brand-mark-dark { display: none; }
+
+/* One glyph in both states, per the standard: the panel toggle, never a
+   chevron. Chevrons belong to accordions, which are a different control. */
+.shell-rail-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--chrome-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.shell-rail-toggle:hover { background: var(--chrome-hover); color: var(--accent); }
+
+.shell-rail-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Only the node list scrolls; the brand block stays pinned. */
+.shell-rail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-2) 6px;
+  /* The standard hides the rail list's scrollbar while it stays scrollable. */
+  scrollbar-width: none;
+}
+
+.shell-rail-body::-webkit-scrollbar { width: 0; height: 0; }
+
+.shell-area + .shell-area { margin-top: var(--space-3); }
+
 .shell-area-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
   font-family: var(--font-heading);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--chrome-muted);
-  margin: 0 0 var(--space-2);
-  padding: 0 var(--space-3);
+  cursor: pointer;
+  text-align: left;
 }
 
-.shell-area + .shell-area { margin-top: var(--space-4); }
+.shell-area-label:hover { background: var(--chrome-hover); }
+
+.shell-area-label:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .shell-node-list {
   list-style: none;
-  margin: 0;
+  margin: var(--space-1) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
+.shell-child-list { margin-top: 2px; }
+
 .shell-link {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  gap: 6px;
+  width: 100%;
+  padding: var(--space-2) 6px;
+  border: 0;
+  border-left: 3px solid transparent;
   border-radius: var(--radius-control);
+  background: transparent;
   color: var(--chrome-text);
   text-decoration: none;
+  font-family: inherit;
   font-size: 13px;
   line-height: 1.4;
+  text-align: left;
 }
+
+/* Enough indent to read as a child of the group above, and no more: at 240px
+   every pixel of indent is a pixel the label loses. */
+.shell-link-nested { padding-left: var(--space-4); }
 
 /* Nav icons are 18px per the standard, sized by font-size so the glyph scales
    with the text rather than the SVG being stretched. */
@@ -242,49 +356,113 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
   color: var(--chrome-muted);
 }
 
-/* A long label truncates rather than wrapping the row or overflowing the rail. */
+/* The rail is fixed at 240px by the standard, and these rows carry a trailing
+   "Soon" pill the template's rows do not. At 13px, twelve approved labels -
+   "Operations Intelligence" the longest - do not fit on one line, so they WRAP
+   rather than being cut off behind an ellipsis. A menu that hides half of
+   "Risks & Opport..." is not something to show a customer, and the width is not
+   ours to change. Measured in the browser, not estimated. */
 .shell-link-label {
+  flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.25;
 }
 
-.shell-link:hover { background: var(--chrome-hover); }
+a.shell-link:hover,
+button.shell-link:hover { background: var(--chrome-hover); cursor: pointer; }
 
-.shell-link:hover .icon { color: var(--accent); }
+a.shell-link:hover .icon,
+button.shell-link:hover .icon { color: var(--accent); }
 
-.shell-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
+.shell-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* The current destination is marked by weight and a tinted ground, not colour
-   alone - WCAG 1.4.1. */
+/* The active destination: Green Gold tint plus a 3px gold left bar, per the
+   standard. Weight carries it too, so colour is never the only signal. */
 .shell-link[aria-current='page'] {
-  background: var(--chrome-hover);
-  color: var(--accent);
+  background: rgba(179, 161, 37, 0.16);
+  border-left-color: var(--brand-gold);
+  color: var(--text);
   font-weight: 600;
 }
 
-.shell-link[aria-current='page'] .icon { color: var(--accent); }
+.shell-link[aria-current='page'] .icon { color: var(--brand-gold); }
 
-/* The registry's glyphs. Sized at 1em everywhere; the container sets font-size. */
-.icon {
-  display: inline-block;
-  vertical-align: -0.125em;
+/* ONE disabled treatment for every roadmap entry: quietened row, small pill,
+   no link, out of the tab order. Never repeated "Coming Soon" sentences. */
+.shell-link-locked { cursor: default; color: var(--chrome-muted); }
+
+.shell-link-locked .icon { opacity: 0.65; }
+
+.shell-soon {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: #EFEAE0;
+  color: #514A3B;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
+
+.shell-chevron {
+  flex: 0 0 auto;
+  font-size: 16px;
+  color: var(--chrome-muted);
+  transition: transform 120ms ease;
+}
+
+.shell-chevron-open { transform: rotate(180deg); }
+
+/* Collapsed: a 56px icon rail. Labels, pills and chevrons go; icons stay at a
+   consistent inset rather than re-centring. */
+.shell-collapsed .shell-rail { width: var(--rail-width-collapsed); flex-basis: var(--rail-width-collapsed); }
+
+.shell-collapsed .shell-rail-head { padding: 0; justify-content: center; }
+
+/* Collapsed, the whole head is the expand control, carrying the C2S short mark
+   in the standard's 40x34 slot. */
+.shell-rail-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.shell-rail-expand:hover { background: var(--chrome-hover); }
+
+.shell-rail-expand:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.shell-collapsed .shell-area-label,
+.shell-collapsed .shell-link-label,
+.shell-collapsed .shell-soon,
+.shell-collapsed .shell-chevron { display: none; }
+
+.shell-collapsed .shell-rail-body { padding: var(--space-2) var(--space-1); }
+
+.shell-collapsed .shell-link { padding: var(--space-2); justify-content: flex-start; }
+
+.shell-collapsed .shell-link-nested { padding-left: var(--space-2); }
 
 .shell-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
 .shell-topbar {
   height: var(--topbar-height);
+  flex: 0 0 var(--topbar-height);
   background: var(--chrome);
   color: var(--chrome-text);
-  box-shadow: 0 2px 10px var(--chrome-edge);
+  border-bottom: 1px solid var(--chrome-edge);
   display: flex;
   align-items: center;
-  padding: 0 var(--space-4);
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: 15px;
@@ -303,9 +481,26 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
   max-width: 560px;
 }
 
+/* No small-screen rule gives the rail a SHAPE of its own: AppShell collapses it
+   to the standard's 56px icon rail at this breakpoint, so there is one rail
+   treatment rather than a second one for phones.
+   What this does change is how an expanded rail sits: a 240px rail beside a
+   390px viewport leaves 150px of canvas and pushes the page into a horizontal
+   scroll, so on a narrow screen it overlays the canvas instead of displacing
+   it. Observed at 390px, not assumed. */
 @media (max-width: 768px) {
-  .shell { flex-direction: column; }
-  .shell-rail { width: 100%; flex: none; }
+  .shell:not(.shell-collapsed) .shell-rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    box-shadow: 2px 0 10px var(--chrome-edge);
+  }
+
+  .shell:not(.shell-collapsed) .shell-main {
+    margin-left: var(--rail-width-collapsed);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -617,7 +812,15 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
 
 @media (max-width: 720px) {
   .org-form-inline { flex-direction: column; align-items: stretch; }
-  .org-table { display: block; overflow-x: auto; }
+
+  /* A wide table scrolls inside its own box, per the standard.
+     `display: block; overflow-x: auto` alone was not enough: the table's
+     internal row and cell boxes still painted past the clip, so the WHOLE PAGE
+     scrolled sideways by ~130px at 390px - the chrome sliding with it - while
+     the table also scrolled internally. `contain: paint` is what actually holds
+     those boxes inside. Confirmed in the browser at 390px: window.scrollX stays
+     0 while the table still scrolls. */
+  .org-table { display: block; overflow-x: auto; contain: paint; }
 }
 
 /* ---- Signed-in landing ---------------------------------------------------- */
@@ -662,3 +865,126 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
   white-space: nowrap;
   border: 0;
 }
+
+/* ---- Top bar actions ------------------------------------------------------ */
+
+/* App name left, then appearance and sign-out. No nav tabs, no global search
+   bar, no action buttons - the standard is explicit about what may live here. */
+/* The page name gives way before the actions do: at 390px the name, the theme
+   switcher and Sign out together exceed the bar, and it was the actions that
+   were pushed off the right edge. */
+.shell-app-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.shell-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.theme-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--chrome-edge);
+  border-radius: var(--radius-pill);
+}
+
+.theme-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--chrome-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.theme-option:hover { background: var(--chrome-hover); color: var(--chrome-text); }
+
+.theme-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.theme-option[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.shell-signout {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--chrome-edge);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--chrome-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shell-signout .icon { font-size: 16px; }
+
+.shell-signout:hover { background: var(--chrome-hover); }
+
+.shell-signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Dark theme: the Soon pill needs its own pair per the standard's token table. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .shell-soon {
+    background: rgba(255, 255, 255, 0.16);
+    color: #DCE4F0;
+  }
+}
+
+:root[data-theme='dark'] .shell-soon {
+  background: rgba(255, 255, 255, 0.16);
+  color: #DCE4F0;
+}
+
+@media (max-width: 720px) {
+  .shell-topbar { padding: 0 var(--space-3); }
+  .shell-signout .shell-signout-label { display: none; }
+}
+
+/* ---- Login messaging ------------------------------------------------------ */
+
+/* D-17: company mark, then product name, then the approved messaging. The card
+   widens for the login page only; every refusal state keeps the narrow shape so
+   the six of them stay indistinguishable. */
+.entry-card-wide { max-width: 460px; }
+
+.entry-tagline {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+  margin: 0 0 var(--space-2);
+}
+
+.entry-supporting {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-3);
+}
+
+.entry-description {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-4);
+}
+
+/* The login card carries the mark larger than the rail does. Declared after the
+   rail rules so it wins on order at equal specificity. */
+.entry-card .entry-mark img { height: 34px; }
