@@ -639,6 +639,189 @@ team membership, they are marked NOT APPLICABLE and carried forward with their
 mutation-proven automated evidence intact. That is a data condition, not an
 implementation defect.
 
+### 7.3h P1-01 SCOPE COMPLETENESS CORRECTION — 1 September 2026
+
+The Product Owner directed a full audit of the P1-01 implementation against its
+plan and design, rather than a fix of the three defects they happened to notice.
+The audit found six gaps. Four of them are the same gap.
+
+#### The scope-gap matrix
+
+Read against `PHASE-1-PLAN.md` and the P1-01 design. **Every scoped entity is
+listed, including the ones that were complete**, because a matrix that lists only
+failures cannot be checked.
+
+| Entity | Create | Read | **Update** | Deactivate | Reactivate | Move | Other | Gap found |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Organisation (Company Profile) | ✅ | ✅ | ✅ | n/a | n/a | n/a | — | **none** |
+| Legal Entity | ✅ | ✅ | ❌ **missing** | ✅ | ✅ | n/a | associate / dissociate ✅ | no update route, controller or service method; `registered_address` validated on create but never rendered; jurisdiction was free text |
+| Business Unit | ✅ | ✅ | ❌ **missing** | ✅ | ✅ | n/a | D-14 association ✅ | no update anywhere |
+| Department | ✅ | ✅ | ❌ **missing** | ✅ | ✅ | ✅ | — | no update; `code` accepted by the controller and held in form state but **never rendered**, so it could be created and then never read or corrected |
+| Team | ✅ | ✅ | ❌ **missing** | ✅ | ✅ | ✅ | membership add / end ✅ | no update; `code` in the same half-built state as Department's; the create form had no code field at all |
+| Management Hierarchy | set ✅ | ✅ | change — *representable, unreachable* | n/a | n/a | n/a | clear ✅ | `setManager()` already ended the previous link and opened a new one, so Change existed in the service; the screen offered no way to invoke it on a user who already had a manager, and said nothing about why a single-user organisation cannot have one |
+
+Two findings that are **not** gaps, recorded because they were checked:
+
+- **Schema: complete.** `registered_address`, `jurisdiction`, `departments.code`
+  and `teams.code` all already exist, nullable, with the right types. **No
+  migration was required and none was written.** The Product Owner's instruction
+  was to stop and explain before implementing any schema change; there was
+  nothing to explain, because there was nothing to change.
+- **Hard delete: still absent.** No DELETE route, no destroy controller method,
+  no model delete call anywhere in Organisation — asserted now by
+  `LifecycleCompletenessTest::test_no_lifecycle_action_is_a_hard_delete`, which
+  fails when a DELETE route is added.
+
+#### Root cause — why the design said Update and four entity types shipped without it
+
+Not an oversight in any one file. Three things lined up:
+
+1. **The lifecycle was written as one word.** The plan says
+   "Create → Read → Update → Deactivate/Reactivate". That reads as a single
+   idea, and it was implemented as a single idea: the *shape* was built — a
+   controller, a service, a status column, a refusal path — and each entity was
+   then judged complete by whether it had that shape, not by whether it had all
+   five verbs.
+
+2. **Deactivate/Reactivate look like the hard part, and they were.** The
+   interesting rules of P1-01 — refuse a deactivation with active children, no
+   cascade, no reactivation under an inactive parent, no hard delete — all live
+   in the lifecycle transitions. Attention went where the rules were. Update has
+   no rule of its own beyond the same-organisation boundary, so it read as
+   trivial, and trivial work is the work that gets assumed done.
+
+3. **Nothing was looking.** This is the real cause, and the only one worth
+   building a guard for. Every P1-01 test asserted that an operation which exists
+   behaves correctly. **An operation that does not exist has no test to fail.**
+   Twenty-one negative cases, all proven non-vacuous by mutation, and not one of
+   them could have detected a missing endpoint — because a mutation test asks
+   "does removing this break something?", and you cannot remove what was never
+   written. CI was green, and green meant nothing here.
+
+The same blind spot explains the two half-built `code` fields. Each was accepted
+by its controller and carried in form state, so every automated check touching it
+passed; nothing asserted that a user could ever *see* it.
+
+#### The guard
+
+`tests/Architecture/LifecycleCompletenessTest.php`. It asserts the presence of
+operations rather than their behaviour, which is the class of check P1-01 had
+none of.
+
+- **Half one** — every entity in a declared catalogue exposes every lifecycle
+  action listed against it. *Mutation: delete the Legal Entity `PUT` route — the
+  original defect, reproduced exactly.* **CAUGHT.**
+- **Half two** — every collection root reachable in the route table appears in
+  that catalogue. This is what stops the guard rotting: the catalogue is
+  hand-written and could simply omit a new entity, so the route table, which
+  cannot be forgotten, is checked against it. *Mutation: add a create route for a
+  new entity and no update.* **CAUGHT.**
+- **Half three** — no Organisation route uses `DELETE`. *Mutation: add one.*
+  **CAUGHT.**
+
+#### What was built
+
+| Change | Where |
+| --- | --- |
+| `updateLegalEntity`, `updateBusinessUnit`, `updateDepartment`, `updateTeam`, sharing one `applyUpdate()` | `StructureService` |
+| Whitelisted attributes per entity — **parent keys excluded**, so a rename can never re-parent | `StructureService::only()` |
+| Four `update()` controller methods and four `PUT` routes | `*Controller`, `routes/web.php` |
+| Packaged ISO 3166-1 jurisdiction list — 249 territories, alphabetical by display name, **no runtime external call** | `Support/Jurisdictions.php` |
+| Server-side jurisdiction validation against that same list | `Rules/ApprovedJurisdiction.php` |
+| Inline row editing, in the same table, with the same controls | `Components/useRowEditor.js` and the five list screens |
+| `registered_address` and the two `code` fields exposed for read and edit | Legal Entities, Departments, Teams |
+| Set / Change / Clear a manager, subject excluded from their own choices, one-user explanatory state | `Pages/Organisation/Hierarchy.jsx` |
+| 14 new automated cases + 3 architecture cases | `StructureUpdateTest`, `LifecycleCompletenessTest` |
+
+The jurisdiction column keeps **display names**, which is what production already
+holds: `Singapore` remains valid and remains selected on the existing entity. No
+jurisdiction table was created, and no existing value was migrated.
+
+#### Mutation results — 17 mutations
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| M1 | Drop `registered_address` from the legal-entity allow-list | **CAUGHT** |
+| M2 | Drop the jurisdiction check from `applyUpdate()` | **CAUGHT** |
+| M3 | Remove `ApprovedJurisdiction` from the controller's update rules | **CAUGHT** |
+| M4 | Make the jurisdiction list fetch at runtime | **CAUGHT** |
+| M5 | Store ISO codes instead of display names | **CAUGHT** |
+| M6 | Rename `updateBusinessUnit` — the operation is missing | **CAUGHT** |
+| M7a | Add `business_unit_id` to the department allow-list (service) | **CAUGHT** |
+| M7b | Same, exercised over HTTP | **SURVIVED — see below** |
+| M7c | Add `business_unit_id` to the controller's update rules only | **SURVIVED — see below** |
+| M7d | Both at once — the change somebody who misread the rule would write | **CAUGHT** |
+| M8 | Drop the `*_UPDATED` event from `applyUpdate()` | **CAUGHT** |
+| M9 | Add `department_id` to the team allow-list | **CAUGHT** |
+| M10 | Drop `requireSameOrganisation()` from `applyUpdate()` | **CAUGHT** |
+| M11 | Drop the blank-name check | **CAUGHT** |
+| M12 | Delete the previous management link instead of ending it | **CAUGHT** |
+| M13 | Delete the Legal Entity `PUT` route — the original defect | **CAUGHT** |
+| M14 | Add a scoped entity with create and no update | **CAUGHT** |
+| M15 | Add a hard-delete route | **CAUGHT** |
+| M16 | Return the jurisdiction list unsorted | **CAUGHT** |
+
+**Two mutations survived, and they are reported rather than tidied away.** The
+HTTP update path has two independent barriers — the controller's validated-key
+set and the service's allow-list — so breaking either one alone leaves the other
+holding. That is defence in depth working, and it means no *single* mutation on
+that path is observable from outside. The mutation that matters is the one a
+person who misunderstood the rule would actually write — "Edit should let you
+change the business unit too", applied to both places — and that is CAUGHT. The
+reasoning is recorded in the test itself, not only here.
+
+**One case was genuinely vacuous and was rewritten.** The HTTP re-parent case
+originally asserted only that the parent had not changed. A request refused for
+any unrelated reason satisfies that, so it passed *while the mutation was live*.
+It now asserts the rename landed first; without that, the second assertion proves
+nothing. Found by mutation. Not by review.
+
+#### Browser verification — Chromium, 1 September 2026
+
+Against a local throwaway database, seeded with structure that is **not** real
+and never leaves the development machine. Recorded as observed, not expected.
+
+| Observation | Result |
+| --- | --- |
+| Inline edit on Legal Entities: jurisdiction select offers **250 options** (249 territories + *Not recorded*), first is *Afghanistan* | ✅ alphabetical, packaged |
+| Registered address typed and saved; value re-read from the list | ✅ persisted |
+| Department renamed *Singapore Retai Sales* → *Singapore Retail Sales* through the screen; business unit unchanged | ✅ correction without a move |
+| Management Hierarchy with two users: **Set manager** → **Change manager** + **Clear**; the subject is not offered as their own manager | ✅ |
+| Management Hierarchy with one user: no Set control, and a written explanation of why | ✅ |
+| Browser console, every screen, both themes | ✅ **no errors** |
+| Horizontal page overflow — 6 screens × 10 viewport widths from 390px to 1440px | ✅ **0 of 60** |
+| Dark theme, all five screens | ✅ |
+
+**Three defects were found in the browser that CI passed over**, all fixed:
+
+1. **The page slid sideways by 33px at 390px on Legal Entities.** Not the table —
+   the add-form. A stretched column takes the label's `max-width: 320px`, and
+   320px plus card and canvas padding exceeds a 390px viewport minus the rail.
+   Fields go fluid below 720px; `min-width: 0` is the half that mattered, because
+   a `min-width` larger than the space available beats any `max-width`.
+2. **The same slide, 12px, at 768px on Legal Entities.** The table containment
+   rule stopped at 720px while a six-column table needs it well above that. The
+   breakpoint now belongs to the widest table, not to the phone.
+3. **Opening an editing row reflowed the rows around it.** The other rows'
+   Edit/Deactivate buttons broke onto two lines as the actions column narrowed.
+   The actions column now shrink-wraps and does not wrap.
+
+Also corrected during the polish gate: every inline-edit field's accessible name
+now identifies its record (*"Name of Singapore Retail Sales"*) rather than
+repeating a bare *"Name"* that collided with the add-form's field; and the move
+control carries a visible **MOVE TO** caption above it, so that the difference
+between correcting a name and restructuring the company is legible on the screen
+rather than only in the code.
+
+#### What this correction did not do
+
+No schema change. No new migration. No production data touched. No hard delete
+introduced. No P1-02, P1-03, P1-04 or P1-05 capability built early — the
+hierarchy screen's one-user state **says** that adding users belongs to User
+Management rather than quietly providing it. The accepted UI foundation was not
+redesigned; the changes to it are the controls the missing operations need, plus
+the three responsive and consistency defects above.
+
 ### 7.4 Outstanding for P1-01 — executable now
 
 **Checks 5a and 2 are now observed** (§7.3b, §7.3f). Four checks remain —

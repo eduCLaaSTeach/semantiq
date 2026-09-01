@@ -33,6 +33,7 @@ final class DepartmentController
                 ->map(fn (Department $department): array => [
                     'id' => $department->id,
                     'name' => $department->name,
+                    'code' => $department->code,
                     'status' => $department->status->value,
                     'businessUnit' => $department->businessUnit?->name,
                     'businessUnitId' => $department->business_unit_id,
@@ -70,6 +71,28 @@ final class DepartmentController
                 ['name' => $validated['name'], 'code' => $validated['code'] ?? null],
                 $this->actor($request)
             );
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.departments');
+    }
+
+    /**
+     * Name and code. NOT the business unit - that is move(), below, which
+     * records a scope-affecting event. Correcting a typo must not look like a
+     * restructure in the audit catalogue.
+     */
+    public function update(Request $request, Department $department): RedirectResponse
+    {
+        /** @var array<string, string|null> $attributes */
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        try {
+            $this->structure->updateDepartment($department, $attributes, $this->actor($request));
         } catch (StructureViolation $violation) {
             return $this->refuse($violation);
         }

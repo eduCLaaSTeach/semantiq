@@ -967,8 +967,109 @@ button.shell-link:hover .icon { color: var(--accent); }
   color: var(--chrome-muted);
 }
 
+/* ---- Inline row editing --------------------------------------------------- */
+
+/* Editing happens in the row, in the same table, with the same controls. The
+   scope correction exposes missing operations; it does not introduce a second
+   editing surface, a modal, or a screen the accepted design system does not
+   already contain. */
+
+.org-table input,
+.org-table select {
+  width: 100%;
+  min-width: 0;
+  max-width: 260px;
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--card-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--chrome);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.org-table input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Two actions per row, side by side.
+   They do NOT wrap. Observed in the browser: with wrapping allowed, opening an
+   editing row widened the other columns, the actions column narrowed, and the
+   remaining rows' buttons broke onto two lines - so the act of editing one row
+   visibly reflowed the ones around it. The column shrink-wraps to its buttons
+   instead, which is what keeps every row's actions identical. */
+.org-row-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.org-table td:last-child,
+.org-table th:last-child {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* A control whose meaning is not obvious from the control alone says what it
+   does. "Move" under a business-unit select is the difference between renaming
+   a department and restructuring the company. */
+.org-hint {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.org-move {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Inside an editing row the hint explains a value rather than labelling a
+   control, so it follows what it refers to. */
+.org-meta .org-hint {
+  margin-top: 2px;
+  margin-bottom: 0;
+}
+
+/* An explanatory state, not an error. It tells the reader why a control is
+   absent, which is the difference between a considered screen and a broken
+   one. */
+.org-note {
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--text-muted);
+  padding: var(--space-3);
+  font-size: 13px;
+  margin: 0;
+  max-width: 640px;
+}
+
 @media (max-width: 720px) {
   .org-form-inline { flex-direction: column; align-items: stretch; }
+
+  /* A stretched column takes the label's max-width, and 320px plus the card and
+     canvas padding is wider than a 390px viewport minus the collapsed rail. The
+     whole page then slid sideways by 33px - the table was innocent. Fields go
+     fluid instead, and `min-width: 0` is the half that actually matters: a
+     min-width larger than the space available wins over any max-width. */
+  .org-form { max-width: 100%; }
+
+  .org-form label,
+  .org-form label.org-field-sm,
+  .org-form label.org-field-md { width: 100%; max-width: 100%; }
+
+  .org-form input,
+  .org-form select { width: 100%; min-width: 0; }
 
   /* A wide table scrolls inside its own box, per the standard.
      `display: block; overflow-x: auto` alone was not enough: the table's
@@ -977,6 +1078,15 @@ button.shell-link:hover .icon { color: var(--accent); }
      the table also scrolled internally. `contain: paint` is what actually holds
      those boxes inside. Confirmed in the browser at 390px: window.scrollX stays
      0 while the table still scrolls. */
+  .org-table { display: block; overflow-x: auto; contain: paint; }
+}
+
+/* The same containment, at every width where a table can outgrow the canvas.
+   Legal Entities carries six columns, and at 768px the canvas is the viewport
+   minus a 240px rail - the page slid sideways by 12px there while the 720px
+   rule sat just below it. The breakpoint belongs to the widest table, not to
+   the phone. */
+@media (min-width: 721px) and (max-width: 1100px) {
   .org-table { display: block; overflow-x: auto; contain: paint; }
 }
 

@@ -40,8 +40,10 @@ final class TeamController
                 ->map(fn (Team $team): array => [
                     'id' => $team->id,
                     'name' => $team->name,
+                    'code' => $team->code,
                     'status' => $team->status->value,
                     'department' => $team->department?->name,
+                    'departmentId' => $team->department_id,
                     'members' => $team->memberships_count,
                 ])
                 ->all(),
@@ -130,6 +132,27 @@ final class TeamController
                 ['name' => $validated['name'], 'code' => $validated['code'] ?? null],
                 $this->actor($request)
             );
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.teams');
+    }
+
+    /**
+     * Name and code. NOT the department - that is move(), for the same reason
+     * a department's business unit is not editable here.
+     */
+    public function update(Request $request, Team $team): RedirectResponse
+    {
+        /** @var array<string, string|null> $attributes */
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        try {
+            $this->structure->updateTeam($team, $attributes, $this->actor($request));
         } catch (StructureViolation $violation) {
             return $this->refuse($violation);
         }

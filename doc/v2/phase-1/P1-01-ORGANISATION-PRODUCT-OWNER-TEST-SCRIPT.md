@@ -14,10 +14,19 @@ that creates permanent records.
 departments, teams and the management hierarchy, plus the lifecycle rules that
 govern them.
 
-This completes the **live verification** of P1-01. The implementation is
-unchanged and is not being redesigned. What is outstanding is the observation of
-six behaviours on the real deployment with real data — checks **2, 3, 4, 5, 7
-and 9** of `P1-01-ORGANISATION-VERIFICATION.md` §7.5.
+This covers two things:
+
+1. **The P1-01 scope completion** — the Update operations that were missing from
+   Legal Entities, Business Units, Departments and Teams, the jurisdiction list,
+   the registered address, the two code fields, and Set / Change / Clear on the
+   Management Hierarchy. Section **S** below.
+2. **The live verification** of P1-01 — the observation of six behaviours on the
+   real deployment with real data, checks **2, 3, 4, 5, 7 and 9** of
+   `P1-01-ORGANISATION-VERIFICATION.md` §7.5. Sections A to D below.
+
+Work through the sections in the order they appear. Section **S** comes before
+sections B and C deliberately: several of its steps are corrections you will want
+in place before you enter the rest of your structure.
 
 ## 2. Deployed build / merge SHA
 
@@ -25,8 +34,9 @@ and 9** of `P1-01-ORGANISATION-VERIFICATION.md` §7.5.
 | --- | --- |
 | P1-01 merge SHA | `9afe33d` — *P1-01 Organisation — EXECUTE* |
 | Correction | `4f99c46` — Organisation was not reachable after sign-in |
-| Tab navigation | see the pull request for this change — presentation and navigation only |
-| Deployed head at issue | `c5cec56` |
+| Tab navigation | `3c2b021` — presentation and navigation only |
+| **Scope completion** | see the pull request for this change — the missing Update operations |
+| Deployed head at issue | recorded on merge |
 | Site | https://semantiq.claas2saas.com |
 
 The UI foundation replaced the shell these screens render inside. All six were
@@ -124,6 +134,67 @@ directly below the page heading.
 | A11 | Narrow the browser to a phone width. | The tab strip **scrolls sideways within itself**. It never wraps onto a second row, and **the page itself never scrolls sideways**. | |
 | A12 | Look at the Company Profile form. | Compact: Name beside Legal name, Country beside Timezone, and the card sized to its content rather than running the width of the screen. | |
 
+### S. The P1-01 scope completion ⚠ some steps change data
+
+Added 1 September 2026. Four of the five things you manage here could be created
+and deactivated but **never corrected**. That is now fixed, and this section is
+where you check it.
+
+**What changes data, and what does not.** Steps S1, S2, S8, S9, S13 and S14 only
+look at a screen — they are safe. The rest save a correction, and a correction is
+permanent in the same way everything else in P1-01 is: the new value replaces the
+old one on the record, and there is no undo screen. **Only correct things that
+are genuinely wrong.**
+
+#### S1–S7 · Legal Entities
+
+| # | Step | Expected result | Result |
+| --- | --- | --- | --- |
+| S1 | Open **Legal Entities** and look at the table headings. | Six columns: Name, Registration, Jurisdiction, **Registered address**, Status, and an unlabelled column of actions. The registered address is now something you can see. | |
+| S2 | Look at the **Add a legal entity** form. | Four fields: Name, Registration number, **Jurisdiction** (a dropdown, not a typing box) and **Registered address**. | |
+| S3 | Open the **Jurisdiction** dropdown. | A long alphabetical list of countries and territories, starting *Not recorded*, then *Afghanistan*. **Singapore is present.** You cannot type into it. | |
+| S4 | On an existing legal entity, click **Edit**. | That row turns into editable fields **in place** — no new page, no pop-up. The other rows are unchanged and their buttons stay on one line. | |
+| S5 | Change the name, then click **Cancel**. | The row returns to exactly what it was. **Nothing was saved.** | |
+| S6 | Click **Edit** again. Set the **Jurisdiction** to the correct country and type the **Registered address**. Click **Save**. ⚠ *saves* | The row closes and shows your new values. Reload the page — they are still there. | |
+| S7 | For the entity that is already recorded as **Singapore**: click Edit and look at the Jurisdiction dropdown. | It is **already showing Singapore** — the existing value was preserved, not lost or reset. Click Cancel. | |
+
+#### S8–S9 · Business Units
+
+| # | Step | Expected result | Result |
+| --- | --- | --- | --- |
+| S8 | Open **Business Units**. | Each row has **Edit** and Deactivate/Reactivate, in that order — the same pair, in the same place, as every other list. | |
+| S9 | Click **Edit** on one, correct the name or code if either is genuinely wrong, and **Save**. If nothing is wrong, click **Cancel** instead and mark this NOT APPLICABLE. ⚠ *saves* | The corrected value appears and survives a reload. | |
+
+#### S10–S12 · Departments and Teams — correcting a name is **not** a move
+
+This is the point of the section. A spelling correction must not restructure your
+company.
+
+| # | Step | Expected result | Result |
+| --- | --- | --- | --- |
+| S10 | Open **Departments**. | A **Code** column is now shown. Under the Business unit column each row has a small **MOVE TO** caption above its dropdown — so the dropdown is visibly the *move* control, not part of editing. | |
+| S11 | Find **Singapore Retai Sales**. Click **Edit**, correct it to **Singapore Retail Sales**, and **Save**. ⚠ *saves* | The name is corrected. **The business unit is unchanged** — the department has not moved, and nothing about your structure changed except the spelling. | |
+| S12 | Open **Teams**. Check the **Code** column and the **Add a team** form. | Teams show their code, and the add form now has a **Code** field — it was missing before. Each row has Edit, and the department dropdown carries the same **MOVE TO** caption. | |
+
+#### S13–S16 · Management Hierarchy
+
+| # | Step | Expected result | Result |
+| --- | --- | --- | --- |
+| S13 | Open **Management Hierarchy**. | You are listed. The Manager column reads **No manager recorded** — plain words, not a dash or a blank. | |
+| S14 | Read the box below the table. | It explains, in business language, that a manager can be assigned once at least two organisation users are available, that nobody can report to themselves, and that adding users belongs to User Management. **There is no Set manager button**, because there is nobody to point it at. | |
+| S15 | **Only when a second user exists** — this is the P1-03 gate, so expect to mark it NOT APPLICABLE today. Click **Set manager** on one person. | The Manager cell becomes a dropdown listing the other users. **That person is not offered as their own manager.** | |
+| S16 | **Only when a second user exists.** Choose a manager and Save; then use **Change manager** to pick a different one, then **Clear**. ⚠ *saves* | The button reads *Set manager* when there is none and *Change manager* when there is. Clearing removes the current manager without erasing the record of the previous one. | |
+
+**Expected today: S15 and S16 are NOT APPLICABLE.** Production has one user, and
+the second arrives with P1-03. That is a data condition, not a defect — and it is
+not to be solved by creating a user by hand.
+
+#### S17 · Still no way to delete anything
+
+| # | Step | Expected result | Result |
+| --- | --- | --- | --- |
+| S17 | Look across every screen in this section for a Delete button, a bin icon, or a delete option in any menu. | **There is none.** Edit corrects a value; Deactivate retires a record and keeps it. Nothing in Organisation destroys anything. | |
+
 ### A. Reaching the screens — check 2 (no data is created)
 
 | # | Step | Expected result | Result |
@@ -172,11 +243,22 @@ automated evidence and are not a substitute for the live observations above.**
 
 ## 9. Visual and UX checks
 
-Steps **A1 to A12** (the tab navigation) plus steps 2, 3, 4, 13 and 14.
+Steps **A1 to A12** (the tab navigation), steps **S1, S2, S4, S10, S12, S13 and
+S14** (the new controls and the hierarchy's explanatory state), plus steps 2, 3,
+4, 13 and 14.
+
+Three layout defects were found in a browser during this change and fixed before
+handover — the page sliding sideways at phone and tablet widths on Legal
+Entities, and the other rows' buttons breaking onto two lines while one row was
+being edited. Steps 14, S4 and S10 are where you would see them if any survived.
 
 ## 10. Evidence to capture
 
 1. The Company Profile screen.
+1a. The **Jurisdiction dropdown open** (step S3), showing the alphabetical list.
+1b. A **row being edited in place** (step S4 or S11), showing the surrounding
+   rows undisturbed.
+1c. The **Management Hierarchy** screen with its explanatory box (step S14).
 2. Each section you added structure to, after adding it.
 3. **The refusal message from step 9** — this one matters most.
 4. The team screen after step 12, showing the ended membership still recorded.
@@ -218,7 +300,22 @@ Stated plainly, and **not** inferred from a passing test:
    the recorded observations are in `P1-01-ORGANISATION-VERIFICATION.md`. Your
    run of them on production is the acceptance observation.
 
-5. **I did not perform steps 5 to 12.** Every one requires real business
+5. **S15 and S16 cannot be tested today** — Set, Change and Clear on the
+   Management Hierarchy need a second user, and production has one. The
+   operations are covered automatically, including the case proving that changing
+   a manager **ends** the previous link rather than deleting it (mutation
+   *delete the previous link instead of ending it*, **CAUGHT**). The live
+   observation is carried to P1-03 alongside check 6. **This was not solved by
+   creating a user**, and must not be.
+
+6. **The scope completion was exercised on a local throwaway database**, not on
+   production. Section S is the production observation. The jurisdiction list,
+   the inline editing, the department rename and the two-user hierarchy were all
+   driven in a real browser and the results recorded in
+   `P1-01-ORGANISATION-VERIFICATION.md` §7.3h — that is development evidence, and
+   it is **not** the same claim as an observed production result.
+
+7. **I did not perform steps 5 to 12.** Every one requires real business
    data, which I must not create. Steps 1, 2, 4, 13, 14, 15 and 16 were
    exercised against a local throwaway database to confirm the screens behave;
    that is a development observation and is **not** recorded as production

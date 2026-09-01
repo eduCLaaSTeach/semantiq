@@ -1,15 +1,34 @@
 import { router, useForm, usePage } from '@inertiajs/react'
 import OrganisationPage from '../../Components/OrganisationPage'
 import StatusPill from '../../Components/StatusPill'
+import useRowEditor from '../../Components/useRowEditor'
 
+/**
+ * Business units.
+ *
+ * A business unit has no parent to move it to - it is the top of the structural
+ * tree - so Edit here is the whole of the change operation, and there is no move
+ * control to keep separate from it.
+ */
 export default function BusinessUnits({ businessUnits }) {
     const { productAreas, errors } = usePage().props
     const form = useForm({ name: '', code: '' })
+
+    const row = useRowEditor('/console/organisation/business-units', ['name', 'code'])
 
     const submit = (event) => {
         event.preventDefault()
         form.post('/console/organisation/business-units', { onSuccess: () => form.reset() })
     }
+
+    const lifecycle = (unit) =>
+        router.patch(
+            `/console/organisation/business-units/${unit.id}/${
+                unit.status === 'active' ? 'deactivate' : 'reactivate'
+            }`,
+            {},
+            { preserveScroll: true }
+        )
 
     return (
         <OrganisationPage
@@ -31,33 +50,69 @@ export default function BusinessUnits({ businessUnits }) {
                 <tbody>
                     {businessUnits.length === 0 ? (
                         <tr>
-                            <td colSpan={5} className="org-empty">No business units yet.</td>
+                            <td colSpan={5} className="org-empty">
+                                No business units yet. Add the ones that genuinely exist.
+                            </td>
                         </tr>
                     ) : (
-                        businessUnits.map((unit) => (
-                            <tr key={unit.id}>
-                                <td>
-                                    <a href={`/console/organisation/business-units/${unit.id}`}>{unit.name}</a>
-                                </td>
-                                <td>{unit.code ?? '—'}</td>
-                                <td>{unit.departments}</td>
-                                <td><StatusPill status={unit.status} /></td>
-                                <td>
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            router.patch(
-                                                `/console/organisation/business-units/${unit.id}/${
-                                                    unit.status === 'active' ? 'deactivate' : 'reactivate'
-                                                }`
-                                            )
-                                        }
-                                    >
-                                        {unit.status === 'active' ? 'Deactivate' : 'Reactivate'}
-                                    </button>
-                                </td>
-                            </tr>
-                        ))
+                        businessUnits.map((unit) =>
+                            row.isEditing(unit.id) ? (
+                                <tr key={unit.id}>
+                                    <td>
+                                        <input
+                                            aria-label={`Name of ${unit.name}`}
+                                            value={row.draft.name}
+                                            onChange={(e) => row.set('name', e.target.value)}
+                                            required
+                                        />
+                                    </td>
+                                    <td>
+                                        <input
+                                            aria-label={`Code for ${unit.name}`}
+                                            value={row.draft.code}
+                                            onChange={(e) => row.set('code', e.target.value)}
+                                            maxLength={32}
+                                        />
+                                    </td>
+                                    <td>{unit.departments}</td>
+                                    <td><StatusPill status={unit.status} /></td>
+                                    <td>
+                                        <div className="org-row-actions">
+                                            <button
+                                                type="button"
+                                                className="org-action"
+                                                onClick={() => row.save(unit.id)}
+                                                disabled={row.saving}
+                                            >
+                                                Save
+                                            </button>
+                                            <button type="button" onClick={row.cancel}>
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : (
+                                <tr key={unit.id}>
+                                    <td>
+                                        <a href={`/console/organisation/business-units/${unit.id}`}>{unit.name}</a>
+                                    </td>
+                                    <td>{unit.code || '—'}</td>
+                                    <td>{unit.departments}</td>
+                                    <td><StatusPill status={unit.status} /></td>
+                                    <td>
+                                        <div className="org-row-actions">
+                                            <button type="button" onClick={() => row.start(unit)}>
+                                                Edit
+                                            </button>
+                                            <button type="button" onClick={() => lifecycle(unit)}>
+                                                {unit.status === 'active' ? 'Deactivate' : 'Reactivate'}
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )
+                        )
                     )}
                 </tbody>
             </table>

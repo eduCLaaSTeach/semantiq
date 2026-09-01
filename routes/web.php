@@ -110,12 +110,14 @@ Route::prefix('console')
                 Route::middleware(RequireOrganisation::class)->group(function (): void {
                     Route::get('legal-entities', [LegalEntityController::class, 'index'])->name('legal-entities');
                     Route::post('legal-entities', [LegalEntityController::class, 'store'])->name('legal-entities.store');
+                    Route::put('legal-entities/{legalEntity}', [LegalEntityController::class, 'update'])->name('legal-entities.update');
                     Route::patch('legal-entities/{legalEntity}/deactivate', [LegalEntityController::class, 'deactivate'])->name('legal-entities.deactivate');
                     Route::patch('legal-entities/{legalEntity}/reactivate', [LegalEntityController::class, 'reactivate'])->name('legal-entities.reactivate');
 
                     Route::get('business-units', [BusinessUnitController::class, 'index'])->name('business-units');
                     Route::post('business-units', [BusinessUnitController::class, 'store'])->name('business-units.store');
                     Route::get('business-units/{businessUnit}', [BusinessUnitController::class, 'show'])->name('business-unit');
+                    Route::put('business-units/{businessUnit}', [BusinessUnitController::class, 'update'])->name('business-units.update');
                     Route::patch('business-units/{businessUnit}/deactivate', [BusinessUnitController::class, 'deactivate'])->name('business-units.deactivate');
                     Route::patch('business-units/{businessUnit}/reactivate', [BusinessUnitController::class, 'reactivate'])->name('business-units.reactivate');
 
@@ -125,6 +127,7 @@ Route::prefix('console')
 
                     Route::get('departments', [DepartmentController::class, 'index'])->name('departments');
                     Route::post('departments', [DepartmentController::class, 'store'])->name('departments.store');
+                    Route::put('departments/{department}', [DepartmentController::class, 'update'])->name('departments.update');
                     Route::patch('departments/{department}/move', [DepartmentController::class, 'move'])->name('departments.move');
                     Route::patch('departments/{department}/deactivate', [DepartmentController::class, 'deactivate'])->name('departments.deactivate');
                     Route::patch('departments/{department}/reactivate', [DepartmentController::class, 'reactivate'])->name('departments.reactivate');
@@ -132,6 +135,7 @@ Route::prefix('console')
                     Route::get('teams', [TeamController::class, 'index'])->name('teams');
                     Route::post('teams', [TeamController::class, 'store'])->name('teams.store');
                     Route::get('teams/{team}', [TeamController::class, 'show'])->name('team');
+                    Route::put('teams/{team}', [TeamController::class, 'update'])->name('teams.update');
                     Route::patch('teams/{team}/move', [TeamController::class, 'move'])->name('teams.move');
                     Route::patch('teams/{team}/deactivate', [TeamController::class, 'deactivate'])->name('teams.deactivate');
                     Route::patch('teams/{team}/reactivate', [TeamController::class, 'reactivate'])->name('teams.reactivate');

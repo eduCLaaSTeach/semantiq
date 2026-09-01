@@ -97,6 +97,23 @@ final class BusinessUnitController
         return redirect()->route('organisation.business-units');
     }
 
+    public function update(Request $request, BusinessUnit $businessUnit): RedirectResponse
+    {
+        /** @var array<string, string|null> $attributes */
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        try {
+            $this->structure->updateBusinessUnit($businessUnit, $attributes, $this->actor($request));
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.business-units');
+    }
+
     public function deactivate(Request $request, BusinessUnit $businessUnit): RedirectResponse
     {
         try {
