@@ -277,7 +277,7 @@ final class OrganisationTabNavigationTest extends TestCase
         $this->assertStringContainsString(
             'overflow-y: hidden',
             $strip[1],
-            "The standard pins the strip to horizontal scroll only."
+            'The standard pins the strip to horizontal scroll only.'
         );
 
         preg_match('/\.org-tab\s*\{([^}]*)\}/', $css, $tab);
