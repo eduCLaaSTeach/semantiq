@@ -914,6 +914,10 @@ button.shell-link:hover .icon { color: var(--accent); }
 
 .org-form label.org-field-md { max-width: 220px; }
 
+/* A legal entity's name is a registered company name and runs long, so the one
+   control that shows a list of them is not held to the 320px measure. */
+.org-form label.org-field-wide { max-width: 420px; }
+
 .org-form-inline label { width: auto; }
 
 .org-form input,
@@ -1177,6 +1181,16 @@ button.shell-link:hover .icon { color: var(--accent); }
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+/* The same small caption, used as explanatory prose rather than as a label for
+   a control that is present - so it is not shouted. */
+.org-hint-plain {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: var(--space-1);
 }
 
 .org-move {

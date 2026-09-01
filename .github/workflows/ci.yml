@@ -99,6 +99,20 @@ jobs:
           php artisan migrate --force --no-interaction
           php artisan migrate:status
 
+          # And prove down() works, on the engine that has to run it.
+          #
+          # A down() is only ever needed on the day something has to be undone,
+          # which is the worst possible day to discover it is broken. It is also
+          # invisible to the suite: SQLite cannot drop a foreign key by name at
+          # all, so a rollback that MySQL would accept fails locally and a
+          # rollback that MySQL would REJECT looks identical.
+          #
+          # Rolled back and re-applied, so the database is left where the rest of
+          # the job expects it.
+          php artisan migrate:rollback --force --no-interaction --step=1
+          php artisan migrate --force --no-interaction
+          php artisan migrate:status
+
       # deploy.yml stages files that live outside the application tree, so
       # nothing in the test suite touches them. Deleting one is invisible until a
       # deployment fails - which is what happened when the repository was cleaned

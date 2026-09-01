@@ -167,7 +167,7 @@ Indicative. Exact columns are DESIGN.
 
 | Entity | Data |
 | --- | --- |
-| **Organisation** | name, legal/display name, primary legal entity, country, timezone, status, timestamps |
+| **Organisation** | name, legal/display name, **primary legal entity** *(omitted by the DESIGN without a decision; closed by D-25, 1 September 2026)*, country, timezone, status, timestamps |
 | **Legal Entity** | organisation, name, registration/company number, jurisdiction, registered address, status |
 | **Business Unit** | organisation, name, code, status |
 | **Department** | organisation, business unit, name, code, status |

@@ -454,11 +454,22 @@ final class PurgeGuardTest extends TestCase
         $this->assertNotEmpty($seen, 'No references were found, so this test proves nothing.');
     }
 
-    /** The walk finds the references D-24 names, and finds them from the schema. */
+    /**
+     * The walk finds the references D-24 names, and finds them from the schema.
+     *
+     * `organisations.primary_legal_entity_id` is in this list because D-25 added
+     * it, and that is the point worth noticing: PurgeDependencies was not
+     * changed to know about the primary legal entity. The migration added a
+     * foreign key, the walk found it, and this case started failing until it was
+     * updated - which is the guard behaving exactly as it was written to.
+     */
     public function test_the_reference_walk_finds_every_dependency_d24_names(): void
     {
         $this->assertSame(
-            [['business_unit_legal_entity', 'legal_entity_id']],
+            [
+                ['business_unit_legal_entity', 'legal_entity_id'],
+                ['organisations', 'primary_legal_entity_id'],
+            ],
             PurgeDependencies::referencesTo('legal_entities')
         );
 

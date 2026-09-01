@@ -45,7 +45,14 @@ final class PurgeDependencies
      * `PurgeGuardTest` fails until a real one is written, so the fallback is a
      * safety net rather than somewhere to leave things.
      *
-     * @var array<string, array{one: string, many: string, counted: bool}>
+     * `advice` overrides the closing sentence for blockers where "deactivate it
+     * instead" is not actually a way forward. Observed in the browser: a legal
+     * entity that is the organisation's primary refused the purge with "Deactivate
+     * it instead", and then refused the deactivation too — the screen sent the
+     * reader in a circle. Where the way through is something else, the refusal
+     * has to say what.
+     *
+     * @var array<string, array{one: string, many: string, counted: bool, advice?: string}>
      */
     private const LABELS = [
         'departments' => [
@@ -63,6 +70,19 @@ final class PurgeDependencies
             'many' => 'membership history exists',
             'counted' => false,
         ],
+        /*
+         * D-25. This entry is the schema-driven guard proving itself: nothing in
+         * PurgeDependencies was changed to know about the primary legal entity.
+         * The migration added a foreign key, the walk found it, and the purge
+         * started refusing. All that was needed here was the sentence.
+         */
+        'organisations' => [
+            'one' => "it is the organisation's primary legal entity",
+            'many' => "it is the organisation's primary legal entity",
+            'counted' => false,
+            'advice' => 'Choose another primary legal entity on the Company Profile, or clear the '
+                .'selection, and then try again.',
+        ],
         'business_unit_legal_entity' => [
             'one' => 'it is associated with %d legal entity',
             'many' => 'it is associated with %d legal entities',
@@ -73,7 +93,10 @@ final class PurgeDependencies
     /**
      * Business-language reasons this record cannot be purged. Empty means safe.
      *
-     * @return list<string>
+     * Each blocker carries its phrase and, where "deactivate it instead" is not
+     * a way forward, the advice that is.
+     *
+     * @return list<array{phrase: string, advice: string|null}>
      */
     public static function blocking(Model $node, bool $locking = false): array
     {
@@ -94,7 +117,10 @@ final class PurgeDependencies
             $count = $locking ? $query->lockForUpdate()->count() : $query->count();
 
             if ($count > 0) {
-                $blockers[] = self::phrase($table, $count);
+                $blockers[] = [
+                    'phrase' => self::phrase($table, $count),
+                    'advice' => self::LABELS[$table]['advice'] ?? null,
+                ];
             }
         }
 

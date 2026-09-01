@@ -212,8 +212,33 @@ final class StructureService
         return $this->setStatus($team, StructureStatus::Inactive, SecurityEventLogger::TEAM_DEACTIVATED, $actor);
     }
 
+    /**
+     * D-25: the organisation's primary legal entity cannot be retired while it
+     * still holds that role.
+     *
+     * The refusal is not a technicality. The primary legal entity is who the
+     * company is on paper, and an inactive record in that position would leave
+     * the Company Profile pointing at something the organisation has said is no
+     * longer current - readable, and wrong.
+     *
+     * Clearing or changing the selection first is the way through, and the
+     * message says so. Nothing is cascaded: the selection is never cleared for
+     * the caller to make the deactivation succeed.
+     */
     public function deactivateLegalEntity(LegalEntity $entity, User $actor): LegalEntity
     {
+        $isPrimary = Organisation::query()
+            ->where('primary_legal_entity_id', $entity->id)
+            ->exists();
+
+        if ($isPrimary) {
+            throw StructureViolation::because(
+                'primary_legal_entity',
+                "This legal entity is the organisation's primary legal entity. Select another "
+                .'primary legal entity or clear the selection before deactivating it.'
+            );
+        }
+
         return $this->setStatus($entity, StructureStatus::Inactive, SecurityEventLogger::LEGAL_ENTITY_DEACTIVATED, $actor);
     }
 
@@ -473,14 +498,27 @@ final class StructureService
             return;
         }
 
+        $phrases = array_column($blocking, 'phrase');
+
+        /*
+         * "Deactivate it instead" is the usual way forward, but not always.
+         * A legal entity that is the organisation's primary refuses the
+         * deactivation as well, so that advice would send the reader in a
+         * circle - observed in the browser, and the reason a blocker may carry
+         * its own closing sentence.
+         */
+        $advice = collect($blocking)->pluck('advice')->filter()->first()
+            ?? 'Deactivate it instead.';
+
         throw StructureViolation::blockedByChildren(
             'in_use',
             sprintf(
-                'This %s cannot be permanently deleted because %s. Deactivate it instead.',
+                'This %s cannot be permanently deleted because %s. %s',
                 $noun,
-                $this->readAsList($blocking)
+                $this->readAsList($phrases),
+                $advice
             ),
-            $blocking
+            $phrases
         );
     }
 
