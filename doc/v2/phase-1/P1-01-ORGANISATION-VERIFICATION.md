@@ -576,11 +576,74 @@ Three regression guards make the two causes unrepresentable: a link with no
 defined colour, a semantic hex used as text, and a token that exists in one
 theme only. Four mutations applied, four caught.
 
+### 7.3f Third reading — 1 September 2026, verification resumed
+
+`verify-organisation.yml` run
+[33479698980](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33479698980)
+on `2f5afb6`, taken on resuming P1-01 functional verification after the UI
+foundation was accepted and frozen.
+
+```json
+{"row_counts":{"organisations":1,"legal_entities":0,"business_units":1,
+ "business_unit_legal_entity":0,"departments":0,"teams":0,
+ "team_memberships":0,"management_relationships":0},
+ "d16_column_exists":true,"d16_column_nullable":true,
+ "d16_foreign_key_target":"organisations",
+ "users_total":1,"users_with_organisation":1,
+ "business_units_active":1,"business_units_inactive":0,
+ "department_moved_events":0,"organisation_delete_routes":0}
+```
+
+Delta against §7.3b, and only what the counts support:
+
+| Movement | 05:40 | 06:55 | What it shows |
+| --- | --- | --- | --- |
+| `business_units_active` | 0 | **1** | A **reactivation was performed and permitted**. |
+| `business_units_inactive` | 1 | **0** | The same row; nothing was created or removed. |
+| Everything else | — | unchanged | No legal entity, department, team, membership or management link exists. |
+
+**Observed lifecycle behaviour so far**, in order, on one real business unit
+with zero departments: created → deactivated → reactivated, each **permitted**.
+That is the *allowed* path through the rule.
+
+**It is not check 7.** Check 7 requires a business unit that genuinely has an
+**active department** and expects the deactivation to be **REFUSED** with the
+blocking children named. With `departments = 0` that case has not been
+reachable, so it remains unobserved.
+
+Check 2 — a signed-in System Administrator reaches Organisation — is **OBSERVED**:
+the Product Owner has been working in the Company Profile and Business Units
+screens on production throughout, and supplied screenshots of both.
+
+### 7.3g P1-01 functional verification — where it actually stands
+
+| Check | Status | Evidence |
+| --- | --- | --- |
+| 2 · Reach Organisation | **OBSERVED** | Product Owner working in the live screens, 1 Sep 2026 |
+| 5a · D-16 `organisation_id` on the creating administrator | **OBSERVED** | `users_with_organisation` 0 → 1, §7.3b |
+| 3 · Record the structure that genuinely exists | **PARTIAL** | Organisation and one business unit exist; no legal entity, department or team yet |
+| 7 · Deactivating a business unit with an active department is refused | **NOT OBSERVED** | needs a real department under a real business unit; `departments = 0` |
+| 4 · Business unit ↔ two legal entities, and the converse | **NOT OBSERVED** | needs `legal_entities >= 2`; currently 0 |
+| 9 · Move a department between business units | **NOT OBSERVED** | needs a real department and a legitimate move |
+| 5 · Add then remove a team member | **NOT OBSERVED** | needs a real team and a factually correct membership |
+| 6 · Multi-user management cycle | **CARRIED TO P1-03** | `users_total = 1`; §7.3 |
+
+**Four checks remain, and none of them is executable by me.** Every one needs
+real business structure entered through the screens, and inventing it is
+forbidden — so they are the Product Owner's steps 5 to 12 in
+`P1-01-ORGANISATION-PRODUCT-OWNER-TEST-SCRIPT.md`.
+
+Checks 4, 9 and 5 stay **conditional**: if the real organisation has no genuine
+many-to-many association, no legitimate department move and no factually correct
+team membership, they are marked NOT APPLICABLE and carried forward with their
+mutation-proven automated evidence intact. That is a data condition, not an
+implementation defect.
+
 ### 7.4 Outstanding for P1-01 — executable now
 
-**Check 5a is now observed** (§7.3b). Six checks remain — **2, 3, 4, 5, 7 and
-9** — all executable in a browser by the existing System Administrator, and all
-subject to the real-data rule below.
+**Checks 5a and 2 are now observed** (§7.3b, §7.3f). Four checks remain —
+**3 (to completion), 4, 5, 7 and 9** — all executable in a browser by the
+existing System Administrator, and all subject to the real-data rule below.
 
 They are recorded as **not yet observed** rather than inferred. Each is covered
 by a test proven non-vacuous by mutation, but a passing test is not the same
@@ -616,7 +679,7 @@ permanent.
 
 | # | Check | Condition | Expected | Observed |
 | --- | --- | --- | --- | --- |
-| 2 | Signed-in System Administrator reaches Organisation | Unconditional | Screen renders | |
+| 2 | Signed-in System Administrator reaches Organisation | Unconditional | Screen renders | **OBSERVED** 1 Sep 2026 — §7.3f |
 | 3 | Create the organisation, and the legal entities, business units, departments and teams that genuinely exist | Unconditional | Persisted | |
 | 5a | **D-16:** the administrator who created the profile carries that `organisation_id` | Follows from 3 | `users_with_organisation` 0 → 1 | **OBSERVED** 1 Sep 2026 — §7.3b |
 | 7 | Deactivate a business unit that genuinely has an active department | Needs one real business unit with one real department. **No data change either way** | Refused, children named | |
@@ -636,7 +699,7 @@ permanent.
 | 4 | No roles, permissions, domains, scopes or sensitivity schema | ✅ |
 | 4a | `users.organisation_id` nullable, one writer, `tenant_id` read nowhere | ✅ |
 | 5 | Organisation is the first navigable item; nothing else navigable | ✅ |
-| 6 | All production checks executed and recorded | **Partial** — checks 1, 8, 10, 11, the D-16 schema claim and **5a** observed (§7.1, §7.2, §7.3b); checks 2, 3, 4, 5, 7, 9 outstanding (§7.5, and the Product Owner Test Script); **check 6 deferred to P1-03** (§7.3) |
+| 6 | All production checks executed and recorded | **Partial** — checks 1, 8, 10, 11, the D-16 schema claim, **2** and **5a** observed (§7.1, §7.2, §7.3b, §7.3f); checks 3 (partial), 4, 5, 7 and 9 outstanding (§7.3g and the Product Owner Test Script); **check 6 deferred to P1-03** (§7.3) |
 | 7 | Apache boundary, 403 gate, ACME and both checksums pass unchanged | ✅ §7.1 |
 | 8 | Explicit Product Owner acceptance | ⏳ |
 
