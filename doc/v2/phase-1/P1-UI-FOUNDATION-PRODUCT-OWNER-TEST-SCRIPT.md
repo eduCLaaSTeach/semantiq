@@ -5,6 +5,23 @@ Written for the Product Owner, in your words, on your screens. Required by
 
 ---
 
+## STATUS — ACCEPTED
+
+**UI / BRAND / NAVIGATION FOUNDATION — PRODUCT OWNER ACCEPTED AND FROZEN.**
+Recorded 1 September 2026 on the Product Owner's word.
+
+| | |
+| --- | --- |
+| Branded Login, real Microsoft sign-in, all three product areas, the complete 43-entry roadmap, Organisation the only enabled feature | **PASS** |
+| P1-01 Organisation UX navigation — the six route-backed tabs | **PASS**, accepted as part of the frozen foundation |
+| Dark-theme visibility | **PASS** — reported by the Product Owner after the correction in `2f5afb6` |
+
+**The foundation is frozen.** No further UI polishing or redesign is authorised
+unless a genuine usability or security defect appears. Minor visual improvements
+go to the backlog and must not delay feature delivery.
+
+---
+
 ## 1. Feature or task being tested
 
 **UI, Brand & Navigation Foundation.** The professional look and feel, the

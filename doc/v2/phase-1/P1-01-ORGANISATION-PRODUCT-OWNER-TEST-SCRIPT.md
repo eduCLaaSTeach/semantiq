@@ -43,18 +43,25 @@ re-opened in a browser afterwards and behave as before
 
 ### What is already recorded, before you start
 
-Read from production on 1 September 2026, counts only — no names, no
+Read from production at 06:55 on 1 September 2026, counts only — no names, no
 identities:
 
 | | |
 | --- | --- |
 | Organisations | 1 |
-| Business units | 1 (inactive) |
+| Business units | 1, **active** |
 | Legal entities, departments, teams, memberships, management links | 0 |
 | Users | 1, and that user carries an organisation |
 
-So the Company Profile already exists and one business unit has already been
-created and deactivated.
+So the Company Profile exists, and one business unit has been created,
+deactivated and reactivated — each step permitted, because it has no
+departments. **Steps 1 to 4 and step 12 are already effectively done**; what
+remains is the structure itself and the lifecycle rules that depend on it.
+
+**Already observed, so you do not need to prove them again:** check 2 (you reach
+Organisation) and check 5a (creating the profile gave your account its
+organisation). The four that remain are checks 3, 4, 5, 7 and 9 — steps 5 to 12
+below.
 
 ## 4. Test data required
 
