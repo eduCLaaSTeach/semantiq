@@ -40,6 +40,14 @@
   --accent-contrast: #FFFFFF;
   --selection: rgba(179, 161, 37, 0.35);
 
+  /* Badge foregrounds. The standard is explicit: a semantic colour used as
+     TEXT goes through a theme-aware readable token, never the raw semantic
+     hex, "because raw Violet-Red on a dark card is about 1.6:1 and invisible".
+     The Active pill hardcoded #3D5418 and had no dark value, so on the dark
+     card it measured 1.15:1 - unreadable, exactly as warned. */
+  --badge-success-bg: rgba(95, 128, 37, 0.14);
+  --badge-success-fg: #3D5418;
+
   /* Spacing scale: 4px base */
   --space-1: 4px;
   --space-2: 8px;
@@ -93,6 +101,11 @@
     --accent: #7FADE1;
     --accent-hover: #93BBE8;
     --accent-contrast: #0F1C2E;
+
+    /* A light tint derived from Avocado Green: 5.02:1 on the pill over the
+       dark card, measured rather than eyeballed. */
+    --badge-success-bg: rgba(95, 128, 37, 0.22);
+    --badge-success-fg: #A8CC72;
   }
 }
 
@@ -113,6 +126,8 @@
   --accent: #7FADE1;
   --accent-hover: #93BBE8;
   --accent-contrast: #0F1C2E;
+  --badge-success-bg: rgba(95, 128, 37, 0.22);
+  --badge-success-fg: #A8CC72;
 }
 
 * { box-sizing: border-box; }
@@ -136,6 +151,41 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/*
+ * LINKS.
+ *
+ * Nothing defined a link colour, so any anchor without a class fell through to
+ * the browser default - #0000EE unvisited, #551A8B VISITED. On the dark card
+ * that visited purple is effectively invisible, which is how a business unit's
+ * name became unreadable on the Business Units and Teams lists.
+ *
+ * Defined once, here, against the accent token, so a link added anywhere in
+ * future inherits a readable colour instead of the browser's. :visited is
+ * pinned to the same value on purpose: a visited link must not fade out.
+ */
+a {
+  color: var(--accent);
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 2px;
+}
+
+a:visited { color: var(--accent); }
+
+a:hover { color: var(--accent-hover); text-decoration-color: currentColor; }
+
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* A link inside a table row is the row's subject, so it carries the row's
+   weight rather than looking like a footnote. */
+.org-table a,
+.org-list a {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.org-table a:visited,
+.org-list a:visited { color: var(--accent); }
 
 /* ---- Pre-authentication entry: the Auth archetype (standard 5.7) ---------
    A standalone centred card with no shell. Nothing here describes what exists
@@ -908,8 +958,8 @@ button.shell-link:hover .icon { color: var(--accent); }
 }
 
 .org-pill-active {
-  background: rgba(95, 128, 37, 0.14);
-  color: #3D5418;
+  background: var(--badge-success-bg);
+  color: var(--badge-success-fg);
 }
 
 .org-pill-inactive {
@@ -1317,6 +1367,9 @@ button.shell-link:hover .icon { color: var(--accent); }
 
 .signin-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* The muted colour measured 4.11:1 on this tinted surface in dark mode - under
+   the 4.5:1 bar. It is the only thing the visitor can act on when sign-in is
+   unavailable, so it reads at full body colour. */
 .signin-unavailable {
   margin: 0;
   padding: var(--space-3);
@@ -1325,7 +1378,7 @@ button.shell-link:hover .icon { color: var(--accent); }
   background: var(--surface-hover);
   font-size: 13px;
   text-align: center;
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .signin-support {

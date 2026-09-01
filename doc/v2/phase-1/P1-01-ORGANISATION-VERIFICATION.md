@@ -520,6 +520,62 @@ seven were caught. One of them survived first time round — the route checks we
 asserting the test's own constant instead of the component's declared hrefs, so
 pointing a tab at a route that did not exist passed. They now read the component.
 
+### 7.3e Unreadable text in the dark theme — CORRECTED
+
+**Found on 1 September 2026 by the Product Owner, on a dark screen. Not caught
+by any test, and not caught by my own visual verification either — every
+screenshot I had taken of a list was in the light theme.**
+
+A business unit's name was effectively invisible on the Business Units list.
+
+**Two separate causes, both real.**
+
+1. **No link colour existed anywhere in the application.** Nothing defined one,
+   so a bare `<a>` fell through to the browser default — `#0000EE` unvisited and
+   `#551A8B` **visited**. That visited purple on the dark card is what the
+   Product Owner circled. The same bug was on the Teams list, which nobody had
+   looked at.
+
+2. **The Active status pill hardcoded `#3D5418`** with no dark-theme value.
+   Measured on the dark card: **1.15:1**, against a 4.5:1 requirement.
+
+The shared standard names this failure mode exactly: *"Semantic colors used as
+text, icons, or thin edges on a surface always go through the theme-aware
+readable tokens, never the raw semantic hex; raw Violet-Red on a dark card is
+about 1.6:1 and invisible."* The code did the thing the standard warns about.
+
+**Corrected.** A link colour is defined once against the accent token, with
+`:visited` pinned to the same value so a visited link never fades out; and the
+pill now reads `--badge-success-bg` / `--badge-success-fg`, defined in all three
+theme blocks. The dark foreground `#A8CC72` is a tint derived from Avocado Green
+and measures **5.02:1** on the pill over the dark card — computed, not eyeballed.
+
+**A full contrast audit now backs this up rather than a spot check.** Every text
+run on nine screens, in both themes, measured as a computed colour against the
+surface it is actually painted on:
+
+| | |
+| --- | --- |
+| Screens | Login, `/console`, all six Organisation sections, one detail screen |
+| Themes | light and dark |
+| Below the WCAG AA threshold | **0** |
+| Not automatically measurable | 44 runs sitting over the hero's gradient, checked visually instead |
+
+One further fix came out of it: the sign-in unavailable note measured 4.11:1 in
+dark and now uses the full body colour.
+
+**The audit was wrong three times before it was right, and each error produced
+confident numbers.** It walked past the hero's gradient to the page canvas and
+reported 22 white-on-beige failures that do not exist; its alpha compositing
+forced `a: 1` after one blend, so translucent chips were measured against a
+surface that is not on the screen; and one of its own guards matched
+`.org-list a:visited` instead of the bare rule, passing with the global rule
+deleted. A measurement that is not itself checked is not evidence.
+
+Three regression guards make the two causes unrepresentable: a link with no
+defined colour, a semantic hex used as text, and a token that exists in one
+theme only. Four mutations applied, four caught.
+
 ### 7.4 Outstanding for P1-01 — executable now
 
 **Check 5a is now observed** (§7.3b). Six checks remain — **2, 3, 4, 5, 7 and
