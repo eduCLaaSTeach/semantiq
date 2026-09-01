@@ -114,6 +114,24 @@ final class BusinessUnitController
         return redirect()->route('organisation.business-units');
     }
 
+    /**
+     * D-24 guarded permanent delete.
+     *
+     * The confirmation happened in the browser and proves only that a person
+     * clicked twice. The dependency check that decides this is in the service,
+     * and it runs again inside the write transaction.
+     */
+    public function purge(Request $request, BusinessUnit $businessUnit): RedirectResponse
+    {
+        try {
+            $this->structure->purgeBusinessUnit($businessUnit, $this->actor($request));
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.business-units');
+    }
+
     public function deactivate(Request $request, BusinessUnit $businessUnit): RedirectResponse
     {
         try {

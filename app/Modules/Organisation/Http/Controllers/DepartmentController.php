@@ -119,6 +119,24 @@ final class DepartmentController
         return redirect()->route('organisation.departments');
     }
 
+    /**
+     * D-24 guarded permanent delete.
+     *
+     * The confirmation happened in the browser and proves only that a person
+     * clicked twice. The dependency check that decides this is in the service,
+     * and it runs again inside the write transaction.
+     */
+    public function purge(Request $request, Department $department): RedirectResponse
+    {
+        try {
+            $this->structure->purgeDepartment($department, $this->actor($request));
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.departments');
+    }
+
     public function deactivate(Request $request, Department $department): RedirectResponse
     {
         try {

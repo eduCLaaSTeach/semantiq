@@ -440,7 +440,7 @@ Read against the §7.3a baseline, and **only** what the counts actually support:
 | `business_units` | 0 | **1** | One business unit exists. |
 | `business_units_inactive` | 0 | **1** | The business unit was deactivated **and the deactivation was permitted**. With `departments = 0` this is the *allowed* case, **not** check 7 — check 7 needs a business unit with an active department and expects a **refusal**. |
 | `legal_entities`, `departments`, `teams`, `team_memberships`, `management_relationships` | 0 | 0 | Checks 4, 5, 7 and 9 have **not** been exercised. |
-| `organisation_delete_routes` | 0 | 0 | Still no DELETE route anywhere in the unit. |
+| `organisation_delete_routes` | 0 | 0 | No DELETE route anywhere in the unit **as at that reading**. D-24 later added four guarded ones — §7.3i. The reading stands as recorded. |
 
 `users_total` is still **1**, so §7.3 stands unchanged: check 6 remains carried
 to P1-03.
@@ -667,10 +667,11 @@ Two findings that are **not** gaps, recorded because they were checked:
   migration was required and none was written.** The Product Owner's instruction
   was to stop and explain before implementing any schema change; there was
   nothing to explain, because there was nothing to change.
-- **Hard delete: still absent.** No DELETE route, no destroy controller method,
-  no model delete call anywhere in Organisation — asserted now by
-  `LifecycleCompletenessTest::test_no_lifecycle_action_is_a_hard_delete`, which
-  fails when a DELETE route is added.
+- **Hard delete: absent as at this audit.** No DELETE route, no destroy
+  controller method, no model delete call anywhere in Organisation.
+  **Superseded the same day by D-24** (§7.3i): permanent deletion now exists for
+  four master types, guarded, and the guard that asserted "none" was amended to
+  assert the exact permitted set rather than deleted.
 
 #### Root cause — why the design said Update and four entity types shipped without it
 
@@ -685,8 +686,8 @@ Not an oversight in any one file. Three things lined up:
 
 2. **Deactivate/Reactivate look like the hard part, and they were.** The
    interesting rules of P1-01 — refuse a deactivation with active children, no
-   cascade, no reactivation under an inactive parent, no hard delete — all live
-   in the lifecycle transitions. Attention went where the rules were. Update has
+   cascade, no reactivation under an inactive parent, no hard delete (as the
+   rule stood before D-24) — all live in the lifecycle transitions. Attention went where the rules were. Update has
    no rule of its own beyond the same-organisation boundary, so it read as
    trivial, and trivial work is the work that gets assumed done.
 
@@ -758,7 +759,7 @@ jurisdiction table was created, and no existing value was migrated.
 | M12 | Delete the previous management link instead of ending it | **CAUGHT** |
 | M13 | Delete the Legal Entity `PUT` route — the original defect | **CAUGHT** |
 | M14 | Add a scoped entity with create and no update | **CAUGHT** |
-| M15 | Add a hard-delete route | **CAUGHT** |
+| M15 | Add a hard-delete route | **CAUGHT** *(guard superseded by D-24 — see §7.3i)* |
 | M16 | Return the jurisdiction list unsorted | **CAUGHT** |
 
 **Two mutations survived, and they are reported rather than tidied away.** The
@@ -816,11 +817,201 @@ rather than only in the code.
 #### What this correction did not do
 
 No schema change. No new migration. No production data touched. No hard delete
-introduced. No P1-02, P1-03, P1-04 or P1-05 capability built early — the
+introduced **in this pass** — D-24 introduced a guarded one afterwards, §7.3i. No P1-02, P1-03, P1-04 or P1-05 capability built early — the
 hierarchy screen's one-user state **says** that adding users belongs to User
 Management rather than quietly providing it. The accepted UI foundation was not
 redesigned; the changes to it are the controls the missing operations need, plus
 the three responsive and consistency defects above.
+
+### 7.3i D-24 — guarded permanent delete — 1 September 2026
+
+The Product Owner changed one earlier lifecycle decision. The blanket "no hard
+delete anywhere" rule made a mis-typed master record **permanent garbage**, and
+that consequence was not intended by it.
+
+The rule is superseded, not withdrawn. It still governs every record that is
+used, and its own reasoning — *"a deleted row makes past decisions
+unexplainable"* — is exactly why the exception is guarded rather than general.
+The original text is preserved and annotated in `P1-01-ORGANISATION-PLAN.md` §6
+and §8, `P1-01-ORGANISATION-DESIGN.md` §3 and negative case 13, and both Product
+Owner test scripts. `PHASE-1-PLAN.md` D-24 is the source of truth.
+
+#### What was built
+
+| | |
+| --- | --- |
+| Service | `purgeLegalEntity`, `purgeBusinessUnit`, `purgeDepartment`, `purgeTeam`, over one `applyPurge()` |
+| Guard | `Support/PurgeDependencies.php` |
+| Routes | four `DELETE` routes, behind `RequireSystemAdministrator` |
+| Events | `legal_entity.purged`, `business_unit.purged`, `department.purged`, `team.purged` |
+| UI | `Delete permanently` per row, a native `<dialog>` confirmation, and a per-screen legend distinguishing Edit / Deactivate / Delete permanently |
+| Tests | `PurgeGuardTest` — 23 cases; `LifecycleCompletenessTest` and `AccessBoundaryTest` amended |
+
+**No schema change was required and none was written.** Every foreign key into
+the four purgeable tables is already `ON DELETE NO ACTION`, so the database
+refuses an orphan even if the service guard were ever wrong — asserted by
+`test_no_foreign_key_into_a_purgeable_table_cascades`.
+
+#### The one design decision worth stating
+
+**The dependency check reads the schema; it is not a hand-written list.**
+
+D-24 requires that a purge is refused when *"no other durable P1-01 record
+references it"*. That is a claim about the whole schema, and a hand-written
+checklist only knows what was true on the day it was written — a table added by
+P1-03 or P1-05 with a foreign key to `teams` would simply not be on it, and the
+purge would succeed while a row still pointed at the destroyed record.
+
+So `PurgeDependencies` walks the foreign keys. A new referencing table blocks
+the purge on the day its migration lands, with no change to that file. What a
+new table *does* need is a sentence in business language, and
+`test_every_referencing_table_has_business_language_for_its_refusal` fails until
+it has one — so the generic fallback is a safety net rather than somewhere to
+leave things.
+
+Two properties follow for free, and both are asserted rather than assumed:
+status is never consulted, so an **inactive** child and an **ended** membership
+block exactly as a live one does; and nothing is ever cascaded, because the code
+that would do the cascading does not exist.
+
+#### The wording is the approved one, not a new one
+
+The shared UI standard already has a **Recycle Bin / Soft Delete** archetype
+(§5.8), and in it a system administrator's destructive action is *"a
+confirm-gated labeled `Delete permanently`"*. So the label, the confirm gate and
+the role are taken from the approved design system rather than invented for this
+change.
+
+P1-01 has **no recycle bin**, and none was built: §5.8 is a later archetype with
+restore, buckets and an "empty everything" guard, and D-24 asks for a guarded
+purge on the record itself. What was reused is the wording and the confirm gate;
+what was not built is a whole archetype the unit has no need for.
+
+The confirmation is a native `<dialog>` opened with `showModal()` rather than a
+div dressed as one — that brings the focus trap, Escape, inert background and
+the accessible modal role with it, and every one of those is something a
+hand-rolled overlay gets wrong on the one screen where getting it wrong destroys
+a record. Focus opens on **Cancel**; a dialog that opens with Delete focused
+turns a stray Enter into a permanent deletion.
+
+#### The second check
+
+D-24 §4 requires the dependency state to be re-read inside the write
+transaction. It is, and it is a **locking** read — under MySQL's REPEATABLE READ
+a plain `SELECT` inside the transaction reads the transaction's own snapshot and
+would miss precisely the row the second check exists to catch.
+
+That is asserted structurally rather than behaviourally, and deliberately: in
+any single-threaded test the second check is indistinguishable from the first,
+so a behavioural assertion would pass with it deleted. `PurgeGuardTest` asserts
+that `applyPurge()` calls the check twice and that the inner call is locking.
+Mutations P6 and P7 confirm both halves.
+
+#### Mutation results — 16 mutations, 16 caught
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| P1 | Count only **active** departments and teams as dependencies | **CAUGHT** |
+| P2 | Count only **current** memberships, ignoring ended history | **CAUGHT** |
+| P3 | Drop the D-14 junction from the reference walk | **CAUGHT** |
+| P4 | Drop `requireSameOrganisation()` from `applyPurge()` | **CAUGHT** |
+| P5 | Drop the security event from `applyPurge()` | **CAUGHT** |
+| P6 | Remove the recheck inside the write transaction | **CAUGHT** |
+| P7 | Make the inner recheck a non-locking read | **CAUGHT** |
+| P8 | Register a `DELETE` for team memberships | **CAUGHT** |
+| P9 | Register a `DELETE` for the organisation profile | **CAUGHT** |
+| P10 | Move a purge route outside the administrator gate | **CAUGHT** |
+| P11 | Add a referencing table with no business-language label | **CAUGHT** |
+| P12 | Expose a database word in the refusal | **CAUGHT** |
+| P13 | Cascade the children instead of refusing | **CAUGHT** |
+| P14 | Make a foreign key `ON DELETE CASCADE` | **CAUGHT** |
+| P15 | Hardcode raw Violet-Red in the destructive action | **CAUGHT** |
+| P16 | Define the danger tokens in the light theme only | **CAUGHT** |
+
+P1 and P2 are the two that matter. Each is the change somebody would make by
+pattern-matching on `deactivateBusinessUnit()`, which legitimately *does* filter
+to active children — and each leaves the other half of its test passing, so a
+single-state case would have missed it.
+
+P15 and P16 exist because Violet-Red as text is 1.33:1 on the dark card, and
+this is the newest place a semantic colour is used as text. The defect that
+produced §7.3e would otherwise have repeated itself on the one control that
+destroys a record.
+
+#### Browser verification — Chromium, 1 September 2026
+
+Local throwaway data. Recorded as observed.
+
+| Observation | Result |
+| --- | --- |
+| Confirmation dialog opens with focus on **Cancel**, not on the destructive button — both themes | ✅ |
+| **Escape** closes the dialog and destroys nothing — both themes | ✅ |
+| Refusal, verbatim: *"This business unit cannot be permanently deleted because it has 1 department. Deactivate it instead."* | ✅ business language, no database terms |
+| After the refusal the business unit is still listed | ✅ nothing changed |
+| Purging an unused team removes that team and nothing else | ✅ |
+| Page overflow at 390 / 768 / 1440, dialog open and closed | ✅ **none** |
+| Browser console | ✅ **no errors** |
+| Dark theme: danger text and the solid confirm button | ✅ 5.12:1 and 8.05:1, measured |
+
+Contrast values were computed before the colours were chosen, not after — the
+light card carries `#991547` at 8.23:1 and the dark card a lighter tint at
+5.12:1, and both dark blocks define them so an explicit Dark choice and a system
+Dark preference give the same palette.
+
+#### A third responsive defect, and the end of guessing breakpoints
+
+Adding a third row action pushed Legal Entities **122px past the canvas at
+1101px** — one pixel above the containment rule that had been moved to 1100px
+earlier the same day, which had itself replaced a 720px rule for the same
+reason.
+
+Two guessed breakpoints, both overtaken by the next column added. A width that
+has to be re-guessed every time the content changes is not a fix, so the
+breakpoint is gone: the table now sits in a scroller that carries the card
+chrome, fills it when the table fits and scrolls inside it when it does not, at
+every width there is. Re-measured across **13 viewport widths from 360px to
+1920px × 6 screens — 0 of 78 combinations overflow**, against 3 of 60 before.
+
+Also corrected during the polish gate: the lifecycle legend carried three CSS
+declarations that did nothing, because the rule sat above `.org-note` and lost
+to it on source order. Dead rules were removed rather than made to win —
+`.org-note`'s readable measure is the right answer for prose, and a note running
+the full width of a 1920px screen is a note nobody reads.
+
+#### One scope gap found by the re-audit — NOT IMPLEMENTED, schema change required
+
+`P1-01-ORGANISATION-PLAN.md` §5 lists the Organisation's data points as
+*"name, legal/display name, **primary legal entity**, country, timezone, status,
+timestamps"*.
+
+`P1-01-ORGANISATION-DESIGN.md` §2.1 does not carry a primary-legal-entity
+column, and gives no reason for dropping it. The table does not have one, the
+Company Profile screen does not show one, and no decision records the omission.
+It is a silent PLAN → DESIGN drop, and it is the only one: every other §5 data
+point is present, and `team_memberships` has no `status` column because `left_at`
+IS the status, which the design states explicitly.
+
+**It is not implemented, and no migration was written.** Closing it needs a
+nullable `primary_legal_entity_id` foreign key on `organisations`, and the
+Product Owner's instruction is explicit: *"If implementing this safely requires
+an unexpected schema change, STOP and explain before changing schema."* Three
+things need deciding before that column exists:
+
+1. Whether a primary legal entity is wanted at all, or whether D-14 already
+   answers it — the junction deliberately carries **no "primary" flag**, and the
+   design records that as a decision, because an attribute there is *"the first
+   thing a later unit reads as employment or entitlement"*. A primary pointer on
+   the organisation is a different shape, but it is adjacent enough to be worth
+   asking about rather than assuming.
+2. Whether purging a legal entity that is the organisation's primary should be
+   refused — under D-24 it would have to be, and that is a new dependency the
+   guard would pick up automatically once the foreign key exists.
+3. Whether the Company Profile can be created before any legal entity exists.
+   It can today, so the column has to be nullable, which makes "primary" an
+   optional designation rather than a required one.
+
+**Everything else in the D-24 amendment and the scope completion is delivered.**
+This one item is reported and stopped on, as directed.
 
 ### 7.4 Outstanding for P1-01 — executable now
 
@@ -838,9 +1029,11 @@ PRODUCTION DATA and carried forward — that is a data condition, not an
 implementation defect.
 
 The steps are written for the Product Owner in
-`P1-01-ORGANISATION-PRODUCT-OWNER-TEST-SCRIPT.md`, which carries the permanent-
-data warning in full: P1-01 has no hard delete, so every record created to
-satisfy a check is permanent.
+`P1-01-ORGANISATION-PRODUCT-OWNER-TEST-SCRIPT.md`, which carries the
+permanent-data warning in full. **Amended by D-24:** a record you create and
+never use can now be permanently deleted, but a record that anything uses cannot
+— and an inactive child or an ended membership still counts as usage. So the
+warning stands for every record a check actually exercises.
 
 ### 7.5 The seven checks
 
@@ -857,8 +1050,11 @@ Where a check cannot be exercised without creating false or misleading permanent
 business history, it is marked **NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION
 DATA**, keeps its mutation-proven automated evidence, and its live observation is
 carried to the first legitimate opportunity. **That is not an implementation
-defect** — P1-01 has no hard delete, so a record created to satisfy a test is
-permanent.
+defect**. Under D-24 an unused record can be permanently deleted, but the
+records these checks create are used **by the check itself** — a department under
+a business unit, a membership on a team — so each one is permanent the moment it
+serves its purpose. Inventing structure to satisfy a check is still not
+reversible.
 
 | # | Check | Condition | Expected | Observed |
 | --- | --- | --- | --- | --- |
@@ -878,7 +1074,7 @@ permanent.
 | --- | --- | --- |
 | 1 | Every §2 table created; every lifecycle rule enforced | ✅ |
 | 2 | All 21 negative cases automated and proven non-vacuous | ✅ |
-| 3 | No DELETE route anywhere in the unit | ✅ |
+| 3 | ~~No DELETE route anywhere in the unit~~ **D-24:** `DELETE` for exactly four guarded master-record purges, asserted as an equality; none for the Organisation, membership history or management history; no cascade | ✅ §7.3i |
 | 4 | No roles, permissions, domains, scopes or sensitivity schema | ✅ |
 | 4a | `users.organisation_id` nullable, one writer, `tenant_id` read nowhere | ✅ |
 | 5 | Organisation is the first navigable item; nothing else navigable | ✅ |

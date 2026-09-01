@@ -90,6 +90,45 @@ final class ReadableInBothThemesTest extends TestCase
     }
 
     /**
+     * The D-24 destructive action, held to the same rule.
+     *
+     * The shared standard names Violet-Red specifically: raw #991547 on the dark
+     * card is 1.33:1 and invisible. This is the newest place a semantic colour
+     * is used as text, so it is the likeliest place to repeat the pill defect -
+     * and unlike the pill, the control it would hide is the one that destroys a
+     * record.
+     *
+     * Mutation: put #991547 back into .org-action-danger.
+     */
+    public function test_the_destructive_action_uses_theme_aware_tokens_rather_than_a_raw_hex(): void
+    {
+        $css = $this->stylesheet();
+
+        preg_match_all('/\.org-(action-danger|confirm[a-z-]*)[^{]*\{([^}]*)\}/', $css, $rules, PREG_SET_ORDER);
+
+        $this->assertNotEmpty($rules, 'No D-24 danger rules were found, so this proves nothing.');
+
+        $checked = 0;
+
+        foreach ($rules as [, $selector, $body]) {
+            // rgba() on a backdrop is a scrim over the page, not text on a
+            // surface, and has no theme-dependent readability to get wrong.
+            $withoutScrim = preg_replace('/background:\s*rgba\([^)]*\);/', '', $body);
+
+            $this->assertDoesNotMatchRegularExpression(
+                '/#[0-9A-Fa-f]{3,8}/',
+                $withoutScrim,
+                "[.org-{$selector}] hardcodes a hex. Violet-Red as text goes through a theme-aware "
+                .'token, or the button that permanently destroys a record is invisible in one theme.'
+            );
+
+            $checked++;
+        }
+
+        $this->assertGreaterThanOrEqual(4, $checked, 'Too few danger rules were examined.');
+    }
+
+    /**
      * Every token defined for the light theme has a dark value, and vice versa.
      *
      * This is the general form of the pill defect: a token that exists in one

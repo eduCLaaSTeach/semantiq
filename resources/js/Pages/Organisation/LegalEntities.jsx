@@ -1,7 +1,10 @@
 import { router, useForm, usePage } from '@inertiajs/react'
 import OrganisationPage from '../../Components/OrganisationPage'
 import StatusPill from '../../Components/StatusPill'
+import ConfirmPurge from '../../Components/ConfirmPurge'
+import LifecycleLegend from '../../Components/LifecycleLegend'
 import useRowEditor from '../../Components/useRowEditor'
+import usePurge from '../../Components/usePurge'
 
 /**
  * The legal axis. Never a level in Business Unit > Department > Team: D-14
@@ -27,6 +30,10 @@ export default function LegalEntities({ legalEntities, jurisdictions }) {
         'registered_address',
     ])
 
+    // D-24. Two steps by construction: ask() opens the confirmation, and only
+    // confirm() sends the request.
+    const purge = usePurge('/console/organisation/legal-entities')
+
     const submit = (event) => {
         event.preventDefault()
         form.post('/console/organisation/legal-entities', { onSuccess: () => form.reset() })
@@ -48,104 +55,115 @@ export default function LegalEntities({ legalEntities, jurisdictions }) {
             title="Legal Entities"
             description="A separate organisational axis. A legal entity may be associated with any number of business units."
         >
-            <table className="org-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Registration</th>
-                        <th>Jurisdiction</th>
-                        <th>Registered address</th>
-                        <th>Status</th>
-                        <th><span className="sr-only">Actions</span></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {legalEntities.length === 0 ? (
+            <div className="org-table-scroll">
+                <table className="org-table">
+                    <thead>
                         <tr>
-                            <td colSpan={6} className="org-empty">
-                                No legal entities yet. Add the ones your business is registered as.
-                            </td>
+                            <th>Name</th>
+                            <th>Registration</th>
+                            <th>Jurisdiction</th>
+                            <th>Registered address</th>
+                            <th>Status</th>
+                            <th><span className="sr-only">Actions</span></th>
                         </tr>
-                    ) : (
-                        legalEntities.map((entity) =>
-                            row.isEditing(entity.id) ? (
-                                <tr key={entity.id}>
-                                    <td>
-                                        <input
-                                            aria-label={`Name of ${entity.name}`}
-                                            value={row.draft.name}
-                                            onChange={(e) => row.set('name', e.target.value)}
-                                            required
-                                        />
-                                    </td>
-                                    <td>
-                                        <input
-                                            aria-label={`Registration number for ${entity.name}`}
-                                            value={row.draft.registration_number}
-                                            onChange={(e) => row.set('registration_number', e.target.value)}
-                                        />
-                                    </td>
-                                    <td>
-                                        <select
-                                            aria-label={`Jurisdiction of ${entity.name}`}
-                                            value={row.draft.jurisdiction}
-                                            onChange={(e) => row.set('jurisdiction', e.target.value)}
-                                        >
-                                            <option value="">Not recorded</option>
-                                            {jurisdictions.map((name) => (
-                                                <option key={name} value={name}>
-                                                    {name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <input
-                                            aria-label={`Registered address of ${entity.name}`}
-                                            value={row.draft.registered_address}
-                                            onChange={(e) => row.set('registered_address', e.target.value)}
-                                        />
-                                    </td>
-                                    <td><StatusPill status={entity.status} /></td>
-                                    <td>
-                                        <div className="org-row-actions">
-                                            <button
-                                                type="button"
-                                                className="org-action"
-                                                onClick={() => row.save(entity.id)}
-                                                disabled={row.saving}
+                    </thead>
+                    <tbody>
+                        {legalEntities.length === 0 ? (
+                            <tr>
+                                <td colSpan={6} className="org-empty">
+                                    No legal entities yet. Add the ones your business is registered as.
+                                </td>
+                            </tr>
+                        ) : (
+                            legalEntities.map((entity) =>
+                                row.isEditing(entity.id) ? (
+                                    <tr key={entity.id}>
+                                        <td>
+                                            <input
+                                                aria-label={`Name of ${entity.name}`}
+                                                value={row.draft.name}
+                                                onChange={(e) => row.set('name', e.target.value)}
+                                                required
+                                            />
+                                        </td>
+                                        <td>
+                                            <input
+                                                aria-label={`Registration number for ${entity.name}`}
+                                                value={row.draft.registration_number}
+                                                onChange={(e) => row.set('registration_number', e.target.value)}
+                                            />
+                                        </td>
+                                        <td>
+                                            <select
+                                                aria-label={`Jurisdiction of ${entity.name}`}
+                                                value={row.draft.jurisdiction}
+                                                onChange={(e) => row.set('jurisdiction', e.target.value)}
                                             >
-                                                Save
-                                            </button>
-                                            <button type="button" onClick={row.cancel}>
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : (
-                                <tr key={entity.id}>
-                                    <td>{entity.name}</td>
-                                    <td>{entity.registration_number || '—'}</td>
-                                    <td>{entity.jurisdiction || '—'}</td>
-                                    <td>{entity.registered_address || '—'}</td>
-                                    <td><StatusPill status={entity.status} /></td>
-                                    <td>
-                                        <div className="org-row-actions">
-                                            <button type="button" onClick={() => row.start(entity)}>
-                                                Edit
-                                            </button>
-                                            <button type="button" onClick={() => lifecycle(entity)}>
-                                                {entity.status === 'active' ? 'Deactivate' : 'Reactivate'}
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
+                                                <option value="">Not recorded</option>
+                                                {jurisdictions.map((name) => (
+                                                    <option key={name} value={name}>
+                                                        {name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <input
+                                                aria-label={`Registered address of ${entity.name}`}
+                                                value={row.draft.registered_address}
+                                                onChange={(e) => row.set('registered_address', e.target.value)}
+                                            />
+                                        </td>
+                                        <td><StatusPill status={entity.status} /></td>
+                                        <td>
+                                            <div className="org-row-actions">
+                                                <button
+                                                    type="button"
+                                                    className="org-action"
+                                                    onClick={() => row.save(entity.id)}
+                                                    disabled={row.saving}
+                                                >
+                                                    Save
+                                                </button>
+                                                <button type="button" onClick={row.cancel}>
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    <tr key={entity.id}>
+                                        <td>{entity.name}</td>
+                                        <td>{entity.registration_number || '—'}</td>
+                                        <td>{entity.jurisdiction || '—'}</td>
+                                        <td>{entity.registered_address || '—'}</td>
+                                        <td><StatusPill status={entity.status} /></td>
+                                        <td>
+                                            <div className="org-row-actions">
+                                                <button type="button" onClick={() => row.start(entity)}>
+                                                    Edit
+                                                </button>
+                                                <button type="button" onClick={() => lifecycle(entity)}>
+                                                    {entity.status === 'active' ? 'Deactivate' : 'Reactivate'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="org-action-danger"
+                                                    onClick={() => purge.ask(entity)}
+                                                >
+                                                    Delete permanently
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
                             )
-                        )
-                    )}
-                </tbody>
-            </table>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            <LifecycleLegend noun="legal entity" />
 
             <form className="org-form org-form-inline" onSubmit={submit}>
                 <h2 className="org-form-title">Add a legal entity</h2>
@@ -185,6 +203,13 @@ export default function LegalEntities({ legalEntities, jurisdictions }) {
                     Add legal entity
                 </button>
             </form>
+            <ConfirmPurge
+                target={purge.target}
+                noun="legal entity"
+                busy={purge.busy}
+                onCancel={purge.cancel}
+                onConfirm={purge.confirm}
+            />
         </OrganisationPage>
     )
 }

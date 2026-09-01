@@ -49,6 +49,7 @@ final class LifecycleCompletenessTest extends TestCase
             'read' => ['GET', ''],
             'create' => ['POST', ''],
             'update' => ['PUT', '/{}'],
+            'purge' => ['DELETE', '/{}'],
             'deactivate' => ['PATCH', '/{}/deactivate'],
             'reactivate' => ['PATCH', '/{}/reactivate'],
         ],
@@ -56,6 +57,7 @@ final class LifecycleCompletenessTest extends TestCase
             'read' => ['GET', ''],
             'create' => ['POST', ''],
             'update' => ['PUT', '/{}'],
+            'purge' => ['DELETE', '/{}'],
             'deactivate' => ['PATCH', '/{}/deactivate'],
             'reactivate' => ['PATCH', '/{}/reactivate'],
         ],
@@ -63,6 +65,7 @@ final class LifecycleCompletenessTest extends TestCase
             'read' => ['GET', ''],
             'create' => ['POST', ''],
             'update' => ['PUT', '/{}'],
+            'purge' => ['DELETE', '/{}'],
             'move' => ['PATCH', '/{}/move'],
             'deactivate' => ['PATCH', '/{}/deactivate'],
             'reactivate' => ['PATCH', '/{}/reactivate'],
@@ -71,6 +74,7 @@ final class LifecycleCompletenessTest extends TestCase
             'read' => ['GET', ''],
             'create' => ['POST', ''],
             'update' => ['PUT', '/{}'],
+            'purge' => ['DELETE', '/{}'],
             'move' => ['PATCH', '/{}/move'],
             'deactivate' => ['PATCH', '/{}/deactivate'],
             'reactivate' => ['PATCH', '/{}/reactivate'],
@@ -142,20 +146,76 @@ final class LifecycleCompletenessTest extends TestCase
     }
 
     /**
-     * P1-01 has no hard delete, anywhere. Deactivate preserves the record; a
-     * DELETE route would make the retention guarantees in the Product Owner
-     * script untrue.
+     * D-24: permanent deletion exists, on FOUR master types and nowhere else.
+     *
+     * This case used to read "no DELETE anywhere in the unit". D-24 superseded
+     * that part of the earlier lifecycle decision, and the case is amended
+     * rather than deleted: the thing worth guarding was never "zero", it was
+     * "no delete reaches the records whose history the unit is built to keep".
+     * That set is still exact and still asserted, so a DELETE on the
+     * organisation, on team memberships or on management relationships fails
+     * the build exactly as it did before.
+     *
+     * Asserted as an equality, not a subset. A subset check would pass while a
+     * fifth DELETE quietly appeared.
+     *
+     * Mutation: register a DELETE for team memberships. CAUGHT.
      */
-    public function test_no_lifecycle_action_is_a_hard_delete(): void
+    public function test_permanent_deletion_reaches_only_the_four_master_types(): void
     {
-        $offenders = collect(Route::getRoutes())
+        $permitted = [
+            'console/organisation/business-units/{businessUnit}',
+            'console/organisation/departments/{department}',
+            'console/organisation/legal-entities/{legalEntity}',
+            'console/organisation/teams/{team}',
+        ];
+
+        $registered = collect(Route::getRoutes())
             ->filter(fn (RoutingRoute $route): bool => str_starts_with($route->uri(), 'console/organisation'))
             ->filter(fn (RoutingRoute $route): bool => in_array('DELETE', $route->methods(), true))
             ->map(fn (RoutingRoute $route): string => $route->uri())
+            ->sort()
             ->values()
             ->all();
 
-        $this->assertSame([], $offenders, 'Organisation exposes a hard delete. P1-01 has none, by design.');
+        $this->assertSame(
+            $permitted,
+            $registered,
+            'The set of DELETE routes in Organisation is not the D-24 set. Permanent deletion is '
+            .'permitted for a legal entity, business unit, department and team, and for nothing '
+            .'else - never for the organisation, a team membership or a management relationship.'
+        );
+    }
+
+    /**
+     * The records whose retention the unit is built around, stated as records
+     * rather than as routes.
+     *
+     * The route check above would also catch these, but only while they have no
+     * route of any verb to hang a DELETE on. This says the thing itself.
+     */
+    public function test_history_and_the_organisation_have_no_delete_route(): void
+    {
+        foreach (Route::getRoutes() as $route) {
+            if (! in_array('DELETE', $route->methods(), true)) {
+                continue;
+            }
+
+            foreach (['members', 'membership', 'hierarchy'] as $protected) {
+                $this->assertStringNotContainsString(
+                    $protected,
+                    $route->uri(),
+                    "Route [{$route->uri()}] would destroy retained history. Membership ends with "
+                    .'left_at and a management link ends with effective_to; both keep their row.'
+                );
+            }
+
+            $this->assertNotSame(
+                'console/organisation',
+                $route->uri(),
+                'The organisation itself has a DELETE route. D-24 excludes the Company Profile.'
+            );
+        }
     }
 
     /**

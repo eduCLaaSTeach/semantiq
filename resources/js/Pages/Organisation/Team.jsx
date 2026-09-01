@@ -35,47 +35,49 @@ export default function Team({ team, members, candidates }) {
 
             <section className="org-section">
                 <h2>Members</h2>
-                <table className="org-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Joined</th>
-                            <th>Left</th>
-                            <th><span className="sr-only">Actions</span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {members.length === 0 ? (
+                <div className="org-table-scroll">
+                    <table className="org-table">
+                        <thead>
                             <tr>
-                                <td colSpan={5} className="org-empty">No members.</td>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Joined</th>
+                                <th>Left</th>
+                                <th><span className="sr-only">Actions</span></th>
                             </tr>
-                        ) : (
-                            members.map((member) => (
-                                <tr key={member.id} className={member.current ? '' : 'org-row-past'}>
-                                    <td>{member.name}</td>
-                                    <td>{member.email}</td>
-                                    <td>{member.joined_at}</td>
-                                    <td>{member.left_at ?? '—'}</td>
-                                    <td>
-                                        {member.current ? (
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    router.patch(
-                                                        `/console/organisation/teams/${team.id}/members/${member.id}/remove`
-                                                    )
-                                                }
-                                            >
-                                                Remove
-                                            </button>
-                                        ) : null}
-                                    </td>
+                        </thead>
+                        <tbody>
+                            {members.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="org-empty">No members.</td>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+                            ) : (
+                                members.map((member) => (
+                                    <tr key={member.id} className={member.current ? '' : 'org-row-past'}>
+                                        <td>{member.name}</td>
+                                        <td>{member.email}</td>
+                                        <td>{member.joined_at}</td>
+                                        <td>{member.left_at ?? '—'}</td>
+                                        <td>
+                                            {member.current ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        router.patch(
+                                                            `/console/organisation/teams/${team.id}/members/${member.id}/remove`
+                                                        )
+                                                    }
+                                                >
+                                                    Remove
+                                                </button>
+                                            ) : null}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
             {candidates.length > 0 ? (

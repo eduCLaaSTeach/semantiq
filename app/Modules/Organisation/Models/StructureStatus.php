@@ -7,7 +7,10 @@ namespace App\Modules\Organisation\Models;
 /**
  * Two states, and no third.
  *
- * There is no "deleted" case because P1-01 offers no hard delete on any route.
+ * There is no "deleted" case. D-24 added a guarded permanent delete for four
+ * master types, and it destroys the row rather than marking it - a "deleted"
+ * status would be a third state that every query then has to remember to
+ * exclude, which is how a deleted record comes back.
  * A cascade is convenient exactly once and unexplainable every time afterwards,
  * and the source document warns that restructuring must not silently broaden
  * access - a silent cascade is precisely how structure changes underneath

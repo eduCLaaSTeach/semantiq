@@ -83,6 +83,24 @@ final class LegalEntityController
         return redirect()->route('organisation.legal-entities');
     }
 
+    /**
+     * D-24 guarded permanent delete.
+     *
+     * The confirmation happened in the browser and proves only that a person
+     * clicked twice. The dependency check that decides this is in the service,
+     * and it runs again inside the write transaction.
+     */
+    public function purge(Request $request, LegalEntity $legalEntity): RedirectResponse
+    {
+        try {
+            $this->structure->purgeLegalEntity($legalEntity, $this->actor($request));
+        } catch (StructureViolation $violation) {
+            return $this->refuse($violation);
+        }
+
+        return redirect()->route('organisation.legal-entities');
+    }
+
     public function deactivate(Request $request, LegalEntity $legalEntity): RedirectResponse
     {
         try {

@@ -20,7 +20,9 @@ This covers two things:
    Legal Entities, Business Units, Departments and Teams, the jurisdiction list,
    the registered address, the two code fields, and Set / Change / Clear on the
    Management Hierarchy. Section **S** below.
-2. **The live verification** of P1-01 — the observation of six behaviours on the
+2. **D-24 — guarded permanent delete.** Section **P** below. Read section 5
+   first: what can and cannot be permanently deleted has changed.
+3. **The live verification** of P1-01 — the observation of six behaviours on the
    real deployment with real data, checks **2, 3, 4, 5, 7 and 9** of
    `P1-01-ORGANISATION-VERIFICATION.md` §7.5. Sections A to D below.
 
@@ -35,7 +37,7 @@ in place before you enter the rest of your structure.
 | P1-01 merge SHA | `9afe33d` — *P1-01 Organisation — EXECUTE* |
 | Correction | `4f99c46` — Organisation was not reachable after sign-in |
 | Tab navigation | `3c2b021` — presentation and navigation only |
-| **Scope completion** | see the pull request for this change — the missing Update operations |
+| **Scope completion + D-24** | see the pull request for this change — the missing Update operations and guarded permanent delete |
 | Deployed head at issue | recorded on merge |
 | Site | https://semantiq.claas2saas.com |
 
@@ -91,21 +93,41 @@ acceptance.
 
 ## 5. ⚠ Warning — this script creates permanent records
 
-**SemantIQ has no hard delete in P1-01.** There is no DELETE route anywhere in
-the unit, by design and asserted by test.
+**Changed by D-24, 1 September 2026.** This section previously said SemantIQ had
+no hard delete at all. That is no longer true, and the difference matters before
+you type anything.
 
-That means:
+### What you can now undo, and what you still cannot
 
-- every legal entity, business unit, department and team you create is
-  **permanent**;
-- deactivating something **does not remove it** — the record and its history
-  remain;
-- a team membership you end keeps its row, with the end date recorded;
-- there is no undo, and no screen that will let you take it back.
+**You can permanently delete a Legal Entity, Business Unit, Department or Team —
+but only while nothing uses it.** The moment it has a child, an association or
+any membership history, permanent deletion is refused and Deactivate is your
+only option. So:
 
-**Only enter structure that genuinely exists.** If you are unsure whether
-something belongs, leave it out — you can add it later, but you cannot remove
-it.
+- a record you add **by mistake and never use** can be removed for good;
+- a record that is **used** cannot, no matter how much you would like it to be;
+- an **inactive** child still counts as usage, and so does an **ended** team
+  membership. Deactivating the children first does **not** unlock the parent.
+
+**These can never be deleted, by anyone:**
+
+- the Organisation / Company Profile;
+- team membership history — ending a membership sets a leaving date and keeps
+  the row;
+- management relationship history — clearing a manager ends the link and keeps
+  it.
+
+### What is still permanent
+
+- **A permanent delete is permanent.** There is no undo, no recycle bin and no
+  screen that will bring the record back. The confirmation dialog is the last
+  point at which you can change your mind.
+- **Deactivating still does not remove anything** — that is the point of it.
+- If you are unsure whether structure belongs, **leave it out**. Adding it later
+  is easy; deleting it later works only while nothing has used it, and something
+  usually has.
+
+**Only enter structure that genuinely exists.**
 
 Steps 1 to 4 and step 12 change nothing and are safe to run at any time.
 
@@ -189,11 +211,57 @@ company.
 the second arrives with P1-03. That is a data condition, not a defect — and it is
 not to be solved by creating a user by hand.
 
-#### S17 · Still no way to delete anything
+#### S17 · Superseded by D-24
+
+This step read *"look for any way to delete a record — there is none"*. That was
+true when it was written and stopped being true the same day, when you approved
+D-24. **Deletion is now section P**, which tests both that it works and that it
+refuses. Mark S17 **SUPERSEDED** and go to section P.
+
+### P. Permanent deletion — D-24 ⚠ one step destroys a record
+
+Added 1 September 2026, and this is the section to read before you run it.
+
+**P1 to P3 create a deliberately fake record and then destroy it.** That is the
+one place in this script where inventing data is not only allowed but required:
+you must not test a permanent delete on a record you actually need, and you
+cannot test it at all without something safe to delete. Label it so obviously
+that nobody mistakes it for real structure.
+
+**P4 to P8 change nothing.** They are refusals and observations.
+
+#### P1–P3 · A safe permanent delete ⚠ creates then destroys a record
 
 | # | Step | Expected result | Result |
 | --- | --- | --- | --- |
-| S17 | Look across every screen in this section for a Delete button, a bin icon, or a delete option in any menu. | **There is none.** Edit corrects a value; Deactivate retires a record and keeps it. Nothing in Organisation destroys anything. | |
+| P1 | Open **Business Units** and add one named exactly **ZZ TEST — DELETE ME**. Give it no departments and no legal entity associations. | It is saved and listed as active. | |
+| P2 | On that row, click **Delete permanently**. | A dialog opens. It **names the record you are deleting**, says the deletion cannot be undone, and tells you to use Deactivate instead if the record is real. The highlighted starting button is **Cancel**, not the delete. | |
+| P3 | Click **Delete permanently** in the dialog. ⚠ *destroys the record* | The dialog closes and **ZZ TEST — DELETE ME is gone from the list**. Reload the page — it is still gone. Every other business unit is untouched. | |
+
+If you would rather not create a fake record at all, mark P1 to P3 **NOT
+APPLICABLE** and say so. The refusals below are the more important half and need
+nothing created.
+
+#### P4–P7 · The guard — nothing is created or changed
+
+| # | Step | Expected result | Result |
+| --- | --- | --- | --- |
+| P4 | Pick a business unit that **has at least one department** — active or inactive, it does not matter. Click **Delete permanently**, then confirm. | **Refused**, in business language: *"This business unit cannot be permanently deleted because it has 1 department. Deactivate it instead."* No database words, no error codes. **The business unit and its departments are all still there.** | |
+| P5 | Read that message again and check the count in it. | The number matches the departments that actually exist under it, **counting inactive ones**. Deactivating a department does not make it stop counting. | |
+| P6 | **Only if a team genuinely has membership history** — anybody added and then removed. Try to **Delete permanently** that team. | **Refused**, saying membership history exists. The team and the history remain. If no team has any membership history yet, mark **NOT APPLICABLE**. | |
+| P7 | Open the dialog on any record, then press **Escape**, and open it again and press **Cancel**. | Both close the dialog and **nothing is deleted**. | |
+
+#### P8 · What has no delete at all — nothing is created
+
+| # | Step | Expected result | Result |
+| --- | --- | --- | --- |
+| P8 | Look at **Company Profile** and at **Management Hierarchy**. | Neither offers Delete permanently anywhere. The hierarchy offers **Clear**, which ends the current reporting line and keeps the record of it — it is not a delete. Team membership is the same: **Remove** ends a membership and keeps the row. | |
+
+#### P9 · The distinction is legible — nothing is created
+
+| # | Step | Expected result | Result |
+| --- | --- | --- | --- |
+| P9 | On each of Legal Entities, Business Units, Departments and Teams, read the note under the table. | It explains, in business language, that **Edit** corrects a wrong detail, **Deactivate** retires a real record and keeps its history, and **Delete permanently** is only for a record entered by mistake. **Delete permanently** is the only action shown in red. | |
 
 ### A. Reaching the screens — check 2 (no data is created)
 
@@ -228,14 +296,16 @@ not to be solved by creating a user by hand.
 | --- | --- | --- | --- |
 | 13 | Look over every Organisation screen you have visited. | Labels and buttons read as business language. No raw column names, no codes, no "undefined" or "null", no developer terminology. | |
 | 14 | Narrow the browser to a phone width and open a list with several rows. | The table scrolls **inside its own box**. The sidebar and top bar stay put, and the page itself does not slide sideways. | |
-| 15 | Look for any way to delete a record. | **There is none** — no delete button, no delete menu item, anywhere in Organisation. Deactivate is the only removal-shaped action, and it preserves the record. | |
+| 15 | Look at the removal-shaped actions on each list. | Each row offers **Deactivate** *and* **Delete permanently**, and they are visibly different — Delete permanently is the only one in red. A short note under each table explains when to use Edit, Deactivate and Delete permanently. **The Company Profile and the Management Hierarchy offer no delete at all.** | |
 | 16 | Open the browser's developer console (F12) and reload. | No red errors. | |
 
 ## 8. Negative, refusal and security cases
 
-Step 9 is the primary refusal case, and it is the one that proves the lifecycle
-rule rather than merely exercising the happy path. Step 15 is the "no hard
-delete" guarantee. Both are observations, not data changes.
+Step 9 is the primary refusal case for deactivation, and **steps P4 and P6 are
+the refusal cases for permanent deletion** — those three prove the lifecycle
+rules rather than merely exercising the happy path, and none of the three
+changes any data. Step 15 and step P8 are the D-24 guarantee: delete exists,
+and it does not reach the records whose history the unit is built to keep.
 
 Twenty-one further negative cases are covered automatically and each was proven
 non-vacuous by mutation — `P1-01-ORGANISATION-VERIFICATION.md` §3. **Those are
@@ -244,8 +314,14 @@ automated evidence and are not a substitute for the live observations above.**
 ## 9. Visual and UX checks
 
 Steps **A1 to A12** (the tab navigation), steps **S1, S2, S4, S10, S12, S13 and
-S14** (the new controls and the hierarchy's explanatory state), plus steps 2, 3,
-4, 13 and 14.
+S14** (the new controls and the hierarchy's explanatory state), steps **P2, P7
+and P9** (the confirmation dialog, its keyboard behaviour and the legend), plus
+steps 2, 3, 4, 13 and 14.
+
+The dialog is worth a moment of attention rather than a glance. It should name
+the record, read as plain business language, put **Cancel** where your hand
+lands first, and close on **Escape**. It is the last thing between a click and a
+record that no longer exists.
 
 Three layout defects were found in a browser during this change and fixed before
 handover — the page sliding sideways at phone and tablet widths on Legal
@@ -259,6 +335,8 @@ being edited. Steps 14, S4 and S10 are where you would see them if any survived.
 1b. A **row being edited in place** (step S4 or S11), showing the surrounding
    rows undisturbed.
 1c. The **Management Hierarchy** screen with its explanatory box (step S14).
+1d. The **confirmation dialog** open (step P2), showing the record name.
+1e. **The refusal message from step P4** — this one matters as much as step 9's.
 2. Each section you added structure to, after adding it.
 3. **The refusal message from step 9** — this one matters most.
 4. The team screen after step 12, showing the ended membership still recorded.
@@ -315,7 +393,23 @@ Stated plainly, and **not** inferred from a passing test:
    `P1-01-ORGANISATION-VERIFICATION.md` §7.3h — that is development evidence, and
    it is **not** the same claim as an observed production result.
 
-7. **I did not perform steps 5 to 12.** Every one requires real business
+7. **I did not perform steps P1 to P9 on production.** The whole D-24 flow —
+   the dialog, the refusal wording, the successful delete of an unused record,
+   Escape and Cancel, both themes, three viewport widths — was driven in a real
+   browser against a local throwaway database, and the observations are in
+   `P1-01-ORGANISATION-VERIFICATION.md` §7.3i. Sixteen mutations were run
+   against the purge guards and all sixteen were caught. **None of that is a
+   production observation**, and steps P1 to P9 are.
+
+8. **One scope gap is reported and deliberately NOT built.** The plan lists a
+   **primary legal entity** among the Organisation's data points; the design
+   dropped it without saying so, and there is no column, no field and no
+   decision recording the omission. Closing it needs a schema change, and the
+   Product Owner's standing instruction is to stop and explain before making
+   one. Nothing about it is in this script, and it is not a defect in what you
+   are testing — it is an open question, set out in §7.3i.
+
+9. **I did not perform steps 5 to 12.** Every one requires real business
    data, which I must not create. Steps 1, 2, 4, 13, 14, 15 and 16 were
    exercised against a local throwaway database to confirm the screens behave;
    that is a development observation and is **not** recorded as production

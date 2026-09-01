@@ -61,86 +61,88 @@ export default function Hierarchy({ people }) {
             title="Management Hierarchy"
             description="Each user has one current manager. Changing it ends the previous link and keeps its history. A cycle is refused. This grants no access."
         >
-            <table className="org-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Manager</th>
-                        <th><span className="sr-only">Actions</span></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {people.length === 0 ? (
+            <div className="org-table-scroll">
+                <table className="org-table">
+                    <thead>
                         <tr>
-                            <td colSpan={4} className="org-empty">
-                                No users are associated with this organisation yet.
-                            </td>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Manager</th>
+                            <th><span className="sr-only">Actions</span></th>
                         </tr>
-                    ) : (
-                        people.map((person) =>
-                            editing === person.id ? (
-                                <tr key={person.id}>
-                                    <td>{person.name}</td>
-                                    <td>{person.email}</td>
-                                    <td>
-                                        <select
-                                            aria-label={`Manager for ${person.name}`}
-                                            value={choice}
-                                            onChange={(e) => setChoice(e.target.value)}
-                                            required
-                                        >
-                                            <option value="">Choose…</option>
-                                            {people
-                                                .filter((candidate) => candidate.id !== person.id)
-                                                .map((candidate) => (
-                                                    <option key={candidate.id} value={candidate.id}>
-                                                        {candidate.name}
-                                                    </option>
-                                                ))}
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <div className="org-row-actions">
-                                            <button
-                                                type="button"
-                                                className="org-action"
-                                                onClick={() => save(person)}
-                                                disabled={saving || !choice}
+                    </thead>
+                    <tbody>
+                        {people.length === 0 ? (
+                            <tr>
+                                <td colSpan={4} className="org-empty">
+                                    No users are associated with this organisation yet.
+                                </td>
+                            </tr>
+                        ) : (
+                            people.map((person) =>
+                                editing === person.id ? (
+                                    <tr key={person.id}>
+                                        <td>{person.name}</td>
+                                        <td>{person.email}</td>
+                                        <td>
+                                            <select
+                                                aria-label={`Manager for ${person.name}`}
+                                                value={choice}
+                                                onChange={(e) => setChoice(e.target.value)}
+                                                required
                                             >
-                                                Save
-                                            </button>
-                                            <button type="button" onClick={cancel}>
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : (
-                                <tr key={person.id}>
-                                    <td>{person.name}</td>
-                                    <td>{person.email}</td>
-                                    <td>{person.manager ?? 'No manager recorded'}</td>
-                                    <td>
-                                        <div className="org-row-actions">
-                                            {assignable ? (
-                                                <button type="button" onClick={() => start(person)}>
-                                                    {person.managerId ? 'Change manager' : 'Set manager'}
+                                                <option value="">Choose…</option>
+                                                {people
+                                                    .filter((candidate) => candidate.id !== person.id)
+                                                    .map((candidate) => (
+                                                        <option key={candidate.id} value={candidate.id}>
+                                                            {candidate.name}
+                                                        </option>
+                                                    ))}
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <div className="org-row-actions">
+                                                <button
+                                                    type="button"
+                                                    className="org-action"
+                                                    onClick={() => save(person)}
+                                                    disabled={saving || !choice}
+                                                >
+                                                    Save
                                                 </button>
-                                            ) : null}
-                                            {person.managerId ? (
-                                                <button type="button" onClick={() => clear(person)}>
-                                                    Clear
+                                                <button type="button" onClick={cancel}>
+                                                    Cancel
                                                 </button>
-                                            ) : null}
-                                        </div>
-                                    </td>
-                                </tr>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    <tr key={person.id}>
+                                        <td>{person.name}</td>
+                                        <td>{person.email}</td>
+                                        <td>{person.manager ?? 'No manager recorded'}</td>
+                                        <td>
+                                            <div className="org-row-actions">
+                                                {assignable ? (
+                                                    <button type="button" onClick={() => start(person)}>
+                                                        {person.managerId ? 'Change manager' : 'Set manager'}
+                                                    </button>
+                                                ) : null}
+                                                {person.managerId ? (
+                                                    <button type="button" onClick={() => clear(person)}>
+                                                        Clear
+                                                    </button>
+                                                ) : null}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
                             )
-                        )
-                    )}
-                </tbody>
-            </table>
+                        )}
+                    </tbody>
+                </table>
+            </div>
 
             {people.length === 1 ? (
                 <p className="org-note">
