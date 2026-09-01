@@ -955,36 +955,344 @@ button.shell-link:hover .icon { color: var(--accent); }
   .shell-signout .shell-signout-label { display: none; }
 }
 
-/* ---- Login messaging ------------------------------------------------------ */
+/* ---- Login: hero beside the authentication panel -------------------------- */
 
-/* D-17: company mark, then product name, then the approved messaging. The card
-   widens for the login page only; every refusal state keeps the narrow shape so
-   the six of them stay indistinguishable. */
-.entry-card-wide { max-width: 460px; }
+/*
+ * The one split screen in the product. Every refusal state stays on the plain
+ * AuthCard above, deliberately: the six of them must remain indistinguishable.
+ *
+ * The hero is a BRANDED surface, not a themed one - Midnight Blue in light mode
+ * and dark mode alike - so its own colours are pinned here rather than following
+ * the theme tokens. Every value is an approved one: Midnight Blue is the primary
+ * accent, the ink navy is the approved dark chrome, and Green Gold is the
+ * standard's highlight treatment.
+ */
+.signin {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 55fr 45fr;
+  background: var(--canvas);
+}
 
-.entry-tagline {
+.signin-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: var(--space-7) var(--space-6);
+  background:
+    radial-gradient(90% 70% at 12% 8%, rgba(25, 62, 107, 0.85) 0%, rgba(25, 62, 107, 0) 60%),
+    radial-gradient(70% 60% at 88% 92%, rgba(179, 161, 37, 0.16) 0%, rgba(179, 161, 37, 0) 60%),
+    linear-gradient(150deg, #123055 0%, #0C1E38 55%, #080F1A 100%);
+  color: #FFFFFF;
+}
+
+/* The grid, kept faint: texture, not pattern. */
+.signin-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(120% 100% at 20% 10%, #000 0%, transparent 75%);
+  pointer-events: none;
+}
+
+.signin-hero-inner {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  margin-inline: auto;
+}
+
+/* D-17: the company mark, then the product name set in type. One logo, one
+   wordmark - never two marks competing. */
+.signin-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.signin-brand .brand-mark-full img { height: 30px; }
+
+.signin-product {
+  padding-left: var(--space-3);
+  border-left: 1px solid rgba(255, 255, 255, 0.22);
   font-family: var(--font-heading);
   font-size: 17px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--text);
-  margin: 0 0 var(--space-2);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.92);
 }
 
-.entry-supporting {
+.signin-badge {
+  display: inline-block;
+  margin: 0 0 var(--space-4);
+  padding: 5px var(--space-3);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-pill);
+  background: rgba(127, 63, 152, 0.28);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.signin-headline {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-heading);
+  font-size: clamp(30px, 3.4vw, 46px);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  color: #FFFFFF;
+}
+
+.signin-headline span { display: block; }
+
+.signin-highlight { color: var(--brand-gold); }
+
+.signin-supporting {
+  margin: 0 0 var(--space-5);
+  max-width: 52ch;
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+/* The product journey. Informational: no list marker, no link, no tab stop. */
+.signin-journey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-6);
+  padding: 0;
+  list-style: none;
+}
+
+.signin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px 12px 5px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.signin-chip-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: rgba(179, 161, 37, 0.22);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-gold);
+}
+
+.signin-benefits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.signin-benefit {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.signin-benefit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-control);
+  background: rgba(179, 161, 37, 0.16);
+  font-size: 18px;
+  color: var(--brand-gold);
+}
+
+.signin-benefit-title {
+  display: block;
+  font-family: var(--font-heading);
   font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin: 0 0 var(--space-3);
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 2px;
 }
 
-.entry-description {
+.signin-benefit-body {
+  display: block;
   font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ---- Login: the authentication panel -------------------------------------- */
+
+.signin-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-7) var(--space-6);
+  background: var(--card);
+  /* In dark mode the panel and the hero are both dark and the split stops
+     reading as two panels. The divider keeps the composition legible in both
+     themes; in light mode it sits invisibly against the white panel edge. */
+  border-left: 1px solid var(--card-border);
+}
+
+.signin-panel-inner {
+  width: 100%;
+  max-width: 420px;
+}
+
+.signin-welcome {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-heading);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.signin-lead {
+  margin: 0 0 var(--space-5);
+  font-size: 14px;
   line-height: 1.55;
   color: var(--text-muted);
-  margin: 0 0 var(--space-4);
 }
 
-/* The login card carries the mark larger than the rail does. Declared after the
-   rail rules so it wins on order at equal specificity. */
-.entry-card .entry-mark img { height: 34px; }
+/* The primary action, on the standard's Primary button geometry. */
+.signin-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.signin-action .icon { font-size: 18px; }
+
+.signin-action:hover { background: var(--accent-hover); }
+
+.signin-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.signin-unavailable {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--card-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-hover);
+  font-size: 13px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.signin-support {
+  margin: var(--space-3) 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.signin-support span { display: block; }
+
+.signin-trust {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: var(--space-6) 0 0;
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--divider);
+  list-style: none;
+}
+
+/* One tidy row on a real screen. Wrapping 2-and-1 reads as an accident rather
+   than a layout, so the three sit on one line and only wrap on a phone, where
+   there is genuinely no room. */
+.signin-trust li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.signin-trust .icon { font-size: 13px; color: var(--accent); }
+
+/* Tablet: both panels survive, neither is crushed. */
+@media (max-width: 1080px) {
+  .signin { grid-template-columns: 1fr 1fr; }
+  .signin-hero { padding: var(--space-6) var(--space-5); }
+  .signin-panel { padding: var(--space-6) var(--space-5); }
+  .signin-journey { margin-bottom: var(--space-5); }
+}
+
+/*
+ * Mobile: the sign-in panel is the primary content and comes FIRST, with a
+ * compact hero beneath it. The direction allows the hero above the panel, but
+ * only in a compact form and without excessive scrolling - and a hero tall
+ * enough to say anything worth saying pushes the button off the first screen.
+ * The button stays immediately visible instead; the hero still carries the
+ * brand, the headline and the benefits directly below it.
+ */
+@media (max-width: 767px) {
+  .signin { grid-template-columns: 1fr; min-height: 0; }
+
+  .signin-panel {
+    order: 1;
+    padding: var(--space-5) var(--space-4) var(--space-6);
+    border-left: 0;
+    border-bottom: 1px solid var(--card-border);
+  }
+
+  .signin-hero {
+    order: 2;
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .signin-headline { font-size: 28px; }
+
+  .signin-supporting { font-size: 14px; margin-bottom: var(--space-4); }
+
+  .signin-brand { margin-bottom: var(--space-4); }
+
+  .signin-journey { margin-bottom: var(--space-4); }
+
+  .signin-trust { margin-top: var(--space-4); }
+}

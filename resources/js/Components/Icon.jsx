@@ -13,7 +13,32 @@
  * Administration Home are i-home, i-gauge and i-grid rather than three
  * variations on a house.
  */
+/*
+ * THIRD-PARTY BRAND MARKS.
+ *
+ * Not UI icons, and deliberately not in the outline style: Microsoft's brand
+ * guidance requires its own mark, in its own colours, on a "sign in with
+ * Microsoft" control, and a logo is used as supplied or not at all. They live
+ * in THIS registry so there is still exactly one SVG source in the app - the
+ * standard's rule is one registry, and an ad-hoc <svg> dropped into a component
+ * is what it forbids.
+ *
+ * A key may only appear here if it is a real third-party brand mark. Everything
+ * else belongs in GLYPHS, in the approved style.
+ */
+export const BRAND_MARKS = ['i-microsoft']
+
 const GLYPHS = {
+    // -- Third-party brand mark (see BRAND_MARKS above) -------------------
+    'i-microsoft': (
+        <>
+            <path fill="#F25022" stroke="none" d="M3 3h8.4v8.4H3z" />
+            <path fill="#7FBA00" stroke="none" d="M12.6 3H21v8.4h-8.4z" />
+            <path fill="#00A4EF" stroke="none" d="M3 12.6h8.4V21H3z" />
+            <path fill="#FFB900" stroke="none" d="M12.6 12.6H21V21h-8.4z" />
+        </>
+    ),
+
     // -- Chrome ----------------------------------------------------------
     'i-panel': (<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>),
     'i-chevron-down': <path d="M6 9l6 6 6-6" />,

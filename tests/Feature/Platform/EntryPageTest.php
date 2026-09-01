@@ -37,12 +37,13 @@ final class EntryPageTest extends TestCase
     }
 
     /**
-     * The approved Login copy, in the response the browser actually receives.
+     * The approved Login copy, in the page the browser actually receives.
      *
-     * BrandAndShellFoundationTest checks the source; this checks the delivered
-     * page, so a copy change that never reaches the wire still fails.
+     * BrandAndShellFoundationTest checks the source; this checks that the Login
+     * page is the component actually served and that its copy is the delivered
+     * copy, so a change that never reaches the wire still fails.
      *
-     * Mutation: paraphrase any line in Entry.jsx.
+     * Mutation: reword any line in Entry.jsx or SignInLayout.jsx.
      */
     public function test_the_login_page_delivers_the_approved_copy(): void
     {
@@ -50,16 +51,21 @@ final class EntryPageTest extends TestCase
 
         $this->assertSame('Entry', $page['component']);
 
-        $rendered = file_get_contents(__DIR__.'/../../../resources/js/Pages/Entry.jsx');
+        $delivered = file_get_contents(__DIR__.'/../../../resources/js/Pages/Entry.jsx')
+            .file_get_contents(__DIR__.'/../../../resources/js/Layouts/SignInLayout.jsx');
 
         foreach ([
-            'Turn business data into confident decisions.',
-            'See what changed. Understand why. Decide what',
-            'SemantIQ brings governed data, business context and intelligent insights together in',
-            'Sign in with Microsoft',
-            'Access is assigned by your organisation',
+            'Business Decision Intelligence',
+            'From business data to',
+            'confident decisions',
+            'Bring governed data, business context and intelligent analysis together to understand',
+            'Welcome to SemantIQ',
+            'Sign in securely to continue to your decision intelligence workspace.',
+            'Continue with Microsoft',
+            'Access is managed by your organisation',
+            'Contact your administrator if you cannot access SemantIQ.',
         ] as $approved) {
-            $this->assertStringContainsString($approved, $rendered, "Approved copy changed: [{$approved}].");
+            $this->assertStringContainsString($approved, $delivered, "Approved copy changed: [{$approved}].");
         }
     }
 

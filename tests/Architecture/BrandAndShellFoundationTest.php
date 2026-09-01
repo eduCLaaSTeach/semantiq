@@ -388,31 +388,264 @@ final class BrandAndShellFoundationTest extends TestCase
     }
 
     /**
-     * The approved Login copy, verbatim.
+     * The approved Login copy, verbatim, hero and panel alike.
      *
-     * Mutation: paraphrase any line.
+     * The Product Owner supplies this wording; it is not paraphrased, tightened
+     * or "improved". Mutation: reword any line.
      */
     public function test_the_login_page_carries_the_approved_copy_verbatim(): void
     {
-        $entry = $this->source('Pages/Entry.jsx');
+        $copy = $this->source('Pages/Entry.jsx').$this->source('Layouts/SignInLayout.jsx');
 
         foreach ([
-            'title="SemantIQ"',
-            'Turn business data into confident decisions.',
-            'See what changed. Understand why. Decide what',
-            'SemantIQ brings governed data, business context and intelligent insights together in',
-            'one secure decision-intelligence experience.',
-            'Sign in with Microsoft',
+            // Hero.
+            'Business Decision Intelligence',
+            'From business data to',
+            'confident decisions',
+            'in moments.',
+            'Bring governed data, business context and intelligent analysis together to understand',
+            'what changed, why it matters and what to do next.',
+            // The product journey.
+            "'Connect', 'Govern', 'Understand', 'Ask', 'Decide'",
+            // Benefit cards.
+            'Unified Intelligence',
+            'Bring trusted business information together in one governed intelligence experience.',
+            'Ask SemantIQ',
+            'Explore performance, change, risk and opportunity using natural business questions.',
+            'Decision Intelligence',
+            'Turn insights into clearer priorities, recommendations and informed next actions.',
+            // Authentication panel.
+            'Welcome to SemantIQ',
+            'Sign in securely to continue to your decision intelligence workspace.',
+            'Continue with Microsoft',
+            'Access is managed by your organisation',
+            'Contact your administrator if you cannot access SemantIQ.',
+            // Trust row.
+            'Secure sign-in',
+            'Role-aware access',
+            'Governed intelligence',
         ] as $approved) {
             $this->assertStringContainsString(
                 $approved,
-                $entry,
+                $copy,
                 "Approved Login copy is missing or has been paraphrased: [{$approved}]."
             );
         }
 
         // The Microsoft path itself is unchanged by this unit.
-        $this->assertStringContainsString('href="/auth/microsoft/redirect"', $entry);
+        $this->assertStringContainsString('href="/auth/microsoft/redirect"', $this->source('Pages/Entry.jsx'));
+    }
+
+    /**
+     * Release 1 supports Microsoft and nothing else, so nothing else is offered.
+     *
+     * A reference layout showing Google, email-and-password and social tabs is a
+     * layout reference, not a feature list. An authentication method the product
+     * does not have must never appear on the screen that authenticates people.
+     *
+     * Mutation: add a second provider, a password field, or a provider tab strip.
+     */
+    public function test_the_login_page_offers_no_authentication_method_the_product_lacks(): void
+    {
+        $login = $this->withoutComments(
+            $this->source('Pages/Entry.jsx').$this->source('Layouts/SignInLayout.jsx')
+        );
+
+        foreach ([
+            'Google',
+            'Apple',
+            'LinkedIn',
+            'password',
+            'Password',
+            'type="email"',
+            'Or continue with',
+            'Sign up',
+            'Create account',
+            'Forgot',
+        ] as $absent) {
+            $this->assertStringNotContainsString(
+                $absent,
+                $login,
+                "The Login page offers [{$absent}], which SemantIQ Release 1 does not support. "
+                .'A control that cannot work is worse than no control.'
+            );
+        }
+
+        // Exactly one authentication destination exists on the page.
+        preg_match_all('/href="([^"]*)"/', $this->source('Pages/Entry.jsx'), $links);
+
+        $this->assertSame(
+            ['/auth/microsoft/redirect'],
+            array_values(array_unique($links[1] ?? [])),
+            'The Login page links somewhere other than the Microsoft sign-in path.'
+        );
+    }
+
+    /**
+     * The headline keeps its three deliberate lines.
+     *
+     * Left to wrap on its own it broke as "in / moments." - an orphan that
+     * reads as an accident. Mutation: collapse the three spans back into one
+     * run of text.
+     */
+    public function test_the_headline_is_set_as_three_deliberate_lines(): void
+    {
+        $hero = $this->source('Layouts/SignInLayout.jsx');
+
+        $this->assertMatchesRegularExpression(
+            '/<h1 className="signin-headline">\s*<span>From business data to<\/span>\s*'
+            .'<span className="signin-highlight">confident decisions<\/span>\s*'
+            .'<span>in moments\.<\/span>\s*<\/h1>/',
+            $hero,
+            'The headline is no longer set as three deliberate lines.'
+        );
+
+        $css = preg_replace('#/\*.*?\*/#s', '', file_get_contents(__DIR__.'/../../resources/css/app.css'));
+
+        $this->assertStringContainsString(
+            '.signin-headline span { display: block; }',
+            $css,
+            'The headline lines are not laid out as blocks, so they run together again.'
+        );
+    }
+
+    /**
+     * Green Gold carries the highlight, through the token rather than a hex.
+     *
+     * The standard reserves Green Gold for the highlight and active-nav
+     * treatment, and forbids hardcoding a token's hex anywhere but the token
+     * definition.
+     *
+     * Mutation: colour the highlight with a raw hex, or with another hue.
+     */
+    public function test_the_headline_highlight_uses_the_green_gold_token(): void
+    {
+        $css = preg_replace('#/\*.*?\*/#s', '', file_get_contents(__DIR__.'/../../resources/css/app.css'));
+
+        $this->assertMatchesRegularExpression(
+            '/\.signin-highlight\s*\{\s*color:\s*var\(--brand-gold\);?\s*\}/',
+            $css,
+            'The headline highlight does not use the Green Gold token.'
+        );
+
+        // And no sign-in rule restates a palette hex that already has a token.
+        foreach ($this->declarationBlocks($css) as $selector => $body) {
+            if (! str_contains($selector, '.signin')) {
+                continue;
+            }
+
+            foreach (['#193E6B', '#B3A125', '#7F3F98', '#448E9D'] as $tokenised) {
+                $this->assertStringNotContainsStringIgnoringCase(
+                    $tokenised,
+                    $body,
+                    "Rule [{$selector}] hardcodes [{$tokenised}], which is a token. Read the token."
+                );
+            }
+        }
+    }
+
+    /**
+     * One icon style, with one documented exception.
+     *
+     * Microsoft's mark is a third-party brand logo, used as supplied on the
+     * control that signs people in with it - a logo is never restyled into
+     * someone else's outline system. It lives in the ONE registry so there is
+     * still a single SVG source, and it is the only key allowed to depart from
+     * the approved style.
+     *
+     * Mutation: add a second filled glyph without listing it as a brand mark.
+     */
+    public function test_only_a_declared_third_party_brand_mark_departs_from_the_icon_style(): void
+    {
+        $registry = $this->source('Components/Icon.jsx');
+
+        preg_match('/export const BRAND_MARKS = \[([^\]]*)\]/', $registry, $declared);
+
+        $this->assertNotEmpty($declared, 'The registry declares no brand-mark allowlist.');
+
+        // Every glyph entry, and which of them paint a fill instead of a stroke.
+        preg_match_all('/\'(i-[a-z0-9-]+)\':(.*?)(?=\n    \'i-|\n};)/s', $registry, $entries, PREG_SET_ORDER);
+
+        $this->assertNotEmpty($entries, 'No glyphs were found, so this guard proves nothing.');
+
+        $filled = [];
+
+        foreach ($entries as [, $key, $body]) {
+            if (str_contains($body, 'fill="#')) {
+                $filled[] = $key;
+            }
+        }
+
+        foreach ($filled as $key) {
+            $this->assertStringContainsString(
+                "'{$key}'",
+                $declared[1],
+                "Glyph [{$key}] is filled rather than the approved outline style and is not a "
+                .'declared third-party brand mark. One style, one exception, and it is declared.'
+            );
+        }
+
+        $this->assertStringContainsString(
+            'i-microsoft',
+            $declared[1],
+            'The Microsoft brand mark is no longer declared.'
+        );
+    }
+
+    /**
+     * The hero states what SemantIQ is for, never what this deployment holds.
+     *
+     * It is the one page an anonymous caller can read in full, so it must carry
+     * no menu, no product area, no count, no version and no customer name.
+     *
+     * Mutation: put a product-area name or a roadmap label into the hero copy.
+     */
+    public function test_the_login_hero_reveals_nothing_about_the_deployment(): void
+    {
+        $login = $this->withoutComments(
+            $this->source('Pages/Entry.jsx').$this->source('Layouts/SignInLayout.jsx')
+        );
+
+        foreach ([
+            'System Administration',
+            'Fabric Configuration',
+            'SemantIQ Workplace',
+            'Organisation',
+            'Business Domains',
+            'Power BI',
+            'Fabric',
+            'tenant',
+            'database',
+            'API',
+        ] as $forbidden) {
+            $this->assertStringNotContainsString(
+                $forbidden,
+                $login,
+                "The Login page mentions [{$forbidden}]. The hero says what SemantIQ is for; it "
+                .'never describes what is behind authentication or how it is built.'
+            );
+        }
+    }
+
+    /**
+     * The journey chips describe the product; they do not navigate.
+     *
+     * Mutation: render a chip as a link or a button.
+     */
+    public function test_the_journey_chips_are_not_navigation(): void
+    {
+        $hero = $this->functionBody($this->source('Layouts/SignInLayout.jsx'), 'SignInLayout');
+
+        $journey = substr($hero, strpos($hero, 'signin-journey'), 600);
+
+        foreach (['<a ', '<button', 'href', 'onClick'] as $interactive) {
+            $this->assertStringNotContainsString(
+                $interactive,
+                $journey,
+                "A journey chip uses [{$interactive}]. The chips are informational: there is "
+                .'nothing behind them to reach.'
+            );
+        }
     }
 
     /**
@@ -427,7 +660,29 @@ final class BrandAndShellFoundationTest extends TestCase
 
         $this->assertNotFalse($mark, 'The Auth card does not show the company mark.');
         $this->assertNotFalse($heading);
-        $this->assertLessThan($mark === false ? 0 : $heading, $mark, 'The product name sits above the company mark.');
+        $this->assertLessThan($heading, $mark, 'The product name sits above the company mark.');
+
+        // The Login hero states the same hierarchy: the CLaaS2SaaS mark, then
+        // the SemantIQ product name - one logo and one wordmark, so they read as
+        // company and product rather than two competing logos.
+        $hero = $this->source('Layouts/SignInLayout.jsx');
+
+        $heroMark = strpos($hero, '<BrandMark');
+        $product = strpos($hero, 'signin-product');
+
+        $this->assertNotFalse($heroMark, 'The Login hero does not show the company mark.');
+        $this->assertNotFalse($product, 'The Login hero does not name the product.');
+        $this->assertLessThan($product, $heroMark, 'The product name sits above the company mark.');
+
+        // And exactly one logo image: the hero is Midnight Blue in both themes,
+        // so its mark is pinned rather than swapped, and a swapped pair here
+        // would render both at once.
+        $this->assertStringContainsString(
+            'on="dark"',
+            $hero,
+            'The hero mark follows the theme. The hero surface does not, so the light-chrome '
+            .'logo would end up on a dark panel.'
+        );
     }
 
     /**
@@ -485,8 +740,9 @@ final class BrandAndShellFoundationTest extends TestCase
 
             $this->assertTrue(
                 $this->reachesAnArchetype($source),
-                basename($page).' uses neither the authenticated shell nor the Auth card, directly '
-                .'or through a shared component. Every screen is built from a shared archetype.'
+                basename($page).' uses none of the three shared archetypes - the authenticated '
+                .'shell, the Auth card or the sign-in layout - directly or through a shared '
+                .'component. Every screen is built from a shared archetype.'
             );
         }
     }
@@ -501,18 +757,22 @@ final class BrandAndShellFoundationTest extends TestCase
      */
     private function reachesAnArchetype(string $source, int $depth = 0): bool
     {
-        if (str_contains($source, 'AppShell') || str_contains($source, 'AuthCard')) {
-            return true;
+        // The three archetypes, and only these three. AuthCard stays the shape
+        // of every refusal state; SignInLayout is the Login page alone.
+        foreach (['AppShell', 'AuthCard', 'SignInLayout'] as $archetype) {
+            if (str_contains($source, $archetype)) {
+                return true;
+            }
         }
 
         if ($depth > 2) {
             return false;
         }
 
-        preg_match_all("#from '[^']*/Components/([A-Za-z]+)'#", $source, $imports);
+        preg_match_all("#from '[^']*/(Components|Layouts)/([A-Za-z]+)'#", $source, $imports, PREG_SET_ORDER);
 
-        foreach ($imports[1] ?? [] as $component) {
-            $path = self::JS.'/Components/'.$component.'.jsx';
+        foreach ($imports as [, $directory, $component]) {
+            $path = self::JS.'/'.$directory.'/'.$component.'.jsx';
 
             if (is_file($path) && $this->reachesAnArchetype(file_get_contents($path), $depth + 1)) {
                 return true;
@@ -520,6 +780,18 @@ final class BrandAndShellFoundationTest extends TestCase
         }
 
         return false;
+    }
+
+    /**
+     * Source with its comments removed.
+     *
+     * These files EXPLAIN in prose that the page must not offer Google or name a
+     * tenant, so a scan that reads comments reports the explanation as the
+     * defect. Strip them and the scan sees only what can reach a screen.
+     */
+    private function withoutComments(string $source): string
+    {
+        return (string) preg_replace(['#/\*.*?\*/#s', '#^\s*//.*$#m'], '', $source);
     }
 
     /** @return list<string> */
