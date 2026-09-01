@@ -423,6 +423,61 @@ survives: `P1-01-ORGANISATION-PLAN.md` §6, §8 and §11 criterion 5;
 `P1-01-ORGANISATION-DESIGN.md` §7.1, negative case 13 and §10 criterion 3; and
 the "no hard delete" warnings in both Product Owner test scripts.
 
+### D-25 — Organisation Primary Legal Entity — **APPROVED 1 September 2026**
+
+**This closes a PLAN → DESIGN omission, and is recorded as one.** The PLAN
+listed *"primary legal entity"* among the Organisation's data points
+(`P1-01-ORGANISATION-PLAN.md` §5). The DESIGN's `organisations` table did not
+carry it and recorded **no decision to drop it**. The P1-01 scope-completeness
+audit found it. D-25 closes it. It was never a designed field, and the documents
+do not pretend otherwise.
+
+**The relationship:** Organisation → one **optional** Primary Legal Entity.
+
+| It is | It is not |
+| --- | --- |
+| The organisation's corporate identity — who the company is on paper | A `primary` flag on `business_unit_legal_entity` |
+| An organisation-level attribute | An employing entity |
+| Optional, and NULL is a real state | An entitlement, a scope or an access rule |
+| Recorded, granting nothing | A replacement for, or a change to, D-14 |
+
+**D-14 is unchanged, and this is the point on which D-25 rests.** Business Unit ↔
+Legal Entity remains many-to-many; the junction still carries **no attributes of
+any kind**; the association still grants no access, employment meaning or
+entitlement. Crucially, **the primary legal entity is not the parent of the
+business units** — it need not be associated with any business unit at all, and
+a business unit may operate under entities that are not the primary. The two
+answer different questions: *who are we on paper*, and *which entity does this
+business unit operate under*.
+
+**Data model.** `organisations.primary_legal_entity_id` — nullable, FK →
+`legal_entities.id`, indexed, `ON DELETE RESTRICT`. Additive migration,
+explicitly authorised. **No seed, no backfill, no manual database write.** The
+existing production organisation stays NULL after the migration and acquires a
+value only when an administrator chooses one on the Company Profile.
+
+**Company Profile.** A dropdown of this organisation's **active** legal entities.
+Optional; Set, Change and Clear are one operation — a chosen value or none. With
+no legal entity yet recorded the screen says so in plain words rather than
+showing an empty control. The server validates the same two conditions the
+dropdown renders from — same organisation, and active — because a `<select>`
+constrains nothing once the request leaves the browser. No raw identifiers are
+shown.
+
+**Lifecycle guards.** While a legal entity is the organisation's primary:
+
+- **Deactivate → REFUSED.** *"This legal entity is the organisation's primary
+  legal entity. Select another primary legal entity or clear the selection
+  before deactivating it."*
+- **Permanent delete → REFUSED**, by the D-24 guard, which reads the schema and
+  therefore picked the new foreign key up with no special case written.
+
+**No cascade.** The selection is never cleared on the caller's behalf to let a
+deactivation or a purge succeed.
+
+Superseded: `P1-01-ORGANISATION-DESIGN.md` §2.1, which omitted the column. The
+omission is recorded there rather than quietly corrected.
+
 ---
 
 ## 10. Carried verification gates

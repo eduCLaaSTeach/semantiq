@@ -20,9 +20,10 @@ This covers two things:
    Legal Entities, Business Units, Departments and Teams, the jurisdiction list,
    the registered address, the two code fields, and Set / Change / Clear on the
    Management Hierarchy. Section **S** below.
-2. **D-24 — guarded permanent delete.** Section **P** below. Read section 5
+2. **D-25 — the organisation's primary legal entity.** Section **L** below.
+3. **D-24 — guarded permanent delete.** Section **P** below. Read section 5
    first: what can and cannot be permanently deleted has changed.
-3. **The live verification** of P1-01 — the observation of six behaviours on the
+4. **The live verification** of P1-01 — the observation of six behaviours on the
    real deployment with real data, checks **2, 3, 4, 5, 7 and 9** of
    `P1-01-ORGANISATION-VERIFICATION.md` §7.5. Sections A to D below.
 
@@ -37,7 +38,8 @@ in place before you enter the rest of your structure.
 | P1-01 merge SHA | `9afe33d` — *P1-01 Organisation — EXECUTE* |
 | Correction | `4f99c46` — Organisation was not reachable after sign-in |
 | Tab navigation | `3c2b021` — presentation and navigation only |
-| **Scope completion + D-24** | see the pull request for this change — the missing Update operations and guarded permanent delete |
+| **Scope completion + D-24** | `29892f1` — the missing Update operations and guarded permanent delete |
+| **D-25** | see the pull request for this change — the organisation's primary legal entity |
 | Deployed head at issue | recorded on merge |
 | Site | https://semantiq.claas2saas.com |
 
@@ -218,6 +220,38 @@ true when it was written and stopped being true the same day, when you approved
 D-24. **Deletion is now section P**, which tests both that it works and that it
 refuses. Mark S17 **SUPERSEDED** and go to section P.
 
+### L. Primary legal entity — D-25 ⚠ two steps save real data
+
+Added 1 September 2026. The Company Profile now records which legal entity the
+organisation **is**, on paper.
+
+**Use your real legal entity.** Steps L3 and L4 save a genuine business fact, so
+select the entity that is actually correct. Do not invent one, and do not select
+a wrong one just to see the screen work — the refusal steps below use whichever
+entity you have genuinely selected.
+
+**This is not the same thing as the business-unit associations.** A business unit
+may operate under any number of legal entities, and that has not changed. The
+primary legal entity is the organisation's identity, and it does not have to be
+associated with any business unit at all.
+
+| # | Step | Expected result | Result |
+| --- | --- | --- | --- |
+| L1 | Open **Company Profile**. | A field labelled **Primary legal entity** sits between Legal name and Country. | |
+| L2 | Open the dropdown. | It lists **Not selected** followed by your organisation's **active** legal entities, by name. No codes, no numbers, no internal identifiers. Nothing from any other organisation. | |
+| L3 | Select **Lithan Academy Pte Ltd** — or whichever entity is genuinely correct — and click **Save changes**. ⚠ *saves* | It saves without complaint. | |
+| L4 | **Refresh the page.** | The selection is still there. | |
+| L5 | Go to **Legal Entities** and click **Deactivate** on that same entity. | **Refused**, in plain words: *"This legal entity is the organisation's primary legal entity. Select another primary legal entity or clear the selection before deactivating it."* **The entity is still Active** and nothing else changed. | |
+| L6 | On that same entity, click **Delete permanently**, then confirm. | **Refused**, and the message tells you to change or clear the selection on the Company Profile — **not** to deactivate it, because you have just seen that deactivating is refused too. The entity is untouched. | |
+| L7 | Return to **Company Profile**, set Primary legal entity to **Not selected**, and Save. ⚠ *saves* | It saves. | |
+| L8 | Go back to **Legal Entities** and click **Deactivate** on that entity. | **Now permitted** — it becomes Inactive. This is the proof that the refusal was about the primary selection and nothing else. **Reactivate it immediately**, because it is a real legal entity. | |
+| L9 | Return to **Company Profile** and re-select the entity that is genuinely your organisation's primary. Save. ⚠ *saves* | Production is left in its correct real state. **Do not skip this step.** | |
+| L10 | Look at **Business Units** and open one. | Its legal-entity associations are **exactly as they were**. Choosing a primary legal entity did not associate it with anything, and did not remove anything. | |
+
+If your organisation genuinely has no primary legal entity, mark L3, L4, L7, L8
+and L9 **NOT APPLICABLE**, and check on Company Profile that the field reads
+*Not selected* — which is a correct state, not a missing value.
+
 ### P. Permanent deletion — D-24 ⚠ one step destroys a record
 
 Added 1 September 2026, and this is the section to read before you run it.
@@ -314,8 +348,9 @@ automated evidence and are not a substitute for the live observations above.**
 ## 9. Visual and UX checks
 
 Steps **A1 to A12** (the tab navigation), steps **S1, S2, S4, S10, S12, S13 and
-S14** (the new controls and the hierarchy's explanatory state), steps **P2, P7
-and P9** (the confirmation dialog, its keyboard behaviour and the legend), plus
+S14** (the new controls and the hierarchy's explanatory state), steps **L1, L2,
+L5 and L6** (the primary legal entity and both its refusals), steps **P2, P7 and
+P9** (the confirmation dialog, its keyboard behaviour and the legend), plus
 steps 2, 3, 4, 13 and 14.
 
 The dialog is worth a moment of attention rather than a glance. It should name
@@ -337,6 +372,8 @@ being edited. Steps 14, S4 and S10 are where you would see them if any survived.
 1c. The **Management Hierarchy** screen with its explanatory box (step S14).
 1d. The **confirmation dialog** open (step P2), showing the record name.
 1e. **The refusal message from step P4** — this one matters as much as step 9's.
+1f. The **Company Profile** with the primary legal entity selected (step L4).
+1g. **Both refusals from steps L5 and L6**, which are the D-25 guard.
 2. Each section you added structure to, after adding it.
 3. **The refusal message from step 9** — this one matters most.
 4. The team screen after step 12, showing the ended membership still recorded.
@@ -401,13 +438,16 @@ Stated plainly, and **not** inferred from a passing test:
    against the purge guards and all sixteen were caught. **None of that is a
    production observation**, and steps P1 to P9 are.
 
-8. **One scope gap is reported and deliberately NOT built.** The plan lists a
-   **primary legal entity** among the Organisation's data points; the design
-   dropped it without saying so, and there is no column, no field and no
-   decision recording the omission. Closing it needs a schema change, and the
-   Product Owner's standing instruction is to stop and explain before making
-   one. Nothing about it is in this script, and it is not a defect in what you
-   are testing — it is an open question, set out in §7.3i.
+8. **The scope gap reported in §7.3i is now closed, not outstanding.** The plan
+   listed a **primary legal entity** among the Organisation's data points and the
+   design dropped it without recording a decision. You reviewed it and approved
+   **D-25**, which authorised the migration. It is section **L** above. The
+   omission is recorded as an omission in the plan, the design and §7.3j — the
+   documents do not read as though the field had always been designed.
+
+   Section **L** was exercised in a browser against a local throwaway database,
+   including both refusals and the release after clearing. That is development
+   evidence and is **not** a production observation; your run of section L is.
 
 9. **I did not perform steps 5 to 12.** Every one requires real business
    data, which I must not create. Steps 1, 2, 4, 13, 14, 15 and 16 were

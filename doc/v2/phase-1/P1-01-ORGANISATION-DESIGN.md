@@ -52,10 +52,27 @@ users.organisation_id  ──────────────────→
 | `id` | bigint unsigned, PK | |
 | `name` | string(255) | Display name |
 | `legal_name` | string(255), nullable | |
+| `primary_legal_entity_id` | FK → legal_entities, **nullable** | **Added by D-25, 1 September 2026** |
 | `country` | string(2), nullable | ISO 3166-1 alpha-2 |
 | `timezone` | string(64), nullable | |
 | `status` | enum(`active`,`inactive`) | |
 | timestamps | | |
+
+> **`primary_legal_entity_id` was missing from this table, and that was an
+> omission rather than a decision.** The PLAN §5 listed *"primary legal entity"*
+> among the Organisation's data points; this table dropped it and gave no reason.
+> Nothing recorded the choice, because no choice was made. The P1-01
+> scope-completeness audit found it and **D-25 closes it** — see
+> `PHASE-1-PLAN.md` D-25 and `P1-01-ORGANISATION-VERIFICATION.md` §7.3j.
+>
+> It is the organisation's corporate identity and **nothing to do with D-14**:
+> the junction below still carries no `primary` flag and no attributes of any
+> kind, and the primary legal entity is **not** the parent of the business units.
+> An organisation's primary legal entity need not be associated with any business
+> unit at all.
+>
+> Nullable, additive, no backfill. Production stays NULL until an administrator
+> chooses one.
 
 Release 1 is single-tenant, so exactly one row is expected. The table exists
 anyway because every other table carries `organisation_id`, and that column is

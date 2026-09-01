@@ -1010,8 +1010,112 @@ things need deciding before that column exists:
    It can today, so the column has to be nullable, which makes "primary" an
    optional designation rather than a required one.
 
-**Everything else in the D-24 amendment and the scope completion is delivered.**
-This one item is reported and stopped on, as directed.
+**Reported and stopped on, as directed — and then closed.** The Product Owner
+reviewed it the same day and approved **D-25**, which authorises the migration
+and completes the field. See §7.3j.
+
+### 7.3j D-25 — Organisation primary legal entity — 1 September 2026
+
+The gap §7.3i reported, closed. The Product Owner approved D-25 and explicitly
+authorised the migration.
+
+**The omission is recorded as an omission.** The PLAN listed the field, the
+DESIGN dropped it with no decision, the scope-completeness audit found it, D-25
+closes it. The documents were annotated rather than rewritten, so nothing reads
+as though the field had always been designed.
+
+#### What was built
+
+| | |
+| --- | --- |
+| Migration | `organisations.primary_legal_entity_id` — nullable, FK → `legal_entities`, indexed, `ON DELETE RESTRICT`. Additive. **No seed, no backfill, no manual write** |
+| Service | `OrganisationService::requireSelectablePrimary()` — same organisation, and active |
+| Screen | Company Profile dropdown of this organisation's active legal entities; Set, Change and Clear are one operation |
+| Guards | Deactivate refused while primary; permanent delete refused by the existing D-24 guard |
+| Tests | `PrimaryLegalEntityTest` — 20 cases |
+
+Production's organisation is NULL after the migration and stays NULL until an
+administrator chooses one. That is the same rule the rest of P1-01 follows: a
+value written by a migration would be invented business content.
+
+#### The D-24 guard picked this up on its own
+
+Worth recording, because it is the design paying for itself. **Nothing in
+`PurgeDependencies` was changed to know about the primary legal entity.** The
+migration added a foreign key; the schema walk found it; the purge started
+refusing. The only code written was the sentence a person reads.
+
+The evidence is that a D-24 test *failed* when the migration landed —
+`test_the_reference_walk_finds_every_dependency_d24_names` began reporting an
+extra reference it had not been told about. That is the guard behaving exactly
+as designed, and it is why the walk reads the schema rather than a hand-written
+list: a table added by P1-03 or P1-05 will do the same thing.
+
+#### A defect found in the browser, not by review
+
+The purge refusal closed with *"Deactivate it instead."* — and deactivating is
+**also** refused while the entity is the primary. The screen sent the reader in
+a circle: two refusals, each pointing at the other.
+
+Fixed by letting a blocker carry its own closing sentence. The primary-legal-
+entity blocker now says *"Choose another primary legal entity on the Company
+Profile, or clear the selection, and then try again."* Every other blocker keeps
+"Deactivate it instead", which for those is true.
+
+This was invisible to the test suite, which asserted each refusal in isolation
+and was right about both. Only walking the two together showed the loop.
+
+#### Mutation results — 12 mutations, 12 caught
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| E1 | Drop the same-organisation check on the selection | **CAUGHT** |
+| E2 | Drop the active check on the selection | **CAUGHT** |
+| E3 | Skip the selection guard entirely in `updateProfile()` | **CAUGHT** |
+| E4 | Delete the primary check from `deactivateLegalEntity()` | **CAUGHT** |
+| E5 | Clear the selection to let the deactivation through (a cascade) | **CAUGHT** |
+| E6 | Coerce an absent field to null in the controller | **CAUGHT** |
+| E7 | Make the new foreign key `ON DELETE CASCADE` | **CAUGHT** |
+| E8 | Put an `is_primary` flag on the D-14 junction | **CAUGHT** |
+| E9 | Make the column NOT NULL | **CAUGHT** |
+| E10 | Remove the business-language phrase for the new reference | **CAUGHT** |
+| E11 | Make the purge ignore the primary-legal-entity reference | **CAUGHT** |
+| E12 | Remove the specific advice, restoring the circular refusal | **CAUGHT** |
+
+E6 is the one worth naming. Written the obvious way, the controller coerced an
+absent field to null — so a save that never mentioned the primary legal entity
+would silently clear the organisation's corporate identity. The coercion now
+applies only when the field was actually sent.
+
+E8 is the D-14 guarantee, asserted rather than trusted: if a `primary` column
+ever appears on the junction, the build fails.
+
+#### D-14 is unchanged, and it is asserted
+
+Three cases, not a claim:
+
+1. The junction's columns are exactly `id`, `organisation_id`,
+   `business_unit_id`, `legal_entity_id` and timestamps. **No `primary` flag.**
+2. **The primary legal entity is not the parent of the business units.** A
+   business unit is associated with a *different* entity and nothing refuses it;
+   the primary has zero business-unit associations and that is ordinary; the
+   many-to-many still works in both directions afterwards.
+3. Selecting a primary legal entity **grants nothing** — a non-administrator is
+   refused exactly as before.
+
+#### Browser verification — Chromium, 1 September 2026
+
+Local throwaway data. Recorded as observed.
+
+| Observation | Result |
+| --- | --- |
+| Company Profile offers **Primary legal entity**, both themes, listing only active entities plus *Not selected* | ✅ |
+| Selection saved and still correct after a full page reload | ✅ |
+| Deactivating the primary is refused, verbatim: *"This legal entity is the organisation's primary legal entity. Select another primary legal entity or clear the selection before deactivating it."* | ✅ both entities still Active |
+| Permanently deleting the primary is refused, and the refusal points at the Company Profile rather than at Deactivate | ✅ |
+| After clearing the selection, the same entity deactivates normally | ✅ |
+| Page overflow at 390 / 768 / 1440 on Company Profile and Legal Entities | ✅ none |
+| Browser console | ✅ no errors |
 
 ### 7.4 Outstanding for P1-01 — executable now
 
