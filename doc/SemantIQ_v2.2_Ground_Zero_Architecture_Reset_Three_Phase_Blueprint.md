@@ -204,6 +204,42 @@ SemantIQ v2 is one product with three deliberately separated operating areas. Se
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Identity and SSO <br>Organisation and hierarchy <br>Users and groups <br>Roles, domains, scope, sensitivity <br>Secure baseline <br>Audit and access reviews | Connect and discover data <br>Classify and ingest <br>Quality and standardise <br>Business and semantic model <br>Security propagation <br>AI readiness <br>Power BI publication and monitoring | Personalised Home <br>My Intelligence <br>Ask SemantIQ <br>Explore and insights <br>Risks and recommendations <br>Decisions and alerts <br>Reports and dashboards <br>My Workspace |
 
+### 2.4a Product-area presentation order — **PRODUCT OWNER AMENDMENT, 31 August 2026 (D-23)**
+
+**Two orderings exist and they are deliberately different.** Before this
+amendment no document said so, which is why the code and the blueprint appeared
+to disagree.
+
+**Navigation order — what the signed-in sidebar renders, top to bottom:**
+
+1. **SemantIQ Workplace**
+2. **Fabric Configuration**
+3. **System Administration**
+
+**Delivery-phase ownership — UNCHANGED by this amendment:**
+
+| Area | Phase |
+| --- | --- |
+| System Administration | Phase 1 |
+| Fabric Configuration | Phase 2 |
+| SemantIQ Workplace | Phase 3 |
+
+The `1.` / `2.` / `3.` numbering in the section 2.4 table above, and in the
+phase table at the head of this document, is **phase numbering**. It is not the
+navigation order and never was.
+
+This amendment changes **presentation only**. The three areas keep their
+meaning, their contents, their ownership and their delivery phase. Nothing about
+access, security or scope moves with it.
+
+Default cluster expansion, while System Administration → Organisation is the
+only delivered capability: **System Administration expanded; SemantIQ Workplace
+and Fabric Configuration collapsed.** The single working area is therefore open
+on arrival rather than behind two collapsed sections of unavailable features.
+
+Enforced by `ProductArea` and `ProductAreaOrderTest`, which assert the two
+orderings independently so they cannot drift into each other.
+
 **ONE SECURITY CONTEXT ACROSS THE PRODUCT**
 
 Identity + Role + Business Domain + Scope + Sensitivity + organisational relationship determine effective access. The same effective access must drive menu visibility, application APIs, Fabric/semantic security, Power BI consumption, AI retrieval, export and sharing decisions.
@@ -220,6 +256,11 @@ Identity + Role + Business Domain + Scope + Sensitivity + organisational relatio
 - Login, first-run bootstrap, authentication callback, access-not-assigned, session-expired and signed-out states are pre-authentication/application-entry experiences. They are not normal sidebar menu items and must be designed before the authenticated shell.
 
 ## 2.6 Master Menu Structure
+
+> **Navigation order (D-23, 31 August 2026):** the sidebar renders **SemantIQ
+> Workplace, then Fabric Configuration, then System Administration** — see
+> section 2.4a. The 2.6.1 / 2.6.2 / 2.6.3 numbering below is the order these
+> menus are *documented* in, not the order they are *displayed* in.
 
 The following menu baseline is authoritative for v2 planning. Phase-specific screen lists later in this document must remain consistent with it. Individual items may be hidden when the user lacks the required role/domain/scope.
 

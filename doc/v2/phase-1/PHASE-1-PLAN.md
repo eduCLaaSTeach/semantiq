@@ -136,6 +136,11 @@ architectural and module boundaries that will host them.
 
 ### D-02 — Navigation architecture — **APPROVED: three product areas**
 
+> **Amended by D-23, 31 August 2026 — presentation order only.** The sidebar
+> renders **SemantIQ Workplace, Fabric Configuration, System Administration**.
+> The areas, their contents, their ownership and their delivery phases are
+> unchanged. See blueprint section 2.4a.
+
 Top-level product areas are **System Administration**, **Fabric Configuration**
 and **SemantIQ Workplace**. SemantIQ is not forced into the design system's four
 generic clusters (Workspace, Compliance, Application Administration, System
@@ -325,6 +330,28 @@ P1-BASE approved and moved from PLAN to DESIGN.
 
 No application code is written before the design is approved. No migration is
 created. The live server is not modified.
+
+### D-23 — Product-area navigation order — **APPROVED 31 August 2026**
+
+The signed-in sidebar renders the three areas in this order:
+
+1. **SemantIQ Workplace**
+2. **Fabric Configuration**
+3. **System Administration**
+
+**Presentation and information architecture only.** No area's meaning, contents,
+ownership or delivery phase changed. Delivery-phase ownership remains System
+Administration Phase 1, Fabric Configuration Phase 2, SemantIQ Workplace Phase 3.
+
+Default cluster expansion while Organisation is the only delivered capability:
+**System Administration expanded, the other two collapsed** — so the one working
+area is open on arrival rather than behind two collapsed sections of unavailable
+features.
+
+Superseded: the implicit ordering carried by `ProductArea` and by the phase
+numbering in blueprint section 2.4, neither of which had ever stated a
+navigation order explicitly. Blueprint section 2.4a now states both orderings so
+they cannot disagree.
 
 ---
 
