@@ -222,6 +222,43 @@ a {
 
 a:visited { color: var(--accent); }
 
+/* SOLID CTA ANCHORS OWN THEIR TEXT COLOUR IN EVERY LINK STATE.
+ *
+ * The defect this fixes, found by the Product Owner on the sign-out journey:
+ * the "Return to sign in" button showed as a blue rectangle with no visible
+ * label, and "Continue with Microsoft" the same.
+ *
+ * The rule above is the cause. `a:visited` has specificity (0,1,1); the CTA's
+ * own `.auth-action { color: var(--accent-contrast) }` has (0,1,0), so the
+ * moment somebody had actually been to the link's destination - which, on a
+ * button whose whole job is to send you back where you came from, is almost
+ * always - the label took the accent colour and sat on an accent background.
+ * Measured in the cascade: text and background both resolve to rgb(25,62,107)
+ * in the light theme and rgb(127,173,225) in the dark one. 1.00:1. Invisible,
+ * in both themes.
+ *
+ * Naming the state explicitly puts these at (0,2,0), which outranks a:visited
+ * without touching it, so ORDINARY textual links keep the accent treatment they
+ * are meant to have. :link and :visited together cover every anchor, and hover,
+ * focus and active are named so no later state rule can reintroduce the same
+ * problem from a different direction.
+ *
+ * The token is the point. A hardcoded white would hide the defect in the light
+ * theme and leave the dark one - where the contrast colour is the ink navy, not
+ * white - exactly as unreadable. */
+.signin-action:link,
+.signin-action:visited,
+.signin-action:hover,
+.signin-action:focus,
+.signin-action:active,
+.auth-action:link,
+.auth-action:visited,
+.auth-action:hover,
+.auth-action:focus,
+.auth-action:active {
+  color: var(--accent-contrast);
+}
+
 a:hover { color: var(--accent-hover); text-decoration-color: currentColor; }
 
 a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

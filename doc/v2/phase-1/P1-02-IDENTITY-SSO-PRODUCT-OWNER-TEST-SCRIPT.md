@@ -115,6 +115,36 @@ afterwards. **This is the first unit with no test-data warning to give.**
 
 Recorded per step above.
 
+**Round 1 — 2 September 2026: ALL PASS**, with one finding on the sign-out
+negative path (below). This script is amended rather than replaced; there is one
+Product Owner test script for P1-02.
+
+### Retest after the authentication CTA fix
+
+The sign-out journey exposed a **shared** authentication-button defect: the
+primary blue button's label was invisible on `/auth/signed-out`, and
+`Continue with Microsoft` was invisible on the Login page. Logout itself worked
+correctly and its destination is unchanged.
+
+The cause was the link cascade, not the wording: a **visited** button took the
+accent colour and painted it on an accent background — 1.00:1, in both themes.
+
+These six steps confirm the fix. **Use your normal browser, the one that already
+has these pages in its history** — a fresh private window would not have visited
+the links and would not show the state that was broken.
+
+| # | Do this | Expect | PASS / FAIL |
+| --- | --- | --- | --- |
+| R1 | Open the Login page | The blue button visibly reads **Continue with Microsoft**, with the Microsoft logo to its left and the text beside it | |
+| R2 | Sign in | You reach SemantIQ as normal. Nothing about sign-in changed | |
+| R3 | Sign out | You land on `/auth/signed-out`, as before. **The destination is unchanged and correct** | |
+| R4 | Read the button on that page | It visibly reads **Return to sign in** | |
+| R5 | Click it | You return to the Login page | |
+| R6 | Repeat R1 and R4 in the **other** theme | Both labels stay clearly readable | |
+
+If any label is still invisible, stop and say which screen and which theme — the
+fix has not taken effect there.
+
 ## 12. What cannot be tested yet, and why
 
 Carried honestly. **None of this is inferred from a passing automated test.**
