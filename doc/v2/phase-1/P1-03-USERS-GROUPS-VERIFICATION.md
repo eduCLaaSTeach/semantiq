@@ -7,7 +7,7 @@ blocked or was skipped, it says so and says why (`CLAUDE.md` §6).
 | --- | --- |
 | PLAN merge SHA | `bc18725f76248e491a26a931168f8e062a8da296` |
 | DESIGN merge SHA | `9e67749cc38e4717e30b9359a1933f28ea9e2b47` |
-| Implementation merge SHA | *recorded at handover* |
+| Implementation merge SHA | `cb73f14c4c6cc7aa06a47adb11d0e656bd53b79c` (PR #84) |
 
 ---
 
@@ -222,6 +222,34 @@ passed.
 | # | Deviation | Why, and what is unchanged |
 | --- | --- | --- |
 | 1 | DESIGN §9 names the reveal endpoint `POST /console/people/reveal`, taking the user in the body. It is implemented as **`POST /console/people/users/{user}/reveal`** | The behaviour DESIGN specifies is unchanged: `POST` rather than `GET`, exactly two accepted field names, and a 422 refusal identical for every other value so the endpoint cannot be used to ask which columns exist — all asserted by `PeoplePresentationTest`. The path differs so that the user id travels in the address like every other record route in the module, which keeps the two route sets structurally disjoint under correction 1 |
+
+---
+
+## 6b. Production, after deployment
+
+The deploy workflow ran on the merge to `main` and succeeded, migrations
+included. What follows was then observed against the live site with
+**anonymous, cache-busted HTTPS requests** — no session, no test double.
+
+| Request | Observed | What it shows |
+| --- | --- | --- |
+| `/console/people/users` | **302 → the entry page** | The route is delivered **and gated**. An anonymous caller is sent to sign in, not shown the directory |
+| `/console/people/groups` | 302 → the entry page | as above |
+| `/console/people/users/1` | 302 → the entry page | Authentication is decided **before** any record is looked up, so the response cannot say whether user 1 exists |
+| `/console/people/users/999999` | 302 → the entry page | **Identical** to a real id — the gate answers first either way |
+| `/console/people` | 302 → the entry page | The collection root redirects only after the gate |
+| `/console/people/users/groups` | **404** | **Negative case 15, observed in production.** A collection name in a record position is Not Found, never a lookup for somebody called "groups" |
+| `/console/people/groups/users` | 404 | as above |
+| `/console/people/users/users` | 404 | as above |
+| `/console/people/groups/groups` | 404 | as above |
+
+The four 404s beside four 302s are the point: they are **different answers**,
+which is what proves the record routes are constrained rather than merely
+declared in a lucky order.
+
+**Nothing was signed into, and no production data was read, created or changed
+by this verification.** Everything past the gate belongs to the Product Owner's
+test script.
 
 ---
 

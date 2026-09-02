@@ -26,8 +26,8 @@ a decision, not an omission, and several steps below check it.
 | | |
 | --- | --- |
 | DESIGN merge SHA | `9e67749cc38e4717e30b9359a1933f28ea9e2b47` |
-| Implementation merge SHA | *recorded at handover* |
-| Deployed to | *recorded at handover* |
+| Implementation merge SHA | `cb73f14c4c6cc7aa06a47adb11d0e656bd53b79c` (PR #84) |
+| Deployed to | <https://semantiq.claas2saas.com> — deployed and verified reachable on 2 September 2026 |
 
 ---
 
@@ -219,7 +219,7 @@ Do these on the four screens: **Users**, a **person's record**, **Groups**, a
 | 53 | **Confirmations** are green, past tense, and **never contain anybody's name** | |
 | 54 | **Buttons** say what they do — *Add user*, *End membership*, *Remove permanently* — with no internal names, codes or abbreviations anywhere on any screen | |
 | 55 | **Keyboard** — tab through a screen. Focus is always visible | |
-| 56 | Press **F12** and look at the browser **Console** on each screen | No red errors | |
+| 56 | Press **F12** and look at the browser **Console** on each screen | No red errors. **This one matters more than it looks** — see §12 U7: the verification environment could not reach the font CDN, so your reading is the real check | |
 
 ---
 
@@ -256,6 +256,7 @@ Stated rather than inferred from a passing test, and never silently omitted.
 | U4 | **The P1-02 provider-wide SSO Re-check lock** (carried gate 3) | **Moved to P1-05** by your decision. It needs a second System Administrator, and P1-03 cannot assign `platform_role` to anybody. Automated evidence stands |
 | U5 | **Permanent removal of a user who has signed in** | There is deliberately no way to do this, so there is nothing to test. Step 47 observes its **absence**, which is the honest form of the check |
 | U6 | **Group-derived access** | Does not exist in P1-03 and is not scheduled here. Step 45 observes that being in a group grants nothing |
+| U7 | **A clean browser console** | The environment these screens were verified in **cannot reach the Google Fonts CDN** — its egress proxy resets the connection — so every screen logged one error there that has nothing to do with SemantIQ's own code. It could not be cleared where the CDN is unreachable, so **step 56 is the real check** and your reading of it is the answer. If you do see an error mentioning `fonts.googleapis.com`, that is the same limitation and not a fault; anything else is |
 
 ---
 
