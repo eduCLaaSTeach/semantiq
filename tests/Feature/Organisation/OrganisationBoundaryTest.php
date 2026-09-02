@@ -12,10 +12,12 @@ use App\Modules\Organisation\Services\OrganisationService;
 use App\Modules\Organisation\Services\StructureService;
 use App\Modules\Organisation\Support\StructureViolation;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
+use App\Modules\Platform\Http\Middleware\RequireSystemAdministrator;
 use App\Modules\Platform\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use ReflectionClass;
 use Tests\Support\OrganisationFactory;
 use Tests\TestCase;
 
@@ -275,9 +277,12 @@ final class OrganisationBoundaryTest extends TestCase
             $this->actingAsUser($admin)->get('/console/organisation')->assertOk();
         }
 
-        // And the authorisation gate does not mention the column at all.
+        // And the authorisation gate does not mention the column at all. The
+        // gate moved to Platform when P1-02 became the second module to need it;
+        // it is resolved by class name rather than by path so a future move
+        // cannot make this guard silently read nothing.
         $gate = file_get_contents(
-            __DIR__.'/../../../app/Modules/Organisation/Http/Middleware/RequireSystemAdministrator.php'
+            (new ReflectionClass(RequireSystemAdministrator::class))->getFileName()
         );
 
         $this->assertStringNotContainsString('organisation_id', $gate);

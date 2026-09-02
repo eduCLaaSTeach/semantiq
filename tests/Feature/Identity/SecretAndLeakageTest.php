@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Identity;
 
+use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
+use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Security\SecurityEventLogger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use Tests\Support\EntraTokenFactory;
+use Tests\Support\OrganisationFactory;
 use Tests\TestCase;
 
 /**
@@ -44,6 +47,103 @@ final class SecretAndLeakageTest extends TestCase
             $this->assertStringNotContainsString(EntraTokenFactory::CLIENT_ID, $body, "[{$page}] leaked the client id.");
             $this->assertStringNotContainsString(EntraTokenFactory::TENANT, $body, "[{$page}] leaked the tenant id.");
         }
+    }
+
+    /**
+     * S1 and S3. Every P1-02 screen joins the same assertion, against REAL
+     * rendered responses.
+     *
+     * This test is EXTENDED rather than joined by a second leakage test. Two
+     * tests each covering half the surface, with neither knowing it, is the more
+     * dangerous arrangement.
+     *
+     * The identifiers matter as much as the secret here. The masking on the
+     * Entra screen is only real if the full value is genuinely absent from the
+     * payload: a CSS mask over a value already in the props would look like
+     * protection while providing none, and would sit in the page source of every
+     * screenshot-adjacent artefact.
+     *
+     * Mutation: send the full tenant or client id as a prop and mask it in the
+     * component. CAUGHT here and nowhere else.
+     */
+    public function test_no_identity_screen_leaks_a_secret_or_a_full_identifier(): void
+    {
+        $admin = (new OrganisationFactory)->user(administrator: true);
+
+        $screens = ['/console/identity', '/console/identity/providers',
+            '/console/identity/login-experience', '/console/identity/health',
+            '/console/identity/session-policy'];
+
+        foreach ($screens as $screen) {
+            $body = $this->actingAsAdministrator($admin)->get($screen)->getContent();
+
+            $this->assertStringNotContainsString(self::SECRET, $body, "[{$screen}] leaked the client secret.");
+            $this->assertStringNotContainsString(EntraTokenFactory::CLIENT_ID, $body, "[{$screen}] leaked the full client id.");
+            $this->assertStringNotContainsString(EntraTokenFactory::TENANT, $body, "[{$screen}] leaked the full tenant id.");
+        }
+    }
+
+    /** S2. And no token, code, verifier, nonce, state, session id or key. */
+    public function test_no_identity_screen_leaks_a_token_or_a_key(): void
+    {
+        $admin = (new OrganisationFactory)->user(administrator: true);
+
+        foreach (['/console/identity', '/console/identity/health'] as $screen) {
+            $body = $this->actingAsAdministrator($admin)->get($screen)->getContent();
+
+            foreach (['id_token', 'access_token', 'code_verifier', 'APP_KEY', 'base64:',
+                'Stack trace', 'Illuminate\\', 'vendor/laravel'] as $leak) {
+                $this->assertStringNotContainsString($leak, $body, "[{$screen}] leaked [{$leak}].");
+            }
+        }
+    }
+
+    /**
+     * S4. The reveal endpoint returns ONE requested identifier, and there is no
+     * field name that would return the secret.
+     */
+    public function test_reveal_returns_one_identifier_and_never_the_secret(): void
+    {
+        $admin = (new OrganisationFactory)->user(administrator: true);
+
+        $directory = $this->actingAsAdministrator($admin)
+            ->post('/console/identity/entra/reveal', ['field' => 'directory']);
+
+        $directory->assertOk();
+        $this->assertSame(EntraTokenFactory::TENANT, $directory->json('value'));
+        $this->assertStringNotContainsString(EntraTokenFactory::CLIENT_ID, $directory->getContent());
+        $this->assertStringNotContainsString(self::SECRET, $directory->getContent());
+
+        $application = $this->actingAsAdministrator($admin)
+            ->post('/console/identity/entra/reveal', ['field' => 'application']);
+
+        $application->assertOk();
+        $this->assertSame(EntraTokenFactory::CLIENT_ID, $application->json('value'));
+        $this->assertStringNotContainsString(EntraTokenFactory::TENANT, $application->getContent());
+        $this->assertStringNotContainsString(self::SECRET, $application->getContent());
+    }
+
+    /** The screen says Present, and says nothing else about the secret. */
+    public function test_the_secret_is_reported_as_presence_only(): void
+    {
+        $admin = (new OrganisationFactory)->user(administrator: true);
+
+        $body = $this->actingAsAdministrator($admin)->get('/console/identity')->getContent();
+
+        $this->assertStringContainsString('Present', $body);
+
+        // Not its length, not a fragment, not a hash.
+        $this->assertStringNotContainsString((string) strlen(self::SECRET), $body);
+        $this->assertStringNotContainsString(substr(self::SECRET, 0, 4), $body);
+        $this->assertStringNotContainsString(hash('sha256', self::SECRET), $body);
+    }
+
+    private function actingAsAdministrator(User $user): self
+    {
+        return $this->withSession([
+            EnsureSessionIsCurrent::SESSION_USER_ID => $user->id,
+            EnsureSessionIsCurrent::SESSION_AUTHENTICATED_AT => now()->toIso8601String(),
+        ]);
     }
 
     /** Negative case 13. */

@@ -434,6 +434,21 @@ jobs:
             "sh -s -- \"$CPANEL_DEPLOY_PATH\" \"${{ steps.state.outputs.state }}\"" \
             < deployment/ensure-app-key.sh
 
+      # D-31. The approved idle timeout is 60 minutes; the server has been
+      # enforcing 120 because SESSION_LIFETIME said so and the constant that
+      # claimed otherwise was never read. This corrects ONE key and preserves
+      # every other byte of .env, including its mode and ownership. It prints no
+      # value from the file. Tested for real in
+      # tests/Architecture/SessionLifetimeDeploymentTest.php, and piped over
+      # stdin because deployment/ is excluded from rsync.
+      - name: Bring SESSION_LIFETIME to the approved session policy
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "sh -s -- \"$CPANEL_DEPLOY_PATH\"" \
+            < deployment/ensure-session-lifetime.sh
+
       # Migration failure fails the deployment. On the EXISTING path the
       # application stays in maintenance: artisan up does not run after this, and
       # no rollback migration is triggered automatically, because a destructive

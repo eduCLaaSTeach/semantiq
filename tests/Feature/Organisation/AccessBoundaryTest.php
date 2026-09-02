@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Organisation;
 
-use App\Modules\Organisation\Http\Middleware\RequireSystemAdministrator;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
+use App\Modules\Platform\Http\Middleware\RequireSystemAdministrator;
 use App\Modules\Platform\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;

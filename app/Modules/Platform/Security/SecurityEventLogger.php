@@ -107,6 +107,23 @@ final class SecurityEventLogger
 
     public const BUSINESS_UNIT_LEGAL_ENTITY_DISSOCIATED = 'business_unit.legal_entity.dissociated';
 
+    /*
+     * P1-02 identity observability.
+     *
+     * Two events, and only two. A visit to a read-only screen is NOT logged
+     * merely because the screen is sensitive: large volumes of low-value
+     * security events bury the ones that matter, and P1-08 would inherit the
+     * noise.
+     *
+     * The name is state_changed rather than degraded, which is what it was
+     * first called. An event named "degraded" that fires on a transition to
+     * failed is a false statement in the audit trail, and the prose explaining
+     * that in a design document does not travel with the log line.
+     */
+    public const IDENTITY_HEALTH_CHECKED = 'identity.health.checked';
+
+    public const IDENTITY_HEALTH_STATE_CHANGED = 'identity.health.state_changed';
+
     private const EVENTS = [
         self::BOOTSTRAP_GRANT_ISSUED,
         self::BOOTSTRAP_COMPLETED,
@@ -144,6 +161,8 @@ final class SecurityEventLogger
         self::BUSINESS_UNIT_PURGED,
         self::DEPARTMENT_PURGED,
         self::TEAM_PURGED,
+        self::IDENTITY_HEALTH_CHECKED,
+        self::IDENTITY_HEALTH_STATE_CHANGED,
     ];
 
     /**

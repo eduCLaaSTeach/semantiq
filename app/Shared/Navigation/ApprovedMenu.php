@@ -108,7 +108,9 @@ final class ApprovedMenu
             NavigationNode::locked($area, 'Users & Groups', 'i-users', $policy),
             NavigationNode::locked($area, 'Roles & Access', 'i-key', $policy),
             NavigationNode::locked($area, 'Business Domains', 'i-layers', $policy),
-            NavigationNode::locked($area, 'Identity & SSO', 'i-fingerprint', $policy),
+            // P1-02. Delivered: five route-backed tabs, read-only, System
+            // Administrator only. Every route re-authorises on its own.
+            NavigationNode::leaf($area, 'Identity & SSO', 'i-fingerprint', 'identity.entra', 'identity.view'),
             NavigationNode::locked($area, 'Security Status', 'i-shield', $policy),
             NavigationNode::locked($area, 'Access Reviews', 'i-clipboard-list', $policy),
             NavigationNode::locked($area, 'Audit', 'i-scroll', $policy),
