@@ -333,6 +333,46 @@ passed while the button was blank — because the text *was* there, painted in t
 background colour. Text that exists and text that can be read are different
 claims.
 
+### Production verification of the fix
+
+Merged as PR #80, `6708f80b88341b2ef1ec30513c0c55696c5c451c`. **Deploy run #104
+succeeded.**
+
+Chromium in this environment cannot traverse the egress proxy to the production
+host, though `curl` can — so production's **own deployed HTML and CSS bundle**
+were pulled down byte for byte and rendered locally. It is the same stylesheet
+that is live, so what the cascade does to it is what it does on production.
+
+The deployed bundle (`app-D-bq8Cyk.css`) carries, verbatim:
+
+```
+.signin-action:link,.signin-action:visited,.signin-action:hover,.signin-action:focus,
+.signin-action:active,.auth-action:link,.auth-action:visited,.auth-action:hover,
+.auth-action:focus,.auth-action:active{color:var(--accent-contrast)}
+```
+
+…and still carries `a:visited{color:var(--accent)}` for ordinary links.
+
+| Production surface | Label present | Visited contrast, light | Visited contrast, dark |
+| --- | --- | --- | --- |
+| Login — `Continue with Microsoft` | Yes | **10.81:1** | **7.31:1** |
+| Signed Out — `Return to sign in` | Yes | **10.81:1** | **7.31:1** |
+
+Both were **1.00:1** before. The signed-out CTA's `href` is `/`, and production's
+`/` serves the Login page (`"component":"Entry"`, HTTP 200), so the return
+journey is intact.
+
+**Not observed on production:** the click-through itself, and a genuinely
+visited link rendered by a real browser — both blocked by the same proxy and
+`:visited` limitations. The click-through *was* driven end to end locally.
+**The Product Owner's retest is the confirming observation**, and steps R1–R6 in
+the test script exist for exactly that.
+
+The read-only identity verification was re-run after this deployment (run #2) and
+**succeeded**: enforced idle timeout still 60 minutes, policy matching, no
+unapproved provider, five GET and two POST Identity routes. The CSS-only change
+disturbed nothing in P1-02.
+
 ---
 
 ## 7. Definition of Done
