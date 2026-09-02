@@ -7,7 +7,7 @@ blocked or was skipped, it says so and says why (`CLAUDE.md` §6).
 | --- | --- |
 | PLAN merge SHA | `bc18725f76248e491a26a931168f8e062a8da296` |
 | DESIGN merge SHA | `9e67749cc38e4717e30b9359a1933f28ea9e2b47` |
-| Implementation merge SHA | *recorded at handover* |
+| Implementation merge SHA | `cb73f14c4c6cc7aa06a47adb11d0e656bd53b79c` (PR #84) |
 
 ---
 

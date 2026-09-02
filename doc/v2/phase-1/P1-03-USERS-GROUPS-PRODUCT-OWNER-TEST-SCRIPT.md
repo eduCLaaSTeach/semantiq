@@ -26,8 +26,8 @@ a decision, not an omission, and several steps below check it.
 | | |
 | --- | --- |
 | DESIGN merge SHA | `9e67749cc38e4717e30b9359a1933f28ea9e2b47` |
-| Implementation merge SHA | *recorded at handover* |
-| Deployed to | *recorded at handover* |
+| Implementation merge SHA | `cb73f14c4c6cc7aa06a47adb11d0e656bd53b79c` (PR #84) |
+| Deployed to | Production, by the deploy workflow on merge to `main` |
 
 ---
 
