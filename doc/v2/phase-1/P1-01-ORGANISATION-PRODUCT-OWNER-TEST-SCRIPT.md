@@ -1,5 +1,23 @@
 # Product Owner Test Script — P1-01 Organisation
 
+> ## ✅ P1-01 — ORGANISATION — PRODUCT OWNER ACCEPTED, 2 September 2026
+>
+> The Product Owner completed the remaining live checks and accepted the unit
+> explicitly. Checks 1–5 PASS; the business-unit deactivation guard PASS, with
+> the refusal observed as *"Refused. This business unit still has active
+> departments. Blocked by: Singapore Enterprise Sales, Singapore Retail Sales"*;
+> the Management Hierarchy one-user state PASS; original checks 4 and 9 PASS.
+>
+> The **multi-user management-cycle** production observation remains **CARRIED TO
+> P1-03**, as previously approved.
+>
+> Final production state, read counts-only at 03:09 and recorded in
+> `P1-01-ORGANISATION-VERIFICATION.md` §7.6. **No production data was modified to
+> produce that reading.**
+>
+> This script is retained as the acceptance record. It is no longer a list of
+> outstanding work.
+
 Written for the Product Owner, in your words, on your screens. Required by
 `CLAUDE.md` §3. All twelve required parts are present.
 
