@@ -225,6 +225,34 @@ passed.
 
 ---
 
+## 6b. Production, after deployment
+
+The deploy workflow ran on the merge to `main` and succeeded, migrations
+included. What follows was then observed against the live site with
+**anonymous, cache-busted HTTPS requests** — no session, no test double.
+
+| Request | Observed | What it shows |
+| --- | --- | --- |
+| `/console/people/users` | **302 → the entry page** | The route is delivered **and gated**. An anonymous caller is sent to sign in, not shown the directory |
+| `/console/people/groups` | 302 → the entry page | as above |
+| `/console/people/users/1` | 302 → the entry page | Authentication is decided **before** any record is looked up, so the response cannot say whether user 1 exists |
+| `/console/people/users/999999` | 302 → the entry page | **Identical** to a real id — the gate answers first either way |
+| `/console/people` | 302 → the entry page | The collection root redirects only after the gate |
+| `/console/people/users/groups` | **404** | **Negative case 15, observed in production.** A collection name in a record position is Not Found, never a lookup for somebody called "groups" |
+| `/console/people/groups/users` | 404 | as above |
+| `/console/people/users/users` | 404 | as above |
+| `/console/people/groups/groups` | 404 | as above |
+
+The four 404s beside four 302s are the point: they are **different answers**,
+which is what proves the record routes are constrained rather than merely
+declared in a lucky order.
+
+**Nothing was signed into, and no production data was read, created or changed
+by this verification.** Everything past the gate belongs to the Product Owner's
+test script.
+
+---
+
 ## 7b. One failure outside P1-03's scope, fixed rather than re-run
 
 CI failed on a commit that passed locally, in a **P1-02** test P1-03 does not
