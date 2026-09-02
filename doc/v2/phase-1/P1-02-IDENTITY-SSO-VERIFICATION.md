@@ -215,6 +215,126 @@ unapproved provider is registered, or if a write route appears under
 
 ---
 
+## 6c. Product Owner functional testing — PASS, with a shared-foundation finding
+
+**P1-02 Product Owner functional testing — PASS.** All functional checks against
+the five Identity screens passed.
+
+**P1-02 PRODUCT OWNER ACCEPTANCE HELD** — a shared authentication CTA visibility
+regression was discovered during sign-out negative-path verification.
+
+**This is a shared P1-00 / UI-foundation regression found while completing
+P1-02, not a failure of the five P1-02 Identity screens.** None of the Identity
+screens uses the affected classes.
+
+### The finding
+
+On `/auth/signed-out` the primary button rendered as a blue rectangle with **no
+visible label**, and the Login page's `Continue with Microsoft` was equally
+unreadable — logo visible, text not. Logout itself was correct: P1-00's
+redirect to `/auth/signed-out` behaved exactly as designed, and nothing about
+the sign-out destination or the authentication flow was changed.
+
+### Root cause — proven, not assumed
+
+The Product Owner proposed the cascade as the likely cause. It was **not taken
+on trust**; it was reproduced.
+
+```
+a:visited      { color: var(--accent) }           specificity (0,1,1)
+.auth-action   { color: var(--accent-contrast) }  specificity (0,1,0)
+```
+
+`a:visited` outranks the button's own colour, so a **visited** CTA takes the
+accent colour and paints it on an accent background. And a button whose entire
+job is to send you back where you came from is visited almost by definition.
+
+Measured in the real cascade, on the real page:
+
+| Theme | Label colour when visited | Button background | Contrast |
+| --- | --- | --- | --- |
+| Light | `rgb(25, 62, 107)` | `rgb(25, 62, 107)` | **1.00:1** |
+| Dark | `rgb(127, 173, 225)` | `rgb(127, 173, 225)` | **1.00:1** |
+
+Identical values. The label was painted in exactly its own background colour, in
+both themes.
+
+### ⚠ Two failed attempts to observe it, recorded because they matter
+
+1. A first probe compared the button unvisited and visited in a fresh
+   `newContext()` and found **no difference** — which looks like evidence the
+   diagnosis was wrong. It is not: an incognito-style context has no history
+   database and Chromium **disables `:visited` styling there entirely**.
+2. A second attempt with a persistent profile also found no difference. A
+   control page — a plain link with `a:visited { color: #ff0000 }` — stayed
+   green after its target was visited, proving **this headless Chromium does not
+   apply `:visited` styling at all**.
+
+**So the rendered visited state cannot be observed in this environment.** The
+cascade was therefore resolved with a *specificity-equivalent stand-in*: every
+`a:visited` rule in the live stylesheet rewritten to `a.is-visited` — identical
+specificity `(0,1,1)` — and the class applied to the real button. The cascade
+cannot tell the two apart, so what wins there is what wins for a genuinely
+visited link.
+
+**This is a limit worth stating plainly: the cascade is proven; the pixels in a
+truly visited state are not observable here.** The Product Owner's retest in a
+real browser is the confirming observation.
+
+### The fix
+
+Solid CTA anchors now own their text colour in every link state, at `(0,2,0)`,
+which outranks `a:visited` **without touching it** — so ordinary textual links
+keep the accent treatment they are meant to have. The theme token is used, never
+a hardcoded white: white would have fixed the light theme and left the dark one,
+whose contrast colour is the ink navy, exactly as unreadable.
+
+### Audit — all eight rendered CTA surfaces
+
+Every surface, both themes, desktop and narrow, in normal / hover / focus /
+visited. **32 combinations, none below WCAG AA.**
+
+| | Light | Dark |
+| --- | --- | --- |
+| Visited (was **1.00:1**) | **13.48:1** | **8.58:1** |
+| Normal | 10.81–13.48:1 | 7.31–8.58:1 |
+| Hover / focus | 13.29–13.48:1 | 8.49–8.58:1 |
+
+Ordinary textual links confirmed unchanged: still `rgb(25, 62, 107)` — the
+accent — in the visited state.
+
+**One surface could not be rendered locally:** First Run
+(`Sign in with Microsoft`) needs a live single-use bootstrap grant. It uses the
+same `.auth-action` class as the seven state screens, so it is covered by the
+fix and by the guard, but it is **not separately observed** and is recorded here
+rather than counted.
+
+### Regression guard
+
+`AuthCallToActionVisibilityTest` — five cases, five mutations, all caught:
+
+| Mutation | Result |
+| --- | --- |
+| Revert the fix (the defect exactly as found) | **CAUGHT** |
+| CTA visited set to the accent instead of its contrast | **CAUGHT** |
+| Drop `:visited` from the CTA states | **CAUGHT** |
+| A future `.auth-card a:visited` that silently outranks the CTA | **CAUGHT** |
+| Weaken the global ordinary-link treatment | **CAUGHT** |
+
+The fourth is the one that matters most: the first three would all pass while a
+future rule at `(0,2,1)` quietly beat the CTA's `(0,2,0)` and put the defect
+straight back. The guard compares **computed specificity**, so it fails on any
+new visited colour rule that could win, unless that rule names a CTA class or is
+listed as deliberately scoped elsewhere with a reason.
+
+**A component test would not have caught any of this.** Tests already asserted
+the label exists in the component and reaches the page, and every one of them
+passed while the button was blank — because the text *was* there, painted in the
+background colour. Text that exists and text that can be read are different
+claims.
+
+---
+
 ## 7. Definition of Done
 
 | # | Criterion | State |
