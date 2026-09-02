@@ -489,6 +489,12 @@ rather than quietly lost.
 | From | To | Gate | Why it could not run in the originating unit |
 | --- | --- | --- | --- |
 | **P1-01** *(ACCEPTED 2 Sep 2026)* | **P1-03** | Live multi-user management-cycle refusal, observed in production | Self-management is refused before the chain walk, so a genuine cycle needs at least two SemantIQ users. P1-01 ships with `users_total = 1`; P1-03 provisions the second |
+| **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-03** | A real non-administrator being refused at Identity & SSO | Production held one account, so there was nobody to sign in as. P1-03 owns provisioning, and every user it creates has `platform_role = NULL` — so this needs no special setup and no manufactured account |
+| **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-05** | The provider-wide Re-check limit, observed with two administrators | Needs a second **privileged** account. **Moved from P1-03 to P1-05 by Product Owner decision:** P1-03 cannot assign `platform_role` at all, so closing it there would have meant manufacturing a second privileged production account. Automated evidence stands |
+
+These two were recorded in the P1-02 Product Owner test script §12 and were
+missing from this register — which is the exact way a carried gate gets quietly
+lost, and the reason this table exists. Added when P1-03 was delivered.
 
 **P1-03 is not accepted until every gate carried into it has been executed and
 recorded with observed output.**
