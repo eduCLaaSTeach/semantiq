@@ -1,6 +1,10 @@
 # P1-02 — Identity & SSO Administration — DESIGN
 
-**Status:** **DESIGN — awaiting Product Owner review.** Documentation only.
+**Status:** **DESIGN — REVISION 2, awaiting Product Owner review.**
+Documentation only.
+**Revises:** Revision 1 (`594de35`), reviewed by the Product Owner on
+2 September 2026: two decisions taken, three corrections required, plus an event
+rename and one deployment-script safety requirement. §0 lists what changed.
 **Unit:** P1-02 (Phase 1 delivery order 4)
 **PLAN:** `P1-02-IDENTITY-SSO-PLAN.md` — **APPROVED 2 September 2026**, decisions
 D-26 to D-31, scope corrections §15a.1 and §15a.2
@@ -9,9 +13,27 @@ D-26 to D-31, scope corrections §15a.1 and §15a.2
 **Depends on:** P1-00 — Login, Entra SSO, sessions — **ACCEPTED 31 August 2026**
 **UI standard:** `doc/design-system/ui-and-ux-layout-template-shared.md` — **FROZEN**
 
-> **Nothing here is implemented.** No route, controller, service, screen,
-> migration, settings table, second provider or editable security setting has
-> been created. **This is DESIGN only.**
+> **Nothing here is implemented.** No route, middleware move, service, screen,
+> migration, settings table, second provider, editable security setting,
+> deployment script or configuration change has been created or made. **This is
+> DESIGN only.**
+
+---
+
+## 0. What changed in Revision 2
+
+| # | Change | Where |
+| --- | --- | --- |
+| 1 | **Decision taken:** `RequireSystemAdministrator` is promoted to Platform | §5.2 |
+| 2 | **Decision taken:** the tab reads **`Other Identity Providers`** | §2, §2.2 |
+| 3 | **`Re-check now` performs a controlled live probe**, through the existing `EntraDiscovery` boundary, under a provider-wide lock | §6.4 |
+| 4 | **Health separates two facts** it previously conflated: *identity trust available* (cache or provider) and *live provider reachability* (did we reach Microsoft just now) | §6.2 |
+| 5 | **An approved provider is not "anything bound in the container".** An authoritative approved-provider catalogue is introduced, and a runtime provider without a matching approval fails the build | §2.2, §6.2, §12 A5 |
+| 6 | **Health wording no longer overclaims.** Healthy means no issue was detected by the available checks; it is not a promise that a person can sign in | §6.3 |
+| 7 | **Event renamed** to `identity.health.state_changed`, because an event named *degraded* that fires on *failed* is untrue | §7 |
+| 8 | **The `.env` rewrite must preserve ownership and permissions**, leave no residual copy, and never create a secret-bearing file at a permissive mode | §8.4, §12 D9–D12 |
+
+Everything else in Revision 1 was approved in principle and is unchanged.
 
 ---
 
@@ -21,8 +43,9 @@ D-26 to D-31, scope corrections §15a.1 and §15a.2
 
 Every screen in P1-02 answers a question about the authentication P1-00 already
 built. No screen changes it. The one action in the entire unit — **Re-check
-now** — re-evaluates a health report and writes a cache entry, and that is the
-full extent of what P1-02 can alter about a running system.
+now** — makes one read-only request to Microsoft and writes a cache entry, and
+that is the full extent of what P1-02 can alter about a running system. It
+issues no token, attempts no sign-in, and changes no configuration.
 
 The single exception is not a screen at all: the **D-31 correction**, which
 brings the *enforced* idle timeout into line with the *approved* one. That is a
@@ -38,14 +61,15 @@ One feature, `Identity & SSO`, five route-backed tabs — the **Pattern B** stri
 P1-01 already uses. No new navigation architecture, no ARIA tab widget, no
 client-only switching.
 
-> **One polish concern, raised and not acted on.** The approved tab label
-> **`Other Approved IdPs`** carries an abbreviation that is identity-protocol
-> jargon (`IdP`). `CLAUDE.md` §4 flags developer terminology on a user-facing
-> surface — and §4 equally forbids using the polish gate to overturn an approved
-> product decision. The Product Owner named these five tabs verbatim, so the
-> label ships as approved. **`Other Identity Providers` is offered as a separate,
-> optional wording change, for the Product Owner to accept or decline on its
-> own.** It is not made here.
+> **Tab wording — DECIDED by the Product Owner, Revision 2.** The second tab
+> reads **`Other Identity Providers`**. The `IdP` abbreviation was
+> identity-protocol jargon on a user-facing surface, which `CLAUDE.md` §4 flags;
+> the Product Owner has replaced it with business language.
+>
+> **Only the user-facing wording changes.** The feature is still `Identity &
+> SSO`, the route is still `/console/identity/providers`, and technical
+> terminology stays where it belongs — in the code, the events and this
+> document.
 
 ### 2.1 Microsoft Entra ID — `/console/identity`
 
@@ -76,22 +100,66 @@ identifiers; cookie values; `APP_KEY`; database credentials; any `.env` line.
 
 **No enable/disable control** — D-28.
 
-### 2.2 Other Approved IdPs — `/console/identity/providers`
+### 2.2 Other Identity Providers — `/console/identity/providers`
 
 | Row | Value |
 | --- | --- |
-| Approved and in use | **Microsoft Entra ID** — the Release 1 provider |
-| Anything else | An **empty state**, not an error: *"No other identity provider is configured. Adding one is a Product Owner decision, not a setting."* |
-| How another would be added | One sentence: through the existing identity-provider boundary, without changing the sign-in flow |
+| Approved provider | **Microsoft Entra ID** — approved, in use, and `Configured` / `Not configured` |
+| Anything else | An **empty state**, not an error: *"No other identity provider is approved."* |
+| How another would be added | *"Adding another identity provider requires Product Owner approval. A provider that merely exists in the code is not an approved provider."* |
 
-The list is **derived from the container**, not written into the page: every
-binding of `IdentityProvider` is enumerated and displayed. A hardcoded list of
-one would become a lie the day a second provider exists, and this screen's whole
-value is that it is not lying.
+**Approved is a decision, not a fact about the code — Revision 2, correction 2.**
+
+Revision 1 had this screen enumerate every `IdentityProvider` binding in the
+service container. That was wrong, and the way it was wrong matters: it made
+**"approved" mean "present"**, so anything a future developer happened to bind
+would have promoted itself onto an administrator's screen as an approved way into
+the product. The Product Owner's rule is that a second identity provider requires
+an explicit decision. A design in which code can grant itself that decision does
+not implement the rule; it implements its opposite.
+
+So two concepts are kept apart, deliberately and by name:
+
+| Concept | Meaning | Source |
+| --- | --- | --- |
+| **Approved provider** | The Product Owner has decided this provider may sign people in | `ApprovedProviders` — an authoritative catalogue, §2.2.1 |
+| **Runtime provider** | An `IdentityProvider` implementation the application actually binds | The container, enumerable via a tag |
+
+**The screen lists the approved catalogue**, and annotates each entry with
+whether it is implemented and configured. **A runtime provider that is not in the
+catalogue is never listed as approved** — instead it fails the build (§12, A5)
+and is reported by health as a fault (§6.2, check 9), which is what an
+unapproved sign-in path deserves.
 
 **Google, Okta, Auth0 and every other provider are absent** — not greyed out,
 not listed as "available", not a disabled toggle. A greyed-out Google button is a
 product claim Release 1 does not make.
+
+#### 2.2.1 The catalogue
+
+```
+App\Modules\Identity\Support\ApprovedProviders
+
+    APPROVED = [ 'microsoft' => 'Microsoft Entra ID' ]   // Release 1, entire
+
+    all():        array<string, string>
+    isApproved(string $key): bool
+    nameFor(string $key): ?string
+```
+
+Release 1's catalogue is **one entry**. Adding a second is a Product Owner
+decision recorded as a numbered decision in the plan, followed by a change to
+this constant — a visible, reviewable, single-line diff, which is exactly the
+property a container scan did not have.
+
+**No second provider is implemented, bound, stubbed or listed.** The catalogue
+gains an entry when a decision says so, not before.
+
+Enumerating runtime providers needs the container to be *enumerable*, which it
+currently is not: `PlatformServiceProvider` binds `IdentityProvider::class` to
+`EntraProvider` and nothing tags it. One line is added to that binding — a tag —
+so the set can be read rather than assumed. That is the whole change to Platform,
+and it adds no provider.
 
 ### 2.3 Login Experience — `/console/identity/login-experience`
 
@@ -122,13 +190,18 @@ does not exist.
 
 The one screen with operational value, and the one action in the unit.
 
-- **One overall state**: `Healthy`, `Needs attention`, or `Sign-in will fail`
-  (§6.3 — the user-facing wording for Healthy / Degraded / Failed).
+- **One overall state**: `Healthy`, `Needs attention`, or `Sign-in unavailable`
+  (§6.3 — and §6.3 is careful about what each one does **not** claim).
 - **One row per check**, each with its own state, a business-readable finding,
   and — where the state is not Healthy — **what to do about it**.
-- **When health was last established**, in plain words, or *"Health has not been
-  checked on this deployment yet."*
-- **`Re-check now`** — one button, System Administrator only, rate limited.
+- **Two separate facts, never merged**: whether identity trust is *available*
+  right now (from cache or the provider), and whether Microsoft was *reachable*
+  during the most recent live check. §6.2.
+- **When health was last established, and when Microsoft was last reached**, in
+  plain words, or *"Health has not been checked on this deployment yet."*
+- **`Re-check now`** — one button, System Administrator only, which performs a
+  real live probe (§6.4), rate limited per administrator and locked
+  provider-wide.
 
 ### 2.5 Session Policy — `/console/identity/session-policy`
 
@@ -167,6 +240,8 @@ App\Modules\Identity\Support\
     IdentitySafeValue             the masking rule, in exactly one place
     SecretPresence                enum { Present, Missing }
     SessionPolicy                 the enforced session values, §8
+    ApprovedProviders             the approved-provider catalogue, §2.2.1
+    ProviderInventory             the runtime providers actually bound, §2.2.1
 ```
 
 `IdentityConfigurationReport` holds:
@@ -279,7 +354,7 @@ Inside the existing `console` group, so `EnsureSessionIsCurrent` runs first, the
 | Method | URI | Name | Purpose |
 | --- | --- | --- | --- |
 | GET | `/console/identity` | `identity.entra` | Microsoft Entra ID |
-| GET | `/console/identity/providers` | `identity.providers` | Other Approved IdPs |
+| GET | `/console/identity/providers` | `identity.providers` | Other Identity Providers |
 | GET | `/console/identity/login-experience` | `identity.login-experience` | Login Experience |
 | GET | `/console/identity/health` | `identity.health` | SSO Health |
 | GET | `/console/identity/session-policy` | `identity.session-policy` | Session Policy |
@@ -302,23 +377,25 @@ Every route re-authorises through `RequireSystemAdministrator`. Navigation
 visibility is **presentation**; the route is the control. Both are asserted, and
 separately, exactly as in P1-01.
 
-**One structural change, and it is a move, not a copy.**
-`RequireSystemAdministrator` currently lives in
-`app/Modules/Organisation/Http/Middleware/`. A second module referencing another
-module's middleware is a boundary smell; **a second copy of an authorisation gate
-is far worse** — it is the "two sources of truth" failure this project has hit
-repeatedly, applied to the one class where being wrong means letting the wrong
-person in.
+**DECIDED by the Product Owner, Revision 2: promote the middleware to Platform.**
+Recorded as *a structural ownership correction, not a P1-01 functional change* —
+this gate is platform-wide, and P1-02 is the second module to need it.
 
-So it is **promoted** to `App\Modules\Platform\Http\Middleware\RequireSystemAdministrator`:
-a file move plus two import updates, with **no behavioural change**. The evidence
-that the move is safe is that every existing P1-01 boundary test passes
-unchanged, because those tests exercise routes rather than class paths.
+`RequireSystemAdministrator` moves from
+`App\Modules\Organisation\Http\Middleware\` to
+`App\Modules\Platform\Http\Middleware\`.
 
-*If the Product Owner prefers that no accepted P1-01 file is touched at all*, the
-fallback is for the Identity routes to reference the class where it currently
-lives. That is strictly worse and is offered only as a preference, not a
-recommendation.
+| Requirement | How it is met |
+| --- | --- |
+| Move it to Platform | The file moves; the namespace changes |
+| Update P1-01 and P1-02 imports | `routes/web.php`, and any test importing the class by name |
+| **Do not create a second copy** | The Organisation path is deleted, not left behind. §12 case A8 fails the build if two classes named `RequireSystemAdministrator` exist |
+| **Do not change its behaviour** | Not one line of the class body changes — the diff is the namespace and the file path |
+| **Existing P1-01 authorisation tests pass unchanged** | They exercise routes, not class paths, so they are the evidence the move was inert. If one needs editing to pass, the move was not inert and that is a finding, not a fixture to adjust |
+
+**A second copy of an authorisation gate was never an option.** It is the "two
+sources of truth" failure this project has hit repeatedly, applied to the one
+class where being wrong means letting the wrong person in.
 
 ### 5.3 Navigation
 
@@ -372,21 +449,52 @@ copy of the logic; §12 case H7 compares the two and fails.
 
 **Collapsing rule, stated explicitly:** `Failed` → `ok: false`. `Degraded` →
 `ok: true`, with the detail naming what needs attention. A deployment must not be
-failed by a redirect-address nuance on a system where sign-in demonstrably works;
-an outage must fail it.
+failed by a return-address nuance, or by a live probe that could not reach
+Microsoft while a valid trust set is still cached and sign-in is still being
+served; a condition that deterministically prevents authentication must fail it.
 
 ### 6.2 The checks
 
-| # | Check | Healthy when | Degraded when | Failed when |
+#### The two facts this screen must never merge — Revision 2, correction 1
+
+Revision 1 had one row called *"Directory reachable"* which went green on a
+cached response. That row was answering **two different questions with one
+answer**, and the more useful of the two was the one it silently dropped:
+
+| Fact | Question | Cached success is… |
+| --- | --- | --- |
+| **Identity trust available** | Can SemantIQ obtain usable metadata and signing keys right now, from its cache or from the provider? | …a perfectly good answer. Sign-in has what it needs |
+| **Live provider reachability** | Did an explicit live check reach Microsoft **just now**? | …**not an answer at all.** It is a record of something that happened up to 24 hours ago |
+
+A successful response cached at 09:00 keeps *trust available* true all day. It
+says nothing about whether Microsoft is reachable at 16:00 — and under Revision
+1 a new outage could therefore have stayed invisible on a screen whose whole
+purpose is to make outages visible, for up to a day, while an administrator
+pressed a button labelled **Re-check now** and was told everything was fine.
+
+So they are **two rows, with two names, fed by two mechanisms**.
+
+#### The checks
+
+| # | Check | Healthy when | Needs attention when | Fails when |
 | --- | --- | --- | --- | --- |
 | 1 | **Provider configured** | all four identity keys present | — | any is missing |
 | 2 | **Configuration valid** | the existing production validator reports no identity problem | — | it reports one |
-| 3 | **Directory reachable** | OIDC metadata is available — **fresh or from the 24-hour cache** | — | no metadata can be obtained |
-| 4 | **Trust anchor available** | at least one usable RSA signing key | — | none, or unreachable |
+| 3 | **Identity trust available** | usable OIDC metadata **and** at least one usable RSA signing key are obtainable — **fresh or from the 24-hour cache** | — | neither cache nor provider can supply them |
+| 4 | **Microsoft reachable (live check)** | the most recent live probe reached Microsoft | the most recent live probe failed **and** check 3 still has usable cached trust | the most recent live probe failed **and** check 3 has nothing usable |
 | 5 | **Directory identity consistent** | the published issuer carries the configured directory id, **or the directory is configured by domain name, where the comparison does not apply** | the directory is configured by id and the published issuer does not carry it | — |
 | 6 | **Sign-in return address** | matches this deployment's callback address | it does not match | — |
 | 7 | **Client secret present** | present | — | missing |
 | 8 | **Session policy coherent** | enforced idle and absolute lifetimes equal the approved policy, and idle is shorter than absolute | either differs | — |
+| 9 | **Only approved providers are registered** | every runtime provider is in the approved catalogue | — | a runtime provider is not approved (§2.2) |
+
+**Check 4 has a fourth per-row outcome: `Not checked`.** Before any live probe
+has run on this deployment — which, because `optimize:clear` empties the cache,
+is the state immediately after every deployment — the row reads *"No live check
+has been run on this deployment yet."* and offers the button. It is
+**informational and contributes nothing to the overall state**. Presenting a
+never-run check as a warning would put every deployment permanently in amber for
+a condition that is not a fault, and §15a.2 forbids exactly that kind of noise.
 
 **Check 5 needs its reasoning on the record.** The sign-in path does *not*
 compare the configured tenant against the published issuer: `IdTokenValidator`
@@ -408,22 +516,37 @@ consequence is — *"if these differ, people will be returned to the wrong place
 after signing in"* — which is actionable without asserting an outage we have not
 observed.
 
-### 6.3 The three states, said in the administrator's words
+### 6.3 The three states — and what each one does *not* claim
 
-| Internal | On screen | Meaning |
+**Revision 2, correction 3.** Revision 1's wording overclaimed in both
+directions: `Healthy` implied sign-in was proven to work, and `Degraded` said
+*"Sign-in works"* outright. **Neither is something this unit can know.** It
+performs no authentication transaction, and it cannot see client-secret expiry at
+all (§13). A screen that claims more certainty than its checks provide is worse
+than a cautious one, because the first time it says `Healthy` over a broken
+sign-in, nobody believes it again.
+
+| Internal | On screen | What it means — exactly |
 | --- | --- | --- |
-| Healthy | **`Healthy`** | Configuration is complete and coherent; the directory and its signing keys are available |
-| Degraded | **`Needs attention`** | Sign-in works. Something is inconsistent and should be corrected |
-| Failed | **`Sign-in will fail`** | Sign-in cannot succeed. The reason is named and so is the next step |
+| Healthy | **`Healthy`** | *"No issue was detected by the available identity checks."* **Not** a guarantee that a given person can sign in |
+| Degraded | **`Needs attention`** | *"An identity configuration or provider condition needs attention and may affect sign-in."* **Never** *"sign-in works"* |
+| Failed | **`Sign-in unavailable`** | Reserved for a condition that **deterministically prevents authentication** — mandatory configuration missing, or no usable trust state at all. The reason is named and so is the next step |
 
 Aggregation: **any Failed → Failed; else any Degraded → Degraded; else Healthy.**
+`Not checked` rows contribute nothing.
 
-**A cached discovery response is `Healthy`** — §15a.2, and it is worth being
-precise about why this is not a judgement call. `EntraDiscovery` caches for 24
-hours and, on expiry, simply refetches. There is no "stale but served" condition
-to report: either metadata is obtainable (fresh or cached) or it is not. Caching
-is the designed behaviour, so it produces no warning at all, and the design has
-**no code path that can emit "cached" as a concern**.
+The screen carries one line under the overall state saying what the checks do and
+do not cover, so the limit is visible where the claim is, not buried in a
+document: *"These checks read configuration and contact the identity provider.
+They do not perform a sign-in, and they cannot detect an expired client secret."*
+
+**A cached discovery response keeps `Identity trust available` Healthy** —
+§15a.2, and the reasoning is unchanged: `EntraDiscovery` caches for 24 hours and,
+on expiry, refetches. There is no "stale but served" state to report — either
+usable trust is obtainable or it is not — so caching produces no warning at all,
+and the design has **no code path that can emit "cached" as a concern**. What
+Revision 2 adds is that this row is no longer allowed to *stand in* for live
+reachability: that is check 4's job, and check 4 is fed by a real probe.
 
 **Every non-Healthy row carries an action.** No warning ships without one — if a
 condition cannot be acted on by the person reading the screen, it is not
@@ -431,41 +554,114 @@ displayed as a warning. Worked examples:
 
 | Finding | What the row says |
 | --- | --- |
-| Directory unreachable | *"The directory could not be reached, so people cannot sign in. Check that the server can make outbound connections to Microsoft."* |
+| No usable trust at all | *"Microsoft's sign-in settings could not be obtained, so people cannot sign in. Check that the server can make outbound connections to Microsoft."* |
+| Live check failed, cached trust still available | *"Microsoft could not be reached during the latest live check. Cached identity trust remains available, but sign-in may be affected. Check that the server can make outbound connections to Microsoft, then run the check again."* |
+| An unapproved provider is registered | *"An identity provider is present in this build that has not been approved. Sign-in providers require Product Owner approval. Remove it, or record the approval."* |
 | Secret missing | *"No client secret is configured, so sign-in cannot complete. Set it on the server through the controlled deployment process."* |
 | Return address mismatch | *"The sign-in return address configured for Microsoft is not this deployment's return address. If they differ, people will be returned to the wrong place after signing in. Compare it with the redirect URI registered in Microsoft Entra."* |
 | Idle timeout differs from policy | *"The idle timeout in force is N minutes; the approved policy is 60. Correct SESSION_LIFETIME on the server through the controlled deployment process."* |
 
 Never an exception message, never a stack trace, never `discovery_unavailable`.
 
-### 6.4 Non-destructive, and rate limited
+### 6.4 `Re-check now` performs a real live probe
 
-Health **reads**. It performs no write to any table, changes no configuration,
-issues no token, starts no authorization and **never validates a credential by
-attempting a sign-in**. The only thing it writes anywhere is the last-result
-cache entry in §6.5.
+**Revision 2, correction 1 — and Revision 1 was wrong here.** It had Re-check
+re-evaluate without touching the network, on the reasoning that failures are
+never cached so a broken directory would be reached anyway. That reasoning
+answers the wrong question. It is true that a *failing* directory is probed on
+every evaluation; it is false that a directory which succeeded this morning and
+broke this afternoon would be. A 24-hour `Cache::remember` holds that morning's
+success, and Revision 1's Re-check would have re-read it and reported `Healthy`
+through an outage — under a button whose label promises the opposite.
 
-**`Re-check now`** — `RateLimiter`, **one per 60 seconds per administrator**,
-key `identity-health-recheck:{user_id}`. Over the limit: *"Health was checked
-moments ago. Try again shortly."* — no internal timer named, no seconds counted
-down.
+**A button that says `Re-check now` must check now.**
 
-**A deliberate refinement of PLAN §7.3, flagged rather than slipped in.** The
-PLAN says Re-check *"refreshes discovery and re-evaluates"*. This design has it
-**re-evaluate without invalidating the discovery cache**, and the reason is the
-PLAN's own §7.2: an administrator holding the refresh key must not become an
-outbound-request amplifier against Microsoft. Invalidating a 24-hour cache on
-demand is exactly that. The refinement costs nothing diagnostically, because
-**failures are never cached** — `Cache::remember` stores nothing when the fetch
-throws — so on a deployment where the directory is genuinely unreachable, every
-check already reaches the network. Re-check refreshes the *health result*; the
-discovery cache is left to the mechanism that was designed to manage it.
+#### The probe, on the existing boundary
+
+The capability is added to **`EntraDiscovery`**, which already owns every
+outbound call to Microsoft. **No second HTTP implementation is created**, and the
+existing sign-in path is not altered.
+
+```
+EntraDiscovery::probe(): ProbeResult      // live, read-only, non-destructive
+```
+
+Its contract, in order, because the order is the safety property:
+
+1. **Take a provider-wide lock before anything else.**
+   `Cache::add("semantiq:entra:{tenant}:probe-lock", 1, 300)` — approximately the
+   protection already proven in `signingKeys()`'s refetch lock. If the lock is
+   **not** acquired, the probe **does not run**: the caller reports the stored
+   result of the last probe, with its timestamp, and says a live check ran
+   moments ago. **Ten administrators cannot turn ten buttons into ten probes**,
+   and neither can one administrator with ten tabs.
+2. **Fetch metadata over HTTP, directly** — not through `Cache::remember`, or the
+   cached success would satisfy the call and no network request would happen.
+   This is the line that makes the probe a probe, and §12 case H11 asserts it.
+3. **Fetch the signing keys** from the `jwks_uri` the fresh metadata published.
+4. **On success**, update the metadata and JWKS cache entries with the fresh
+   values and a full 24-hour TTL. `Cache::put`, not forget-then-fetch.
+5. **On failure at any step, touch no cache entry.** The previously cached trust
+   set survives intact and continues to serve sign-in. Nothing is invalidated,
+   nothing is deleted, and the failure is recorded only as a probe outcome.
+6. **Record the outcome** — reachable or not, when, and a classified reason — at
+   `semantiq:identity:probe:last`.
+
+**The cache is never cleared before the network is tried.** That ordering is the
+whole of requirement "a live probe must not delete a known-good runtime cache
+before attempting the network request": a forget-then-fetch would convert a
+transient Microsoft outage into a local one, turning a diagnostic button into the
+thing that breaks sign-in.
+
+**What the probe never does:** it requests no token, starts no authorization,
+sends no client secret, attempts no sign-in, and writes to no table. It performs
+exactly two `GET` requests to public discovery endpoints. §12 cases H4 and H12.
+
+> **An observation, raised and deliberately not acted on.** The *existing*
+> `EntraDiscovery::signingKeys(forceRefresh: true)` — used by the sign-in path
+> when a token carries an unknown key id — does `Cache::forget()` *before* its
+> refetch, so a refetch that fails leaves no cached keys. That is the same class
+> of defect this correction forbids in the probe. It is **P1-00 sign-in-path
+> behaviour, outside P1-02's scope**, it is bounded by its own 5-minute lock, and
+> changing it would be reopening the authentication architecture the Product
+> Owner has ruled out. **Recorded here so it is not lost**, for a P1-00
+> correction or a later unit to decide on. Nothing in P1-02 depends on it.
+
+#### Two guards, not one
+
+| Guard | Scope | Purpose |
+| --- | --- | --- |
+| **Provider-wide probe lock**, ~5 minutes | The tenant, across every administrator and every session | The real protection. Bounds outbound traffic to Microsoft no matter how many people press the button |
+| **Administrator rate limit**, 1 per 60 seconds | `identity-health-recheck:{user_id}` | A UI guard. Stops double-submits and impatient clicking before they reach the lock, and gives the person a sentence instead of a silent no-op |
+
+Over the administrator limit: *"Health was checked moments ago. Try again
+shortly."* Lock held by someone else: *"A live check was run moments ago. This
+is its result."* — with the stored probe timestamp. Neither names an internal
+timer or counts seconds down.
+
+#### Everything else about health still reads
+
+Outside an explicit Re-check, health **reads**: it performs no write to any
+table, changes no configuration, issues no token, starts no authorization and
+never validates a credential by attempting a sign-in. Rendering the SSO Health
+screen does **not** probe — only the button does. The only things written
+anywhere in this unit are cache entries: the last health result (§6.5) and the
+last probe outcome.
 
 ### 6.5 Last result — D-30, cache only
 
-One entry, `semantiq:identity:health:last`, holding the state, the time it was
-established and the per-check outcomes. **No table, no migration, no retention
-policy.** P1-08 owns durable history.
+Two entries, no table:
+
+| Key | Holds |
+| --- | --- |
+| `semantiq:identity:health:last` | the overall state, when it was established, and the per-check outcomes |
+| `semantiq:identity:probe:last` | the last live probe: reachable or not, when, and a classified reason |
+
+**No table, no migration, no retention policy.** P1-08 owns durable history. The
+probe outcome is kept separately from the health result because it has a
+different lifetime: a health result is recomputed on every render, while a probe
+outcome is a record of a specific moment and must survive until the next probe
+replaces it.
 
 **Two consequences, stated rather than discovered later:**
 
@@ -476,8 +672,10 @@ policy.** P1-08 owns durable history.
   *"Health has not been checked on this deployment yet."* until somebody checks.
   This is the accepted cost of D-30 and it is what the screen is designed to
   say.
-- A cache flush loses the history. That is the definition of cache, and the
-  screen never presents a missing result as a failure.
+- A cache flush loses the history — both entries. That is the definition of
+  cache, and the screen never presents a missing result as a failure: after a
+  deployment, check 4 reads `Not checked` (§6.2), which is informational and
+  turns nothing amber.
 
 ### 6.6 Environments without a directory
 
@@ -505,16 +703,29 @@ be logged by accident, and it is not widened for this unit's convenience.
 | Event | Fires when | Context |
 | --- | --- | --- |
 | `identity.health.checked` | an explicit **Re-check now** completes | `provider`, `user_id`, `result` |
-| `identity.health.degraded` | the overall state **changes** from Healthy to anything else | `provider`, `result`, `reason` |
+| `identity.health.state_changed` | the overall state **changes**, in either direction | `provider`, `result`, `reason` |
 
 `result` carries `healthy` / `degraded` / `failed`; `reason` carries the key of
 the first non-Healthy check. Both are existing permitted keys.
 
-**Naming, stated plainly so nobody is misled by it:** `identity.health.degraded`
-fires for a transition into **either** Degraded or Failed. The approved PLAN
-§6.5 names exactly these two events, so the name stays; `result` says which state
-was actually reached. The alternative — inventing a third event name not in the
-approved plan — would be a silent scope change.
+**Renamed in Revision 2, and the reason is worth keeping.** Revision 1 kept the
+approved PLAN's name `identity.health.degraded` and fired it on a transition into
+*either* Degraded or Failed, explaining in prose that `result` said which. The
+Product Owner's correction is right and the correction is not cosmetic: **an
+event named `degraded` that fires on a failure is a false statement in the audit
+trail**, and prose in a design document does not travel with the log line. Whoever
+reads that log in six months — or whoever builds P1-08's audit catalogue on top of
+it — sees the name, not this paragraph. One semantic event, `state_changed`, with
+the state in `result`, is true in every case it fires.
+
+**`previous_result` is deliberately omitted.** It would be genuinely useful — a
+transition reads better as *healthy → failed* than as *failed* — but
+`SecurityEventLogger::ALLOWED_KEYS` has no key that carries it, and the Product
+Owner's instruction is explicit: **omit the field rather than widen D-12 for
+convenience.** That fixed key list is the reason a token cannot be logged by
+accident, and widening it to improve a log line's readability would be trading a
+security guard for a nicety. The previous state is recoverable from the preceding
+event.
 
 **It fires on change, not on evaluation.** The last-result cache (§6.5) is what
 makes that possible, and it is what keeps a screen refresh from producing an
@@ -635,14 +846,48 @@ Its contract, written before it is written:
 5. **Is idempotent.** A second run reports "already matches" and writes nothing.
 6. **Never replaces, regenerates or overwrites `.env`** — requirement 8.
 
+**7. Preserves the file's ownership and permissions — Revision 2.**
+   An atomic rename replaces the *inode*, so the new file carries the temporary
+   file's mode and owner, not the original's. Left unaddressed, a script written
+   to protect `.env` would be the thing that loosened it — and a `.env` that
+   becomes group- or world-readable on a shared host is a credential disclosure
+   caused by a security fix. So the script:
+
+   - records the original's mode and ownership **before** it writes anything;
+   - creates the temporary file in the **same directory** (a rename across
+     filesystems is not atomic) under `umask 077`, so the file is never
+     readable by anyone else even for an instant while it holds every secret in
+     `.env`;
+   - restores the recorded mode and ownership onto the temporary file
+     immediately before the rename;
+   - **verifies after the rename** that the mode and owner match what was
+     recorded, and **fails the deployment loudly** if they do not. A silent
+     permission change is exactly the kind of thing nobody notices until it
+     matters.
+
+   Ownership is preserved rather than assumed: the deployment user normally owns
+   `.env`, in which case the restore is a no-op — but a script that depends on
+   that being true, and is silently wrong the day it is not, is not a guard.
+
+**8. Leaves no residual copy — Revision 2.**
+   The temporary file holds a complete copy of `.env`, secrets included. It is
+   removed on **every** exit path — success, failure, or interruption — through a
+   trap set before it is created, and it is the only file the script creates.
+   **No `.env.bak`, no `.env.old`, no timestamped backup is ever written**: a
+   backup of a secrets file is a second secrets file, and it would sit on the
+   host indefinitely with nobody's name against it. The temp-and-rename is
+   already atomic; a backup would buy nothing and cost that.
+
 The value it enforces comes from `SessionPolicy::APPROVED_IDLE_MINUTES`, read at
 deploy time by `php artisan` rather than typed into the workflow, so the
 deployment and the application cannot disagree about the policy.
 
 **The logic lives in a script so it can be tested for real rather than asserted
-about** — the same reasoning that produced `tests/Architecture/AppKeyBootstrapTest.php`,
-and §12 case D5 is its equivalent: a fixture `.env` containing many keys, run the
-script, assert only the one line changed and every other byte survived.
+about** — the same reasoning that produced `tests/Architecture/AppKeyBootstrapTest.php`.
+§12 cases D5 to D12 are its equivalent, and they cover every clause above:
+one line changed, every other byte intact, nothing printed, idempotent, mode and
+ownership preserved, and no residual file after either a success or an injected
+mid-run failure.
 
 `optimize:clear` already runs after this step, so the configuration cache is
 rebuilt and the change takes effect on the next request.
@@ -687,15 +932,17 @@ had to be corrected.
 
 | State | Where | What happens |
 | --- | --- | --- |
-| **Empty** | Other Approved IdPs | *"No other identity provider is configured."* — plus the sentence that adding one is a Product Owner decision. Presented as information, **not** as an error |
+| **Empty** | Other Identity Providers | *"No other identity provider is approved."* — plus the sentence that adding one requires Product Owner approval. Presented as information, **not** as an error |
 | **Empty** | SSO Health, never checked | *"Health has not been checked on this deployment yet."* — with `Re-check now` offered, and the note that a deployment clears the last result |
+| **Empty** | The live-check row, never probed | *"No live check has been run on this deployment yet."* — informational, **not a warning**, and it turns nothing amber (§6.2) |
 | **Empty** | Microsoft Entra ID, unconfigured | Names which parts are missing **by key name, never by value**, and states that sign-in is unavailable until they are set on the server. The only place a raw key name appears (§2.1) |
 | **Refusal** | Anonymous | Redirected by `EnsureSessionIsCurrent`. Nothing disclosed |
 | **Refusal** | Authenticated non-administrator | Redirected to access-denied. Identical to P1-01's boundary. **Authentication is not authorisation** |
-| **Refusal** | Re-check, rate limited | *"Health was checked moments ago. Try again shortly."* — `role="alert"`, no internal timer named |
+| **Refusal** | Re-check, over the administrator rate limit | *"Health was checked moments ago. Try again shortly."* — `role="alert"`, no internal timer named |
+| **Refusal** | Re-check, provider lock held by somebody else | *"A live check was run moments ago. This is its result."* — shown with the stored probe time. Not an error: the person gets a real, recent answer, just not a new request |
 | **Refusal** | Reveal, unknown field | 422, naming nothing about what fields exist |
-| **Error** | Directory unreachable | The business-readable finding from §6.3, in the health row. **Never the exception** |
-| **Success** | Re-check completes | The `role="status"` confirmation channel built in P1-01, reused — *"Health re-checked."* |
+| **Error** | Microsoft unreachable | The business-readable finding from §6.3, in the relevant health row — and **which** row depends on whether cached trust survives (§6.2). **Never the exception** |
+| **Success** | Re-check completes | The `role="status"` confirmation channel built in P1-01, reused — *"Health re-checked."* The report itself carries whether the live check reached Microsoft; the confirmation says only that the action ran |
 
 **The confirmation channel is reused, not reinvented.** `HandleInertiaRequests`
 already shares `confirmation`; P1-01's guard already requires every write that
@@ -830,16 +1077,29 @@ misunderstood the rule would plausibly write*.
 
 | # | Case | Mutation |
 | --- | --- | --- |
-| H1 | Each check reports Failed for its own real cause | Break that dependency, one at a time |
-| H2 | A **cached** discovery response is Healthy, never Degraded | Report cached metadata as Degraded |
-| H3 | Health performs **no write** to any table | Make a check update configuration or issue a token |
-| H4 | Health never attempts a sign-in or requests a token | Add a token request to a check |
-| H5 | `Re-check now` is rate limited | Remove the limiter |
+| H1 | Each check reports its own real cause | Break that dependency, one at a time |
+| H2 | **Identity trust available** is Healthy on a cached response, never Degraded | Report cached metadata as Degraded |
+| H3 | Rendering the Health screen performs **no write** to any table and **no** outbound request | Make a render probe |
+| H4 | No health path attempts a sign-in or requests a token | Add a token request to a check |
+| H5 | `Re-check now` is rate limited per administrator | Remove the limiter |
 | H6 | With `app.env=production` and the keys absent, the state is **Failed** | Let the non-production exemption apply in production |
 | H7 | `HealthInspector`'s identity result agrees with `IdentityHealthCheck` | Give the inspector its own copy of the logic |
-| H8 | A failed or unconfigured provider **cannot create a sign-in bypass** | Make an unconfigured or unhealthy provider fall through to an authenticated session |
+| H8 | A failed, unapproved or unconfigured provider **cannot create a sign-in bypass** | Make an unconfigured or unhealthy provider fall through to an authenticated session |
 | H9 | Every non-Healthy row carries an action | Emit a finding with no next step |
-| H10 | The degraded event fires on **transition**, not on every evaluation | Fire on every check |
+| H10 | The `state_changed` event fires on **transition**, not on every evaluation, and its `result` names the state actually reached | Fire on every check; fire `degraded` on a transition to failed |
+
+#### The live probe — Revision 2
+
+| # | Case | Mutation |
+| --- | --- | --- |
+| H11 | **A cached success cannot make a requested probe skip the network.** With fresh metadata already in cache, `probe()` still issues the HTTP request | Route the probe through `Cache::remember` — the request disappears and the case fails |
+| H12 | The probe issues exactly two `GET` requests to discovery endpoints, and **no token request and no authorization request** | Add a token request to the probe |
+| H13 | **A failed probe destroys nothing.** With a valid cached trust set and the network failing, the metadata and JWKS entries are byte-identical afterwards | `Cache::forget` before the fetch — the Revision 1-adjacent defect, and the one the existing `signingKeys(forceRefresh: true)` path actually has |
+| H14 | A **successful** probe refreshes the cache with the fresh values and a full TTL | Leave the cache untouched on success |
+| H15 | **The provider-wide lock holds across users.** Two different administrators, back to back: the second does not reach the network and is told a live check ran moments ago | Make the lock per user — the second probe reaches Microsoft and the case fails |
+| H16 | **A failed probe with a valid cache is `Needs attention`, not `Sign-in unavailable`** — and the wording never says sign-in works | Aggregate a probe failure as Failed |
+| H17 | A failed probe with **no** usable cached trust **is** `Sign-in unavailable` | Aggregate it as Needs attention |
+| H18 | Before any probe, check 4 reads `Not checked` and contributes nothing to the overall state | Make "never probed" Degraded — every deployment goes amber and the case fails |
 
 ### D-31 — session policy
 
@@ -853,6 +1113,17 @@ misunderstood the rule would plausibly write*.
 | D6 | The script prints no value from `.env` | Echo the line it changed |
 | D7 | The script is idempotent | Append on every run |
 | D8 | `EnsureSessionIsCurrent::IDLE_MINUTES` no longer exists | Reintroduce it |
+| D9 | **The rewritten `.env` keeps the original file mode.** Fixture at `0600`; still `0600` afterwards | Omit the mode restore — the rename leaves the temp file's mode and the case fails |
+| D10 | **The rewritten `.env` keeps the original ownership**, and a mismatch after the rename **fails the run** rather than being reported as success | Drop the post-rename verification |
+| D11 | **No residual file remains** — after a successful run, and after a failure injected between the write and the rename. `.env` is unchanged in the failure case | Remove the trap; the temp file survives, carrying every secret |
+| D12 | The script sets a restrictive `umask` **before** creating the temporary file | Create it first and `chmod` afterwards |
+
+**On D12's honesty:** it is a **presence guard read from the script**, not a
+behaviour test, and it is labelled as one. The window in which a temporary file
+would be world-readable is a race that cannot be observed reliably from outside
+the process, so claiming a behavioural assertion here would be exactly the
+evidence-shaped output this project keeps catching. D11 is the behavioural case;
+D12 asserts the ordering that makes the race impossible in the first place.
 
 **On D1's honesty:** it must exercise Laravel's own expiry, not a re-implementation
 of it — the database session handler's `last_activity` comparison is the thing that
@@ -870,9 +1141,13 @@ defect through.
 | A2 | The Identity routes are exactly five GETs and two POSTs; no PUT, PATCH or DELETE | Add a PUT |
 | A3 | `client_secret` is referenced in exactly one place in the Identity module | Read it a second time |
 | A4 | The literal `60` appears as an idle timeout in no page, component or Identity class other than the three places in §8.2 | Type it into the Session Policy page |
-| A5 | Only approved providers are listed; the list is derived, not written | Register a second provider — it must appear, proving the list is real |
+| A5 | **An unapproved runtime provider fails the build.** Every `IdentityProvider` bound in the container has a matching entry in `ApprovedProviders` | Register a second provider without a catalogue entry — the case must fail. **Replaces Revision 1's A5**, which asserted the opposite: that registering a provider made it appear as approved |
+| A5b | **The screen reads the catalogue, not the container.** With an unapproved provider bound, it is **not** listed as an approved provider | Have the screen enumerate container bindings — the unapproved provider appears and the case fails |
+| A5c | The Release 1 catalogue contains exactly one entry, Microsoft Entra ID | Add a second entry without a Product Owner decision |
 | A6 | Every Identity route resolves and every tab points at a real one | Point a tab at a route that does not exist |
 | A7 | Every Identity surface is readable in both themes | Use a raw semantic hex as text |
+| A8 | **Exactly one class named `RequireSystemAdministrator` exists**, in Platform | Leave the Organisation copy behind — two authorisation gates, and the case fails |
+| A9 | Every existing P1-01 authorisation test passes **unedited** after the middleware move | Any edit needed to make one pass is a finding, not a fixture to adjust |
 
 ### Presence guards — the P1-01 lesson, applied before it bites
 
@@ -884,6 +1159,13 @@ to write a test for. Two guards here assert *shape*, not behaviour:
   rendering a dead link nobody notices.
 - **A2** — a write route added later fails immediately, rather than becoming the
   `.env` editor the unit is defined as not having.
+- **A5** — a provider bound later without an approval fails immediately, rather
+  than quietly promoting itself onto an administrator's screen as an approved way
+  into the product. This is the same shape as the other two, applied to the
+  boundary Revision 1 got wrong: nobody would have written a test for a provider
+  nobody had added yet.
+- **A8** — a second copy of the authorisation gate fails immediately, rather than
+  drifting apart from the first over the units that follow.
 
 ---
 
@@ -903,16 +1185,20 @@ with all twelve required elements. Its shape:
    idle timeout tightens from 120 to 60 minutes on this deployment, and anyone
    idle longer than an hour is signed out at their next request.
 6. **Steps** — reach Identity & SSO from the menu; read each of the five tabs;
-   reveal and hide an identifier; press `Re-check now`; press it twice and see
-   the rate-limit refusal; confirm the secret reads only `Present`.
+   reveal and hide an identifier; press `Re-check now` and see the live check
+   run; press it again straight away and see the refusal; confirm the secret
+   reads only `Present`; confirm **Other Identity Providers** lists Microsoft
+   Entra ID and says another provider needs Product Owner approval.
 7. **Expected result for every step**, in the Product Owner's words.
 8. **Negative and security cases** — sign in as a non-administrator (**carried,
    see item 12**); confirm no screen offers a way to change a security setting;
    confirm no screen shows a secret.
 9. **Visual and UX checks** — both themes, a narrow window, the empty state on
-   Other Approved IdPs, the health empty state directly after deployment.
+   Other Identity Providers, and the health screen **directly after deployment**,
+   where the live-check row correctly reads *"No live check has been run on this
+   deployment yet."* rather than a warning.
 10. **Evidence to capture** — screenshots of each tab in both themes; the
-    rate-limit refusal; the health report.
+    rate-limit refusal; the health report before and after a live check.
 11. **PASS / FAIL per step.**
 12. **What cannot be tested yet, and why** — carried honestly, never inferred
     from a passing test:
@@ -923,8 +1209,15 @@ with all twelve required elements. Its shape:
       observation stays carried to P1-03. **The Product Owner is not asked to
       create a fake user to close it.**
     - **A directory outage** cannot be produced on demand without breaking
-      production sign-in. The Failed states are proven by automated evidence
-      (case H1) and are not staged live.
+      production sign-in. **NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION
+      DATA** — the Failed and Needs-attention states, including a failed live
+      probe over a still-valid cache, are proven by automated evidence (cases
+      H1, H13, H16, H17) and are not staged live. The Product Owner is not asked
+      to break production to watch a red screen.
+    - **The provider-wide probe lock** is observable in production only by two
+      people pressing the button within five minutes of each other, which needs
+      a second administrator account. Carried with the non-administrator case to
+      P1-03; automated evidence is case H15.
     - **Client-secret expiry** is not detectable at all in this unit: it needs a
       Microsoft Graph call this design deliberately does not make. **Named as a
       known limit, not as a check that passed.**
@@ -935,7 +1228,7 @@ with all twelve required elements. Its shape:
 
 | Step | Effect |
 | --- | --- |
-| Code deploy | Five read-only screens; the navigation entry becomes reachable; `semantiq:health` gains an identity check |
+| Code deploy | Five read-only screens; the navigation entry becomes reachable; `semantiq:health` gains an identity check; `RequireSystemAdministrator` moves to Platform (no behavioural change) |
 | `ensure-session-lifetime.sh` | **The only behavioural change to a running system** — §8.4, §8.5 |
 | `optimize:clear` | Configuration cache rebuilt; **the identity health cache and last result are cleared**, so SSO Health reads *"not checked yet"* until somebody checks — §6.5 |
 | Rollback | The screens roll back with the code. Reverting the idle timeout is a **relaxation of an approved security control** and needs a Product Owner decision, not a deployment choice — §8.6 |
@@ -943,8 +1236,10 @@ with all twelve required elements. Its shape:
 **Production verification** follows the established read-only pattern
 (`verify-organisation.yml`): a workflow reporting **facts and booleans only** —
 the enforced idle minutes, the enforced absolute hours, whether each of the four
-identity keys is present, and the overall health state. **No value of any key is
-ever printed, and no log content is returned.**
+identity keys is present, the count of approved providers, the count of runtime
+providers, and the overall health state. **No value of any key is ever printed,
+and no log content is returned.** It runs no live probe: a verification workflow
+must not generate outbound traffic to Microsoft on a schedule.
 
 ---
 
@@ -955,15 +1250,20 @@ ever printed, and no log content is returned.**
   and case A1 keeps it that way. The one controlled configuration change is a
   deployment step, not an application capability.
 - It does not add a settings table, a health-history table, or any migration.
-- It does not enable, list or hint at a second identity provider.
+- It does not enable, implement, bind, stub or list a second identity provider.
+  It adds a catalogue whose Release 1 content is one entry.
 - It does not provision users, sync groups or define roles.
 - It does not log a visit to a read-only screen.
 - It does not build durable audit storage; it emits through the existing D-12
   boundary and adds no context key.
 - It does not detect client-secret expiry — named in §13 as a known limit rather
   than quietly omitted.
-- It does not make health destructive, and it does not let an administrator's
-  refresh key become an outbound-request amplifier — §6.4.
+- It does not make health destructive. The one live probe is two read-only `GET`
+  requests, bounded by a provider-wide lock, and it deletes nothing before it
+  tries the network — §6.4.
+- It does not change the P1-00 sign-in path, including the `signingKeys`
+  forget-then-refetch behaviour observed and recorded in §6.4.
+- It does not widen the D-12 context-key boundary — §7.
 
 ---
 
@@ -976,17 +1276,20 @@ ever printed, and no log content is returned.**
 | 3 | No token, code, verifier, nonce, state, session id or `APP_KEY` in any payload |
 | 4 | Identifiers masked by default, revealed only by an explicit authorised round-trip; **never applied to the secret** |
 | 5 | Return-address consistency shown and correct |
-| 6 | Health reports Healthy / Needs attention / Sign-in will fail exactly as §6.2 defines, with an action on every non-Healthy row |
-| 7 | Health performs no write and no destructive action, and is rate limited |
+| 6 | Health reports Healthy / Needs attention / Sign-in unavailable exactly as §6.2 and §6.3 define, with an action on every non-Healthy row, and **claims no more certainty than the checks provide** |
+| 7 | Health performs no write and no destructive action. `Re-check now` performs a **real live probe**, bounded by a provider-wide lock and an administrator rate limit, and a failed probe destroys no valid cache |
+| 7b | **Identity trust available** and **live provider reachability** are reported as two distinct facts |
+| 7c | **Only approved providers are listed as approved**, and an unapproved runtime provider fails the build |
 | 8 | **The displayed session policy is the enforced session policy**, proven by a test that fails when they drift |
 | 9 | **Idle expiry is 60 minutes and is proven by behaviour**, not by a configured number |
 | 10 | The dead `IDLE_MINUTES` constant is gone |
-| 11 | Existing `.env` keys preserved; exactly one key changed, by a tested script, with no value printed |
+| 11 | Existing `.env` keys preserved; exactly one key changed, by a tested script, with no value printed, **the file's mode and ownership preserved and verified, and no residual copy left behind** |
 | 12 | An unconfigured or unhealthy provider cannot create an authentication bypass |
 | 13 | No schema change |
 | 14 | The Login page and the UI foundation are unchanged |
 | 15 | Five screens meet the frozen design system, both themes, responsive, WCAG AA, verified **in a real browser** and recorded as observed |
 | 16 | Every guard proven non-vacuous by a recorded mutation |
+| 16b | Exactly one `RequireSystemAdministrator` exists, in Platform, and every P1-01 authorisation test passes **unedited** |
 | 17 | Product Owner test script delivered with all twelve elements |
 | 18 | Explicit Product Owner acceptance. **A green CI run does not unlock P1-03** |
 
@@ -994,19 +1297,29 @@ ever printed, and no log content is returned.**
 
 ## 17. Stop point
 
-**Nothing in this design is implemented.** No route, controller, service, screen,
-component, migration, settings table, second provider, editable setting or
-deployment script has been created, and no configuration has been changed on any
-environment.
+**Nothing in this design is implemented.** No route, middleware move, controller,
+service, screen, component, migration, settings table, provider catalogue, second
+provider, editable setting or deployment script has been created, and no
+configuration has been changed on any environment.
 
-Two items are put to the Product Owner rather than decided here:
+**Both open items from Revision 1 are now closed**, decided by the Product Owner
+and recorded where the work is described:
 
-1. **§5.2** — promoting `RequireSystemAdministrator` from the Organisation module
-   to Platform: a file move with no behavioural change, recommended, with the
-   worse fallback named.
-2. **§2** — the `Other Approved IdPs` tab label, raised as a separate optional
-   wording change and **not** made.
+1. **§5.2** — `RequireSystemAdministrator` is promoted to Platform. A structural
+   ownership correction, not a P1-01 functional change.
+2. **§2, §2.2** — the tab reads **`Other Identity Providers`**. User-facing
+   wording only; the feature name, the route and the internal terminology are
+   unchanged.
 
-Neither blocks EXECUTE; both are cheaper to settle now than after the code exists.
+**Nothing in this revision is left for the Product Owner to decide.** Three
+things are recorded for a later unit rather than acted on here, and none of them
+blocks EXECUTE:
 
-**P1-02 DESIGN READY FOR PRODUCT OWNER REVIEW.**
+- the `signingKeys(forceRefresh: true)` forget-before-fetch in the P1-00 sign-in
+  path (§6.4);
+- a deliberate-disclosure event for Reveal, if P1-08's audit catalogue wants one
+  (§7);
+- the live observations carried to P1-03, where a second user account exists
+  (§13).
+
+**P1-02 DESIGN READY FOR PRODUCT OWNER REVIEW — REVISION 2.**
