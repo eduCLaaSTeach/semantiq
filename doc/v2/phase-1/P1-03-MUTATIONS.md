@@ -4,7 +4,7 @@
 below was broken deliberately, the suite run, and the failure observed. The
 mutation is recorded beside the case it belongs to.
 
-**65 mutations. 65 caught.** Four needed a second attempt, and what each exposed
+**70 mutations. 70 caught.** Four needed a second attempt, and what each exposed
 is in `P1-03-USERS-GROUPS-VERIFICATION.md` §3 — three were weaknesses in the
 tests, not in the code.
 
@@ -112,3 +112,21 @@ restored before the next.
 | --- | --- | --- |
 | M-scope | `refuseIfOutsideOrganisation()` disabled | `test_a_record_of_another_organisation_is_not_found` |
 | M-member-group | The `group_id` comparison in `removeMember` removed | `test_a_membership_cannot_be_ended_through_a_different_group` |
+
+## The group duplicate-name guard, added after reading the test script
+
+| ID | Mutation applied | Caught by |
+| --- | --- | --- |
+| M-N44b | `refuseIfTaken()` dropped from `create()`, so `groups_org_name_uq` surfaces to the administrator | `test_no_group_refusal_exposes_a_database_error` |
+| M-N44c | The same, dropped from `update()` | as above |
+| M-N44d | The `whereKeyNot` that lets a group keep its own name removed, so saving a group unchanged refuses | as above |
+
+## The reworked secret-length guard
+
+Not P1-03's, but reworked because it blocked this PR — see
+`P1-03-USERS-GROUPS-VERIFICATION.md` §7b.
+
+| ID | Mutation applied | Caught by |
+| --- | --- | --- |
+| M-secret-length | `SecretPresence::inWords()` returns `"Present (33 characters)"` | `test_the_secret_is_reported_as_presence_only` |
+| M-secret-props-scope | The props extraction returns nothing at all, so the guard would have nothing to look at | as above |

@@ -55,7 +55,7 @@ to a subset.
 
 ## 3. Mutation testing — every guard broken deliberately
 
-`CLAUDE.md` §2. **65 mutations applied; every one observed to fail the suite.**
+`CLAUDE.md` §2. **70 mutations applied; every one observed to fail the suite.**
 
 Four survived on the first attempt. They are recorded here rather than quietly
 re-run, because three of them exposed weaknesses in the TESTS — which is what
@@ -81,6 +81,8 @@ hidden.
 | N34–N39 | 13 | yes |
 | The two guards added after review | 2 | yes |
 | Screen-copy re-verification after the N13 correction | 7 | yes |
+| The group duplicate-name guard added after reading the test script | 3 | yes |
+| The reworked secret-length guard | 2 | yes |
 
 Full mutation table: `doc/v2/phase-1/P1-03-MUTATIONS.md`.
 
@@ -101,13 +103,117 @@ Stated plainly rather than implied by a passing run.
 
 ## 5. Browser verification
 
-*Recorded from the actual run — §5.1 below.*
+Real Chromium, real rendered screens, against a seeded database holding every
+state a screen can be in: somebody who has never signed in, somebody who has, an
+inactive person, a person with **no organisation**, a group with live and ended
+membership, an empty group, an inactive group, and 34 users so pagination is
+real rather than notional.
+
+**Every screen proves it is the screen it claims to be** before anything is
+measured, by asserting its `h1`. The P1-02 audit measured the Login page fifteen
+times without noticing, because a hand-built session cookie failed to decrypt
+and every request fell through to the entry page — and it reported zero defects
+on five screens it had never seen. That assertion caught the same mistake again
+here: the first cookie was missing the framework's `CookieValuePrefix`, and the
+`h1` read *"From business data to confident decisions in moments."*
+
+### 5.1 What was measured
+
+| | |
+| --- | --- |
+| Screen states | 15 |
+| Themes | Light and Dark |
+| Widths | 1440 (desktop) and 390 (small) |
+| **Measurements** | **60 screen renderings** |
+| Per screen | `h1` identity, implementation-term scan, horizontal overflow of the page and of every layout container, contrast of every visible text node against the surface it is actually painted on, console errors |
+
+### 5.2 Findings, and the four defects it caught that CI passed over
+
+**The first pass found four things.** Three were layout, one was contrast:
+
+| # | Finding | Fix |
+| --- | --- | --- |
+| 1 | Filter bars carried `.org-form-inline` alone — the ROW layout without the label rule that belongs with it. Every filter label sat jammed against its own control and against the next: *"SearchStatusOrganisationGroup"* | A dedicated `.org-filters` reuses the label layout and stays transparent |
+| 2 | `.org-form-title` carries `width: 100%`, which spans a flex row and does **nothing at all in a grid** — so *"Group details"* sat in the first cell of the profile grid, reading as a label for the Name field beside it | It spans, and the three titles are headings rather than paragraphs |
+| 3 | The record page said *"Organisation"* twice: as the row label, and again above the control inside it | The second is for assistive technology only |
+| 4 | **The Inactive status pill measured 4.40:1 in the light theme** — under AA. It painted `--chrome-muted` on `--chrome-hover`: tokens for the DARK chrome, not for a light card. A P1-01 component every list in the product uses | A theme-aware `--badge-neutral` pair, like every other badge |
+
+Finding 4 is the one worth dwelling on. **It is close enough to passing that no
+amount of looking would have caught it** — 4.40 against a floor of 4.5. It was
+found by measuring computed colour against the surface it is actually painted
+on, and it had been in the product since P1-01.
+
+Two further nits were found by reading the screenshots rather than by the
+measurements: an organisation's **name** rendered in `.idn-value`, the monospace
+face reserved for identifiers; and a note under the Organisation row that
+repeated, in different words, the refusal already shown above it.
+
+### 5.3 The finished build
+
+The whole set was re-measured after the fixes.
+
+| | |
+| --- | --- |
+| Screen renderings measured | **60** |
+| Layout, contrast, overflow, wording findings | **0** |
+| Pages whose body scrolled sideways at 390px | **0** — wide tables scroll inside their own box, per the standard |
+| `h1` mismatches | **0** |
+
+### 5.4 The console errors, attributed rather than dismissed
+
+Every screen logged **one** console error: `net::ERR_CONNECTION_RESET`.
+
+`CLAUDE.md` §4 lists browser console errors as a gate item, so it was identified
+rather than waved away. Two ordinary probes reproduced nothing, which is exactly
+how an environmental fault behaves. Adding a `requestfailed` listener named it
+exactly:
+
+```
+https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800
+  &family=Source+Sans+3:wght@400;500;600;700  —  net::ERR_CONNECTION_RESET
+```
+
+It is the **Google Fonts stylesheet**, which this verification container cannot
+reach: its egress proxy reported the matching failures itself — fourteen
+connections to `fonts.googleapis.com` reset during a fifteen-screen pass.
+
+**No console error originates from SemantIQ's own code or assets.** The page
+carries a real fallback font stack, so this is a cosmetic degradation rather
+than a fault, and the screenshots above were taken with the CDN unreachable —
+they show what a reader sees in the worst case.
+
+**This is carried, not closed.** The production check belongs in the Product
+Owner script (step 56), where the CDN is reachable and the honest answer can be
+observed rather than inferred.
 
 ---
 
 ## 6. MySQL migrate / rollback / migrate
 
-*Recorded at handover.*
+**Not runnable in this environment — no MySQL server is installed** (`pdo_mysql`
+is present, a server is not). Executed by CI against **MySQL 8.4**, and the
+result is read from the run rather than assumed:
+
+| Step | Result |
+| --- | --- |
+| `migrate` | success |
+| `migrate:rollback --step=1` | success |
+| `migrate` again | success |
+| `migrate:status` | success |
+| **The People suite against MySQL** | success |
+
+### 6.1 A green CI step that proved nothing
+
+The People-on-MySQL step completed in **four seconds**, which looked too good.
+`php artisan test tests/Feature/People` **exits 0 when the path matches
+nothing** — it prints *"Test file not found"* and returns success. Confirmed
+against a deliberately wrong path.
+
+A rename or a moved directory would therefore have left that step permanently
+green while running no tests at all: a step reporting safety it was not
+providing, which is `CLAUDE.md` §2 in the workflow rather than in a test. The
+step now captures its own output and fails unless at least forty People tests
+passed.
 
 ---
 
@@ -116,6 +222,29 @@ Stated plainly rather than implied by a passing run.
 | # | Deviation | Why, and what is unchanged |
 | --- | --- | --- |
 | 1 | DESIGN §9 names the reveal endpoint `POST /console/people/reveal`, taking the user in the body. It is implemented as **`POST /console/people/users/{user}/reveal`** | The behaviour DESIGN specifies is unchanged: `POST` rather than `GET`, exactly two accepted field names, and a 422 refusal identical for every other value so the endpoint cannot be used to ask which columns exist — all asserted by `PeoplePresentationTest`. The path differs so that the user id travels in the address like every other record route in the module, which keeps the two route sets structurally disjoint under correction 1 |
+
+---
+
+## 7b. One failure outside P1-03's scope, fixed rather than re-run
+
+CI failed on a commit that passed locally, in a **P1-02** test P1-03 does not
+touch.
+
+`test_the_secret_is_reported_as_presence_only` asserted that `strlen(SECRET)`
+does not appear in the response body. `strlen` is **33** — a two-character
+needle — and the body also carries Inertia's asset-version hash: 32 random hex
+characters that change whenever any asset is rebuilt. Roughly one build in three
+produces a hash containing `33`. Building the frontend for the P1-03 screens
+landed on one of those.
+
+**Re-running would sometimes have passed, which is worse than failing.** A guard
+whose verdict depends on a random hash is not reporting on the thing it names.
+The length is now asserted against the Inertia props — the application-controlled
+payload, and the only place a length could actually leak from — with the
+framework's version hash removed. The secret itself, a four-character fragment
+and its SHA-256 are still asserted against the whole body: long, distinctive
+needles with no randomness problem. Two mutations confirm it still catches a
+real leak.
 
 ---
 
@@ -131,6 +260,7 @@ None was found by a failing test, which is why they are listed.
 | 3 | No **Status** filter on Groups; no **search**, **Current/Past** filter or pagination on a group's members | All added |
 | 4 | Lists printed *Page 1 of 3* with no way to reach page 2 — a count is not navigation | A `Pagination` component with working **Previous** / **Next** |
 | 5 | A group's empty state said *"Nobody has ever been in this group"* whenever a filter matched nobody, which for a group with history is **untrue** | The two facts are now distinguished, and asserted |
+| 6 | A **duplicate group name or code** raised a database integrity error. Step 21 of the Product Owner script asks them to create a duplicate deliberately, so the script would have handed them a constraint violation for doing exactly what it told them to do. Found by reading the script back against the code | Refused in business language, with the constraint still the real guard underneath. N44 is extended to the group screens |
 
 ---
 
