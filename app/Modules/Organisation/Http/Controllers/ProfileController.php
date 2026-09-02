@@ -59,13 +59,16 @@ final class ProfileController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.profile');
+        return $this->confirm('organisation.profile', 'Company Profile created. You are now associated with this organisation.');
     }
 
     public function update(Request $request): RedirectResponse
     {
         $organisation = $this->organisations->current();
 
+        // Nothing to update, so nothing is confirmed. Saying "saved" here would
+        // be the confirmation lying, which is worse than the silence it
+        // replaces.
         if ($organisation === null) {
             return redirect()->route('organisation.profile');
         }
@@ -80,7 +83,7 @@ final class ProfileController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.profile');
+        return $this->confirm('organisation.profile', 'Company Profile saved.');
     }
 
     /** @return array<string, string|int|null> */

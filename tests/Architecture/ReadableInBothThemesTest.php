@@ -98,13 +98,19 @@ final class ReadableInBothThemesTest extends TestCase
      * and unlike the pill, the control it would hide is the one that destroys a
      * record.
      *
-     * Mutation: put #991547 back into .org-action-danger.
+     * The refusal banner is in scope too, and was found breaking this rule
+     * while the guard was being extended: it bordered in the raw #991547, which
+     * is 1.33:1 on the dark card - so the one element whose whole job is to
+     * signal a refusal lost its only colour signal in the dark theme. The shared
+     * standard names thin edges alongside text for exactly that reason.
+     *
+     * Mutation: put #991547 back into .org-action-danger or .org-refusal.
      */
     public function test_the_destructive_action_uses_theme_aware_tokens_rather_than_a_raw_hex(): void
     {
         $css = $this->stylesheet();
 
-        preg_match_all('/\.org-(action-danger|confirm[a-z-]*)[^{]*\{([^}]*)\}/', $css, $rules, PREG_SET_ORDER);
+        preg_match_all('/\.org-(action-danger|confirm[a-z-]*|refusal[a-z-]*)[^{]*\{([^}]*)\}/', $css, $rules, PREG_SET_ORDER);
 
         $this->assertNotEmpty($rules, 'No D-24 danger rules were found, so this proves nothing.');
 
@@ -125,7 +131,7 @@ final class ReadableInBothThemesTest extends TestCase
             $checked++;
         }
 
-        $this->assertGreaterThanOrEqual(4, $checked, 'Too few danger rules were examined.');
+        $this->assertGreaterThanOrEqual(5, $checked, 'Too few danger rules were examined.');
     }
 
     /**

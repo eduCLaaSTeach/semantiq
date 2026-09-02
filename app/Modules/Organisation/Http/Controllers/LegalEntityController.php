@@ -61,7 +61,7 @@ final class LegalEntityController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.legal-entities');
+        return $this->confirm('organisation.legal-entities', 'Legal entity added.');
     }
 
     public function update(Request $request, LegalEntity $legalEntity): RedirectResponse
@@ -80,7 +80,7 @@ final class LegalEntityController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.legal-entities');
+        return $this->confirm('organisation.legal-entities', 'Legal entity saved.');
     }
 
     /**
@@ -98,7 +98,7 @@ final class LegalEntityController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.legal-entities');
+        return $this->confirm('organisation.legal-entities', 'Legal entity permanently deleted.');
     }
 
     public function deactivate(Request $request, LegalEntity $legalEntity): RedirectResponse
@@ -109,7 +109,7 @@ final class LegalEntityController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.legal-entities');
+        return $this->confirm('organisation.legal-entities', 'Legal entity deactivated. The record and its history are kept.');
     }
 
     public function reactivate(Request $request, LegalEntity $legalEntity): RedirectResponse
@@ -120,6 +120,6 @@ final class LegalEntityController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.legal-entities');
+        return $this->confirm('organisation.legal-entities', 'Legal entity reactivated.');
     }
 }

@@ -1117,6 +1117,94 @@ Local throwaway data. Recorded as observed.
 | Page overflow at 390 / 768 / 1440 on Company Profile and Legal Entities | ✅ none |
 | Browser console | ✅ no errors |
 
+### 7.3k A successful write said nothing — 2 September 2026
+
+Reported by the Product Owner during live verification, on the Company Profile:
+**"After Click Save nothing happens."**
+
+**The save had worked.** Production read `organisations_with_primary_legal_entity`
+as **1**, against 0 the previous day — Lithan Academy Pte Ltd was recorded
+correctly, on the first attempt.
+
+The defect is the silence, and it is a real one. The unit had a refusal channel
+from the first commit and **no success channel at all**. On most screens that was
+invisible because the change was its own evidence — a row appeared, a status pill
+flipped. The Company Profile re-renders identically after a save, so there a save
+that worked and a dead button looked exactly the same.
+
+`CLAUDE.md` §4 lists "empty, error, refusal and **success** states" among the
+professional-polish checks. Three of the four had been built.
+
+#### What was built
+
+`confirm()` beside `refuse()` in `InteractsWithStructure`; the message shared as a
+one-render Inertia prop; and a `role="status"` region in `OrganisationPage`,
+polite rather than assertive, because a success is news and not an interruption.
+
+Every Organisation write now confirms itself, in business language, past tense,
+and **carrying no record name** — the same channel a refusal uses, which negative
+test 17 keeps free of business content.
+
+#### Two things this found on the way
+
+1. **The patch confirmed a save that never happened.** The first version replaced
+   the Company Profile's *"there is nothing to update"* early return rather than
+   its success return, so a request with no organisation would have been told its
+   profile was saved. Caught by reading the result; now covered by a case and
+   mutation C2.
+2. **The refusal banner bordered in the raw `#991547`** — 1.33:1 on the dark
+   card. The one element whose whole job is to signal a refusal lost its only
+   colour signal in the dark theme. Found while extending the readability guard
+   to cover the new confirmation; the shared standard names thin edges alongside
+   text for exactly this reason.
+
+#### The guard
+
+`test_every_organisation_write_confirms_itself` reads the controllers and asserts
+that **any method redirecting to an Organisation route after doing work goes
+through `confirm()`**. Presence, not behaviour — the same shape as the
+lifecycle-completeness guard, and for the same reason: a write added later with a
+bare redirect would pass every behavioural case in the file, because the case
+that would fail it does not exist. The single exemption is named explicitly
+rather than pattern-matched.
+
+#### One of my own tests was vacuous, again
+
+`test_the_confirmation_reaches_the_page_as_a_prop` asserted that the rendered HTML
+contains the message. **Inertia embeds its props as JSON in the page**, so it
+passed with the component's render deleted — mutation C6 SURVIVED. A prop sitting
+unused in the payload is exactly as silent as no prop at all, which is the defect
+being fixed.
+
+Split into two: one case proving delivery, one reading the component and proving
+it renders the prop in a polite live region. C6 is now CAUGHT, and so is turning
+`role="status"` into `role="alert"`.
+
+#### Mutation results — 9 mutations, 9 caught
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| C1 | Return a plain redirect from the profile save | **CAUGHT** |
+| C2 | Confirm the profile save when there is nothing to save | **CAUGHT** |
+| C3 | Confirm before the refusal is caught | **CAUGHT** |
+| C4 | Stop sharing the confirmation with the page | **CAUGHT** |
+| C5 | Put a record name into a confirmation | **CAUGHT** |
+| C6 | Stop rendering the confirmation on the page | **CAUGHT** *(SURVIVED first — see above)* |
+| C7 | Hardcode the raw danger hex in the refusal edge | **CAUGHT** |
+| C8 | Define the success edge in the light theme only | **CAUGHT** |
+| C9 | Make the confirmation an assertive alert | **CAUGHT** |
+
+#### Browser verification — Chromium, 2 September 2026
+
+| Observation | Result |
+| --- | --- |
+| Company Profile save shows **"✓ Company Profile saved."**, both themes | ✅ |
+| It is gone after navigating away — a confirmation, not a banner | ✅ |
+| A refused deactivation shows the refusal and **no** confirmation | ✅ |
+| A write that already changes the screen still confirms | ✅ |
+| Page overflow at 390 / 768 / 1440 with the confirmation shown | ✅ none |
+| Browser console | ✅ no errors |
+
 ### 7.4 Outstanding for P1-01 — executable now
 
 **Checks 5a and 2 are now observed** (§7.3b, §7.3f). Four checks remain —

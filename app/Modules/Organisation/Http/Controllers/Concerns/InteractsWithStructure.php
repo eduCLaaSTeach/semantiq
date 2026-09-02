@@ -18,6 +18,14 @@ use Illuminate\Http\Request;
  * raw exception. Rendering the exception message is exactly negative test 17's
  * mutation: it is how a stack trace, a framework internal or the name of a
  * record the viewer may not see reaches a browser.
+ *
+ * confirm() is its counterpart, and it exists because for a long time only the
+ * refusal had one. A refused write said so; a SUCCESSFUL write said nothing at
+ * all. On most screens the change was its own evidence - a row appeared, a pill
+ * flipped - but the Company Profile re-renders identically after a save, so a
+ * save that worked and a dead button looked the same. The Product Owner
+ * reported it as "after Click Save nothing happens"; the save had in fact
+ * worked, every time.
  */
 trait InteractsWithStructure
 {
@@ -46,5 +54,19 @@ trait InteractsWithStructure
         }
 
         return back()->withErrors($errors);
+    }
+
+    /**
+     * A successful write, confirmed to the person who made it.
+     *
+     * The message is written for an administrator and says what happened, in
+     * the past tense, naming the thing rather than the operation: "Company
+     * Profile saved", not "update succeeded". It carries no identifier and no
+     * record name - a name is business content, and this is the same channel a
+     * refusal uses, which negative test 17 keeps free of it.
+     */
+    private function confirm(string $route, string $message, mixed $parameters = []): RedirectResponse
+    {
+        return redirect()->route($route, $parameters)->with('confirmation', $message);
     }
 }

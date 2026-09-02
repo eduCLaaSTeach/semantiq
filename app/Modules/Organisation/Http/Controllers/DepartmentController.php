@@ -75,7 +75,7 @@ final class DepartmentController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.departments');
+        return $this->confirm('organisation.departments', 'Department added.');
     }
 
     /**
@@ -97,7 +97,7 @@ final class DepartmentController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.departments');
+        return $this->confirm('organisation.departments', 'Department saved.');
     }
 
     public function move(Request $request, Department $department): RedirectResponse
@@ -116,7 +116,7 @@ final class DepartmentController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.departments');
+        return $this->confirm('organisation.departments', 'Department moved to another business unit. The move is recorded as scope-affecting.');
     }
 
     /**
@@ -134,7 +134,7 @@ final class DepartmentController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.departments');
+        return $this->confirm('organisation.departments', 'Department permanently deleted.');
     }
 
     public function deactivate(Request $request, Department $department): RedirectResponse
@@ -145,7 +145,7 @@ final class DepartmentController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.departments');
+        return $this->confirm('organisation.departments', 'Department deactivated. The record and its history are kept.');
     }
 
     public function reactivate(Request $request, Department $department): RedirectResponse
@@ -156,6 +156,6 @@ final class DepartmentController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.departments');
+        return $this->confirm('organisation.departments', 'Department reactivated.');
     }
 }
