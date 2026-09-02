@@ -1,6 +1,7 @@
 # P1-02 — Identity & SSO Administration — PLAN
 
-**Status:** PLAN — awaiting Product Owner review. **Documentation only.**
+**Status:** **PLAN APPROVED — Product Owner, 2 September 2026**, with decisions
+D-26 to D-31 decided as recorded in §15. **Documentation only.**
 **Unit:** P1-02 (Phase 1 delivery order 4)
 **Predecessor:** P1-01 — Organisation — **ACCEPTED 2 September 2026**
 **Depends on:** P1-00 — Login, Entra SSO, sessions — **ACCEPTED 31 August 2026**
@@ -57,7 +58,7 @@ That is why the boundaries in §6 and §10 are written before the screens.
 | 2 | **Other Approved IdPs** — the provider-adapter boundary, and the honest statement that no other provider is configured |
 | 3 | **Login Experience** — the identity-related settings that genuinely belong to identity, and an explicit statement of what is owned elsewhere |
 | 4 | **SSO Health** — a non-destructive administrator health view over provider trust |
-| 5 | **Session Policy** — the P1-00 values, surfaced; editable or read-only per **D-26** below |
+| 5 | **Session Policy** — the P1-00 values, surfaced **read-only** (D-26), and the D-31 correction |
 | 6 | The **Identity & SSO** navigation entry becomes reachable; nothing else unlocks |
 
 ### Out of scope — each owned elsewhere
@@ -203,9 +204,9 @@ outbound network access from the server."* — never `discovery_unavailable`.
 The screen shows each value, what it means in plain words, and what a person
 experiences when it triggers.
 
-**Recommendation: read-only in Release 1.** See **D-26** in §15, with the
-reasoning and the guardrails that would be required if the Product Owner decides
-otherwise.
+**READ-ONLY in Release 1 — D-26, approved.** §8.3 records the guardrails that
+*would* have been required had the answer gone the other way; they are retained
+as reasoning, not as work.
 
 ---
 
@@ -315,9 +316,13 @@ message. The same standard as P1-01's negative case 17, and the same reason.
 
 ### 6.5 Events
 
-`SecurityEventLogger`, existing D-12 boundary, existing context keys. Candidate
-events: `identity.health.checked`, `identity.health.degraded`,
-`identity.configuration.viewed`.
+`SecurityEventLogger`, existing D-12 boundary, existing context keys. Events:
+`identity.health.checked`, `identity.health.degraded`.
+
+**`identity.configuration.viewed` is deliberately NOT built** — §15a.1. A visit to
+a read-only screen is not logged merely because the screen is sensitive. Large
+volumes of low-value security events bury the ones that matter, and P1-08 would
+inherit the noise.
 
 **No new context key is added.** The logger rejects an unknown key as a hard
 failure, and that guard is the reason a secret cannot be logged by accident. It
@@ -370,7 +375,10 @@ and therefore a schema decision, which §11 does not currently propose.
 
 ### 7.5 Degraded is not failed
 
-Three states, because two would lie:
+Three states, because two would lie. **DESIGN must define exactly what produces
+each** — §15a.2. In particular a normally cached discovery response is
+**Healthy**, not Degraded: the 24-hour cache is the designed behaviour, and a
+warning an administrator cannot act on is noise wearing a warning's clothes.
 
 | State | Meaning |
 | --- | --- |
@@ -387,7 +395,7 @@ Three states, because two would lie:
 Absolute lifetime **12 hours**; active-user revalidation on every protected
 request; idle timeout **as recorded in §8.4**.
 
-### 8.2 Recommendation — expose read-only in Release 1
+### 8.2 APPROVED — expose read-only in Release 1 (D-26)
 
 **Reasons.** These values are a security control, and the current ones are
 approved (P1-00 D-10). Making them editable adds a way to weaken authentication
@@ -397,9 +405,11 @@ change that is invisible afterwards without the audit trail P1-08 has not built
 yet. Read-only delivers the exit outcome — *supportable and observable* — at zero
 security cost.
 
-### 8.3 If the Product Owner chooses editable — the guardrails
+### 8.3 NOT BUILT — the guardrails editability would have required
 
-Not a recommendation; the minimum that would make it safe.
+**D-26 chose read-only, so none of this is built.** Retained because it is the
+reasoning behind the decision, and because a later unit revisiting editability
+should start from it rather than from nothing.
 
 | Guardrail | Value |
 | --- | --- |
@@ -439,9 +449,11 @@ approved 60. Production has been enforcing double that.
 behaviour — the same shape as the P1-01 finding: the guard was written, and then
 nothing looked at whether it was connected.
 
-**This plan does not fix it.** It is a live authentication-policy discrepancy on
-an accepted unit, and the correction is the Product Owner's call, not mine.
-**Decision D-31** in §15 puts three options to you. Whichever is chosen, the fix
+**This plan does not fix it — the DESIGN does.** **D-31 is approved: enforce 60
+minutes**, recorded as *an accepted P1-00 policy discrepancy discovered during
+P1-02 planning; correction authorised under P1-02, without reopening the P1-00
+authentication architecture.* §15 carries the ten requirements the correction
+must satisfy. Whichever is chosen, the fix
 belongs in P1-02's DESIGN and EXECUTE, with a test that fails when the two
 disagree — because a constant nothing reads is exactly how this happened.
 
@@ -496,11 +508,13 @@ A schema change becomes necessary **only** if the Product Owner approves:
 
 | Decision | What it would need |
 | --- | --- |
-| **D-26** editable session policy | A settings table, or an equivalent durable store |
-| **D-30** durable health history | A health-result table — **and it should not be built here**, because P1-08 owns durable history and building a second one is how two audit stories start |
+| ~~**D-26** editable session policy~~ | **Not approved.** Read-only. No settings table |
+| ~~**D-30** durable health history~~ | **Not approved.** Cache only. No health-result table |
 
-**If either is approved, DESIGN stops and explains before writing a migration**,
-per the standing instruction.
+**Both were declined, so the expectation holds: P1-02 requires no migration.**
+The D-31 correction changes a configuration value and removes a dead constant;
+neither touches the schema. **If DESIGN nevertheless finds a schema change
+necessary, it stops and explains first**, per the standing instruction.
 
 ---
 
@@ -580,7 +594,125 @@ auth controllers, `GrantIssuer`, `GrantRedeemer`, the Login screen, the shell.
 
 ---
 
-## 15. Decisions requiring Product Owner approval
+## 15. Decisions — APPROVED 2 September 2026
+
+All six were decided by the Product Owner on review of this plan. The
+recommendation and the decision agreed in every case.
+
+> **The approved principle, in the Product Owner's words:** P1-02 is primarily an
+> **observability / supportability layer** over P1-00 identity trust, not a screen
+> that rewrites authentication configuration. **Do not turn the application into
+> an `.env` editor or rebuild the Login flow.**
+
+### D-26 — Session policy — **APPROVED: Option A, READ-ONLY**
+
+Release 1 displays the policy **actually enforced by the system**.
+
+- **No settings table.**
+- An administrator may **not** weaken idle timeout, absolute lifetime or
+  active-user revalidation from the application.
+- Reason recorded by the Product Owner: **P1-08 does not yet provide the durable
+  audit control** that security-setting administration would require.
+
+### D-27 — Tenant and client identifiers — **APPROVED: Option B, MASKED, REVEALABLE**
+
+- Masked by default; explicit **Reveal**; **Copy** may be offered after reveal.
+- They are not secrets, but should not appear in every screenshot.
+- **This pattern is never applied to the client secret.** The secret remains
+  `Present` / `Missing` and nothing else — no mask, no reveal, no copy, no
+  length.
+
+### D-28 — Provider enable / disable — **APPROVED: NO CONTROL IN RELEASE 1**
+
+One provider. A control whose only useful effect is locking everyone out is not
+an administrative capability. Revisit only when another IdP is explicitly
+approved.
+
+### D-29 — Login Experience — **APPROVED: NO EDITABLE SETTING IN RELEASE 1**
+
+Support-contact configuration is **not** built merely to make the screen
+editable. Login Experience is a **read-only ownership and status view**, showing:
+
+- Microsoft sign-in configured / not configured;
+- the authentication provider in use;
+- which Login elements are owned by **P1-00**;
+- which brand and layout elements are **frozen**;
+- which refusal and session behaviours are controlled elsewhere.
+
+Preferred to introducing a low-value settings store. **No schema change.**
+
+### D-30 — Health history — **APPROVED: CACHE ONLY**
+
+Last health result, last check time and current state live in **cache**. **No
+health-history table.** P1-08 owns durable audit and history.
+
+### D-31 — Idle timeout — **APPROVED: Option A, ENFORCE 60 MINUTES**
+
+**Recorded as:** *an accepted P1-00 policy discrepancy discovered during P1-02
+planning; correction authorised under P1-02, without reopening the P1-00
+authentication architecture.*
+
+The accepted policy is **60 minutes idle / 12 hours absolute**. The
+implementation contains `IDLE_MINUTES = 60`, which the middleware never uses;
+Laravel's session configuration reads `SESSION_LIFETIME`, whose current
+configuration path yields **120**. The discrepancy is real, and **the mistake is
+corrected rather than the policy changed to match it**.
+
+**Requirements the DESIGN must satisfy — one source of truth:**
+
+| # | Requirement |
+| --- | --- |
+| 1 | Enforced idle timeout = **60 minutes** |
+| 2 | Absolute session lifetime remains **12 hours** |
+| 3 | Active-user revalidation remains **every protected request** |
+| 4 | Remove the dead `IDLE_MINUTES` constant if Laravel session lifetime is the authoritative idle control |
+| 5 | The Session Policy screen **reads the same enforced source**; it never duplicates the number `60` |
+| 6 | `.env.example` represents the approved 60-minute policy |
+| 7 | If production requires a `SESSION_LIFETIME` change, **only that key** is updated, through the controlled deployment process |
+| 8 | **Never** replace or overwrite the production `.env`; preserve every other value; never expose it |
+| 9 | Test **idle expiry behaviour**, not merely the configured number |
+| 10 | Test that **displayed policy and enforced policy cannot drift again** |
+
+**The deployment effect is stated plainly, not hidden:** tightening 120 → 60
+means users idle for more than an hour are signed out where previously they were
+not. DESIGN must say so where a reader will see it.
+
+---
+
+## 15a. Two scope corrections, approved with the plan
+
+### 15a.1 Avoid audit noise
+
+**A visit to a read-only Identity screen is not logged merely because the screen
+is sensitive.** `identity.configuration.viewed` is **removed** from §6.5 and is
+not built without a concrete security or audit requirement.
+
+Meaningful events are kept:
+
+- an explicit **Re-check now**;
+- health **becoming** Failed or Degraded, where appropriate;
+- a **security-relevant refusal**.
+
+**Large volumes of low-value security events are themselves a security problem**
+— they bury the events that matter, and P1-08 inherits the noise.
+
+### 15a.2 Healthy / Degraded / Failed must be defined precisely
+
+DESIGN must state **exactly** what produces each state.
+
+- **A normally cached Microsoft discovery response must not be reported as
+  Degraded merely because it is cached.** Caching for 24 hours is the designed,
+  healthy behaviour, not a deficiency.
+- **No health warning an administrator cannot act on.** A warning with no action
+  is noise wearing a warning's clothes, and it teaches people to ignore the
+  screen that matters.
+
+---
+
+## 15b. Superseded — the decisions as originally proposed
+
+Retained so the reasoning that produced the recommendations is not lost. Every
+recommendation below was **accepted**; the authoritative text is §15.
 
 ### D-26 — Session policy: editable or read-only?
 
@@ -655,14 +787,16 @@ happened, and leaving it is how it happens again.
 - It does not enable another identity provider.
 - It does not provision users, sync groups or define roles.
 - It does not write `.env`.
-- It does not create a schema change, unless D-26 or D-30 forces one — and then
-  DESIGN stops and explains first.
-- **It does not fix §8.4 unilaterally.** That is a live authentication-policy
-  discrepancy on an accepted unit, and D-31 is the Product Owner's call.
+- It does not create a schema change. D-26 and D-30 were both declined, which is
+  what keeps that true.
+- It does not log a visit to a read-only screen (§15a.1).
+- **It did not fix §8.4 unilaterally.** The correction is authorised by D-31, in
+  DESIGN, with the deployment effect stated plainly.
 
 ---
 
-**P1-02 PLAN READY FOR PRODUCT OWNER REVIEW.**
+**P1-02 PLAN — APPROVED BY THE PRODUCT OWNER, 2 September 2026**, with D-26 to
+D-31 decided as recorded in §15 and the two scope corrections in §15a.
 
-No DESIGN. No implementation. No routes, controllers, migrations, screens or
-services have been created.
+DESIGN follows. No implementation: no routes, controllers, migrations, screens,
+services or settings tables have been created.
