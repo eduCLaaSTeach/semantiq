@@ -1,7 +1,8 @@
 # P1-02 — Identity & SSO Administration — DESIGN
 
-**Status:** **DESIGN — REVISION 2, awaiting Product Owner review.**
-Documentation only.
+**Status:** **DESIGN — REVISION 2 — PRODUCT OWNER APPROVED, 2 September 2026.**
+Documentation only. Approved for EXECUTE, with decision **D-32** added on
+approval (§8b).
 **Revises:** Revision 1 (`594de35`), reviewed by the Product Owner on
 2 September 2026: two decisions taken, three corrections required, plus an event
 rename and one deployment-script safety requirement. §0 lists what changed.
@@ -32,6 +33,7 @@ D-26 to D-31, scope corrections §15a.1 and §15a.2
 | 6 | **Health wording no longer overclaims.** Healthy means no issue was detected by the available checks; it is not a promise that a person can sign in | §6.3 |
 | 7 | **Event renamed** to `identity.health.state_changed`, because an event named *degraded* that fires on *failed* is untrue | §7 |
 | 8 | **The `.env` rewrite must preserve ownership and permissions**, leave no residual copy, and never create a secret-bearing file at a permissive mode | §8.4, §12 D9–D12 |
+| 9 | **D-32, added on approval:** a forced JWKS refresh must fetch first and replace the cache only on success — the P1-00 defect Revision 2 merely observed is now authorised for correction | §8b, §12 K1–K6 |
 
 Everything else in Revision 1 was approved in principle and is unchanged.
 
@@ -617,15 +619,14 @@ thing that breaks sign-in.
 sends no client secret, attempts no sign-in, and writes to no table. It performs
 exactly two `GET` requests to public discovery endpoints. §12 cases H4 and H12.
 
-> **An observation, raised and deliberately not acted on.** The *existing*
+> **This observation became D-32.** The *existing*
 > `EntraDiscovery::signingKeys(forceRefresh: true)` — used by the sign-in path
 > when a token carries an unknown key id — does `Cache::forget()` *before* its
-> refetch, so a refetch that fails leaves no cached keys. That is the same class
-> of defect this correction forbids in the probe. It is **P1-00 sign-in-path
-> behaviour, outside P1-02's scope**, it is bounded by its own 5-minute lock, and
-> changing it would be reopening the authentication architecture the Product
-> Owner has ruled out. **Recorded here so it is not lost**, for a P1-00
-> correction or a later unit to decide on. Nothing in P1-02 depends on it.
+> refetch, so a refetch that fails leaves no cached keys. Revision 2 recorded it
+> and did not act on it. **The Product Owner has since authorised the
+> correction as D-32** (§8b): the same fetch-then-replace ordering the probe
+> uses, applied to the forced refresh, while P1-02 is already extending this
+> class.
 
 #### Two guards, not one
 
@@ -925,6 +926,88 @@ and rolls back with the code.
 
 ---
 
+## 8b. D-32 — preserve last-known-good signing keys on a forced refresh
+
+**Approved by the Product Owner on approval of Revision 2**, and recorded as
+*a bounded P1-00 reliability defect discovered during P1-02 design, explicitly
+authorised for correction without redesigning the P1-00 authentication
+architecture.*
+
+### 8b.1 The defect
+
+`EntraDiscovery::signingKeys(forceRefresh: true)` today does this, in this order:
+
+1. take the 5-minute refetch lock;
+2. **`Cache::forget()` the cached JWKS**;
+3. fetch a fresh set from Microsoft.
+
+`IdTokenValidator` calls it for exactly one reason: a token arrived carrying a
+signing key id we do not recognise, which is the normal signal that Microsoft has
+rotated its keys. So the forced refresh fires **at the moment a rotation is in
+progress** — and if the network or Microsoft fails during step 3, step 2 has
+already destroyed a key set that was still perfectly usable.
+
+**The consequence is worse than the failed sign-in that triggered it.** The
+person holding the new key fails either way — that is correct, and D-32 does not
+change it. But every *other* person signing in with a token signed by a
+**previously known, still-valid** key now fails too, because the keys that would
+have validated them are gone. One unlucky request during a rotation converts a
+transient network blip into a broader sign-in outage, and the 5-minute lock then
+prevents another refetch attempt for five minutes.
+
+**It is the same defect class §6.4 forbids in the P1-02 live probe**, in code the
+probe sits next to. Correcting it while this class is already open is cheaper and
+safer than leaving one method with the safe ordering and its neighbour with the
+unsafe one.
+
+### 8b.2 The rule
+
+**Fetch candidate → validate the response → replace the cache only on success.**
+
+| Situation | Required behaviour |
+| --- | --- |
+| Forced refresh **succeeds** | The new key set replaces the cached one, with a full 24-hour TTL |
+| Forced refresh **fails** — network, timeout, non-2xx, unparseable body, or a body with no usable RSA signature key | **The previous cached JWKS survives byte-for-byte.** Nothing is deleted, nothing is written |
+| The token that triggered the refresh | **Still fails validation** if its key cannot be obtained. Preserving the old cache must never mean accepting the unknown key from it |
+| Subsequent sign-ins using a key that was already in the old cache | **Continue to succeed.** This is the whole point of the correction |
+| Issuer, audience, tenant, nonce, expiry and signature validation | **Unchanged.** Not one comparison is relaxed |
+| The provider-wide 5-minute refetch protection | **Retained exactly as it is.** D-32 changes the ordering inside the lock, never the lock |
+| Any sign-in bypass | **None.** A failed refresh makes validation strictly no more permissive than before |
+
+### 8b.3 What changes, precisely
+
+Inside `signingKeys()`, the forced-refresh branch stops being *forget then
+read-through-cache* and becomes *fetch, then `Cache::put` on success*. A failure
+returns the currently cached set — the same value the method would have returned
+had no refresh been requested — and `IdTokenValidator`'s existing second attempt
+then fails on the unknown key id, which is the correct outcome.
+
+`AuthenticationFailed::protocol('jwks_unavailable')` is no longer the way a
+failed forced refresh surfaces: the caller already has a well-defined path for
+"this key is not in the set we hold", and using it means a rotation failure looks
+like what it is — one token we cannot validate — rather than a fetch error that
+takes the whole key set with it.
+
+**Nothing else in P1-00 is touched.** Not the validator's checks, not the
+provider, not the flow, not the leeway, not the algorithm restriction, not the
+lock duration. The diff is the ordering of three statements and the failure path
+of one.
+
+### 8b.4 Why this is a reliability correction and not a security relaxation
+
+The question worth asking of any change to a token validator is whether it makes
+anything easier for an attacker. It does not, and the reason is that **the old
+cache is never consulted for the unknown key**. A token whose `kid` is absent
+from the cached set fails exactly as it does today; what changes is only that
+*other* tokens, whose keys are present, keep working. A failed refresh under D-32
+leaves the validator in precisely the state it was in before the refresh was
+attempted — never a more permissive one.
+
+The mutations in §12 K1–K6 exist to prove that claim rather than assert it, and
+K4 is the one that matters most: the unknown-key token must still be refused.
+
+---
+
 ## 9. Empty, refusal, error and success states
 
 All four, named before anything is built. `CLAUDE.md` §4; P1-01 shipped three and
@@ -1133,6 +1216,22 @@ handler reads. **What is not acceptable is asserting on the configured number an
 calling it a behaviour test**, which is the exact failure that let the original
 defect through.
 
+### D-32 — last-known-good signing keys
+
+| # | Case | Mutation |
+| --- | --- | --- |
+| K1 | **A failed forced refresh preserves the cached JWKS byte-for-byte.** Cache a good set, make the fetch fail, force a refresh, compare | `Cache::forget` before the fetch — the defect itself, reproduced |
+| K2 | **A successful forced refresh replaces the cached set** with the new keys and a full TTL | Keep the old set on success — rotation would never take effect |
+| K3 | A sign-in with a key that is **still in the preserved cache** succeeds after a failed refresh | Return an empty key set on a failed refresh |
+| K4 | **The token that triggered the refresh still fails** when Microsoft cannot supply its key | Fall back to accepting the token, or match its `kid` loosely — this is the one that must never pass |
+| K5 | The provider-wide 5-minute refetch lock still bounds forced refreshes | Remove or shorten the lock |
+| K6 | Issuer, audience, tenant, nonce and signature validation are unchanged by a failed refresh | Weaken any one of them on the refresh path |
+
+**K4 is the case D-32 lives or dies by.** Everything else in the correction is
+about keeping working sign-ins working; K4 is the assertion that keeping the old
+cache did not quietly become a way to accept a key we never fetched. It is
+written first and broken first.
+
 ### Architecture and completeness
 
 | # | Case | Mutation |
@@ -1261,8 +1360,9 @@ must not generate outbound traffic to Microsoft on a schedule.
 - It does not make health destructive. The one live probe is two read-only `GET`
   requests, bounded by a provider-wide lock, and it deletes nothing before it
   tries the network — §6.4.
-- It does not change the P1-00 sign-in path, including the `signingKeys`
-  forget-then-refetch behaviour observed and recorded in §6.4.
+- It does not redesign the P1-00 authentication architecture. The one P1-00
+  change is **D-32** (§8b) — the ordering of a cache write, explicitly
+  authorised, with no validation check relaxed.
 - It does not widen the D-12 context-key boundary — §7.
 
 ---
@@ -1290,6 +1390,7 @@ must not generate outbound traffic to Microsoft on a schedule.
 | 15 | Five screens meet the frozen design system, both themes, responsive, WCAG AA, verified **in a real browser** and recorded as observed |
 | 16 | Every guard proven non-vacuous by a recorded mutation |
 | 16b | Exactly one `RequireSystemAdministrator` exists, in Platform, and every P1-01 authorisation test passes **unedited** |
+| 16c | **D-32:** a failed forced JWKS refresh preserves the cached key set; a successful one replaces it; the unknown-key token still fails; no validation check is weakened |
 | 17 | Product Owner test script delivered with all twelve elements |
 | 18 | Explicit Product Owner acceptance. **A green CI run does not unlock P1-03** |
 
@@ -1311,15 +1412,15 @@ and recorded where the work is described:
    wording only; the feature name, the route and the internal terminology are
    unchanged.
 
-**Nothing in this revision is left for the Product Owner to decide.** Three
-things are recorded for a later unit rather than acted on here, and none of them
-blocks EXECUTE:
+**Nothing in this revision is left for the Product Owner to decide.** The
+`signingKeys` forget-before-fetch that Revision 2 recorded for later has since
+been authorised as **D-32** and is in scope (§8b). Two things remain recorded for
+a later unit rather than acted on here, and neither blocks EXECUTE:
 
-- the `signingKeys(forceRefresh: true)` forget-before-fetch in the P1-00 sign-in
-  path (§6.4);
 - a deliberate-disclosure event for Reveal, if P1-08's audit catalogue wants one
   (§7);
 - the live observations carried to P1-03, where a second user account exists
   (§13).
 
-**P1-02 DESIGN READY FOR PRODUCT OWNER REVIEW — REVISION 2.**
+**P1-02 DESIGN — REVISION 2 — APPROVED BY THE PRODUCT OWNER, 2 September 2026**,
+with **D-32** added on approval. EXECUTE follows.
