@@ -30,19 +30,26 @@ final class GroupService
     /** @param array<string, string|null> $attributes */
     public function create(Organisation $organisation, array $attributes, User $actor): Group
     {
-        $group = new Group;
+        $name = trim((string) $attributes['name']);
+        $code = $this->nullIfBlank($attributes['code'] ?? null);
 
-        $group->forceFill([
-            'organisation_id' => $organisation->id,
-            'name' => trim((string) $attributes['name']),
-            'code' => $this->nullIfBlank($attributes['code'] ?? null),
-            'description' => $this->nullIfBlank($attributes['description'] ?? null),
-            'status' => GroupStatus::Active->value,
-        ])->save();
+        return DB::transaction(function () use ($organisation, $name, $code, $attributes, $actor): Group {
+            $this->refuseIfTaken($organisation->id, $name, $code);
 
-        $this->record(SecurityEventLogger::GROUP_CREATED, $group, $actor);
+            $group = new Group;
 
-        return $group;
+            $group->forceFill([
+                'organisation_id' => $organisation->id,
+                'name' => $name,
+                'code' => $code,
+                'description' => $this->nullIfBlank($attributes['description'] ?? null),
+                'status' => GroupStatus::Active->value,
+            ])->save();
+
+            $this->record(SecurityEventLogger::GROUP_CREATED, $group, $actor);
+
+            return $group;
+        });
     }
 
     /**
@@ -57,15 +64,59 @@ final class GroupService
      */
     public function update(Group $group, array $attributes, User $actor): Group
     {
-        $group->forceFill([
-            'name' => trim((string) $attributes['name']),
-            'code' => $this->nullIfBlank($attributes['code'] ?? null),
-            'description' => $this->nullIfBlank($attributes['description'] ?? null),
-        ])->save();
+        $name = trim((string) $attributes['name']);
+        $code = $this->nullIfBlank($attributes['code'] ?? null);
 
-        $this->record(SecurityEventLogger::GROUP_UPDATED, $group, $actor);
+        return DB::transaction(function () use ($group, $name, $code, $attributes, $actor): Group {
+            $this->refuseIfTaken($group->organisation_id, $name, $code, $group->id);
 
-        return $group;
+            $group->forceFill([
+                'name' => $name,
+                'code' => $code,
+                'description' => $this->nullIfBlank($attributes['description'] ?? null),
+            ])->save();
+
+            $this->record(SecurityEventLogger::GROUP_UPDATED, $group, $actor);
+
+            return $group;
+        });
+    }
+
+    /**
+     * A name or code already in use is a SENTENCE, not a constraint violation.
+     *
+     * groups_org_name_uq and groups_org_code_uq are the real guard and stay the
+     * real guard - two administrators submitting the same name at the same
+     * moment produce one group and one refusal whatever the timing. This read
+     * exists only so the administrator is told what happened in their own words.
+     *
+     * Found by reading the Product Owner test script back against the code:
+     * step 21 asks them to create a duplicate group, and without this they would
+     * have been handed a database error for doing exactly what the script told
+     * them to do.
+     */
+    private function refuseIfTaken(int $organisationId, string $name, ?string $code, ?int $ignoreId = null): void
+    {
+        $taken = fn (string $column, string $value): bool => Group::query()
+            ->where('organisation_id', $organisationId)
+            ->where($column, $value)
+            ->when($ignoreId !== null, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->lockForUpdate()
+            ->exists();
+
+        if ($taken('name', $name)) {
+            throw PeopleViolation::refuse(
+                'name_taken',
+                'A group called that already exists. Open it, or choose another name.'
+            );
+        }
+
+        if ($code !== null && $taken('code', $code)) {
+            throw PeopleViolation::refuse(
+                'code_taken',
+                'That code is already used by another group. Choose another one.'
+            );
+        }
     }
 
     /** An inactive group keeps its members and its history. */

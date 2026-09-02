@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\People;
 
+use App\Modules\People\Models\Group;
 use App\Modules\People\Models\GroupMembership;
 use App\Modules\People\Models\GroupStatus;
 use App\Modules\People\Services\GroupService;
@@ -429,6 +430,59 @@ final class MembershipRulesTest extends TestCase
                 "A refusal is not written as a sentence: {$message}"
             );
         }
+    }
+
+    /**
+     * Negative case 44, extended to the GROUP screens.
+     *
+     * The original case covered membership only. Writing the Product Owner test
+     * script exposed the gap: step 21 asks the Product Owner to create a
+     * duplicate group deliberately, and a duplicate name would have handed them
+     * a database integrity error for doing exactly what the script told them to
+     * do. Found by reading the script back against the code, not by a test.
+     *
+     * Mutation: remove refuseIfTaken() and let groups_org_name_uq surface.
+     */
+    public function test_no_group_refusal_exposes_a_database_error(): void
+    {
+        $organisation = $this->make->organisation();
+        $admin = $this->make->user($organisation, administrator: true);
+
+        $this->actingAsUser($admin)
+            ->post('/console/people/groups', ['name' => 'Finance Approvers', 'code' => 'FIN'])
+            ->assertSessionHasNoErrors();
+
+        $other = $this->people->group($organisation, 'Fire Wardens', code: 'FIRE');
+
+        $attempts = [
+            ['POST', '/console/people/groups', ['name' => 'Finance Approvers', 'code' => null],
+                'A group called that already exists. Open it, or choose another name.'],
+            ['POST', '/console/people/groups', ['name' => 'Something Else', 'code' => 'FIN'],
+                'That code is already used by another group. Choose another one.'],
+            ['PUT', "/console/people/groups/{$other->id}", ['name' => 'Finance Approvers', 'code' => 'FIRE'],
+                'A group called that already exists. Open it, or choose another name.'],
+            ['PUT', "/console/people/groups/{$other->id}", ['name' => 'Fire Wardens', 'code' => 'FIN'],
+                'That code is already used by another group. Choose another one.'],
+        ];
+
+        foreach ($attempts as [$method, $uri, $payload, $expected]) {
+            $this->actingAsUser($admin)->call($method, $uri, $payload)->assertSessionHasErrors('people');
+
+            $message = session('errors')->get('people')[0];
+
+            $this->assertSame($expected, $message);
+
+            foreach (['SQLSTATE', 'Integrity constraint', 'UNIQUE', 'groups_org', 'Exception'] as $leak) {
+                $this->assertStringNotContainsString($leak, $message, "A refusal exposed [{$leak}].");
+            }
+        }
+
+        // Renaming a group to the name it already has is not a duplicate.
+        $this->actingAsUser($admin)
+            ->put("/console/people/groups/{$other->id}", ['name' => 'Fire Wardens', 'code' => 'FIRE'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(2, Group::query()->count(), 'A refused create still made a group.');
     }
 
     /**

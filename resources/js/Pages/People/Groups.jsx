@@ -44,7 +44,7 @@ export default function Groups({ groups, filters }) {
         >
             {adding ? (
                 <form className="org-form org-form-profile" onSubmit={submit}>
-                    <p className="org-form-title">Add a group</p>
+                    <h3 className="org-form-title">Add a group</h3>
 
                     <label>
                         Name
@@ -68,7 +68,7 @@ export default function Groups({ groups, filters }) {
                 </form>
             ) : null}
 
-            <div className="org-form-inline">
+            <div className="org-filters">
                 <label>
                     Search
                     <input

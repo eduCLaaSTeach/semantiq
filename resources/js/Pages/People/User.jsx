@@ -182,15 +182,22 @@ export default function User({ person, dependencies, teams, manages, groups, org
                         </>
                     ) : (
                         <form
-                            className="org-form-inline"
+                            className="org-filters"
                             onSubmit={(e) => {
                                 e.preventDefault()
                                 organisation.put(`/console/people/users/${person.id}`)
                             }}
                         >
                             <label>
-                                <span className="org-hint">Organisation</span>
+                                {/*
+                                  * The row already says "Organisation". A visible
+                                  * second copy read as a heading above the control
+                                  * and made the row say its own name twice, so the
+                                  * name stays for assistive technology only.
+                                  */}
+                                <span className="sr-only">Organisation</span>
                                 <select
+                                    aria-label="Organisation"
                                     value={organisation.data.organisation_id}
                                     onChange={(e) => organisation.setData('organisation_id', e.target.value)}
                                 >
@@ -239,9 +246,18 @@ export default function User({ person, dependencies, teams, manages, groups, org
                 </table>
             </div>
 
+            {/* Sentences, not counters. "People reporting to them: 0" is a zero
+              * clause of exactly the kind the dependency summary omits. */}
             <p className="org-meta">
-                Teams: {teams.length === 0 ? 'none' : teams.map((team) => team.name).join(', ')}
-                {' '}&middot; People reporting to them: {manages}
+                {teams.length === 0
+                    ? 'In no team.'
+                    : `Teams: ${teams.map((team) => team.name).join(', ')}.`}
+                {' '}
+                {manages === 0
+                    ? 'Nobody reports to them.'
+                    : manages === 1
+                        ? '1 person reports to them.'
+                        : `${manages} people report to them.`}
             </p>
 
             {/*

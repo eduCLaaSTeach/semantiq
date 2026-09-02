@@ -49,7 +49,7 @@ export default function Users({ users, filters, groups }) {
         >
             {adding ? (
                 <form className="org-form org-form-profile" onSubmit={submit}>
-                    <p className="org-form-title">Add a user</p>
+                    <h3 className="org-form-title">Add a user</h3>
 
                     <label>
                         Microsoft Entra Object ID
@@ -106,7 +106,7 @@ export default function Users({ users, filters, groups }) {
                 </form>
             ) : null}
 
-            <div className="org-form-inline">
+            <div className="org-filters">
                 <label>
                     Search
                     <input

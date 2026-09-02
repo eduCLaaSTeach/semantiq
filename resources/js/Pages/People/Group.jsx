@@ -69,7 +69,7 @@ export default function Group({ group, members, candidates, filters, everHadMemb
                     details.put(`/console/people/groups/${group.id}`)
                 }}
             >
-                <p className="org-form-title">Group details</p>
+                <h3 className="org-form-title">Group details</h3>
 
                 <label>
                     Name
@@ -96,7 +96,7 @@ export default function Group({ group, members, candidates, filters, everHadMemb
 
             {candidates.length > 0 && group.status === 'active' ? (
                 <form
-                    className="org-form-inline"
+                    className="org-form org-form-inline"
                     onSubmit={(e) => {
                         e.preventDefault()
                         member.post(`/console/people/groups/${group.id}/members`, {
@@ -118,7 +118,7 @@ export default function Group({ group, members, candidates, filters, everHadMemb
             ) : null}
 
             {everHadMembers ? (
-                <div className="org-form-inline">
+                <div className="org-filters">
                     <label>
                         Search members
                         <input
