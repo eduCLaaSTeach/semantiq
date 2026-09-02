@@ -1,6 +1,7 @@
 # P1-03 — Users & Groups — PLAN
 
-**Status:** **PLAN — awaiting Product Owner review.** Documentation only.
+**Status:** **PLAN APPROVED — Product Owner, 2 September 2026**, with decisions
+**D-33 to D-39** decided as recorded in §18. Documentation only.
 **Unit:** P1-03 (Phase 1 delivery order 5)
 **Predecessors:** P1-00 **ACCEPTED 31 Aug 2026** · P1-01 **ACCEPTED 2 Sep 2026** ·
 P1-02 **ACCEPTED 2 Sep 2026**
@@ -101,79 +102,107 @@ The blueprint names the subareas: **Users; Groups; Invitations/Directory Sync;
 User Lifecycle.** Mapped to route-backed tabs — Pattern B, as P1-01 and P1-02
 already use — that is:
 
+**Two tabs — D-38, approved:**
+
 | Tab | Purpose |
 | --- | --- |
-| **Users** | The list. Who is in SemantIQ, their status, and the way in to one person |
-| **User** *(a record page, not a tab)* | One person: identity, what SemantIQ owns, organisation, groups, dependencies |
-| **Add a user** | The provisioning entry point — its exact shape depends on **D-33** |
-| **Groups** | The list of groups |
-| **Group** *(a record page)* | One group: its details and its members |
+| **Users** | The list. Who is in SemantIQ, their status, and the way in to one person. **`Add User` is an action on this screen** |
+| **Groups** | The list of groups. **`Add Group` is an action on this screen** |
 
-**"Invitations / Directory Sync" is deliberately NOT a tab in Release 1.** It is
-the *name of a mechanism*, and until **D-33** decides which mechanism exists,
-a tab for it would be a screen in search of a feature. Whatever D-33 chooses
-appears as **Add a user**; if D-33 chooses directory sync, that tab is renamed
-in DESIGN rather than added alongside.
+| Record page *(not a tab)* | Purpose |
+| --- | --- |
+| **User** | One person: identity, organisation, groups, dependencies, and every lifecycle action that acts on them |
+| **Group** | One group: its details and its members |
 
-**"User Lifecycle" is not a tab either.** A lifecycle is not a place. Activate
-and deactivate belong on the person they act on, exactly as P1-01 put
-deactivation on the record rather than on a lifecycle screen.
+**Three things are deliberately NOT tabs**, and D-38 confirms all three:
 
-Both departures from the blueprint's subarea list are **raised for Product Owner
-confirmation** rather than assumed — see **D-38**.
+- **`Add User`** is an action, not a destination. A permanent tab for a form
+  turns a button into navigation.
+- **Invitations / Directory Sync** — the mechanism does not exist. D-33 chose
+  Option A, so there is nothing to invite and nothing to sync, and a tab for it
+  would be a screen in search of a feature.
+- **User Lifecycle** — a lifecycle is not a place. Activate and deactivate belong
+  on the person they act on, exactly as P1-01 put deactivation on the record.
 
 ---
 
-## 4. The provisioning question — the central decision
+## 4. Provisioning — D-33 APPROVED: the administrator enters the Object ID
 
-**This is the decision the rest of the unit hangs on, and it cannot be inferred
-from the menu label.**
+**Decided. Option A.** The administrator types the Microsoft Entra **Object ID**.
+No email binding, no Microsoft Graph, no pending-invitation table, no change to
+the sign-in callback, no reopening of bootstrap.
 
-P1-00 keys a user on `external_subject` — the Entra **object id**, immutable and
-never reassigned. To create a user before they have ever signed in, SemantIQ
-must obtain that object id. There are only three honest ways.
+**The Product Owner's reason, recorded:** *"I do not want to weaken the P1-00
+rule that immutable Entra Object ID is the identity key. The current schema and
+P1-00 design deliberately exclude email from the identity key because email can
+change or be reassigned."*
 
-| # | Mechanism | What it needs | Cost |
-| --- | --- | --- | --- |
-| **A** | **Administrator enters the Entra object id** | Nothing new | The administrator must fetch a GUID from the Entra portal for every person. Accurate, immutable, and tedious |
-| **B** | **Pre-authorised binding on first sign-in.** The administrator records the intended person by email/UPN; the first time that person authenticates, the pending record binds to their object id and becomes a user | Nothing new from Microsoft | Convenient. **But it introduces an email-keyed step into onboarding**, which is the one thing P1-00's identity rule exists to avoid — see the warning below |
-| **C** | **Directory lookup / sync via Microsoft Graph** | **A new Entra application permission** (`User.Read.All` or similar), admin consent, and a new outbound integration | Closest to the blueprint's "synchronise". Also the largest security and scope change in Phase 1 so far |
+Option B — binding a pending record on first sign-in — was declined, and it was
+declined for exactly the reason this plan warned about: it would have used an
+email address once, to decide which pending record a verified sign-in belonged
+to, and that is a real weakening of a real rule. Option C was declined because a
+Graph permission is a security decision in its own right, not a side effect of a
+Users screen.
 
-**Recommendation: B, with the guards below.** A is unusable at any real scale and
-will be worked around. C is the right long-term answer and the wrong thing to
-decide as a side effect of a Users screen: it widens what SemantIQ may read from
-the directory, it is a permission the Product Owner has not been asked for, and
-P1-02 deliberately did **not** request Graph access.
+### 4.1 The Add User flow
 
-> ### ⚠ The warning that must be read before approving B
->
-> P1-00's rule is *"the identity key is never email, because email is mutable and
-> reassignable and a reassigned mailbox must never inherit a SemantIQ identity."*
-> **Option B uses an email exactly once, to decide which pending record a
-> verified sign-in belongs to.** That is a real weakening of a real rule, and
-> calling it anything else would be dishonest.
->
-> It is defensible only with all of these, and DESIGN must carry every one:
->
-> 1. the pending record is matched against the **verified** email claim from a
->    successfully validated Entra token — never a typed or asserted address;
-> 2. the tenant must match the configured directory, so an identically named
->    mailbox in another tenant cannot bind;
-> 3. binding is **single-use** — it consumes the pending record in the same
->    transaction, in the `WHERE` clause, the way `bootstrap_grants` already does;
-> 4. a pending record **expires**, and an expired one refuses rather than waits;
-> 5. once bound, the object id is the key **forever**; the email reverts to being
->    a display projection and is never consulted again;
-> 6. binding creates a user with **no role, no organisation-derived access and no
->    entitlement** — it makes a principal, not a permission;
-> 7. every bind, refusal and expiry is a security event.
->
-> If the Product Owner is not comfortable with that, **A is the safe answer** and
-> the plan should take it. There is no third position where B is used without
-> accepting the email step.
+| Step | |
+| --- | --- |
+| 1 | A System Administrator opens **Users** and chooses **Add User** |
+| 2 | **Entra Object ID** — **required.** Format-validated and checked for uniqueness, server-side |
+| 3 | **Work email** — **required.** Initial human-readable reference only, §4.2 |
+| 4 | **Display name** — **optional.** Defaults to the email when omitted |
+| 5 | **Organisation** — **required.** The current organisation |
+| 6 | **Provider** — set automatically to Microsoft Entra ID. Never typed |
+| 7 | **Tenant ID** — taken automatically from the configured trusted tenant. **Never typed** |
+| 8 | `platform_role` — **NULL.** §12 |
+| 9 | The user is created with **zero business access** |
 
-**D-33 decides this, and nothing else in the unit can be designed until it is
-decided.**
+### 4.2 ⚠ Provisional display information — the distinction that must not blur
+
+**Before a first successful sign-in, `email` and `display_name` are PROVISIONAL
+DISPLAY INFORMATION.** They are what an administrator typed, and SemantIQ has
+verified none of it.
+
+They must **NEVER** be used for:
+
+- **authentication matching** — the identity key stays `(provider,
+  external_subject, tenant_id)`;
+- **authorization** — they grant nothing and gate nothing;
+- **duplicate identity resolution** — uniqueness is decided on the identity
+  triple, never on an address;
+- **access** of any kind.
+
+**On the first successful sign-in nothing special happens, and that is the
+point.** `IdentityResolver` already refreshes `email` and `display_name` from the
+verified Entra token on every sign-in, and it will refresh these the same way. A
+provisional value simply becomes a verified projection the first time the real
+person authenticates. **No new callback behaviour is added**, and DESIGN must
+not add any: the transition is a consequence of code that already exists.
+
+### 4.3 ⚠ SemantIQ cannot confirm the Object ID exists
+
+Release 1 has **no Graph permission by deliberate decision**, so SemantIQ can
+check that an Object ID is *well formed* and *not already used*, and it can check
+nothing else. **It cannot confirm that the identifier names a real person in the
+directory.**
+
+**The screens must say so plainly rather than implying validation occurred.** A
+green tick that means "the format is right" and reads as "we found them" is the
+kind of dishonest affordance this project keeps rejecting.
+
+The consequence, stated: a mistyped Object ID produces a user who can never sign
+in, because no directory identity will ever match it. **The correction path is
+the D-39 guarded purge** — never-signed-in, no history — and the identity key is
+**not** made casually editable to accommodate typos. An editable identity key is
+how one person quietly becomes another.
+
+### 4.4 What D-33 = A therefore removes from this unit
+
+- **No `user_provisionings` table.** No pending records, no invitations.
+- **No email-binding callback change.** P1-00's flow is untouched.
+- **No bootstrap reopening.** `bootstrap_grants` is not reused or extended.
+- **No Microsoft Graph**, and no new Entra application permission.
 
 ---
 
@@ -186,7 +215,7 @@ or explicitly refused.
 
 | Operation | Available? | Notes |
 | --- | --- | --- |
-| **Create** | **Yes** — by the mechanism D-33 chooses | Never by self-registration. SYS-015 |
+| **Create** | **Yes** — the administrator enters the Object ID, D-33 = A | Never by self-registration. SYS-015 |
 | **Read — list** | **Yes** | §9 |
 | **Read — one** | **Yes** | The record page |
 | **Edit — SemantIQ-owned fields** | **Yes** | Exactly the fields §7 marks SemantIQ-owned |
@@ -201,7 +230,7 @@ or explicitly refused.
 | **Delete (unguarded)** | **NO — no such route exists** | As P1-01: no DELETE beyond the guarded purge, asserted by `LifecycleCompletenessTest` |
 | **Change platform role** | **NO — refused in P1-03** | §12. P1-05 owns the role model |
 | **Reset password / manage credentials** | **NO — impossible by design** | SemantIQ holds no credential. Entra owns authentication |
-| **Force sign-out / revoke session now** | **Deferred — D-36** | Deactivation already ends access at the next request (P1-00 revalidates every protected request, uncached). Immediate revocation is a *separate* capability |
+| **Force sign-out / revoke session now** | **NO — D-36, decided** | Deactivation already ends access at the person's next request, because P1-00 revalidates every protected request uncached. Immediate revocation is a separate capability with its own design |
 
 ## 6. Group lifecycle — stated operation by operation
 
@@ -230,16 +259,24 @@ locally versus what remains authoritative in Entra".
 | Field | Source of truth | Editable in SemantIQ | Shown to an administrator |
 | --- | --- | --- | --- |
 | `provider` | **P1-00 / Entra** | No | As a provider name, not a key |
-| `external_subject` | **Entra — the object id** | **Never** | **Decision D-37** — this is the immutable directory identifier; masked, like P1-02's D-27 |
-| `tenant_id` | **Entra** | Never | Masked, D-37 |
+| `external_subject` | **Entra — the object id** | **Never** | **Masked with an explicit Reveal — D-37, approved: exactly the P1-02 D-27 pattern, reused, not reinvented.** Entered once at Add User; never editable afterwards |
+| `tenant_id` | **Entra** | **Never — and never typed.** Taken from the configured trusted tenant | Masked, D-37 |
 | `email` | **Entra**, refreshed every sign-in | **No** | Yes — administrators correlate people by it |
 | `display_name` | **Entra**, refreshed every sign-in | **No** | Yes |
 | `status` | **SemantIQ** | **Yes** — activate / deactivate | Yes |
 | `organisation_id` | **SemantIQ** (D-16, P1-01) | **Yes**, guarded — §11B | As the organisation's name |
 | `platform_role` | **SemantIQ**, P1-05 seam | **NO in P1-03** — §12 | Read-only, and labelled as owned by a later release |
 | `last_signed_in_at` | **SemantIQ**, written by P1-00 | No | Yes — the most useful field on the list |
-| *(new)* `job_title` | **SemantIQ** | Yes | Candidate — **D-34** |
-| *(new)* `notes` | **SemantIQ** | Yes | Candidate — **D-34** |
+| `last_signed_in_at` **when NULL** | — | — | **`Not signed in yet`** — D-33. The list and the record both say it in those words |
+
+**No new `users` columns — D-34, approved: none.** `job_title` and `notes` were
+declined as duplicate profile data that Entra already holds, with no current
+business decision requiring a second copy that can drift.
+
+**Before a first sign-in, `email` and `display_name` are what an administrator
+typed — provisional, unverified, and never used for identity, authorisation or
+duplicate resolution (§4.2). After it, they are verified directory projections.**
+Nothing about their *editability* changes between the two states.
 
 **Why `email` and `display_name` are not editable.** They are overwritten by
 `IdentityResolver` on every single sign-in. An administrator who edited either
@@ -259,10 +296,13 @@ DESIGN must say on the screen that these come from Microsoft.
 | `description` | SemantIQ | Yes |
 | `status` | SemantIQ | Activate / deactivate |
 
-**Release 1 groups are SemantIQ-owned, not mirrors of Entra security groups** —
-**D-35**. Mirroring directory groups needs Graph, the same permission decision as
-D-33 option C, and a rule for what happens when a mirrored group changes
-underneath us.
+**D-35, approved: groups are SemantIQ-owned and flat.** No Entra group sync, no
+Graph, no nested groups, and **no group-derived access in P1-03**. They are
+organisational labels and membership containers, nothing else.
+
+**P1-05 may later decide how groups participate in access. P1-03 must not
+anticipate that decision** — which is why `groups` carries no column that could
+be read as a grant (§12).
 
 ### 7.3 `group_memberships` *(new)*
 
@@ -337,14 +377,17 @@ Duplicate prevention therefore has two layers:
    *business language* — *"That person is already in SemantIQ"* — with a way to
    reach their record, never a constraint-violation message.
 
-**The uncomfortable case, stated rather than left to be discovered:** under
-option B (§4), what prevents an administrator from creating two *pending*
-records for the same person, keyed by two different email addresses they both
-own? Nothing at the database level, because neither has an object id yet. DESIGN
-must handle it: the second binding attempt finds the identity already exists,
-**refuses, and marks the losing pending record consumed rather than leaving it
-to bind to somebody later**. It is the same shape as the bootstrap grant's
-single-use rule and should reuse its reasoning.
+**D-33 = A removes the hardest version of this problem.** The identity key is
+present at the moment of creation, so a duplicate is caught by the constraint
+immediately — there is no window in which two unbound records could later
+resolve to the same person. That is a direct consequence of not using email to
+bind, and it is worth naming as a benefit of the decision rather than leaving it
+implicit.
+
+**Two addresses, one person, is therefore a non-problem here:** an administrator
+who adds the same Object ID under a second email address is refused by
+`users_identity_uq`, whatever they typed in the email field. **The email is never
+consulted for duplicate resolution** — §4.2.
 
 ---
 
@@ -386,7 +429,7 @@ record is the evidence that they were here.
 | Entity | Purge in Release 1? |
 | --- | --- |
 | **User** | **Yes, but only in one narrow case — D-39.** A user who has **never signed in**, holds **no membership of any kind, current or historical**, appears in **no management relationship**, and is **not the bootstrap administrator**. In other words: an onboarding mistake, removed before it became a person's history. **Any user who has ever signed in is deactivated, never purged** |
-| **Pending provisioning record** (if D-33 = B) | **Yes.** It is an intent, not a person. Cancelling one before it binds must be possible |
+| **Pending provisioning record** | **Does not exist.** D-33 = A creates the user directly; there is no intermediate record to cancel. The mistyped-Object-ID correction path is the user purge above |
 | **Group** | **Yes** — only with **no membership history at all**. One member ever, even ended, and it deactivates instead |
 | **Group membership** | **NO.** Ending is the operation. A membership that can be erased is not evidence |
 
@@ -428,41 +471,55 @@ than hide the field.
 | Concern | Rule |
 | --- | --- |
 | **Personal data** | Users & Groups is the first unit holding personal data — names and email addresses of real people. Every screen is System Administrator only, and nothing here is exposed to any other viewer |
-| **Security events** | Through the existing D-12 boundary, **adding no context key**. Candidate events: `user.provisioned`, `user.activated`, `user.deactivated`, `user.organisation.assigned`, `user.purged`, `group.created`, `group.updated`, `group.deactivated`, `group.purged`, `group.member.added`, `group.member.removed`, and — under D-33 option B — `user.binding.refused` |
+| **Security events** | Through the existing D-12 boundary, **adding no context key**. Candidate events: `user.provisioned`, `user.activated`, `user.deactivated`, `user.organisation.assigned`, `user.purged`, `group.created`, `group.updated`, `group.deactivated`, `group.purged`, `group.member.added`, `group.member.removed`, and `user.provision.refused` |
 | **What events must NOT carry** | No email address, no display name, no group name. `SecurityEventLogger` has no key for free text and none is added; `user_id`, `entity_type`, `entity_id`, `result`, `reason` are enough to reconstruct what happened |
 | **Refusals** | Business language, never a constraint violation, never an exception, never a stack trace. The P1-01 standard |
-| **Enumeration** | The user list is administrator-only, so listing people is not a disclosure. But under D-33 option B, **provisioning must not become an oracle** for which email addresses exist in the directory: a refusal must not distinguish "no such person in Entra" from "already in SemantIQ" in a way that lets an administrator probe the directory |
+| **Enumeration** | The user list is administrator-only, so listing people is not a disclosure. **D-33 = A removes the directory-oracle risk entirely**: SemantIQ never queries Entra during provisioning, so no refusal can reveal whether an address exists there. A duplicate refusal reveals only what the administrator can already see on the Users list |
 | **Directory identifiers** | Object id and tenant id masked by default, per **D-37**, reusing P1-02's D-27 pattern rather than inventing a second one |
 | **Deactivation timing** | Stated on screen: access ends at the person's **next request**, not instantly, because that is what P1-00 actually does |
 
 ---
 
-## 14. Carried verification gates — P1-03 closes three
+## 14. Carried verification gates — P1-03 closes two, and moves one
 
-**P1-03 is not accepted until all three have been executed against genuine
+**P1-03 is not accepted until gates 1 and 2 have been executed against genuine
 production users and recorded with observed output.**
 
-| # | Gate | From | What closes it |
-| --- | --- | --- | --- |
-| 1 | **Live management-cycle refusal** | **P1-01**, `PHASE-1-PLAN.md` §10 | With two legitimate users: set a manager, change it, clear it, then attempt a real cycle (A manages B, then make B manage A) and observe the refusal |
-| 2 | **Non-System-Administrator route refusal** | **P1-02** | A genuine non-administrator signs in and cannot reach Identity & SSO |
-| 3 | **Provider-wide Re-check lock** | **P1-02** | Two legitimate administrators press *Re-check now* within five minutes; the second is told a live check ran moments ago |
+| # | Gate | From | Closed by | Where |
+| --- | --- | --- | --- | --- |
+| 1 | **Live management-cycle refusal** | **P1-01**, `PHASE-1-PLAN.md` §10 | With two legitimate users: **Set** a manager, **Change** it, **Clear** it, then attempt a real cycle — A manages B, then make B manage A — and observe the refusal | **P1-03** |
+| 2 | **Non-System-Administrator route refusal** | **P1-02** | A genuine non-administrator signs in and cannot reach Identity & SSO | **P1-03** |
+| 3 | **Provider-wide Re-check lock** | **P1-02** | Two legitimate System Administrators press *Re-check now* within five minutes; the second is told a live check ran moments ago | **MOVED TO P1-05** |
 
-> **⚠ These are only closed by REAL users.**
->
-> Gate 1 needs a second real person. Gate 2 needs a real person who is genuinely
-> not an administrator. **Gate 3 needs a second real System Administrator — and
-> that is a privileged account.**
->
-> **No fake or permanent test users are to be created to satisfy any of these.**
-> If the organisation genuinely has a second administrator, gate 3 is observable.
-> If it does not, **manufacturing one to pass a test would be creating privileged
-> production access for no business reason**, which is worse than an open gate.
-> In that case gate 3 is **carried again**, with its automated evidence
-> (`IdentityHealthTest` H15) standing, and the reason recorded.
->
-> Gates 1 and 2 are expected to close naturally, because P1-03's entire purpose
-> is that a second real person exists.
+### Why gate 3 moves rather than being attempted here
+
+**P1-03 explicitly cannot assign `platform_role`** (§12). So the only way to
+produce a second System Administrator during this unit would be to write that
+column by some route P1-03 is defined as not having — or to manufacture a
+privileged production account for the sake of a test.
+
+**Neither is acceptable.** Creating privileged production access for no business
+reason is worse than an open gate.
+
+**Moved to P1-05 — Roles & Access**, where creating and assigning legitimate
+administrative roles is the unit's actual subject. If a second genuine System
+Administrator happens to exist before then, the observation can be made earlier
+and recorded; nothing prevents that.
+
+**Automated evidence continues to stand until then** —
+`IdentityHealthTest::test_the_probe_lock_holds_across_administrators`, proven
+non-vacuous by the mutation *key the lock by user*.
+
+### Gates 1 and 2, and what they need
+
+Both close naturally, because P1-03's entire purpose is that a second real person
+exists. Gate 1 needs one more real user of any kind; gate 2 needs a real user who
+is genuinely **not** an administrator — and since P1-03 creates every user with
+`platform_role = NULL`, every user it creates is exactly that.
+
+> **No fake or permanent production users are to be created to satisfy any
+> gate.** The Product Owner provisions a genuine second user through the
+> delivered screen, and the gates are observed against that person.
 
 ---
 
@@ -477,12 +534,14 @@ unit introduces new entities. It is stated up front rather than discovered.
 | --- | --- |
 | `groups` | `id`, `organisation_id` (FK, RESTRICT), `name`, `code` (nullable), `description` (nullable), `status`, timestamps. Unique `(organisation_id, name)`; unique `(organisation_id, code)` where present |
 | `group_memberships` | `id`, `group_id` (FK), `user_id` (FK), `joined_at`, `left_at` (nullable), timestamps. Index on `user_id` |
-| `user_provisionings` *(only if **D-33 = B**)* | `id`, `organisation_id` (nullable FK), `email`, `expected_tenant`, `expires_at`, `consumed_at` (nullable), `consumed_by_user_id` (nullable FK), `created_by_user_id` (FK), timestamps. Unique on the pending email within a tenant |
+
+**Two new tables, and no others.**
 
 ### Columns added to `users`
 
-Only if **D-34** approves them: `job_title`, `notes`. **Both nullable, no
-backfill, no seed.**
+**NONE — D-34, approved.** The existing `users` table is reused exactly as it
+stands: no `job_title`, no `notes`, and no provisioning or invitation table,
+because D-33 = A needs none.
 
 ### Constraints of the house style, from P1-01 experience
 
@@ -497,8 +556,13 @@ backfill, no seed.**
 ### What is deliberately absent
 
 No `roles`, no `permissions`, no `entitlements`, no `scopes`, no `domains`, no
-`group_roles`, no `group_permissions`. `NoBusinessSchemaTest` forbids most of
-them today and **that list is not shortened by this unit**.
+`group_roles`, no `group_permissions`, no `user_provisionings`.
+`NoBusinessSchemaTest` forbids most of them today and **that list is not
+shortened by this unit**.
+
+**If DESIGN discovers a further schema requirement, it stops and explains why
+before adding it** — the standing instruction, and the reason P1-01 and P1-02
+both ended up with the schema they said they would have.
 
 ---
 
@@ -520,7 +584,7 @@ them today and **that list is not shortened by this unit**.
 | 12 | User list search, filter and pagination work against seeded volume |
 | 13 | No security event carries an email, a name or any free text |
 | 14 | No schema forbidden by `NoBusinessSchemaTest` appears |
-| 15 | **Carried gates 1 and 2 closed with observed production output**; gate 3 closed or re-carried with a recorded reason |
+| 15 | **Carried gates 1 and 2 closed with observed production output.** Gate 3 is recorded as moved to P1-05, with its automated evidence standing |
 | 16 | Screens meet the frozen design system, both themes, responsive, WCAG AA, **verified in a real browser** |
 | 17 | Every guard proven non-vacuous by a recorded mutation |
 | 18 | Product Owner test script delivered with all twelve elements |
@@ -542,10 +606,11 @@ Each with the mutation that must make it fail.
 | 6 | Authentication resolves a user by email | **It does not** | Make `IdentityResolver` fall back to email |
 | 7 | Duplicate identity | Refused, in business language | Remove `users_identity_uq` |
 | 8 | Two administrators provision the same person concurrently | One user, one refusal | Replace the constraint with a check-then-insert |
-| 9 | *(D-33 = B)* A pending record binds to a **different tenant** | **Refused** | Drop the tenant comparison |
-| 10 | *(D-33 = B)* A pending record binds **twice** | Refused | Move the single-use guard out of the `WHERE` clause |
-| 11 | *(D-33 = B)* An **expired** pending record binds | Refused | Ignore `expires_at` |
+| 9 | **A malformed Object ID** | Refused, server-side | Validate in the browser only |
+| 10 | **The identity key is editable after creation** | **No such route** | Make `external_subject` fillable from a screen |
+| 11 | **`tenant_id` is typed by the administrator** | **It is not** — it comes from the configured tenant | Accept it from the request |
 | 12 | Editing a directory-owned field | **No such field is editable** | Make `email` editable — and watch a sign-in overwrite it |
+| 12b | **A provisional email is used for authentication, authorisation or duplicate resolution** | **It is not** | Resolve a user by email anywhere |
 | 13 | Deactivating a user who manages people | Permitted, with the count shown | Silently refuse, or silently orphan the reports |
 | 14 | Deactivating a user is blocked by a dependency | **Never blocked** | Add a dependency guard to deactivation |
 | 15 | Purging a user who has ever signed in | **Refused** | Allow it |
@@ -555,7 +620,7 @@ Each with the mutation that must make it fail.
 | 19 | Membership for a user with no organisation | **Refused** | Allow NULL to pass |
 | 20 | A second current membership of one group | **Refused** | Allow stacking |
 | 21 | A security event carries an email or a name | **Hard failure** | Add one to the context |
-| 22 | Provisioning refusals distinguish "not in the directory" from "already in SemantIQ" | **They do not** | Make the two messages differ |
+| 22 | **`Not signed in yet`** is shown when `last_signed_in_at` is NULL, and replaced by the real value afterwards | Shown correctly | Render an empty cell, or a date that is not there |
 | 23 | A user list page returns every row | **Paginated** | Remove the limit |
 | 24 | An unguarded DELETE route appears under Users & Groups | Build fails | Add one — `LifecycleCompletenessTest` extended to this unit |
 | 25 | **Every §5 and §6 operation exists** | Build fails if one is missing | Delete a service method — the P1-01 presence-guard lesson, applied before implementation rather than after |
@@ -567,58 +632,95 @@ a presence guard be written at all.
 
 ---
 
-## 18. Product Owner decisions needed
+## 18. Decisions — APPROVED 2 September 2026
 
-**None of these can be inferred, and D-33 blocks DESIGN.**
+All seven were decided by the Product Owner on review of this plan. **The
+recommendation and the decision agreed in every case except D-33**, where the
+Product Owner took the more conservative option — and was right to.
 
-### D-33 — How are users provisioned? ⚠ **BLOCKING**
+### D-33 — User onboarding — **APPROVED: Option A, the administrator enters the Object ID**
 
-| Option | Consequence |
-| --- | --- |
-| A — Administrator enters the Entra object id | No new permissions. Tedious, and will be worked around |
-| **B — Pre-authorised binding on first sign-in** *(recommended, with §4's seven guards)* | Usable. **Introduces one email-keyed step into onboarding** — read the warning in §4 before approving |
-| C — Directory lookup/sync via Microsoft Graph | Closest to the blueprint. **Requires a new Entra application permission and admin consent** — a security decision in its own right, and one P1-02 deliberately avoided |
+**The plan recommended Option B and the Product Owner declined it.** Recorded in
+their words: *"I do not want to weaken the P1-00 rule that immutable Entra Object
+ID is the identity key. The current schema and P1-00 design deliberately exclude
+email from the identity key because email can change or be reassigned."*
 
-### D-34 — Does SemantIQ own any profile fields of its own?
+That is the correct call, and the reasoning is worth keeping: Option B's
+convenience was real, and so was the weakening it required. **No Graph permission
+is added.** §4 carries the full flow, the provisional-data rule, and the honest
+statement that SemantIQ cannot confirm an Object ID exists.
 
-`job_title` and `notes`, or neither. **Recommendation: neither in Release 1.**
-Every such field is one Entra already holds, and a second copy that drifts is
-worse than a link to the first. Add them when somebody names a decision that
-needs them.
+**Consequently removed from the unit:** the `user_provisionings` table, the
+email-binding callback change, any bootstrap reopening, and Microsoft Graph.
 
-### D-35 — Are groups SemantIQ-owned or mirrors of Entra security groups?
+### D-34 — SemantIQ profile fields — **APPROVED: none in Release 1**
 
-**Recommendation: SemantIQ-owned, flat, no nesting.** Mirroring needs Graph
-(D-33 option C) and a rule for what happens when the directory changes
-underneath a membership somebody is relying on.
+No `job_title`, no `notes`, no unnecessary `users` columns. Recorded: *"The PLAN
+correctly identified these as duplicate profile data with no current business
+decision requiring them."*
 
-### D-36 — Deactivating a manager, and immediate session revocation
+### D-35 — Groups — **APPROVED: SemantIQ-owned and flat**
 
-Two related answers: whether deactivating somebody who manages people is
-permitted (**recommendation: yes, showing the count first**), and whether "sign
-this person out now" is in Release 1 (**recommendation: no** — deactivation ends
-access at the next request, and immediate revocation is a separate capability
-with its own design).
+No Entra group sync, no Graph, no nested groups, **no group-derived access in
+P1-03**. Groups are organisational labels and membership containers only.
+**P1-05 may later decide how groups participate in access; P1-03 must not
+anticipate that decision.**
 
-### D-37 — How is the Entra object id displayed?
+### D-36 — User deactivation — **APPROVED, with exact semantics**
 
-**Recommendation: masked with an explicit reveal, exactly as P1-02's D-27** — a
-second pattern for the same kind of value would be the inconsistency this
-project keeps paying for.
+- **Deactivation is always permitted.** Never blocked because the user manages
+  people, belongs to teams, belongs to groups, or has historical records.
+- **A dependency summary is shown before confirming**, in the Product Owner's
+  own shape: *"This user currently manages 3 people, belongs to 2 teams and 1
+  group. Deactivation stops their SemantIQ access but does not remove these
+  relationships."*
+- **Organisational history is never silently rewritten.** Current team, group and
+  management relationships remain until an administrator changes them through
+  the feature that owns them.
+- **No "Force sign out now" in P1-03.** P1-00 revalidates active-user status on
+  every protected request, so an inactive user is refused at their next request.
+- **Reactivation restores authentication eligibility only.** It invents and
+  rebuilds nothing, because nothing was deleted.
+- **Organisation change stays guarded:** refused while current memberships or
+  management relationships would become cross-organisation, telling the
+  administrator what must be resolved first.
 
-### D-38 — The subarea shape
+### D-37 — Directory identifiers — **APPROVED: masked, with explicit Reveal**
 
-The blueprint names *Users; Groups; Invitations/Directory Sync; User Lifecycle*.
-This plan proposes **Users, Groups, and one provisioning entry point**, with
-lifecycle on the record it acts on and no separate "User Lifecycle" screen.
-**Confirm or correct.**
+**Exactly the P1-02 D-27 pattern, reused.** No second reveal mechanism is
+created. Tenant and Object IDs are not secrets, and are masked by default.
 
-### D-39 — Is purging a user ever appropriate?
+### D-38 — Screen structure — **APPROVED, with one simplification**
 
-**Recommendation: yes, in the single narrow case in §11C** — never signed in, no
-history of any kind, not the bootstrap administrator. Everything else
-deactivates. **Confirm, or rule purge out entirely**, which is also a coherent
-answer and simpler to guard.
+Route-backed tabs are **Users | Groups**, and nothing else. `Add User` and
+`Add Group` are **actions on those screens, not tabs**. User and Group detail are
+record pages, and every lifecycle action lives on the record it acts on. No
+Invitations / Directory Sync tab; no User Lifecycle tab. *"This keeps the parent
+feature simple and follows the established tab UX without turning actions into
+navigation."*
+
+### D-39 — Guarded purge — **APPROVED**
+
+A **user** may be purged only when **all** hold:
+
+- never signed in — `last_signed_in_at IS NULL`;
+- no team membership, current or historical;
+- no group membership, current or historical;
+- no management relationship in either direction, current or historical;
+- no other durable schema reference;
+- not the bootstrap System Administrator;
+- **the dependency guard re-checks inside the transaction.**
+
+**Any user who has ever signed in is deactivated, never purged.**
+
+A **group** may be purged only with zero membership history and no other durable
+reference. **No membership history may be deleted. No cascade.**
+
+**The same schema-driven dependency principle established by D-24 is used**, so
+a future P1-05 foreign key becomes a blocker automatically rather than needing
+somebody to remember.
+
+Recorded: *"purge is for an onboarding mistake, not for a person leaving."*
 
 ---
 
@@ -633,10 +735,15 @@ answer and simpler to guard.
 - It does not create an audit table.
 - It does not create a production user, and it does not manufacture privileged
   accounts to close a verification gate.
-- **It does not decide D-33 on the Product Owner's behalf**, because the honest
-  version of that decision includes a real weakening of a real rule.
+- It does not add a Microsoft Graph permission, a provisioning table, an
+  invitation flow or an email-binding step — **D-33 = A removed all four.**
+- It does not manufacture a privileged production account to close a carried
+  gate; gate 3 moves to P1-05 instead.
 
 ---
 
-**P1-03 PLAN — awaiting Product Owner review.** No DESIGN, no migration, no
-routes, controllers, screens or services have been created.
+**P1-03 PLAN — APPROVED BY THE PRODUCT OWNER, 2 September 2026**, with D-33 to
+D-39 decided as recorded in §18.
+
+DESIGN follows. No migration, routes, controllers, screens or services have been
+created, and no production user exists beyond the one the bootstrap made.
