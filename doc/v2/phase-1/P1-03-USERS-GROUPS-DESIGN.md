@@ -1,6 +1,7 @@
 # P1-03 — Users & Groups — DESIGN
 
-**Status:** **DESIGN — awaiting Product Owner review.** Documentation only.
+**Status:** **DESIGN APPROVED — Product Owner, 2 September 2026**, with five
+corrections applied as recorded in §0. Documentation only.
 **Unit:** P1-03 (Phase 1 delivery order 5)
 **PLAN:** `P1-03-USERS-GROUPS-PLAN.md` — **APPROVED 2 September 2026**, decisions
 **D-33 to D-39**
@@ -11,6 +12,23 @@
 > **Nothing here is implemented.** No migration, model, route, controller,
 > screen, service, seed, test or production user has been created. **This is
 > DESIGN only.**
+
+---
+
+## 0. Corrections applied at DESIGN review
+
+| # | Correction | Where |
+| --- | --- | --- |
+| 1 | **The route collision was not removed, only renamed.** `/console/people/{user}` versus `/console/people/groups` is the identical dynamic-versus-static clash. Users move under `/console/people/users` | §2, §13.1, N15 |
+| 2 | **The last active System Administrator cannot deactivate themselves.** A lockout-prevention guard, and the one exception to "deactivation is always permitted" | §7.1a |
+| 3 | `PurgeDependencies` moves to `App\Shared\Lifecycle`. **`RequireOrganisation` does NOT move** — People depends on the accepted Organisation module rather than Platform depending backwards on it | §8.2, §13.2, §18 |
+| 4 | **Group membership must survive leave → rejoin on the same day.** Timestamp precision, not a date-keyed uniqueness that collides | §6.2 |
+| 5 | The `groups` schema guard asserts the **actual physical column set**, `created_at` and `updated_at` included | §12, N3b |
+
+**Correction 1 was my error, and the evidence was already in this document:** N15
+required route ordering and a numeric constraint to work, which is precisely the
+proof that the collision had survived the rename. Renaming `users` to `people`
+moved the clash; it did not remove it.
 
 ---
 
@@ -34,13 +52,28 @@ A new module, `App\Modules\People`, and a route prefix `/console/people`.
 — P1-00 owns the identity record — so a module also called `Users` would put two
 different meanings of the word one directory apart.
 
-**Why not the prefix `/console/users`.** The Groups list would sit at
-`/console/users/groups` and a user record at `/console/users/{id}`. Those are the
-same URL shape, and the segment `groups` would be captured as an id unless every
-route carried a numeric constraint. Relying on a `whereNumber` to stop a list
-screen being read as a person is the kind of arrangement that works until
-somebody adds a route and forgets. **`/console/people` removes the collision
-rather than guarding it.**
+**The prefix is `/console/people`, and users live under `/console/people/users`
+— correction 1.**
+
+The first version of this design put user records at `/console/people/{user}` and
+the group list at `/console/people/groups`, and claimed that renaming the prefix
+had removed a collision. **It had not.** A dynamic segment and a static one at
+the same depth clash whatever the parent is called, and the proof was sitting in
+this document's own test list: N15 required route-declaration order *and* a
+numeric constraint to work. A guard that is needed is a collision that exists.
+
+So the hierarchy is made unambiguous instead:
+
+```
+/console/people/users            /console/people/groups
+/console/people/users/{user}     /console/people/groups/{group}
+```
+
+`users` and `groups` are both **static** segments at the same depth, and every
+dynamic segment sits one level below a static one. **Correctness no longer
+depends on declaration order or on anybody remembering `whereNumber()`.** A
+numeric constraint is still applied as defence in depth, and N15 now proves the
+structure rather than the ordering.
 
 The *feature* is still called **Users & Groups** — the approved menu label — and
 `RoutePrefixCollisionTest` already forbids a prefix that Apache denies; `people`
@@ -56,7 +89,7 @@ day it is delivered and not before — the same way `Identity` was added by P1-0
 Two route-backed tabs — Pattern B, as P1-01 and P1-02 use — and two record pages.
 **D-38.**
 
-### 3.1 Users — `/console/people`
+### 3.1 Users — `/console/people/users`
 
 The list, and the way in to one person.
 
@@ -73,7 +106,7 @@ action on this screen, never a tab** — D-38.
 
 **Search and filter** — §10.
 
-### 3.2 User — `/console/people/{user}`
+### 3.2 User — `/console/people/users/{user}`
 
 One person. Every lifecycle action that acts on them lives here, not on a
 "lifecycle" screen.
@@ -82,7 +115,7 @@ One person. Every lifecycle action that acts on them lives here, not on a
 | --- | --- |
 | **Identity** | Provider (`Microsoft Entra ID`), **Object ID — masked with Reveal**, **Directory (tenant) — masked with Reveal**, and the sentence that these come from Microsoft and cannot be changed here |
 | **Directory details** | Email and display name, **read-only**, labelled as coming from Microsoft — with the provisional caveat while `last_signed_in_at` is NULL (§5.4) |
-| **Status** | `Active` / `Inactive`, with **Deactivate** or **Reactivate** |
+| **Status** | `Active` / `Inactive`, with **Deactivate** or **Reactivate**. §7.1a governs the one case where Deactivate is refused |
 | **Organisation** | The current organisation, or `Not assigned`, with the guarded assignment control (§7) |
 | **Platform role** | Read-only, and it says **why**: *"Roles are assigned in a later release."* §12 |
 | **Groups** | The groups they are currently in, and the ones they have left, with the date |
@@ -256,20 +289,64 @@ Unique `(organisation_id, name)`. Unique `(organisation_id, code)` where present
 **No column that could be read as a grant.** No `role`, no `permission`, no
 `scope`, no `domain`, no `is_admin`. §12.
 
-### 6.2 `group_memberships`
+### 6.2 `group_memberships` — and why it is NOT keyed like P1-01's
 
-| Column | |
+| Column | Type | |
+| --- | --- | --- |
+| `id` | | |
+| `group_id` | FK → `groups` | |
+| `user_id` | FK → `users` | |
+| `joined_at` | **`datetime`** | Required. **Timestamp precision, not a date** |
+| `left_at` | **`datetime`**, nullable | **NULL means current** |
+| timestamps | | |
+
+Index on `user_id`; index on `group_id`.
+
+#### ⚠ Correction 4 — the same-day rejoin collision is not inherited
+
+P1-01 keys team membership as `UNIQUE(team_id, user_id, joined_at)` over
+date-valued timing. **That cannot represent join → leave → rejoin on the same
+day**: the second period has the same three key values as the first, and the
+database refuses it with an integrity error that has nothing to do with what the
+administrator did wrong — because they did nothing wrong.
+
+**P1-03 does not copy that.** Two decisions:
+
+1. **`joined_at` and `left_at` are `datetime`**, so two genuine membership
+   periods on one calendar day are distinguishable by their actual boundaries.
+2. **There is no `UNIQUE(group_id, user_id, joined_at)`.** The invariant worth
+   enforcing is *"at most one **current** membership"*, and that is what is
+   enforced — not "no two rows share a start".
+
+#### How "at most one current membership" is enforced
+
+A partial unique index on `(group_id, user_id)` **where `left_at IS NULL`** is
+the ideal expression. **MySQL 8.4 does not support partial indexes**, and the
+deployment target is MySQL, so it is enforced instead by:
+
+- a **locking read inside the write transaction** — `SELECT … FOR UPDATE` on the
+  user's current membership of that group — which is the same mechanism
+  `PurgeDependencies` uses for the second D-24 re-check, and which closes the
+  concurrent-join window that a plain check-then-insert leaves open;
+- a service-level refusal, in business language, when one is already current.
+
+**Stated honestly:** this is an application-enforced invariant, not a database
+one, because the database this deploys to cannot express it. The locking read is
+what makes it hold under concurrency, and N32 breaks it deliberately to prove
+that.
+
+#### What the lifecycle then looks like
+
+| Step | Row state |
 | --- | --- |
-| `id` | |
-| `group_id` | FK → `groups` |
-| `user_id` | FK → `users` |
-| `joined_at` | Required |
-| `left_at` | Nullable. **NULL means current** |
-| timestamps | |
+| Join | one row, `left_at` NULL |
+| Leave | that row gains `left_at`; **it is never deleted** |
+| Rejoin, same day | a **new** row, `left_at` NULL, `joined_at` after the previous `left_at` |
+| Leave again | the new row gains `left_at` |
 
-Index on `user_id`. Deliberately the **same shape as P1-01's
-`team_memberships`**, so membership means one thing in the product rather than
-two — and so the schema-driven purge guard treats them alike without being told.
+`left_at` may not precede `joined_at`, and a rejoin's `joined_at` may not precede
+the previous period's `left_at` — otherwise two periods would overlap in history
+and the record would say somebody was in a group twice at once.
 
 ### 6.3 House rules, from P1-01 experience
 
@@ -295,14 +372,14 @@ before adding it.**
 
 | Operation | Route | Behaviour |
 | --- | --- | --- |
-| **Create** | `POST /console/people` | §4 |
-| **Read — list** | `GET /console/people` | §10 |
-| **Read — one** | `GET /console/people/{user}` | §3.2 |
-| **Assign / change organisation** | `PUT /console/people/{user}` | §7.2 |
-| **Deactivate** | `PATCH /console/people/{user}/deactivate` | §7.1 |
-| **Reactivate** | `PATCH /console/people/{user}/reactivate` | Restores authentication eligibility. **Rebuilds nothing**, because nothing was removed |
-| **Guarded purge** | `DELETE /console/people/{user}` | §8 |
-| **Reveal an identifier** | `POST /console/people/reveal` | §9 |
+| **Create** | `POST /console/people/users` | §4 |
+| **Read — list** | `GET /console/people/users` | §10 |
+| **Read — one** | `GET /console/people/users/{user}` | §3.2 |
+| **Assign / change organisation** | `PUT /console/people/users/{user}` | §7.2 |
+| **Deactivate** | `PATCH /console/people/users/{user}/deactivate` | §7.1, and **§7.1a** |
+| **Reactivate** | `PATCH /console/people/users/{user}/reactivate` | Restores authentication eligibility. **Rebuilds nothing**, because nothing was removed |
+| **Guarded purge** | `DELETE /console/people/users/{user}` | §8 |
+| **Reveal an identifier** | `POST /console/people/users/{user}/reveal` | §9 |
 | **Edit directory fields** | **No route** | They are Entra's. §5 |
 | **Edit the identity key** | **No route** | §4.4 |
 | **Change platform role** | **No route** | §12 |
@@ -331,6 +408,49 @@ them, deliberately.
 
 **The timing is stated on screen:** access ends at the person's **next request**,
 not instantly, because that is what P1-00 actually does.
+
+### 7.1a ⚠ The one exception — the last active System Administrator
+
+**Correction 2.** Deactivation stays always permitted for ordinary users. It is
+refused in exactly one case:
+
+> **If the target is an active System Administrator, deactivation is permitted
+> only when another active System Administrator remains after the transaction.**
+
+**In production today, with one System Administrator, that means the Product
+Owner cannot deactivate themselves** — which is the point. The alternative is a
+deployment with zero active administrators, no route back in through the
+application, and bootstrap permanently closed because it closes on the existence
+of an administrator record rather than an active one.
+
+**The refusal, in business language:**
+
+> *This is the only active System Administrator. Add or retain another active
+> System Administrator before deactivating this account.*
+
+#### How it is enforced
+
+The count is re-read **inside the write transaction, with a locking read**,
+immediately before the status changes:
+
+```
+SELECT count(*) FROM users
+WHERE platform_role = 'system_administrator' AND status = 'active'
+AND id <> :target
+FOR UPDATE
+```
+
+A plain check-then-write would let two administrators deactivate each other
+concurrently, each seeing the other as the survivor, and leave zero. **The
+locking read is what makes the guard hold**, and it is the same mechanism D-24's
+second re-check already uses. N41 breaks it deliberately.
+
+#### What this guard is not
+
+It does **not** reopen bootstrap, assign anybody a role, touch `platform_role`,
+or build any part of P1-05. It reads two columns and refuses one write.
+**P1-00's recovery path remains an emergency mechanism, not the normal way back
+from a UI action** — which is exactly why the UI must not create the emergency.
 
 ### 7.2 Organisation — assign is easy, change is guarded
 
@@ -376,7 +496,13 @@ with no change to this unit — which is what the Product Owner asked for.
 second copy of a delete guard is the worst possible place for two sources of
 truth. A file move plus import updates, **no behavioural change**, with a guard
 that exactly one such class exists — the same shape as P1-02's middleware
-promotion, and reported the same way.
+promotion, and reported the same way. **Approved — correction 3:** move, do not
+copy; one class only; no behaviour change; P1-01 imports updated; P1-01 purge
+behaviour and tests intact.
+
+**It is genuinely cross-module infrastructure**, not Organisation-specific: it
+walks schema references and knows nothing about business units. That is why it
+moves and `RequireOrganisation`, which does know about organisations, does not.
 
 Its `LABELS` map gains business phrasing for `management_relationships`,
 `group_memberships` and the `manager_id` direction. That map already fails
@@ -399,6 +525,11 @@ required by an existing test rather than optional.
 >
 > This is exactly the failure mode P1-01 kept finding, caught by reading the
 > migrations rather than trusting the mechanism to be total.
+>
+> **The historical P1-00 migration is NOT amended to add a foreign key merely so
+> the walker can see it** — approved at review. Changing an accepted unit's
+> schema to suit a later unit's convenience is a bigger change than an explicit
+> six-line check, and it would rewrite history that P1-00 owns.
 
 ### 8.3 Groups
 
@@ -494,10 +625,35 @@ evidence rather than as intent.
 | --- | --- |
 | `platform_role` is **never written** by P1-03 | No route, no form field, no service method, no `fillable` path in this module. §14 N4 |
 | `PlatformRole` keeps **exactly one case** | The existing test is left in place and not relaxed. §14 N5 |
-| A group has **no permission surface** | Asserted on the schema: `groups` columns are exactly the seven in §6.1, and a test fails if an eighth appears. §14 N3b |
+| A group has **no permission surface** | Asserted on the **actual physical column set** — §14 N3b, corrected below |
 | **Nothing consults group membership for access** | Asserted on the source: outside `app/Modules/People` and its tests, **no file references `group_memberships`, the `GroupMembership` model or `->groups(`**. §14 N3 |
 | **A newly created user has nothing** | Asserted behaviourally: create a user, then assert `platform_role` is NULL, `isSystemAdministrator()` is false, and every P1-01 and P1-02 administrator route refuses them. §14 N2 |
 | No forbidden schema appears | `NoBusinessSchemaTest`, unchanged |
+
+### 12.1 The `groups` schema guard — the physical set, correction 5
+
+The first version said "exactly the seven columns", counting conceptually and
+**forgetting that `timestamps()` produces two**. A column-count guard that is
+wrong about the count either fails on day one or, worse, is loosened until it
+passes and stops guarding anything.
+
+The expected **physical** set is asserted, in full:
+
+```
+id, organisation_id, name, code, description, status, created_at, updated_at
+```
+
+**Nine for `group_memberships`:**
+
+```
+id, group_id, user_id, joined_at, left_at, created_at, updated_at
+```
+
+The invariant that matters is not the number. It is that **`groups` contains no
+role, permission, scope, domain, sensitivity, entitlement, administrator or
+grant field** — so the guard also fails on any column whose name contains any of
+those words, which catches `owner_role` or `default_scope` even if somebody
+updated the expected list without thinking.
 
 **The screen says it too.** The record page's Platform role row reads *"Roles are
 assigned in a later release."* rather than hiding the field — an administrator
@@ -515,11 +671,19 @@ P1-03 must not make group membership the back door that `platform_role` is not.
 
 Inside the existing `console` group, so `EnsureSessionIsCurrent` runs first.
 
+**Every dynamic segment sits one level below a static one.** `users` and
+`groups` are both static, at the same depth, and disjoint.
+
 | Method | URI | Name |
 | --- | --- | --- |
-| GET | `/console/people` | `people.users` |
-| POST | `/console/people` | `people.users.store` |
-| POST | `/console/people/reveal` | `people.users.reveal` |
+| GET | `/console/people/users` | `people.users` |
+| POST | `/console/people/users` | `people.users.store` |
+| GET | `/console/people/users/{user}` | `people.user` |
+| PUT | `/console/people/users/{user}` | `people.users.update` |
+| PATCH | `/console/people/users/{user}/deactivate` | `people.users.deactivate` |
+| PATCH | `/console/people/users/{user}/reactivate` | `people.users.reactivate` |
+| POST | `/console/people/users/{user}/reveal` | `people.users.reveal` |
+| DELETE | `/console/people/users/{user}` | `people.users.purge` |
 | GET | `/console/people/groups` | `people.groups` |
 | POST | `/console/people/groups` | `people.groups.store` |
 | GET | `/console/people/groups/{group}` | `people.group` |
@@ -529,16 +693,16 @@ Inside the existing `console` group, so `EnsureSessionIsCurrent` runs first.
 | DELETE | `/console/people/groups/{group}` | `people.groups.purge` |
 | POST | `/console/people/groups/{group}/members` | `people.groups.members.add` |
 | PATCH | `/console/people/groups/{group}/members/{membership}/remove` | `people.groups.members.remove` |
-| GET | `/console/people/{user}` | `people.user` |
-| PUT | `/console/people/{user}` | `people.users.update` |
-| PATCH | `/console/people/{user}/deactivate` | `people.users.deactivate` |
-| PATCH | `/console/people/{user}/reactivate` | `people.users.reactivate` |
-| DELETE | `/console/people/{user}` | `people.users.purge` |
 
-**Ordering matters and is not left to chance:** every `groups` route is
-registered **before** the `{user}` routes, and `{user}` additionally carries a
-numeric constraint. Either alone would work; both together mean a future
-reordering cannot turn the Groups list into a user lookup. §14 case N15.
+**`/console/people` itself redirects to `/console/people/users`**, so the
+navigation entry lands somewhere real and the bare prefix is never a dead URL.
+
+**Correctness does not depend on declaration order.** `{user}` cannot capture
+`groups`, because `groups` is not under `users`. A numeric constraint is applied
+to `{user}` and `{group}` as **defence in depth**, not as the mechanism. §14 case
+N15 proves the structure — that the group routes and the user routes are
+disjoint, and that `/console/people/users/groups` is a 404 rather than a lookup
+— rather than proving an ordering somebody could reshuffle.
 
 **Two new DELETE routes** — a user and a group. `LifecycleCompletenessTest`
 currently asserts the delete set is exactly P1-01's four; it is extended to the
@@ -551,11 +715,18 @@ exact set of **six**, so a seventh fails the build.
 route is the control; both are asserted separately.
 
 `RequireOrganisation` is needed too — a group and a user assignment both require
-an organisation to exist. It currently lives in the Organisation module, so it is
-**promoted to `App\Modules\Platform\Http\Middleware\RequireOrganisation`** on the
-same reasoning and with the same one-class guard as its sibling. A file move,
-imports updated, **no behavioural change**, and P1-01's tests must pass with no
-assertion altered.
+an organisation to exist. **It is NOT moved — correction 3.**
+
+The first version of this design proposed promoting it to Platform alongside
+`RequireSystemAdministrator`, by analogy. The analogy does not hold: that
+middleware reads one column on a user, while this one **depends on
+`OrganisationService`, resolves the current organisation and redirects to the
+Company Profile**. Moving it would make Platform depend backwards on
+Organisation.
+
+**People uses `App\Modules\Organisation\Http\Middleware\RequireOrganisation`
+directly.** A newer module depending on an accepted one is the right direction of
+dependency, and it is not duplicated.
 
 *Company-Profile-style exception:* the Users list is reachable without an
 organisation, so an administrator who has not yet created one is sent to the
@@ -593,7 +764,7 @@ mutation is recorded beside the case.
 | N1 | Anonymous, and authenticated non-administrator, on **every** route | Drop the gate from one route |
 | N2 | **A newly created user has nothing** — no role, not an administrator, refused by every P1-01 and P1-02 admin route | Give the provisioning path a role |
 | N3 | **Nothing outside People reads group membership** | Have any authorisation path read `group_memberships` |
-| N3b | `groups` has exactly its seven columns | Add `is_admin` |
+| N3b | **`groups` and `group_memberships` have exactly their physical column sets**, `created_at` and `updated_at` included; and **no column name contains** role, permission, scope, domain, sensitivity, entitlement, admin or grant | Add `is_admin`; add `owner_role`; add a column and update the expected list without reading it |
 | N4 | **No P1-03 path writes `platform_role`** | Add it to the update request |
 | N5 | `PlatformRole` still has one case | Add a second |
 | N6 | **Authentication never resolves a user by email** | Make `IdentityResolver` fall back to email |
@@ -615,7 +786,7 @@ mutation is recorded beside the case.
 
 | # | Case | Mutation |
 | --- | --- | --- |
-| N15 | `/console/people/groups` resolves to the Groups list, not a user lookup | Register `{user}` first and drop the numeric constraint |
+| N15 | **The user and group route sets are structurally disjoint**: every `people.users.*` URI begins `/console/people/users` and every `people.groups.*` URI begins `/console/people/groups`; **no route has a dynamic segment at the depth of a static one**; `/console/people/users/groups` is **404**, not a lookup; and the whole set still resolves after the route file is **reversed** | Put a user route back at `/console/people/{user}` — reversing the file then makes `groups` resolve as a user, which order-dependent routing hides and this does not |
 | N16 | The application's DELETE routes are **exactly six** | Add a seventh |
 | N17 | **Every operation named in PLAN §5 and §6 exists** as a service method | Delete one — the P1-01 presence guard, written before implementation this time |
 | N18 | Every write **confirms itself** | Return a bare redirect — the existing P1-01 guard, extended to this module |
@@ -624,7 +795,10 @@ mutation is recorded beside the case.
 
 | # | Case | Mutation |
 | --- | --- | --- |
-| N19 | **Deactivation is never blocked** by any dependency | Add a dependency guard to deactivation |
+| N19 | **Deactivation is never blocked** by any dependency, for an ordinary user | Add a dependency guard to deactivation |
+| N41 | **The sole active System Administrator cannot deactivate themselves**, and the refusal is the business sentence | Remove the guard — production is then one click from zero administrators |
+| N41b | With **two** active System Administrators, either may be deactivated | Refuse whenever the target is an administrator |
+| N41c | **The count is re-read inside the transaction, with a locking read** | Move the check outside the transaction — two concurrent deactivations then leave zero |
 | N20 | The dependency summary counts **current** relationships only, and omits zero clauses | Count historical rows too |
 | N21 | Deactivation **changes no** membership or management row | Have it end them |
 | N22 | Reactivation restores eligibility and **nothing else** | Have it recreate a membership |
@@ -644,6 +818,9 @@ mutation is recorded beside the case.
 | N31 | Membership for a user with no organisation refused | Let NULL pass |
 | N32 | A second **current** membership of one group refused | Allow stacking |
 | N33 | Inactive user or inactive group refused | Allow either |
+| N42 | **join → leave → rejoin → leave → rejoin, all on one calendar day**, succeeds and leaves three periods in history | Key membership on `(group_id, user_id, joined_at)` over dates — the P1-01 collision, reproduced |
+| N43 | A rejoin whose `joined_at` precedes the previous `left_at` is refused | Allow overlapping periods |
+| N44 | **No database integrity error ever reaches the administrator** | Let the constraint surface instead of the service refusing first |
 
 ### Presentation and privacy
 
@@ -733,25 +910,18 @@ Written in full before acceptance, with all twelve `CLAUDE.md` §3 elements.
 **Nothing here is implemented.** No migration, model, route, controller, service,
 screen, test or production user has been created.
 
-Two structural moves are proposed and flagged rather than slipped in, both
-following the precedent P1-02 set:
+**One structural move, approved at review:** `PurgeDependencies` →
+`App\Shared\Lifecycle`. Move, not copy; one class; no behaviour change; P1-01
+imports updated and its purge tests intact.
 
-1. **`PurgeDependencies`** → `App\Shared\Lifecycle` — two modules now need the
-   delete guard, and a second copy is the worst possible duplication.
-2. **`RequireOrganisation`** → `App\Modules\Platform\Http\Middleware` — the same,
-   for the same reason.
+**`RequireOrganisation` does not move.** It depends on `OrganisationService` and
+resolves the current organisation, so promoting it would make Platform depend
+backwards on Organisation. People uses it where it lives.
 
-Both are file moves with **no behavioural change**, each with a guard that
-exactly one such class exists, and each requires P1-01's tests to pass with **no
-assertion altered**. If the Product Owner would rather neither accepted module
-were touched, say so and P1-03 will reference them where they live — which is
-worse, and is offered as a preference rather than a recommendation.
+**The bootstrap-administrator finding stands** (§8.2): because
+`bootstrap_grants.consumed_by_user_id` carries no foreign key, D-39's condition 6
+needs its own explicit check, and the historical P1-00 migration is **not**
+amended to suit the walker.
 
-**One finding from this design is worth the Product Owner's attention now**
-(§8.2): `bootstrap_grants.consumed_by_user_id` carries **no foreign-key
-constraint**, so the schema-driven dependency walk cannot see it. D-39's
-condition 6 therefore needs its own explicit check. Without that reading, the
-purge guard would have looked complete and quietly permitted removing the
-founding administrator.
-
-**P1-03 DESIGN READY FOR PRODUCT OWNER REVIEW.**
+**P1-03 DESIGN — APPROVED BY THE PRODUCT OWNER, 2 September 2026**, with the five
+corrections in §0 applied. EXECUTE follows.
