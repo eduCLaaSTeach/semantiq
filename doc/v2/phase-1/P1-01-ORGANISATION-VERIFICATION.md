@@ -8,7 +8,7 @@ verification and corrected; the seven §7.5 checks remain outstanding.
 **PLAN:** `P1-01-ORGANISATION-PLAN.md` — approved; D-14, D-15
 **DESIGN:** `P1-01-ORGANISATION-DESIGN.md` — approved; D-16
 **Predecessor:** P1-00 — ACCEPTED 31 August 2026
-**Successor:** P1-02 — Identity & SSO administration (**not started**)
+**Successor:** P1-02 — Identity & SSO administration (**PLAN unlocked 2 September 2026**)
 
 Nothing below is marked PASS unless it was executed and its output observed.
 
@@ -1205,6 +1205,73 @@ it renders the prop in a polite live region. C6 is now CAUGHT, and so is turning
 | Page overflow at 390 / 768 / 1440 with the confirmation shown | ✅ none |
 | Browser console | ✅ no errors |
 
+### 7.6 PRODUCT OWNER ACCEPTANCE — 2 September 2026
+
+**P1-01 — ORGANISATION — PRODUCT OWNER ACCEPTED.**
+
+The Product Owner completed the remaining live checks and accepted the unit
+explicitly. Recorded verbatim:
+
+| Check | Result |
+| --- | --- |
+| Checks 1–5 | **PASS** |
+| Business Unit deactivation guard | **PASS** |
+| Management Hierarchy one-user state | **PASS** |
+| Original check 4 — D-14 in both directions | **PASS** |
+| Original check 9 — department move | **PASS** |
+| Multi-user management cycle | **CARRIED TO P1-03**, as previously approved |
+
+The observed refusal, quoted by the Product Owner:
+
+> **Refused.** This business unit still has active departments.
+> Blocked by: Singapore Enterprise Sales, Singapore Retail Sales
+
+That is negative case 11 observed live, with its blocking children named — the
+check most likely to have been satisfied by a cascade, and it refused instead.
+
+#### Final production state — read-only, 03:09 on 2 September 2026
+
+Schema facts and counts only. No name, email, identity or structural value was
+read or printed. **No production data was modified to produce this reading.**
+
+| | |
+| --- | --- |
+| Organisations | 1 |
+| Legal entities | 1 |
+| Business units | 3, **all active** |
+| Business unit ↔ legal entity associations | 3 |
+| Departments | 3 |
+| Teams | 2 |
+| Team memberships | **3 — 2 current, 1 ended** |
+| Management relationships | 0 |
+| Users | 1, carrying an organisation |
+| Legal entities spanning multiple business units | **1** |
+| Organisations with a primary legal entity | **1** |
+| `d16` column · nullable · FK | true · true · `organisations` |
+| `d25` column · nullable · FK | true · true · `legal_entities` |
+| Organisation DELETE routes | **4** — the D-24 set, and no more |
+
+Against the 1 September reading this shows the Product Owner's live session:
+memberships 1 → 3 with an ended row retained, and the primary legal entity set
+for the first time. `management_relationships` remains 0, which is the carried
+P1-03 gate and not a gap in this unit.
+
+#### What acceptance does and does not cover
+
+**Accepted:** every P1-01 capability, its guards, and the live observations
+above.
+
+**Carried to P1-03, unchanged:** the multi-user management-cycle production
+observation. Production has one user; `platform_role` is written in exactly one
+place, the bootstrap redemption path, and bootstrap is closed while a System
+Administrator exists. The rule itself is covered by negative case 8, mutation
+*remove the chain walk*, **CAUGHT**. **P1-03 is not accepted until that gate has
+been executed and recorded with observed output** (`PHASE-1-PLAN.md` §10).
+
+**Not reopened:** D-14, D-15, D-16, D-24, D-25.
+
+**P1-02 is unlocked for PLAN only.**
+
 ### 7.4 Outstanding for P1-01 — executable now
 
 **Checks 5a and 2 are now observed** (§7.3b, §7.3f). Four checks remain —
@@ -1272,6 +1339,6 @@ reversible.
 | 5 | Organisation is the first navigable item; nothing else navigable | ✅ |
 | 6 | All production checks executed and recorded | **Partial** — checks 1, 8, 10, 11, the D-16 schema claim, **2** and **5a** observed (§7.1, §7.2, §7.3b, §7.3f); checks 3 (partial), 4, 5, 7 and 9 outstanding (§7.3g and the Product Owner Test Script); **check 6 deferred to P1-03** (§7.3) |
 | 7 | Apache boundary, 403 gate, ACME and both checksums pass unchanged | ✅ §7.1 |
-| 8 | Explicit Product Owner acceptance | ⏳ |
+| 8 | Explicit Product Owner acceptance | ✅ **ACCEPTED 2 September 2026** — §7.6 |
 
 **A green CI run does not unlock P1-02.**

@@ -488,7 +488,7 @@ rather than quietly lost.
 
 | From | To | Gate | Why it could not run in the originating unit |
 | --- | --- | --- | --- |
-| **P1-01** | **P1-03** | Live multi-user management-cycle refusal, observed in production | Self-management is refused before the chain walk, so a genuine cycle needs at least two SemantIQ users. P1-01 ships with `users_total = 1`; P1-03 provisions the second |
+| **P1-01** *(ACCEPTED 2 Sep 2026)* | **P1-03** | Live multi-user management-cycle refusal, observed in production | Self-management is refused before the chain walk, so a genuine cycle needs at least two SemantIQ users. P1-01 ships with `users_total = 1`; P1-03 provisions the second |
 
 **P1-03 is not accepted until every gate carried into it has been executed and
 recorded with observed output.**
