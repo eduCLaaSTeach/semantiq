@@ -121,7 +121,7 @@ jobs:
       - name: Check the files deploy.yml depends on
         run: |
           missing=0
-          for f in deployment/public_html.htaccess deployment/public_html.index.php deployment/rsync-protected-paths.txt deployment/ensure-app-key.sh; do
+          for f in deployment/public_html.htaccess deployment/public_html.index.php deployment/rsync-protected-paths.txt deployment/ensure-app-key.sh deployment/ensure-session-lifetime.sh; do
             if [ ! -f "$f" ]; then
               echo "::error file=$f::Required by .github/workflows/deploy.yml but missing"
               missing=1

@@ -221,6 +221,12 @@ final class AuthenticationFlowTest extends TestCase
         // the claim is stated as reachability instead.
         //
         // Mutation: give any business-domain entry a route in ApprovedMenu.
+        //
+        // P1-02 adds a SECOND reachable entry, and it is the same kind of thing
+        // as the first: Identity & SSO is System Administration, it reports on
+        // the front door, and reading it grants no business-domain access
+        // either. The claim under test is unchanged - the expected set is
+        // simply the delivered set, and it is still exhaustive.
         $areas = $response->viewData('page')['props']['productAreas'] ?? [];
 
         $this->assertNotSame([], $areas, 'No navigation was rendered, so this test proves nothing.');
@@ -241,7 +247,10 @@ final class AuthenticationFlowTest extends TestCase
         }
 
         $this->assertSame(
-            ['Organisation' => '/console/organisation'],
+            [
+                'Organisation' => '/console/organisation',
+                'Identity & SSO' => '/console/identity',
+            ],
             $reachable,
             'A System Administrator was offered a destination beyond Organisation. The role '
             .'describes the platform; it grants no business-domain capability.'

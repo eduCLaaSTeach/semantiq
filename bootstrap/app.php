@@ -2,9 +2,9 @@
 
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Modules\Organisation\Http\Middleware\RequireOrganisation;
-use App\Modules\Organisation\Http\Middleware\RequireSystemAdministrator;
 use App\Modules\Organisation\Providers\OrganisationServiceProvider;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
+use App\Modules\Platform\Http\Middleware\RequireSystemAdministrator;
 use App\Modules\Platform\Providers\PlatformServiceProvider;
 use App\Modules\Platform\Support\DeploymentLayout;
 use Illuminate\Foundation\Application;

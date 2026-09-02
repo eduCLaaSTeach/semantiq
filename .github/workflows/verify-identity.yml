@@ -1,0 +1,146 @@
+# Read-only P1-02 identity state verification.
+#
+# Manual dispatch only. It reports BOOLEANS AND COUNTS: whether each identity
+# setting is present, what session policy is enforced, which providers are
+# registered and approved, and the overall health state.
+#
+# IT PRINTS NO VALUE FROM .env AND NO LOG CONTENT. Not the tenant, not the
+# client id, not the redirect address, and above all not the secret - only
+# whether each is set. The questions this answers are "is the front door
+# configured", "is the approved session policy in force" and "is anything
+# unapproved registered".
+#
+# It runs NO LIVE PROBE. A verification workflow must not generate outbound
+# traffic to Microsoft on demand from CI; the SSO Health screen owns that, under
+# a provider-wide lock.
+#
+# It mirrors verify-bootstrap.yml, including the ssh-agent and askpass handling
+# the deploy key needs: the key is passphrase-protected, and writing the key
+# file alone produces "Permission denied (publickey)".
+name: Verify P1-02 identity state (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Report identity state over SSH
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+    steps:
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      # Booleans and counts. No value from .env, no log content, no live probe.
+      - name: Report identity state
+        run: |
+          set -euo pipefail
+
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
+              // PRESENCE ONLY. Every one of these is a boolean; not one value is
+              // read into anything that is printed.
+              \$present = [];
+              foreach ([\"tenant_id\",\"client_id\",\"client_secret\",\"redirect_uri\"] as \$k) {
+                \$present[\$k] = ((string) config(\"identity.microsoft.\".\$k)) !== \"\";
+              }
+
+              \$policy = new \App\Modules\Identity\Support\SessionPolicy;
+
+              \$inventory = app(\App\Modules\Identity\Support\ProviderInventory::class);
+
+              \$health = app(\App\Modules\Identity\Health\IdentityHealthCheck::class)->report();
+
+              \$rows = [];
+              foreach (\$health->checks as \$row) {
+                \$rows[\$row[\"key\"]] = \$row[\"state\"];
+              }
+
+              \$identityRoutes = [];
+              foreach (\Illuminate\Support\Facades\Route::getRoutes() as \$r) {
+                if (str_starts_with(\$r->uri(), \"console/identity\")) {
+                  foreach (\$r->methods() as \$m) {
+                    if (! in_array(\$m, [\"HEAD\",\"OPTIONS\"], true)) { \$identityRoutes[] = \$m; }
+                  }
+                }
+              }
+              sort(\$identityRoutes);
+
+              echo json_encode([
+                \"identity_keys_present\"      => \$present,
+                \"d31_enforced_idle_minutes\"  => \$policy->idleMinutes(),
+                \"d31_approved_idle_minutes\"  => \App\Modules\Identity\Support\SessionPolicy::APPROVED_IDLE_MINUTES,
+                \"d31_enforced_absolute_hours\" => \$policy->absoluteHours(),
+                \"d31_policy_matches_approved\" => \$policy->matchesApprovedPolicy(),
+                \"d31_idle_shorter_than_absolute\" => \$policy->idleIsShorterThanAbsolute(),
+                \"d31_idle_constant_removed\"  => ! defined(\"App\\\\Modules\\\\Platform\\\\Http\\\\Middleware\\\\EnsureSessionIsCurrent::IDLE_MINUTES\"),
+                \"session_storage\"            => \$policy->driver(),
+                \"approved_providers\"         => array_keys(\App\Modules\Identity\Support\ApprovedProviders::all()),
+                \"runtime_providers\"          => \$inventory->runtimeKeys(),
+                \"unapproved_providers\"       => \$inventory->unapprovedKeys(),
+                \"health_state\"               => \$health->state(),
+                \"health_rows\"                => \$rows,
+                \"identity_route_methods\"     => \$identityRoutes,
+              ], JSON_PRETTY_PRINT);
+            '")"
+
+          echo "$out"
+
+          # A guard, not just a report: the approved policy must be the enforced
+          # one, and nothing unapproved may be registered.
+          python3 - "$out" <<'PYEOF'
+          import json, sys
+          raw = sys.argv[1]
+          data = json.loads(raw[raw.index('{'):raw.rindex('}') + 1])
+
+          problems = []
+          if not data.get('d31_policy_matches_approved'):
+              problems.append('The enforced session policy is not the approved one.')
+          if not data.get('d31_idle_constant_removed'):
+              problems.append('The dead IDLE_MINUTES constant is back.')
+          if data.get('unapproved_providers'):
+              problems.append('An unapproved identity provider is registered.')
+          if 'PUT' in data.get('identity_route_methods', []) or 'DELETE' in data.get('identity_route_methods', []):
+              problems.append('A write route exists under console/identity.')
+
+          for p in problems:
+              print(f'::error::{p}')
+
+          sys.exit(1 if problems else 0)
+          PYEOF

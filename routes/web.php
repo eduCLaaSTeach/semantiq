@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Modules\Identity\Http\Controllers\EntraController;
+use App\Modules\Identity\Http\Controllers\HealthController;
+use App\Modules\Identity\Http\Controllers\LoginExperienceController;
+use App\Modules\Identity\Http\Controllers\ProvidersController;
+use App\Modules\Identity\Http\Controllers\SessionPolicyController;
 use App\Modules\Organisation\Http\Controllers\BusinessUnitController;
 use App\Modules\Organisation\Http\Controllers\DepartmentController;
 use App\Modules\Organisation\Http\Controllers\HierarchyController;
@@ -9,7 +14,6 @@ use App\Modules\Organisation\Http\Controllers\LegalEntityController;
 use App\Modules\Organisation\Http\Controllers\ProfileController;
 use App\Modules\Organisation\Http\Controllers\TeamController;
 use App\Modules\Organisation\Http\Middleware\RequireOrganisation;
-use App\Modules\Organisation\Http\Middleware\RequireSystemAdministrator;
 use App\Modules\Platform\Http\Controllers\Auth\CallbackController;
 use App\Modules\Platform\Http\Controllers\Auth\LogoutController;
 use App\Modules\Platform\Http\Controllers\Auth\RedirectController;
@@ -18,6 +22,7 @@ use App\Modules\Platform\Http\Controllers\ConsoleController;
 use App\Modules\Platform\Http\Controllers\EntryController;
 use App\Modules\Platform\Http\Controllers\FirstRun\BeginController;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
+use App\Modules\Platform\Http\Middleware\RequireSystemAdministrator;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -156,5 +161,39 @@ Route::prefix('console')
                     Route::post('hierarchy', [HierarchyController::class, 'setManager'])->name('hierarchy.set');
                     Route::patch('hierarchy/{user}/clear', [HierarchyController::class, 'clearManager'])->name('hierarchy.clear');
                 });
+            });
+
+        /*
+         * P1-02 - Identity & SSO.
+         *
+         * A WINDOW ONTO THE FRONT DOOR, NEVER A HANDLE ON IT. Five GET screens
+         * and exactly two POSTs, and neither POST writes business data: one
+         * probes Microsoft and updates a cache, one returns a value it read.
+         *
+         * There is deliberately no PUT, PATCH or DELETE anywhere under this
+         * prefix, and no route that could write .env. IdentityArchitectureTest
+         * asserts that exact set, so a write route added later fails the build
+         * rather than quietly becoming the .env editor this unit is defined as
+         * not having.
+         *
+         * Every route re-authorises through RequireSystemAdministrator, which
+         * P1-02 promoted to Platform because it is now needed by two modules and
+         * a second copy of an authorisation gate is the worst possible place for
+         * two sources of truth.
+         */
+        Route::middleware(RequireSystemAdministrator::class)
+            ->prefix('identity')
+            ->name('identity.')
+            ->group(function (): void {
+                Route::get('/', [EntraController::class, 'show'])->name('entra');
+                Route::post('entra/reveal', [EntraController::class, 'reveal'])->name('entra.reveal');
+
+                Route::get('providers', [ProvidersController::class, 'show'])->name('providers');
+                Route::get('login-experience', [LoginExperienceController::class, 'show'])->name('login-experience');
+
+                Route::get('health', [HealthController::class, 'show'])->name('health');
+                Route::post('health/re-check', [HealthController::class, 'recheck'])->name('health.recheck');
+
+                Route::get('session-policy', [SessionPolicyController::class, 'show'])->name('session-policy');
             });
     });

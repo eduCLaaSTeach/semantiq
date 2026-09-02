@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Modules\Organisation\Http\Middleware;
+namespace App\Modules\Platform\Http\Middleware;
 
 use App\Modules\Platform\Models\User;
 use Closure;

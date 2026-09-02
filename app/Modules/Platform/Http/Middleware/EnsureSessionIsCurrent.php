@@ -23,6 +23,14 @@ use Symfony\Component\HttpFoundation\Response;
  *    refreshed;
  *  - the user still exists and is still active.
  *
+ * The IDLE timeout is NOT enforced here, and this class no longer pretends it
+ * is. It declared IDLE_MINUTES = 60 that nothing ever read, while Laravel's own
+ * session.lifetime quietly enforced 120 in production - the approved policy and
+ * the running system disagreed for as long as the constant existed to reassure
+ * anyone who looked. D-31 removed it. The idle timeout lives in
+ * config/session.php, is read through SessionPolicy, and is compared against the
+ * approved value by the identity health check.
+ *
  * The active-user check is deliberately uncached. Caching it would reintroduce
  * exactly the window D-10 closes: "next protected request" has to mean this
  * request, not the one after the cache expires.
@@ -32,8 +40,6 @@ final class EnsureSessionIsCurrent
     public const SESSION_USER_ID = 'auth.user_id';
 
     public const SESSION_AUTHENTICATED_AT = 'auth.authenticated_at';
-
-    public const IDLE_MINUTES = 60;
 
     public const ABSOLUTE_HOURS = 12;
 

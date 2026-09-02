@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Health;
 
+use App\Modules\Identity\Health\IdentityHealthCheck;
 use App\Modules\Platform\Support\ConfigurationValidator;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Migrations\Migrator;
@@ -28,6 +29,7 @@ final class HealthInspector
         private readonly DatabaseManager $db,
         private readonly Migrator $migrator,
         private readonly ConfigurationValidator $configuration,
+        private readonly IdentityHealthCheck $identity,
     ) {}
 
     public function inspect(): HealthReport
@@ -38,6 +40,7 @@ final class HealthInspector
             'configuration' => $this->configuration(),
             'storage' => $this->storage(),
             'assets' => $this->assets(),
+            'identity' => $this->identity(),
         ]);
     }
 
@@ -93,6 +96,24 @@ final class HealthInspector
         }
 
         return ['ok' => true, 'detail' => 'Runtime directories writable.'];
+    }
+
+    /**
+     * P1-02. The SAME object the SSO Health screen renders, collapsed.
+     *
+     * Not a second copy of the logic: semantiq:health and the screen must not be
+     * able to disagree about one deployment, because then an operator has to
+     * pick which to believe.
+     *
+     * @return array{ok: bool, detail: string}
+     */
+    private function identity(): array
+    {
+        try {
+            return $this->identity->forInspector();
+        } catch (Throwable) {
+            return ['ok' => false, 'detail' => 'Could not determine identity health.'];
+        }
     }
 
     /** @return array{ok: bool, detail: string} */

@@ -48,9 +48,10 @@ final class NoBusinessSchemaTest extends TestCase
      * Exactly the modules that have been delivered, and no others.
      *
      * The point is unchanged from P1-BASE: a directory is not pre-created to
-     * reserve a name. Identity administration, Access and Audit still have no
-     * module here, and adding one before its unit is approved is the failure
-     * this catches.
+     * reserve a name. Access and Audit still have no module here, and adding one
+     * before its unit is approved is the failure this catches.
+     *
+     * Identity joined the list when P1-02 delivered it, and not before.
      */
     public function test_only_delivered_modules_exist(): void
     {
@@ -59,7 +60,7 @@ final class NoBusinessSchemaTest extends TestCase
         sort($modules);
 
         $this->assertSame(
-            ['Organisation', 'Platform'],
+            ['Identity', 'Organisation', 'Platform'],
             $modules,
             'A module directory appeared for a unit that has not been delivered. '
             .'Directories are not pre-created to reserve them.'

@@ -63,12 +63,19 @@ final class ConsoleNavigationTest extends TestCase
             'Organisation is not in the navigation offered on the landing page.'
         );
 
-        // D-19 shows the whole roadmap. Exactly one entry is a destination.
+        // D-19 shows the whole roadmap. Exactly TWO entries are destinations,
+        // and P1-02 delivering the second is the only reason this changed: both
+        // are System Administration capabilities, and the guard is still that
+        // nothing else is reachable.
         $this->assertSame(
-            ['Organisation' => '/console/organisation'],
+            [
+                'Organisation' => '/console/organisation',
+                'Identity & SSO' => '/console/identity',
+            ],
             $this->reachable($areas),
-            'Something other than Organisation is reachable from the sidebar. Organisation is '
-            .'the only capability delivered; every other entry is a roadmap label.'
+            'Something other than the two delivered capabilities is reachable from the sidebar. '
+            .'Organisation and Identity & SSO are what P1-01 and P1-02 delivered; every other '
+            .'entry is a roadmap label.'
         );
     }
 
@@ -82,10 +89,17 @@ final class ConsoleNavigationTest extends TestCase
 
         $reachable = $this->reachable($areas);
 
-        $this->assertSame(['Organisation' => '/console/organisation'], $reachable);
+        $this->assertSame([
+            'Organisation' => '/console/organisation',
+            'Identity & SSO' => '/console/identity',
+        ], $reachable);
 
-        // And that href actually serves the screen, rather than merely existing.
-        $this->actingAsUser($admin)->get($reachable['Organisation'])->assertOk();
+        // And those hrefs actually serve their screens, rather than merely
+        // existing. A menu entry that resolves to a route which 500s is a dead
+        // link with extra steps.
+        foreach ($reachable as $href) {
+            $this->actingAsUser($admin)->get($href)->assertOk();
+        }
     }
 
     /**
@@ -148,8 +162,10 @@ final class ConsoleNavigationTest extends TestCase
 
         $inert = 0;
 
+        $delivered = ['Organisation', 'Identity & SSO'];
+
         foreach ($this->flatten($areas) as $node) {
-            if ($node['label'] === 'Organisation') {
+            if (in_array($node['label'], $delivered, true)) {
                 continue;
             }
 

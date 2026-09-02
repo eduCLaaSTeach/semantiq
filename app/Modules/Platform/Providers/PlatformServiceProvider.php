@@ -7,6 +7,7 @@ namespace App\Modules\Platform\Providers;
 use App\Modules\Organisation\Support\SystemAdministratorNavigationAuthorizer;
 use App\Modules\Platform\Console\Commands\IssueBootstrapGrantCommand;
 use App\Modules\Platform\Console\HealthCommand;
+use App\Modules\Platform\Console\SessionPolicyCommand;
 use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Identity\Microsoft\EntraDiscovery;
 use App\Modules\Platform\Identity\Microsoft\EntraProvider;
@@ -69,16 +70,28 @@ final class PlatformServiceProvider extends ServiceProvider
             (string) config('identity.microsoft.client_secret'),
             (string) config('identity.microsoft.redirect_uri'),
         ));
+
+        /*
+         * P1-02 needs the set of identity providers to be ENUMERABLE, not just
+         * resolvable. Without a tag the container can hand back the one binding
+         * and nothing can ask "what else is there?" - so a second provider added
+         * later would be invisible to the guard that exists to catch it.
+         *
+         * The tag is what makes ProviderInventory possible, and ApprovedProviders
+         * is what decides whether anything found there may sign people in. The
+         * two are deliberately different questions.
+         */
+        $this->app->tag([IdentityProvider::class], 'identity.providers');
     }
 
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([HealthCommand::class, IssueBootstrapGrantCommand::class]);
+            $this->commands([HealthCommand::class, IssueBootstrapGrantCommand::class, SessionPolicyCommand::class]);
         }
 
-        // The Platform module still registers NO navigation nodes: Identity and
-        // SSO administration screens are P1-02. P1-01 registers Organisation in
-        // its own provider, which is the pattern - a module owns its nodes.
+        // The Platform module still registers NO navigation nodes. P1-01
+        // registers Organisation in its own provider and P1-02 registers
+        // Identity & SSO in its own - a module owns its nodes.
     }
 }
