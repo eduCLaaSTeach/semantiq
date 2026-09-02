@@ -129,7 +129,27 @@ jobs:
           DB_DATABASE: semantiq_ci
           DB_USERNAME: root
           DB_PASSWORD: ci-root
-        run: php artisan test tests/Feature/People
+        run: |
+          set -eo pipefail
+
+          php artisan test tests/Feature/People | tee people-mysql.log
+
+          # A PATH THAT MATCHES NOTHING EXITS 0.
+          #
+          # `php artisan test tests/Feature/Typo` prints "Test file not found"
+          # and returns success, so a rename or a moved directory would leave
+          # this step permanently green while running no tests at all - a step
+          # that reports safety it is not providing, which is the one thing
+          # CLAUDE.md §2 forbids. So the count is asserted, not assumed.
+          passed=$(grep -oE '[0-9]+ passed' people-mysql.log | head -1 | grep -oE '[0-9]+' || echo 0)
+
+          if [ "${passed:-0}" -lt 40 ]; then
+            echo "::error::Only ${passed:-0} People tests ran against MySQL. The suite is larger than that, so the path matched little or nothing."
+            exit 1
+          fi
+
+          echo "${passed} People tests passed against MySQL 8.4."
+
 
       # deploy.yml stages files that live outside the application tree, so
       # nothing in the test suite touches them. Deleting one is invisible until a

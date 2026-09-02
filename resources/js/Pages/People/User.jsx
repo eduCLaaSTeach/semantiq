@@ -162,9 +162,17 @@ export default function User({ person, dependencies, teams, manages, groups, org
                 <IdentityRow
                     label="Organisation"
                     note={
-                        person.organisationId === null
-                            ? 'Somebody must belong to an organisation before they can join a group.'
-                            : 'Their teams, groups and reporting lines all belong to this organisation.'
+                        /*
+                          * No note when the change is blocked: the refusal
+                          * below already explains why, and a second sentence
+                          * saying the same thing differently reads as two
+                          * different reasons.
+                          */
+                        person.organisationId !== null && dependencies.length > 0
+                            ? null
+                            : person.organisationId === null
+                                ? 'Somebody must belong to an organisation before they can join a group.'
+                                : 'Their teams, groups and reporting lines all belong to this organisation.'
                     }
                 >
                     {/*
@@ -174,7 +182,10 @@ export default function User({ person, dependencies, teams, manages, groups, org
                       */}
                     {person.organisationId !== null && dependencies.length > 0 ? (
                         <>
-                            <span className="idn-value">{person.organisationName}</span>
+                            {/* An organisation's name is a name, not an
+                              * identifier - .idn-value is the monospace face
+                              * the Object ID and tenant are set in. */}
+                            <span>{person.organisationName}</span>
                             <p className="org-hint-plain">
                                 This cannot be changed while this person {dependencies.join(', ')}. End
                                 those first, because they all belong to this organisation.
