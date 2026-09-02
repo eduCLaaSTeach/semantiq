@@ -249,6 +249,7 @@ final class AuthenticationFlowTest extends TestCase
         $this->assertSame(
             [
                 'Organisation' => '/console/organisation',
+                'Users & Groups' => '/console/people/users',
                 'Identity & SSO' => '/console/identity',
             ],
             $reachable,

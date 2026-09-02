@@ -175,6 +175,47 @@ final class ReadableInBothThemesTest extends TestCase
     }
 
     /**
+     * Negative case 39. EVERY PEOPLE SURFACE IS READABLE IN BOTH THEMES.
+     *
+     * P1-03 reuses the console classes rather than inventing a third set, so
+     * most of this is already covered above. What it adds is its own rules -
+     * pagination, the no-results escape - and those are where a raw hex would
+     * arrive now.
+     *
+     * Asserted over EVERY rule that P1-03 introduced, found by name rather than
+     * listed, so a rule added tomorrow is covered without anybody remembering to
+     * add it here.
+     *
+     * The measurement of actual contrast is a browser job and belongs to the
+     * verification document. What this makes unrepresentable is the CAUSE.
+     *
+     * Mutation: put a raw #991547 into .org-pagination.
+     */
+    public function test_the_people_rules_use_theme_aware_tokens_rather_than_raw_hexes(): void
+    {
+        $css = $this->stylesheet();
+
+        preg_match_all('/(\.(?:org-pagination|org-empty|idn-subhead|org-row-past)[^{]*)\{([^}]*)\}/', $css, $rules, PREG_SET_ORDER);
+
+        $this->assertNotEmpty($rules, 'No People-surface rules were found, so this proves nothing.');
+
+        $checked = 0;
+
+        foreach ($rules as [, $selector, $body]) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/#[0-9A-Fa-f]{3,8}/',
+                $body,
+                "[{$selector}] hardcodes a hex. A colour with one value has one value in both "
+                .'themes, which is how the Active pill came to measure 1.15:1 on the dark card.'
+            );
+
+            $checked++;
+        }
+
+        $this->assertGreaterThanOrEqual(4, $checked, 'Too few People rules were examined.');
+    }
+
+    /**
      * @return list<string>
      */
     private function tokensIn(string $css, string $pattern): array

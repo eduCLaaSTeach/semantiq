@@ -124,6 +124,40 @@ final class SecurityEventLogger
 
     public const IDENTITY_HEALTH_STATE_CHANGED = 'identity.health.state_changed';
 
+    /*
+     * P1-03 people and groups.
+     *
+     * Structural identifiers only. There is deliberately no event carrying an
+     * email, a display name, a group name or an Entra Object ID - the logger has
+     * no key for free text and none is added for this unit, which is what makes
+     * a leak here unrepresentable rather than merely discouraged.
+     */
+    public const USER_PROVISIONED = 'user.provisioned';
+
+    public const USER_PROVISION_REFUSED = 'user.provision.refused';
+
+    public const USER_ACTIVATED = 'user.activated';
+
+    public const USER_DEACTIVATED = 'user.deactivated';
+
+    public const USER_ORGANISATION_ASSIGNED = 'user.organisation.assigned';
+
+    public const USER_PURGED = 'user.purged';
+
+    public const GROUP_CREATED = 'group.created';
+
+    public const GROUP_UPDATED = 'group.updated';
+
+    public const GROUP_DEACTIVATED = 'group.deactivated';
+
+    public const GROUP_ACTIVATED = 'group.activated';
+
+    public const GROUP_PURGED = 'group.purged';
+
+    public const GROUP_MEMBER_ADDED = 'group.member.added';
+
+    public const GROUP_MEMBER_REMOVED = 'group.member.removed';
+
     private const EVENTS = [
         self::BOOTSTRAP_GRANT_ISSUED,
         self::BOOTSTRAP_COMPLETED,
@@ -163,6 +197,19 @@ final class SecurityEventLogger
         self::TEAM_PURGED,
         self::IDENTITY_HEALTH_CHECKED,
         self::IDENTITY_HEALTH_STATE_CHANGED,
+        self::USER_PROVISIONED,
+        self::USER_PROVISION_REFUSED,
+        self::USER_ACTIVATED,
+        self::USER_DEACTIVATED,
+        self::USER_ORGANISATION_ASSIGNED,
+        self::USER_PURGED,
+        self::GROUP_CREATED,
+        self::GROUP_UPDATED,
+        self::GROUP_DEACTIVATED,
+        self::GROUP_ACTIVATED,
+        self::GROUP_PURGED,
+        self::GROUP_MEMBER_ADDED,
+        self::GROUP_MEMBER_REMOVED,
     ];
 
     /**

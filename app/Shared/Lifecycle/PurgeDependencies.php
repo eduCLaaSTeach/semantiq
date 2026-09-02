@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Modules\Organisation\Support;
+namespace App\Shared\Lifecycle;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -66,8 +66,8 @@ final class PurgeDependencies
             'counted' => true,
         ],
         'team_memberships' => [
-            'one' => 'membership history exists',
-            'many' => 'membership history exists',
+            'one' => 'team membership history exists',
+            'many' => 'team membership history exists',
             'counted' => false,
         ],
         /*
@@ -82,6 +82,28 @@ final class PurgeDependencies
             'counted' => false,
             'advice' => 'Choose another primary legal entity on the Company Profile, or clear the '
                 .'selection, and then try again.',
+        ],
+        /*
+         * P1-03. A user is referenced by these, and PurgeGuardTest fails on a
+         * referencing table with no real label - so the phrases are required
+         * rather than optional.
+         *
+         * management_relationships appears twice because it points at a user
+         * from two directions, and "they manage people" is a different sentence
+         * from "they report to somebody". The walk reports the column, so the
+         * label is keyed by table and the phrase covers both honestly.
+         */
+        'management_relationships' => [
+            'one' => 'they appear in the management hierarchy',
+            'many' => 'they appear in the management hierarchy',
+            'counted' => false,
+            'advice' => 'Deactivate this person instead. Their reporting history is kept.',
+        ],
+        'group_memberships' => [
+            'one' => 'group membership history exists',
+            'many' => 'group membership history exists',
+            'counted' => false,
+            'advice' => 'Deactivate this person instead. Their group history is kept.',
         ],
         'business_unit_legal_entity' => [
             'one' => 'it is associated with %d legal entity',

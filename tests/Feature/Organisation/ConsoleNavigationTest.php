@@ -63,19 +63,20 @@ final class ConsoleNavigationTest extends TestCase
             'Organisation is not in the navigation offered on the landing page.'
         );
 
-        // D-19 shows the whole roadmap. Exactly TWO entries are destinations,
-        // and P1-02 delivering the second is the only reason this changed: both
-        // are System Administration capabilities, and the guard is still that
-        // nothing else is reachable.
+        // D-19 shows the whole roadmap. Exactly THREE entries are destinations,
+        // and P1-03 delivering the third is the only reason this changed: all
+        // three are System Administration capabilities, and the guard is still
+        // that nothing else is reachable.
         $this->assertSame(
             [
                 'Organisation' => '/console/organisation',
+                'Users & Groups' => '/console/people/users',
                 'Identity & SSO' => '/console/identity',
             ],
             $this->reachable($areas),
-            'Something other than the two delivered capabilities is reachable from the sidebar. '
-            .'Organisation and Identity & SSO are what P1-01 and P1-02 delivered; every other '
-            .'entry is a roadmap label.'
+            'Something other than the three delivered capabilities is reachable from the sidebar. '
+            .'Organisation, Users & Groups and Identity & SSO are what P1-01, P1-03 and P1-02 '
+            .'delivered; every other entry is a roadmap label.'
         );
     }
 
@@ -91,6 +92,7 @@ final class ConsoleNavigationTest extends TestCase
 
         $this->assertSame([
             'Organisation' => '/console/organisation',
+            'Users & Groups' => '/console/people/users',
             'Identity & SSO' => '/console/identity',
         ], $reachable);
 
@@ -162,7 +164,7 @@ final class ConsoleNavigationTest extends TestCase
 
         $inert = 0;
 
-        $delivered = ['Organisation', 'Identity & SSO'];
+        $delivered = ['Organisation', 'Users & Groups', 'Identity & SSO'];
 
         foreach ($this->flatten($areas) as $node) {
             if (in_array($node['label'], $delivered, true)) {

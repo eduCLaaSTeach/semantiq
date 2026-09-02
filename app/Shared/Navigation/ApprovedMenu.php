@@ -105,7 +105,9 @@ final class ApprovedMenu
             // The one delivered capability.
             NavigationNode::leaf($area, 'Organisation', 'i-sitemap', 'organisation.profile', 'organisation.view'),
 
-            NavigationNode::locked($area, 'Users & Groups', 'i-users', $policy),
+            // P1-03. Delivered: Users and Groups, System Administrator only.
+            // Creating a user or adding somebody to a group grants nothing.
+            NavigationNode::leaf($area, 'Users & Groups', 'i-users', 'people.users', 'people.view'),
             NavigationNode::locked($area, 'Roles & Access', 'i-key', $policy),
             NavigationNode::locked($area, 'Business Domains', 'i-layers', $policy),
             // P1-02. Delivered: five route-backed tabs, read-only, System

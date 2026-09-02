@@ -911,6 +911,30 @@ button.shell-link:hover .icon { color: var(--accent); }
   font-style: italic;
 }
 
+/* A no-results state offers a way out, and the escape must not inherit the
+   italic the surrounding sentence uses. */
+.org-empty .org-action {
+  font-style: normal;
+  margin-top: var(--space-2);
+}
+
+/* Page controls for a server-paginated list. A count with no controls states
+   that more exists and offers no way to reach it. */
+.org-pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+.org-pagination .org-meta { margin: 0; }
+
+.org-pagination .org-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .org-list {
   list-style: none;
   margin: 0;
