@@ -17,7 +17,8 @@ and a correction to how long a signed-in session lasts.
 | DESIGN merge SHA | `0f0a45be11b0905cb12c8abad3273aa77ea4fffd` |
 | Implementation merge SHA | `8a812836270826ad5dd6b2e7af21cb9d15161621` (PR #78) |
 | Deployment run | #102 — succeeded 2 September 2026, including the session-policy correction |
-| Production verification | *Verify P1-02 identity state* run #1 — succeeded |
+| Production verification | *Verify P1-02 identity state* runs #1 and #2 — both succeeded |
+| Authentication CTA fix | `6708f80b88341b2ef1ec30513c0c55696c5c451c` (PR #80), deploy run #104 |
 
 ## 3. Preconditions
 
