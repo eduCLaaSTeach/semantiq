@@ -1,0 +1,14 @@
+[
+  {
+    "id": "M-secret-length",
+    "case": "S-secret",
+    "verdict": "CAUGHT",
+    "detail": "test_the_secret_is_reported_as_presence_only"
+  },
+  {
+    "id": "M-secret-props-scope",
+    "case": "S-secret",
+    "verdict": "CAUGHT",
+    "detail": "test_the_secret_is_reported_as_presence_only"
+  }
+]
