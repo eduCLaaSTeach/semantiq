@@ -14,6 +14,8 @@ use App\Modules\Organisation\Http\Controllers\LegalEntityController;
 use App\Modules\Organisation\Http\Controllers\ProfileController;
 use App\Modules\Organisation\Http\Controllers\TeamController;
 use App\Modules\Organisation\Http\Middleware\RequireOrganisation;
+use App\Modules\People\Http\Controllers\GroupController;
+use App\Modules\People\Http\Controllers\UserController;
 use App\Modules\Platform\Http\Controllers\Auth\CallbackController;
 use App\Modules\Platform\Http\Controllers\Auth\LogoutController;
 use App\Modules\Platform\Http\Controllers\Auth\RedirectController;
@@ -181,6 +183,55 @@ Route::prefix('console')
          * a second copy of an authorisation gate is the worst possible place for
          * two sources of truth.
          */
+        /*
+         * P1-03 - Users & Groups.
+         *
+         * EVERY DYNAMIC SEGMENT SITS ONE LEVEL BELOW A STATIC ONE. `users` and
+         * `groups` are both static and at the same depth, so no route can
+         * capture the other's name.
+         *
+         * The first design put user records at /console/people/{user} beside
+         * /console/people/groups and claimed the collision was gone because the
+         * prefix had been renamed from `users` to `people`. It had not: a
+         * dynamic segment and a static one at the same depth clash whatever
+         * their parent is called, and the proof was that correctness needed
+         * both declaration order and a whereNumber to hold. It now needs
+         * neither. The numeric constraints below are defence in depth, and
+         * PeopleRoutingTest asserts the set still resolves when the file is
+         * read in reverse.
+         *
+         * RequireOrganisation is used from the Organisation module rather than
+         * promoted to Platform: it depends on OrganisationService and redirects
+         * to the Company Profile, so moving it would make Platform depend
+         * backwards on Organisation.
+         */
+        Route::middleware([RequireSystemAdministrator::class, RequireOrganisation::class])
+            ->prefix('people')
+            ->name('people.')
+            ->group(function (): void {
+                Route::get('/', fn () => redirect()->route('people.users'));
+
+                Route::get('users', [UserController::class, 'index'])->name('users');
+                Route::post('users', [UserController::class, 'store'])->name('users.store');
+                Route::get('users/{user}', [UserController::class, 'show'])->name('user')->whereNumber('user');
+                Route::put('users/{user}', [UserController::class, 'update'])->name('users.update')->whereNumber('user');
+                Route::patch('users/{user}/deactivate', [UserController::class, 'deactivate'])->name('users.deactivate')->whereNumber('user');
+                Route::patch('users/{user}/reactivate', [UserController::class, 'reactivate'])->name('users.reactivate')->whereNumber('user');
+                Route::post('users/{user}/reveal', [UserController::class, 'reveal'])->name('users.reveal')->whereNumber('user');
+                Route::delete('users/{user}', [UserController::class, 'purge'])->name('users.purge')->whereNumber('user');
+
+                Route::get('groups', [GroupController::class, 'index'])->name('groups');
+                Route::post('groups', [GroupController::class, 'store'])->name('groups.store');
+                Route::get('groups/{group}', [GroupController::class, 'show'])->name('group')->whereNumber('group');
+                Route::put('groups/{group}', [GroupController::class, 'update'])->name('groups.update')->whereNumber('group');
+                Route::patch('groups/{group}/deactivate', [GroupController::class, 'deactivate'])->name('groups.deactivate')->whereNumber('group');
+                Route::patch('groups/{group}/reactivate', [GroupController::class, 'reactivate'])->name('groups.reactivate')->whereNumber('group');
+                Route::delete('groups/{group}', [GroupController::class, 'purge'])->name('groups.purge')->whereNumber('group');
+
+                Route::post('groups/{group}/members', [GroupController::class, 'addMember'])->name('groups.members.add')->whereNumber('group');
+                Route::patch('groups/{group}/members/{membership}/remove', [GroupController::class, 'removeMember'])->name('groups.members.remove')->whereNumber('group')->whereNumber('membership');
+            });
+
         Route::middleware(RequireSystemAdministrator::class)
             ->prefix('identity')
             ->name('identity.')

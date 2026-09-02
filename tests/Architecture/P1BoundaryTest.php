@@ -108,9 +108,10 @@ final class P1BoundaryTest extends TestCase
 
         $this->assertNotEmpty($declared);
 
-        // P1-01 adds the structural event families and P1-02 adds identity
-        // health. Anything outside this list is an event nobody reviewed.
-        $families = 'auth|bootstrap|organisation|legal_entity|business_unit|department|team|management|identity';
+        // P1-01 adds the structural event families, P1-02 identity health, and
+        // P1-03 the user and group families. Anything outside this list is an
+        // event nobody reviewed.
+        $families = 'auth|bootstrap|organisation|legal_entity|business_unit|department|team|management|identity|user|group';
 
         foreach ($declared as $event) {
             $this->assertMatchesRegularExpression('/^('.$families.')\./', $event);

@@ -151,7 +151,11 @@ final class IdentityAccessBoundaryTest extends TestCase
         }
 
         $this->assertSame(
-            ['Organisation' => '/console/organisation', 'Identity & SSO' => '/console/identity'],
+            [
+                'Organisation' => '/console/organisation',
+                'Users & Groups' => '/console/people/users',
+                'Identity & SSO' => '/console/identity',
+            ],
             $reachable,
             'A business domain became reachable. Identity administration confers no business access.'
         );

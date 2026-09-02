@@ -29,3 +29,6 @@ Thumbs.db
 
 # Production tree assembled by the deploy workflow on the runner.
 /_deploy
+
+# Written by the CI step that proves the People suite really ran on MySQL.
+/people-mysql.log

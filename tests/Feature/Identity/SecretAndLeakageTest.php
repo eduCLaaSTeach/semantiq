@@ -123,7 +123,29 @@ final class SecretAndLeakageTest extends TestCase
         $this->assertStringNotContainsString(self::SECRET, $application->getContent());
     }
 
-    /** The screen says Present, and says nothing else about the secret. */
+    /**
+     * The screen says Present, and says nothing else about the secret.
+     *
+     * THE LENGTH IS ASSERTED AGAINST THE PROPS, NOT THE WHOLE BODY, and the
+     * reason is a defect this test had from the day it was written.
+     *
+     * strlen(SECRET) is 33 - a TWO-CHARACTER needle. The body also carries
+     * Inertia's asset-version hash, 32 random hex characters that change
+     * whenever any asset is rebuilt. Roughly one build in three produces a hash
+     * containing "33", and on those builds this assertion failed for a reason
+     * that had nothing to do with the secret. It passed locally and failed in
+     * CI on the same commit.
+     *
+     * That is not a flake to re-run: re-running would sometimes pass, which is
+     * worse than failing. The fix is to measure the thing the guard is about.
+     * The props are the application-controlled payload and the only place a
+     * length could actually leak from; the version hash is the framework's and
+     * carries no information about anything.
+     *
+     * The secret itself, a fragment of it and its hash are still asserted
+     * against the WHOLE body: those are long, distinctive needles with no
+     * randomness problem, and the wider surface is worth keeping for them.
+     */
     public function test_the_secret_is_reported_as_presence_only(): void
     {
         $admin = (new OrganisationFactory)->user(administrator: true);
@@ -132,10 +154,40 @@ final class SecretAndLeakageTest extends TestCase
 
         $this->assertStringContainsString('Present', $body);
 
-        // Not its length, not a fragment, not a hash.
-        $this->assertStringNotContainsString((string) strlen(self::SECRET), $body);
+        // Not a fragment, and not a hash - anywhere in the response.
         $this->assertStringNotContainsString(substr(self::SECRET, 0, 4), $body);
         $this->assertStringNotContainsString(hash('sha256', self::SECRET), $body);
+
+        // And not its length, in anything the application put there.
+        $props = $this->propsOf($body);
+
+        $this->assertNotSame('', $props, 'No page payload was found, so this guard proves nothing.');
+        $this->assertStringContainsString('Present', $props);
+
+        $this->assertStringNotContainsString(
+            (string) strlen(self::SECRET),
+            $props,
+            'The page payload carries the length of the client secret. Presence is all that may be '
+            .'reported: a length narrows a brute force and answers a question nobody should be able '
+            .'to ask.'
+        );
+    }
+
+    /**
+     * The Inertia page payload, with the framework's own asset-version hash
+     * removed.
+     *
+     * Everything else in data-page is something the application chose to send.
+     */
+    private function propsOf(string $body): string
+    {
+        if (preg_match('/<script data-page="app" type="application\/json">(.*?)<\/script>/s', $body, $found) !== 1) {
+            return '';
+        }
+
+        $payload = html_entity_decode($found[1], ENT_QUOTES);
+
+        return (string) preg_replace('/"version":"[0-9a-f]*",?/', '', $payload);
     }
 
     private function actingAsAdministrator(User $user): self

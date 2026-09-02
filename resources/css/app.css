@@ -63,6 +63,15 @@
   --badge-danger-bg: rgba(153, 21, 71, 0.12);
   --badge-attention-bg: rgba(179, 161, 37, 0.16);
   --badge-attention-fg: #6B5F0E;
+
+  /* The neutral badge - Inactive.
+   *
+   * It used --chrome-muted on --chrome-hover, which are tokens for the
+   * DARK chrome rather than for a light card, and measured 4.40:1 on the
+   * Groups list - just under AA, and found by measuring rather than by
+   * looking. A theme-aware pair, like every other badge. */
+  --badge-neutral-bg: rgba(25, 62, 107, 0.10);
+  --badge-neutral-fg: #3C4C61;
   --attention-edge: rgba(179, 161, 37, 0.55);
 
   --danger-fg: #991547;
@@ -136,6 +145,8 @@
     --badge-danger-bg: rgba(238, 154, 174, 0.20);
     --badge-attention-bg: rgba(179, 161, 37, 0.24);
     --badge-attention-fg: #E4D46B;
+    --badge-neutral-bg: rgba(255, 255, 255, 0.12);
+    --badge-neutral-fg: #C2CEDD;
     --attention-edge: rgba(228, 212, 107, 0.55);
 
     /* A light tint of Violet-Red: 5.12:1 on the dark card, and dark text on
@@ -172,6 +183,8 @@
   --badge-danger-bg: rgba(238, 154, 174, 0.20);
   --badge-attention-bg: rgba(179, 161, 37, 0.24);
   --badge-attention-fg: #E4D46B;
+  --badge-neutral-bg: rgba(255, 255, 255, 0.12);
+  --badge-neutral-fg: #C2CEDD;
   --attention-edge: rgba(228, 212, 107, 0.55);
   --danger-fg: #EE9AAE;
   --danger-edge: rgba(238, 154, 174, 0.45);
@@ -911,6 +924,30 @@ button.shell-link:hover .icon { color: var(--accent); }
   font-style: italic;
 }
 
+/* A no-results state offers a way out, and the escape must not inherit the
+   italic the surrounding sentence uses. */
+.org-empty .org-action {
+  font-style: normal;
+  margin-top: var(--space-2);
+}
+
+/* Page controls for a server-paginated list. A count with no controls states
+   that more exists and offers no way to reach it. */
+.org-pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+.org-pagination .org-meta { margin: 0; }
+
+.org-pagination .org-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .org-list {
   list-style: none;
   margin: 0;
@@ -961,6 +998,15 @@ button.shell-link:hover .icon { color: var(--accent); }
 
 .org-form-profile input { min-width: 0; width: 100%; }
 
+/* The section's own name spans the grid.
+ *
+ * .org-form-title carries width:100%, which spans a FLEX row and does nothing
+ * at all in a grid - so "Group details" sat in the first cell beside the Name
+ * field, reading as a label for it. */
+.org-form-profile .org-form-title { grid-column: 1 / -1; }
+
+.org-form-profile .org-hint-plain { grid-column: 1 / -1; margin: 0; }
+
 .org-form-profile .org-action { grid-column: 1 / -1; justify-self: start; }
 
 .org-form-profile .org-field-error { grid-column: 1 / -1; margin: 0; }
@@ -987,6 +1033,32 @@ button.shell-link:hover .icon { color: var(--accent); }
   max-width: none;
 }
 
+/* A filter bar is not a form card.
+ *
+ * The first version reused .org-form-inline alone, which carries the ROW
+ * layout but not the label rule that goes with it - so every label sat jammed
+ * against its own control and against the next one: "SearchStatusOrganisation".
+ * It reuses the label layout here and stays transparent, because a second card
+ * sitting directly on top of the table's is one card too many.
+ */
+.org-filters {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.org-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 .org-form label {
   display: flex;
   flex-direction: column;
@@ -1011,7 +1083,9 @@ button.shell-link:hover .icon { color: var(--accent); }
 .org-form-inline label { width: auto; }
 
 .org-form input,
-.org-form select {
+.org-form select,
+.org-filters input,
+.org-filters select {
   height: 32px;
   min-width: 180px;
   padding: 0 var(--space-2);
@@ -1026,6 +1100,8 @@ button.shell-link:hover .icon { color: var(--accent); }
 
 .org-form input:focus-visible,
 .org-form select:focus-visible,
+.org-filters input:focus-visible,
+.org-filters select:focus-visible,
 .org-table select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -1209,8 +1285,8 @@ button.shell-link:hover .icon { color: var(--accent); }
 }
 
 .org-pill-inactive {
-  background: var(--chrome-hover);
-  color: var(--chrome-muted);
+  background: var(--badge-neutral-bg);
+  color: var(--badge-neutral-fg);
 }
 
 /* ---- Inline row editing --------------------------------------------------- */
@@ -1312,7 +1388,8 @@ button.shell-link:hover .icon { color: var(--accent); }
 }
 
 @media (max-width: 720px) {
-  .org-form-inline { flex-direction: column; align-items: stretch; }
+  .org-form-inline,
+  .org-filters { flex-direction: column; align-items: stretch; }
 
   /* A stretched column takes the label's max-width, and 320px plus the card and
      canvas padding is wider than a 390px viewport minus the collapsed rail. The
@@ -1325,6 +1402,8 @@ button.shell-link:hover .icon { color: var(--accent); }
   .org-form label.org-field-sm,
   .org-form label.org-field-md { width: 100%; max-width: 100%; }
 
+  .org-filters input,
+  .org-filters select,
   .org-form input,
   .org-form select { width: 100%; min-width: 0; }
 

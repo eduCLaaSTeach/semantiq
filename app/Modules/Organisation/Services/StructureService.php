@@ -11,10 +11,10 @@ use App\Modules\Organisation\Models\Organisation;
 use App\Modules\Organisation\Models\StructureStatus;
 use App\Modules\Organisation\Models\Team;
 use App\Modules\Organisation\Support\Jurisdictions;
-use App\Modules\Organisation\Support\PurgeDependencies;
 use App\Modules\Organisation\Support\StructureViolation;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Security\SecurityEventLogger;
+use App\Shared\Lifecycle\PurgeDependencies;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
