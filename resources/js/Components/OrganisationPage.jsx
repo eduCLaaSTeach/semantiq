@@ -25,6 +25,13 @@ import OrganisationTabs from './OrganisationTabs'
  * never from a raw exception - the design's negative test 17 exists because
  * rendering an exception message is how a stack trace or the name of a record
  * the viewer may not see reaches a browser.
+ *
+ * A CONFIRMATION sits in the same place, for the opposite outcome. For a long
+ * time only the refusal had one: a refused write said so, and a successful write
+ * said nothing. On most screens the change was its own evidence, but the Company
+ * Profile re-renders identically after a save, so a save that worked was
+ * indistinguishable from a dead button. It is `role="status"` rather than
+ * `role="alert"` - polite, because a success is news, not an interruption.
  */
 export default function OrganisationPage({
     productAreas,
@@ -36,7 +43,9 @@ export default function OrganisationPage({
     children,
 }) {
     const refusal = errors.structure
-    const { url } = usePage()
+    const page = usePage()
+    const { url } = page
+    const { confirmation } = page.props
 
     return (
         <AppShell productAreas={productAreas} title="Organisation">
@@ -70,6 +79,13 @@ export default function OrganisationPage({
                     <div className="org-refusal" role="alert">
                         <strong>Refused.</strong> {refusal}
                         {errors.blockedBy ? <div className="org-refusal-detail">Blocked by: {errors.blockedBy}</div> : null}
+                    </div>
+                ) : null}
+
+                {confirmation && !refusal ? (
+                    <div className="org-confirmation" role="status">
+                        <span className="org-confirmation-mark" aria-hidden="true">&#10003;</span>
+                        {confirmation}
                     </div>
                 ) : null}
 

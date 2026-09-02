@@ -94,7 +94,7 @@ final class BusinessUnitController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.business-units');
+        return $this->confirm('organisation.business-units', 'Business unit added.');
     }
 
     public function update(Request $request, BusinessUnit $businessUnit): RedirectResponse
@@ -111,7 +111,7 @@ final class BusinessUnitController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.business-units');
+        return $this->confirm('organisation.business-units', 'Business unit saved.');
     }
 
     /**
@@ -129,7 +129,7 @@ final class BusinessUnitController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.business-units');
+        return $this->confirm('organisation.business-units', 'Business unit permanently deleted.');
     }
 
     public function deactivate(Request $request, BusinessUnit $businessUnit): RedirectResponse
@@ -140,7 +140,7 @@ final class BusinessUnitController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.business-units');
+        return $this->confirm('organisation.business-units', 'Business unit deactivated. The record and its history are kept.');
     }
 
     public function reactivate(Request $request, BusinessUnit $businessUnit): RedirectResponse
@@ -151,7 +151,7 @@ final class BusinessUnitController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.business-units');
+        return $this->confirm('organisation.business-units', 'Business unit reactivated.');
     }
 
     public function associate(Request $request, BusinessUnit $businessUnit): RedirectResponse
@@ -170,13 +170,13 @@ final class BusinessUnitController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.business-unit', $businessUnit);
+        return $this->confirm('organisation.business-unit', 'Legal entity associated. The association records structure and grants no access.', $businessUnit);
     }
 
     public function dissociate(Request $request, BusinessUnit $businessUnit, LegalEntity $legalEntity): RedirectResponse
     {
         $this->structure->dissociate($businessUnit, $legalEntity, $this->actor($request));
 
-        return redirect()->route('organisation.business-unit', $businessUnit);
+        return $this->confirm('organisation.business-unit', 'Legal entity association removed.', $businessUnit);
     }
 }

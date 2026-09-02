@@ -80,7 +80,7 @@ final class HierarchyController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.hierarchy');
+        return $this->confirm('organisation.hierarchy', 'Manager recorded. Any previous reporting line is ended and kept.');
     }
 
     public function clearManager(Request $request, User $user): RedirectResponse
@@ -91,6 +91,6 @@ final class HierarchyController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.hierarchy');
+        return $this->confirm('organisation.hierarchy', 'Manager cleared. The record of the previous reporting line is kept.');
     }
 }

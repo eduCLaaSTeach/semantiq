@@ -136,7 +136,7 @@ final class TeamController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.teams');
+        return $this->confirm('organisation.teams', 'Team added.');
     }
 
     /**
@@ -157,7 +157,7 @@ final class TeamController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.teams');
+        return $this->confirm('organisation.teams', 'Team saved.');
     }
 
     public function move(Request $request, Team $team): RedirectResponse
@@ -176,7 +176,7 @@ final class TeamController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.teams');
+        return $this->confirm('organisation.teams', 'Team moved to another department. The move is recorded as scope-affecting.');
     }
 
     /**
@@ -194,7 +194,7 @@ final class TeamController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.teams');
+        return $this->confirm('organisation.teams', 'Team permanently deleted.');
     }
 
     public function deactivate(Request $request, Team $team): RedirectResponse
@@ -205,7 +205,7 @@ final class TeamController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.teams');
+        return $this->confirm('organisation.teams', 'Team deactivated. The record and its history are kept.');
     }
 
     public function reactivate(Request $request, Team $team): RedirectResponse
@@ -216,7 +216,7 @@ final class TeamController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.teams');
+        return $this->confirm('organisation.teams', 'Team reactivated.');
     }
 
     public function addMember(Request $request, Team $team): RedirectResponse
@@ -235,7 +235,7 @@ final class TeamController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.team', $team);
+        return $this->confirm('organisation.team', 'Member added to the team.', $team);
     }
 
     public function removeMember(Request $request, Team $team, TeamMembership $membership): RedirectResponse
@@ -246,6 +246,6 @@ final class TeamController
             return $this->refuse($violation);
         }
 
-        return redirect()->route('organisation.team', $team);
+        return $this->confirm('organisation.team', 'Membership ended. The record is kept, with its end date.', $team);
     }
 }

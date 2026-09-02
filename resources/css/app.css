@@ -47,6 +47,7 @@
      card it measured 1.15:1 - unreadable, exactly as warned. */
   --badge-success-bg: rgba(95, 128, 37, 0.14);
   --badge-success-fg: #3D5418;
+  --success-edge: rgba(95, 128, 37, 0.55);
 
   /* D-24 danger tokens. The same rule as the success badge, applied before it
      could go wrong a second time: Violet-Red used as TEXT goes through a
@@ -117,6 +118,7 @@
        dark card, measured rather than eyeballed. */
     --badge-success-bg: rgba(95, 128, 37, 0.22);
     --badge-success-fg: #A8CC72;
+    --success-edge: rgba(168, 204, 114, 0.55);
 
     /* A light tint of Violet-Red: 5.12:1 on the dark card, and dark text on
        the solid button reads at 8.05:1. */
@@ -147,6 +149,7 @@
   --accent-contrast: #0F1C2E;
   --badge-success-bg: rgba(95, 128, 37, 0.22);
   --badge-success-fg: #A8CC72;
+  --success-edge: rgba(168, 204, 114, 0.55);
   --danger-fg: #EE9AAE;
   --danger-edge: rgba(238, 154, 174, 0.45);
   --danger-solid: #EE9AAE;
@@ -755,8 +758,35 @@ button.shell-link:hover .icon { color: var(--accent); }
 
 /* A refusal is an alert, not a toast: it must survive a screen reader reaching
    it late, and it must not disappear before it has been read. */
+/* The edge goes through the theme-aware token, not the raw semantic hex. The
+   shared standard names thin edges alongside text for exactly this reason:
+   #991547 on the dark card is 1.33:1 and the refusal loses its only colour
+   signal. */
+/* A successful write, confirmed. The mirror of .org-refusal in every respect
+   except its colour and its politeness: role="status" rather than role="alert",
+   because a success is news and not an interruption. */
+.org-confirmation {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  border: 1px solid var(--success-edge);
+  border-left-width: 4px;
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--text);
+  padding: var(--space-3);
+  font-size: 13px;
+}
+
+/* Colour is never the only signal: the tick is redundant reinforcement of a
+   sentence that already says what happened. */
+.org-confirmation-mark {
+  color: var(--badge-success-fg);
+  font-weight: 700;
+}
+
 .org-refusal {
-  border: 1px solid var(--semantic-danger);
+  border: 1px solid var(--danger-edge);
   border-left-width: 4px;
   border-radius: var(--radius-control);
   background: var(--card);

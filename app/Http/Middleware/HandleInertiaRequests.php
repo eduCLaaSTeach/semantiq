@@ -38,6 +38,15 @@ final class HandleInertiaRequests extends Middleware
             // everyone, on every page. Inertia resolves the closure when the
             // response is built, by which time EnsureSessionIsCurrent has run.
             'productAreas' => fn (): array => app(NavigationRegistry::class)->visibleFor(),
+
+            // The confirmation of a successful write, for one render.
+            //
+            // A closure for the same reason as the line above: share() runs
+            // before the route middleware, and the session is read when the
+            // response is built. Null on every request that did not just
+            // complete a write, which is what makes it a confirmation rather
+            // than a banner that lives on the page.
+            'confirmation' => fn (): ?string => $request->session()->get('confirmation'),
         ];
     }
 }
