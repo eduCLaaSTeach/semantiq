@@ -107,6 +107,35 @@ final class SigningKeyRefreshTest extends TestCase
     }
 
     /**
+     * An EMPTY key set is a failed refresh, not a successful one.
+     *
+     * A 200 carrying no keys is not a rotation, it is an answer we cannot use.
+     * Writing it to the cache would destroy a working set just as thoroughly as
+     * the forget-then-fetch D-32 removed - the defect would simply have moved
+     * from the network path to the parsing one.
+     *
+     * Found by re-reading the change adversarially before merging, not by a
+     * mutation. Mutation: accept an empty set as fresh.
+     */
+    public function test_an_empty_key_set_does_not_replace_the_cache(): void
+    {
+        $known = $this->entra->jwks();
+
+        Cache::put($this->cacheKey('jwks'), $known, now()->addHours(24));
+        Cache::put($this->cacheKey('metadata'), [
+            'issuer' => $this->entra->issuer(),
+            'jwks_uri' => 'https://login.microsoftonline.test/keys',
+        ], now()->addHours(24));
+
+        Http::fake(['*/keys' => Http::response(['keys' => []])]);
+
+        $returned = $this->discovery()->signingKeys(forceRefresh: true);
+
+        $this->assertSame($known, Cache::get($this->cacheKey('jwks')), 'An empty key set replaced a working one.');
+        $this->assertSame($known, $returned);
+    }
+
+    /**
      * K3. A sign-in on a key we still hold works after a failed refresh.
      *
      * This is the consequence the whole correction is for: one unlucky request

@@ -29,13 +29,13 @@
 
 ## 2. Automated evidence
 
-**373 tests, 4,995 assertions, all passing.** Pint clean. The P1-02 suites:
+**374 tests, 4,999 assertions, all passing.** Pint clean. The P1-02 suites:
 
 | Suite | Cases |
 | --- | --- |
 | `IdentityHealthTest` | 19 |
 | `IdentityAccessBoundaryTest` | 7 |
-| `SigningKeyRefreshTest` (D-32) | 7 |
+| `SigningKeyRefreshTest` (D-32) | 8 |
 | `SessionPolicyEnforcementTest` (D-31) | 6 |
 | `ApprovedProviderBoundaryTest` | 4 |
 | `SessionPolicyDriftTest` | 4 |
@@ -136,6 +136,17 @@ After the fixes: **0 of 30 combinations overflow, 0 clip, 0 console errors** —
 the only console output is the font CDN, which this sandbox blocks.
 
 ---
+
+## 4b. A gap found by re-reading the change, not by a test
+
+Before merging, D-32 was re-read adversarially. A JWKS response of `200` with an
+**empty key list** would have satisfied `$fresh !== null` and been written to the
+cache — destroying a working key set just as thoroughly as the forget-then-fetch
+the correction removes. The defect would simply have moved from the network path
+to the parsing one.
+
+An empty set now counts as a failed refresh, and a case covers it. **Nothing
+found this; reading the diff did.**
 
 ## 5. A defect found in the deployment script, by killing it
 

@@ -105,25 +105,30 @@ final class EntraDiscovery
             /*
              * D-32. Fetch, then replace - never forget, then fetch.
              *
-             * A failed fetch here leaves the cached set exactly as it was and
-             * returns it. The caller's second decode attempt then fails on the
-             * unknown key id, which is the correct outcome for the one token
-             * that triggered this; every other sign-in keeps working on the keys
-             * we still hold.
-             */
-            /*
-             * Metadata may be unreachable too - the jwks_uri comes from it. A
-             * refresh that cannot even resolve where the keys live has failed,
-             * and a failed refresh must RETURN the preserved cache rather than
-             * throw. Throwing here was the first version of this fix, and it
-             * turned "we could not refresh" back into "sign-in is broken for
-             * everyone", which is the defect wearing different clothes.
+             * A failed fetch leaves the cached set exactly as it was and returns
+             * it. The caller's second decode attempt then fails on the unknown
+             * key id, which is the correct outcome for the one token that
+             * triggered this; every other sign-in keeps working on the keys we
+             * still hold.
+             *
+             * Metadata can be unreachable too, since the jwks_uri comes from it.
+             * A refresh that cannot resolve where the keys live has failed, and
+             * a failed refresh RETURNS the preserved cache rather than throwing:
+             * throwing was the first version of this fix, and it turned "we
+             * could not refresh" back into "sign-in is broken for everyone",
+             * which is the defect wearing different clothes.
+             *
+             * AN EMPTY KEY SET COUNTS AS A FAILURE. A 200 carrying no keys is
+             * not a rotation, it is an answer we cannot use - and writing it to
+             * the cache would destroy a working set just as thoroughly as the
+             * forget-then-fetch this correction removed. Found by re-reading the
+             * change rather than by a test, and now covered by one.
              */
             $metadata = $this->cachedMetadata() ?? $this->fetchMetadata();
 
             $fresh = $metadata === null ? null : $this->fetchKeysFrom($metadata);
 
-            if ($fresh !== null) {
+            if ($fresh !== null && $fresh !== []) {
                 Cache::put($key, $fresh, now()->addHours(self::CACHE_HOURS));
 
                 return $fresh;
