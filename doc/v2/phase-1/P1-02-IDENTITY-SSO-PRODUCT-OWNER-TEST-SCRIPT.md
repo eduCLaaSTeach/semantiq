@@ -1,5 +1,10 @@
 # P1-02 — Identity & SSO — PRODUCT OWNER TEST SCRIPT
 
+> **P1-02 — IDENTITY & SSO — PRODUCT OWNER ACCEPTED, 2 September 2026.**
+> Functional testing ALL PASS. Acceptance was held on one shared authentication
+> CTA visibility defect found on the sign-out path; it was corrected, retested by
+> the Product Owner in their own browser, and all four retest checks passed.
+
 Written for the Product Owner: your words, your screens, your decisions.
 
 ---
@@ -142,6 +147,10 @@ the links and would not show the state that was broken.
 | R4 | Read the button on that page | It visibly reads **Return to sign in** | |
 | R5 | Click it | You return to the Login page | |
 | R6 | Repeat R1 and R4 in the **other** theme | Both labels stay clearly readable | |
+
+**Retest result — 2 September 2026: R1–R6 PASS.** Recorded by the Product Owner:
+Login CTA visible, sign out reaches `/auth/signed-out`, `Return to sign in`
+visible, and the click returns to Login.
 
 If any label is still invisible, stop and say which screen and which theme — the
 fix has not taken effect there.

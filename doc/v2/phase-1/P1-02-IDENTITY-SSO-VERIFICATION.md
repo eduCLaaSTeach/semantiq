@@ -6,6 +6,7 @@
 **Implementation merge SHA:** `8a812836270826ad5dd6b2e7af21cb9d15161621` (PR #78)
 **Deployment:** run #102, succeeded — including the D-31 session-policy step
 **Decisions implemented:** D-26 to D-32
+**Status:** **PRODUCT OWNER ACCEPTED — 2 September 2026**
 
 > **What was executed and observed**, not what was expected to be true. Where
 > something is unverified, blocked or not observable, it says so and says why.
@@ -396,4 +397,47 @@ disturbed nothing in P1-02.
 | 15 | Five screens verified in a real browser, both themes, responsive | Met, with five defects found and fixed |
 | 16 | Every guard proven non-vacuous | Met, 50 mutations |
 | 17 | Product Owner test script delivered | Met |
-| 18 | Product Owner acceptance | **Outstanding.** A green CI run does not unlock P1-03 |
+| 18 | Product Owner acceptance | **MET — accepted 2 September 2026** |
+
+---
+
+## 8. Product Owner acceptance
+
+**P1-02 — IDENTITY & SSO — PRODUCT OWNER ACCEPTED, 2 September 2026.**
+
+Functional testing of the five Identity screens: **ALL PASS**.
+
+Acceptance was **held** on one finding and released once it was corrected. The
+finding was a shared P1-00 / UI-foundation regression discovered on the sign-out
+negative path — the primary authentication button's label was invisible — not a
+failure of the five Identity screens. §6c records the cause, the fix and the
+audit; the final retest, in the Product Owner's own browser:
+
+| Retest | Result |
+| --- | --- |
+| Login CTA — `Continue with Microsoft` visible | **PASS** |
+| Sign out → `/auth/signed-out` | **PASS** |
+| `Return to sign in` label visible | **PASS** |
+| Click returns to Login | **PASS** |
+
+### Accepted deviation — the middleware namespace move
+
+`RequireSystemAdministrator` moved from Organisation to Platform, so two P1-01
+authorisation tests changed. **Accepted by the Product Owner as a namespace-only
+consequence of the approved middleware ownership move, explicitly not a
+weakening of the P1-01 gate**, on these conditions, each verified against the
+merged code:
+
+| Condition | Verified |
+| --- | --- |
+| Only namespace/import references changed | `AccessBoundaryTest`: the `use` line only. `OrganisationBoundaryTest`: the `use` lines **plus one line in a method body** — the gate is now located by `ReflectionClass` instead of a hardcoded path into the directory it left. Reported rather than described as import-only |
+| No P1-01 assertion changed | Assertion lines byte-identical in both files (20 and 35) |
+| No fixture changed | Nothing under `tests/Support/` touched |
+| No expected authorization result changed | The gate's body is byte-identical apart from its `namespace` line |
+| Exactly one `RequireSystemAdministrator` | One file, in Platform. No `class_alias` anywhere, and none will be added |
+
+The one body line also makes that guard stronger: a hardcoded path would silently
+read an empty file after any future move, and reading nothing passes
+`assertStringNotContainsString` for the wrong reason.
+
+**P1-02 is not reopened unless a genuine defect is subsequently found.**
