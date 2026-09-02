@@ -3,6 +3,8 @@
 **Unit:** P1-02 (Phase 1 delivery order 4)
 **DESIGN:** `P1-02-IDENTITY-SSO-DESIGN.md` — Revision 2, **APPROVED**, merged as
 `0f0a45be11b0905cb12c8abad3273aa77ea4fffd` (PR #77)
+**Implementation merge SHA:** `8a812836270826ad5dd6b2e7af21cb9d15161621` (PR #78)
+**Deployment:** run #102, succeeded — including the D-31 session-policy step
 **Decisions implemented:** D-26 to D-32
 
 > **What was executed and observed**, not what was expected to be true. Where
@@ -176,6 +178,40 @@ Recorded honestly rather than inferred from a passing test.
 | 4 | **Client-secret expiry** — undetectable in this unit at all. It needs a Microsoft Graph call this design deliberately does not make | **Named as a known limit, not a check that passed.** The screen says so where the claim is |
 | 5 | **The `ulimit` kill test** reproduces one interrupted-write ending, not every one. `SIGKILL` cannot be trapped by anything | The startup sweep is what covers the untrappable case, and it is asserted |
 | 6 | **D12** is a presence guard read from the script, not a behaviour test. The permission window is a race that cannot be observed honestly from outside the process | Labelled as a presence guard in the test itself |
+
+---
+
+## 6b. Production verification — observed, read-only
+
+*Verify P1-02 identity state*, run #1 against production on the deployed build.
+**Booleans and counts only. No value from `.env` and no log content was read or
+printed, and no live probe was run.**
+
+| Reported | Value |
+| --- | --- |
+| Identity settings present | tenant, client id, client secret, redirect address — **all present** |
+| **Enforced idle timeout** | **60 minutes** |
+| Approved idle timeout | 60 minutes |
+| Enforced absolute lifetime | 12 hours |
+| Enforced policy matches approved | **true** |
+| Idle shorter than absolute | true |
+| `IDLE_MINUTES` constant removed | **true** |
+| Approved providers | `microsoft` |
+| Runtime providers | `microsoft` |
+| Unapproved providers | **none** |
+| Overall health | **healthy** |
+| Live-check row | `not_checked` — correct: a deployment clears the cache and nobody has pressed the button |
+| Identity trust, directory identity, return address | all healthy — production genuinely obtained Microsoft's settings and signing keys |
+| Identity route methods | five `GET`, two `POST`. No `PUT`, no `DELETE` |
+
+**D-31 is confirmed in production: the enforced idle timeout is 60 minutes, and
+the constant that claimed it without enforcing it is gone.** Before this
+deployment the same reading would have been 120.
+
+The workflow is a guard as well as a report: it exits non-zero if the enforced
+policy stops matching the approved one, if the dead constant returns, if an
+unapproved provider is registered, or if a write route appears under
+`console/identity`.
 
 ---
 
