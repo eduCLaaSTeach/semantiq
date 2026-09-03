@@ -158,6 +158,40 @@ final class SecurityEventLogger
 
     public const GROUP_MEMBER_REMOVED = 'group.member.removed';
 
+    /*
+     * P1-04 business domains.
+     *
+     * SEVEN EVENTS AND NO NEW CONTEXT KEY. Every value one of these carries
+     * already has somewhere to go - entity_type, entity_id, organisation_id,
+     * user_id, related_id, result - and that is the D-12 boundary working as
+     * designed rather than a coincidence: a domain's NAME, CODE and DESCRIPTION
+     * are business content, there is no key for free text, and so a leak here
+     * is UNREPRESENTABLE rather than merely discouraged. A design that needed a
+     * new key would be a design putting business content in the log.
+     *
+     * REFUSALS ARE DELIBERATELY NOT LOGGED. P1-02's note above says a screen is
+     * not logged merely because it is sensitive, because volume buries what
+     * matters and P1-08 inherits the noise. user.provision.refused exists
+     * because a failed provision can indicate enumeration; being told "assign
+     * an owner before enabling this" cannot indicate anything.
+     *
+     * None of these events records a grant, because none of these operations is
+     * one. An owner is accountable, not entitled.
+     */
+    public const BUSINESS_DOMAIN_CREATED = 'business_domain.created';
+
+    public const BUSINESS_DOMAIN_UPDATED = 'business_domain.updated';
+
+    public const BUSINESS_DOMAIN_ENABLED = 'business_domain.enabled';
+
+    public const BUSINESS_DOMAIN_DISABLED = 'business_domain.disabled';
+
+    public const BUSINESS_DOMAIN_PURGED = 'business_domain.purged';
+
+    public const BUSINESS_DOMAIN_OWNER_ASSIGNED = 'business_domain.owner.assigned';
+
+    public const BUSINESS_DOMAIN_OWNER_CLEARED = 'business_domain.owner.cleared';
+
     private const EVENTS = [
         self::BOOTSTRAP_GRANT_ISSUED,
         self::BOOTSTRAP_COMPLETED,
@@ -210,6 +244,13 @@ final class SecurityEventLogger
         self::GROUP_PURGED,
         self::GROUP_MEMBER_ADDED,
         self::GROUP_MEMBER_REMOVED,
+        self::BUSINESS_DOMAIN_CREATED,
+        self::BUSINESS_DOMAIN_UPDATED,
+        self::BUSINESS_DOMAIN_ENABLED,
+        self::BUSINESS_DOMAIN_DISABLED,
+        self::BUSINESS_DOMAIN_PURGED,
+        self::BUSINESS_DOMAIN_OWNER_ASSIGNED,
+        self::BUSINESS_DOMAIN_OWNER_CLEARED,
     ];
 
     /**

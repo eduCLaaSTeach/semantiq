@@ -1,0 +1,168 @@
+# P1-04 BASELINE BUSINESS DOMAINS - THE ONE-TIME INITIALISATION.
+#
+# ############################################################################
+# #                                                                          #
+# #   THIS WORKFLOW WRITES TO PRODUCTION.                                    #
+# #                                                                          #
+# #   Every other operational workflow in this repository is a READ-ONLY     #
+# #   report. This one is not, and it says so in its name, here, and in its  #
+# #   own run summary, so that nobody dispatches it thinking otherwise.      #
+# #                                                                          #
+# ############################################################################
+#
+# WHAT IT DOES. Creates whichever of the seven baseline business domains are
+# missing for the organisation - executive, sales, finance, people, operations,
+# customer, learning - as DISABLED, WITH NO OWNER, and with their access
+# expectation set to "Not yet determined".
+#
+# WHY IT EXISTS. D-46. New organisations get their baseline vocabulary inside
+# the transaction that creates the Company Profile. Production was created
+# before P1-04 existed and WILL NEVER RUN THAT PATH AGAIN, so it needs an
+# explicit one-time run - deliberately a COMMAND somebody decides to dispatch,
+# rather than a migration or a boot hook that decides for them.
+#
+# WHAT IT WILL NOT DO. It is IDEMPOTENT and it is NOT A RESET. A domain that
+# already exists is left exactly as it is - renamed, enabled, owned, whatever
+# an administrator has decided about it. Running it twice produces seven
+# domains, not fourteen.
+#
+# IT CREATES NO USER, ASSIGNS NO OWNER AND GRANTS NOBODY ANYTHING. A domain
+# existing gives nobody access to anything, which is the whole of P1-04.
+#
+# It mirrors verify-people.yml for the ssh-agent and askpass handling the deploy
+# key needs: the key is passphrase-protected, and writing the key file alone
+# produces "Permission denied (publickey)".
+name: Initialise baseline business domains (WRITES)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  initialise:
+    name: Create missing baseline domains over SSH
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+    steps:
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      # Masked identifiers, booleans and counts. Nothing else leaves the server.
+
+      - name: Create any missing baseline domains
+        run: |
+          set -euo pipefail
+
+          echo "::warning::This workflow WRITES to production. It creates missing baseline business domains, disabled and unowned."
+
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan domains:initialise")"
+
+          echo "$out"
+
+          # A GUARD, NOT JUST A REPORT.
+          #
+          # The command prints what it created and what was already there. If it
+          # printed neither, something ran that was not this command - a stale
+          # deploy, a different application root, an artisan that failed quietly
+          # - and a step that reports success for that is worse than one that
+          # fails.
+          if ! printf '%s' "$out" | grep -q 'THIS COMMAND WRITES'; then
+            echo "::error::The command did not identify itself. Nothing can be concluded about what ran."
+            exit 1
+          fi
+
+          if ! printf '%s' "$out" | grep -qE 'Created:|Already there:'; then
+            echo "::error::The command reported neither what it created nor what was already present."
+            exit 1
+          fi
+
+      # The state afterwards, READ-ONLY: counts and codes, and not one name,
+      # email or identifier. Recorded as the evidence for the verification
+      # document, so that "seven domains, disabled, unowned" is an observation
+      # rather than an expectation.
+      - name: Report the resulting state
+        run: |
+          set -euo pipefail
+
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
+              \$rows = [];
+              foreach (\App\Modules\Domains\Models\BusinessDomain::query()->orderBy(\"id\")->get() as \$d) {
+                \$rows[] = [
+                  \"code\" => \$d->code,
+                  \"kind\" => \$d->kind->value,
+                  \"status\" => \$d->status->value,
+                  \"access_expectation\" => \$d->access_expectation->value,
+                  \"has_owner\" => \$d->currentOwnership()->exists(),
+                ];
+              }
+
+              echo json_encode([
+                \"domains\" => \$rows,
+                \"domains_total\" => count(\$rows),
+                \"ownership_rows_total\" => \App\Modules\Domains\Models\DomainOwnership::query()->count(),
+              ], JSON_PRETTY_PRINT);
+            '")"
+
+          echo "$out"
+
+          python3 - "$out" <<'PYEOF'
+          import json, sys
+          raw = sys.argv[1]
+          data = json.loads(raw[raw.index('{'):raw.rindex('}') + 1])
+
+          problems = []
+          codes = [d['code'] for d in data['domains'] if d['kind'] == 'baseline']
+          expected = ['executive', 'sales', 'finance', 'people', 'operations', 'customer', 'learning']
+
+          for code in expected:
+              if code not in codes:
+                  problems.append(f'Baseline domain [{code}] is missing.')
+
+          if len(codes) != len(set(codes)):
+              problems.append('A baseline code appears more than once - initialisation was not idempotent.')
+
+          for p in problems:
+              print(f'::error::{p}')
+
+          print('::notice::' + str(data['domains_total']) + ' domains present, '
+                + str(data['ownership_rows_total']) + ' ownership rows.')
+
+          sys.exit(1 if problems else 0)
+          PYEOF

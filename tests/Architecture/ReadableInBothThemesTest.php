@@ -216,6 +216,45 @@ final class ReadableInBothThemesTest extends TestCase
     }
 
     /**
+     * N51. The Business Domains surfaces use theme-aware tokens.
+     *
+     * P1-04 introduces NO NEW COLOUR TOKEN: the two status pills reuse the
+     * success and neutral pair the user states already use, and the attention
+     * pill reuses the tokens P1-02 added for its own third state. So the whole
+     * of this guard is that none of the new rules reaches for a raw hex - which
+     * is exactly how the Active pill came to measure 1.15:1 on the dark card.
+     *
+     * Mutation: give .org-pill-enabled a literal green.
+     */
+    public function test_the_domain_rules_use_theme_aware_tokens_rather_than_raw_hexes(): void
+    {
+        $css = $this->stylesheet();
+
+        preg_match_all(
+            '/(\.(?:org-pill-enabled|org-pill-disabled|org-pill-attention|org-identifier|org-muted|org-record-section|org-attention|org-empty-inline|org-action-quiet)[^{]*)\{([^}]*)\}/',
+            $css,
+            $rules,
+            PREG_SET_ORDER
+        );
+
+        $this->assertNotEmpty($rules, 'No Business Domains rules were found, so this proves nothing.');
+
+        $checked = 0;
+
+        foreach ($rules as [, $selector, $body]) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/#[0-9A-Fa-f]{3,8}/',
+                $body,
+                "[{$selector}] hardcodes a hex. A colour with one value has one value in both themes."
+            );
+
+            $checked++;
+        }
+
+        $this->assertGreaterThanOrEqual(8, $checked, 'Too few Business Domains rules were examined.');
+    }
+
+    /**
      * @return list<string>
      */
     private function tokensIn(string $css, string $pattern): array

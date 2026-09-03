@@ -105,6 +105,21 @@ final class PurgeDependencies
             'counted' => false,
             'advice' => 'Deactivate this person instead. Their group history is kept.',
         ],
+        /*
+         * P1-04. Uncounted and phrased as a fact, the way team and group
+         * membership history already are: the question is whether anybody has
+         * ever been accountable for this domain, not how many times.
+         *
+         * The advice is not "deactivate it instead" - a domain is disabled, not
+         * deactivated, and sending an administrator to look for a control that
+         * does not exist is the circular refusal P1-01 shipped once already.
+         */
+        'business_domain_owners' => [
+            'one' => 'ownership history exists',
+            'many' => 'ownership history exists',
+            'counted' => false,
+            'advice' => 'Disable this domain instead. The record of who was accountable for it is kept.',
+        ],
         'business_unit_legal_entity' => [
             'one' => 'it is associated with %d legal entity',
             'many' => 'it is associated with %d legal entities',

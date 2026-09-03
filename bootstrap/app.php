@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Modules\Domains\Console\InitialiseBusinessDomains;
 use App\Modules\Organisation\Http\Middleware\RequireOrganisation;
 use App\Modules\Organisation\Providers\OrganisationServiceProvider;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
@@ -23,6 +24,15 @@ $app = Application::configure(basePath: dirname(__DIR__))
             Route::group([], __DIR__.'/../routes/health.php');
         },
     )
+    /*
+     * P1-04. The one-time baseline initialisation for a deployment whose
+     * organisation already exists - it is a COMMAND rather than a migration or
+     * a boot hook because somebody has to DECIDE to run it, and because a
+     * migration runs before any organisation exists to name.
+     */
+    ->withCommands([
+        InitialiseBusinessDomains::class,
+    ])
     ->withProviders([
         PlatformServiceProvider::class,
 

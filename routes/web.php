@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Domains\Http\Controllers\DomainController;
 use App\Modules\Identity\Http\Controllers\EntraController;
 use App\Modules\Identity\Http\Controllers\HealthController;
 use App\Modules\Identity\Http\Controllers\LoginExperienceController;
@@ -230,6 +231,45 @@ Route::prefix('console')
 
                 Route::post('groups/{group}/members', [GroupController::class, 'addMember'])->name('groups.members.add')->whereNumber('group');
                 Route::patch('groups/{group}/members/{membership}/remove', [GroupController::class, 'removeMember'])->name('groups.members.remove')->whereNumber('group')->whereNumber('membership');
+            });
+
+        /*
+         * P1-04 - Business Domains.
+         *
+         * ONE LIST AND ONE RECORD PAGE, no tabs: this unit delivers ONE kind of
+         * thing, and baseline and custom domains are the same object with a
+         * different origin.
+         *
+         * {domain} is the only thing at its depth. There is no static segment
+         * beside it, which is the collision correction 1 of P1-03 was written
+         * for; whereNumber is defence in depth rather than the mechanism, and
+         * DomainRoutingTest asserts the set still resolves when this file is
+         * read in reverse.
+         *
+         * owner/clear is a PATCH, not a DELETE. In this codebase DELETE means a
+         * record is permanently destroyed and the complete DELETE route set is
+         * asserted; clearing an owner ends a period and destroys nothing, so a
+         * DELETE would both misdescribe it and weaken that assertion.
+         *
+         * A DOMAIN GRANTS NOTHING. Every route below is behind the same two
+         * gates as People, and no route anywhere reads a domain to decide what
+         * a person may see.
+         */
+        Route::middleware([RequireSystemAdministrator::class, RequireOrganisation::class])
+            ->prefix('domains')
+            ->name('domains.')
+            ->group(function (): void {
+                Route::get('/', [DomainController::class, 'index'])->name('index');
+                Route::post('/', [DomainController::class, 'store'])->name('store');
+
+                Route::get('{domain}', [DomainController::class, 'show'])->name('show')->whereNumber('domain');
+                Route::put('{domain}', [DomainController::class, 'update'])->name('update')->whereNumber('domain');
+                Route::delete('{domain}', [DomainController::class, 'purge'])->name('purge')->whereNumber('domain');
+
+                Route::patch('{domain}/enable', [DomainController::class, 'enable'])->name('enable')->whereNumber('domain');
+                Route::patch('{domain}/disable', [DomainController::class, 'disable'])->name('disable')->whereNumber('domain');
+                Route::patch('{domain}/owner', [DomainController::class, 'setOwner'])->name('owner.set')->whereNumber('domain');
+                Route::patch('{domain}/owner/clear', [DomainController::class, 'clearOwner'])->name('owner.clear')->whereNumber('domain');
             });
 
         Route::middleware(RequireSystemAdministrator::class)

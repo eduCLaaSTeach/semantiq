@@ -1289,6 +1289,113 @@ button.shell-link:hover .icon { color: var(--accent); }
   color: var(--badge-neutral-fg);
 }
 
+/* P1-04. A domain is ENABLED or DISABLED, not active or inactive - a USER is
+   active; a DOMAIN is switched on or off by the organisation. The colours are
+   the same pair the two user states already use, because the meaning is the
+   same shape and a third palette would say the two are unrelated. */
+.org-pill-enabled {
+  background: var(--badge-success-bg);
+  color: var(--badge-success-fg);
+}
+
+.org-pill-disabled {
+  background: var(--badge-neutral-bg);
+  color: var(--badge-neutral-fg);
+}
+
+/* The third state, reusing the tokens P1-02 added for its own third state.
+   NO NEW COLOUR TOKEN IS INTRODUCED BY P1-04. It is a prompt, not an alarm:
+   nothing is broken, a person is unreachable. */
+.org-pill-attention {
+  margin-left: var(--space-2);
+  background: var(--badge-attention-bg);
+  color: var(--badge-attention-fg);
+}
+
+/* An identity code is something a person COMPARES against another system, not
+   code to be read. Quieter than the name beside it and tabular so two codes
+   line up, without borrowing the look of a terminal. */
+.org-identifier {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+}
+
+.org-muted {
+  color: var(--text-muted);
+}
+
+/* ---- P1-04 Business Domains ---------------------------------------------- */
+
+/* A record page with four or five stacked sections rather than tabs. The rule
+   between them is what makes "Details", "Accountability" and "Availability"
+   read as separate questions instead of one long form. */
+.org-record-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--divider);
+}
+
+.org-record-section:first-of-type {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+
+.org-record-section h3 {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+/* The third banner state, beside refusal and confirmation. It is NOT a refusal:
+   nothing was blocked and nothing is broken. Its edge is the attention colour
+   P1-02 introduced, so a reader who has seen "Needs attention" on the SSO
+   health screen recognises the same weight of news here. */
+.org-attention {
+  border: 1px solid var(--attention-edge);
+  border-left-width: 4px;
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--text);
+  padding: var(--space-3);
+  font-size: 13px;
+}
+
+/* A field that is READ-ONLY and looks it. An input styled identically to the
+   editable one beside it invites an administrator to try to change it, and then
+   says nothing when nothing happens. Caught in the first browser pass. */
+.org-readonly,
+.org-form input.org-readonly {
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+/* An empty state inside a section, rather than in place of a page. */
+.org-empty-inline {
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+/* A secondary action beside a primary one. "Clear owner" must not compete with
+   "Change owner", and it is not destructive enough to be danger-coloured -
+   ownership history survives it. */
+.org-action-quiet {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.org-action-quiet:hover {
+  color: var(--text);
+}
+
 /* ---- Inline row editing --------------------------------------------------- */
 
 /* Editing happens in the row, in the same table, with the same controls. The

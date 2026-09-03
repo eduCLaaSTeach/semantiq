@@ -250,6 +250,8 @@ final class AuthenticationFlowTest extends TestCase
             [
                 'Organisation' => '/console/organisation',
                 'Users & Groups' => '/console/people/users',
+                'Business Domains' => '/console/domains',
+                'Business Domains' => '/console/domains',
                 'Identity & SSO' => '/console/identity',
             ],
             $reachable,
