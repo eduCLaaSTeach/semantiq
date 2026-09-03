@@ -27,6 +27,7 @@ a decision, not an omission, and several steps below check it.
 | --- | --- |
 | DESIGN merge SHA | `9e67749cc38e4717e30b9359a1933f28ea9e2b47` |
 | Implementation merge SHA | `cb73f14c4c6cc7aa06a47adb11d0e656bd53b79c` (PR #84) |
+| Acceptance merge SHA | `5ec9327e56e0403fc4acf52437d6c4ad287b0613` (PR #87) |
 | Deployed to | <https://semantiq.claas2saas.com> — deployed and verified reachable on 2 September 2026 |
 | **Result** | **P1-03 PRODUCT OWNER ACCEPTED — 3 September 2026** |
 
