@@ -8,7 +8,35 @@ blocked or was skipped, it says so and says why (`CLAUDE.md` §6).
 | PLAN merge SHA | `b083b30f261820a00f8fdfc37addcd1a6e063789` (PR #88) |
 | DESIGN merge SHA | `bffa100032cf9fe2d18869961b1659f4003c7aae` (PR #89) |
 | Implementation merge SHA | `920600279561224d2955debc78c71892eecd5f73` (PR #90) |
-| **Status** | **Awaiting Product Owner test** |
+| **Status** | **P1-04 PRODUCT OWNER ACCEPTED — 3 September 2026** |
+
+---
+
+## 0. Acceptance
+
+**P1-04 — BUSINESS DOMAINS — PRODUCT OWNER ACCEPTED, 3 September 2026.**
+
+The Product Owner ran the test script and confirmed: **all executed steps PASS,
+no failures observed.**
+
+### What was recorded, and what was not
+
+| | |
+| --- | --- |
+| Per-step result | **PASS**, on the Product Owner's confirmation |
+| **Verbatim wording of refusals E1–E8** | **NOT CAPTURED.** Not supplied, and **not reconstructed from the source** to fill the gap |
+| **The optional live non-administrator refusal** (script §8) | **NOT SPECIFICALLY CAPTURED**, so it is **not recorded as observed.** The automated coverage stands and the live observation is not claimed |
+
+**This is the second unit running for which the verbatim refusal wording was not
+retained.** It is recorded as missing rather than filled in, because a sentence
+copied out of `DomainViolation` would look identical to one somebody read on a
+screen — and only one of those is evidence.
+
+### What acceptance does NOT close
+
+Everything in §4 and §10 stands unchanged. In particular the **P1-05 carried
+gate of §8 is untouched by this run**: there is no access engine in P1-04 to
+test it against, which is the whole reason it is carried.
 
 ---
 

@@ -490,15 +490,36 @@ rather than quietly lost.
 | --- | --- | --- | --- |
 | **P1-01** *(ACCEPTED 2 Sep 2026)* | **P1-03** | Live multi-user management-cycle refusal, observed in production | **CLOSED 3 Sep 2026** — observed by the Product Owner against a genuine second user. Verbatim wording not retained |
 | **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-03** | A real non-administrator being refused at Identity & SSO | **CLOSED 3 Sep 2026** — `semantiq@educlaas.com`, a real user with no role, signed in and saw an empty System Administration area. No account was manufactured for it |
-| **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-05** | The provider-wide Re-check limit, observed with two administrators | Needs a second **privileged** account. **Moved from P1-03 to P1-05 by Product Owner decision:** P1-03 cannot assign `platform_role` at all, so closing it there would have meant manufacturing a second privileged production account. Automated evidence stands |
+| **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-05** | The provider-wide Re-check limit, observed with two administrators | **STILL OPEN.** Needs a second **privileged** account. **Do not create a fake privileged account to close it.** If P1-05 legitimately establishes another real System Administrator, the live observation is taken then; otherwise it stays open and says so. Automated evidence stands |
+| **P1-04** *(ACCEPTED 3 Sep 2026)* | **P1-05** | **A DISABLED DOMAIN CAN NEVER BROADEN ACCESS** | **OPEN, and mandatory.** P1-04 intentionally contains **no access engine**, so the failure is unreachable and untestable there. It becomes reachable the moment P1-05 builds effective access. See the five required cases below |
 
-These two were recorded in the P1-02 Product Owner test script §12 and were
+The first two were recorded in the P1-02 Product Owner test script §12 and were
 missing from this register — which is the exact way a carried gate gets quietly
 lost, and the reason this table exists. Added when P1-03 was delivered, and
 closed by it the next day.
 
-**One gate remains open across the whole of Phase 1 so far**, and it is the one
-that cannot be closed without a second privileged account. It stays with P1-05.
+**TWO GATES ARE NOW OPEN, both against P1-05.**
+
+### The P1-04 gate, stated as the cases it must run
+
+**A disabled domain can never broaden access.** The failure this anticipates is
+concrete rather than theoretical: the natural implementation of "disabled" is *a
+filter that removes a domain from a set*, and a filter that is skipped when the
+set is empty turns **no domains enabled** into **allow everything.**
+
+P1-05 must run **all five**:
+
+| # | Case | Required outcome |
+| --- | --- | --- |
+| 1 | **One** domain disabled | No access through that domain. Access through the others is unchanged |
+| 2 | **All** domains disabled | **No domain access at all** |
+| 3 | **No enabled domains** at all | **NO DOMAIN ACCESS — never unrestricted access.** This is the case the whole gate exists for |
+| 4 | An entitlement referencing a domain **subsequently disabled** | The entitlement grants nothing while the domain is disabled. It is **not deleted** |
+| 5 | **Re-enable** | Access returns to exactly what it was, and no further |
+
+Case 3 is not a rewording of case 2. *All disabled* and *none exist* reach the
+same empty set by different paths, and a filter that guards one may not guard
+the other.
 
 **P1-03 is not accepted until every gate carried into it has been executed and
 recorded with observed output.** Both were, and **P1-03 was accepted on
