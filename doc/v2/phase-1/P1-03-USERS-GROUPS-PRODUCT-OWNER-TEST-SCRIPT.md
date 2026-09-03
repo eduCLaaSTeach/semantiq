@@ -28,6 +28,29 @@ a decision, not an omission, and several steps below check it.
 | DESIGN merge SHA | `9e67749cc38e4717e30b9359a1933f28ea9e2b47` |
 | Implementation merge SHA | `cb73f14c4c6cc7aa06a47adb11d0e656bd53b79c` (PR #84) |
 | Deployed to | <https://semantiq.claas2saas.com> — deployed and verified reachable on 2 September 2026 |
+| **Result** | **P1-03 PRODUCT OWNER ACCEPTED — 3 September 2026** |
+
+---
+
+## RESULT — 3 September 2026
+
+**All executed steps PASS. No failures observed. P1-03 accepted.**
+
+Run on production as `salil@lithan.com`. Recorded on the Product Owner's
+confirmation.
+
+| Evidence | Result |
+| --- | --- |
+| **E4** — sole System Administrator deactivation refusal (step 34) | **PASS, observed.** Verbatim wording **not retained or provided** |
+| **E5** — management-cycle refusal (step 43) | **PASS, observed.** Verbatim wording **not retained or provided** |
+
+The wording of those two refusals has deliberately **not been reconstructed from
+the source code** to fill the gap. What was observed is recorded; what was not
+captured is named as missing.
+
+**Carried gates closed by this run:** P1-01's multi-user management cycle, and
+P1-02's genuine non-administrator refusal. P1-02's provider-wide Re-check lock
+remains carried to P1-05, unchanged.
 
 ---
 
