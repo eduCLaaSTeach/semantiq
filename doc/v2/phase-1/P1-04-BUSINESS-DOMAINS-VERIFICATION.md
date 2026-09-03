@@ -7,7 +7,7 @@ blocked or was skipped, it says so and says why (`CLAUDE.md` §6).
 | --- | --- |
 | PLAN merge SHA | `b083b30f261820a00f8fdfc37addcd1a6e063789` (PR #88) |
 | DESIGN merge SHA | `bffa100032cf9fe2d18869961b1659f4003c7aae` (PR #89) |
-| Implementation merge SHA | *(recorded at merge — §9)* |
+| Implementation merge SHA | `920600279561224d2955debc78c71892eecd5f73` (PR #90) |
 | **Status** | **Awaiting Product Owner test** |
 
 ---
@@ -210,8 +210,77 @@ has already lost two gates once.
 
 ## 9. Production
 
-*Recorded after deployment — deploy SHA, the `domains:initialise` run and its
-actual output, and the read-only state report.*
+### 9.1 Deployment
+
+| | |
+| --- | --- |
+| **Implementation merge SHA** | **`920600279561224d2955debc78c71892eecd5f73`** (PR #90) |
+| Deploy run | [33749349614](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33749349614), run 114 |
+| Result | **success**, 29 steps, migrations included. 11:22:41 → 11:24:27 UTC |
+
+### 9.2 The one-time baseline initialisation — the WRITE
+
+Dispatched once, deliberately, after the deploy completed:
+[run 33749570249](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33749570249).
+
+**Verbatim from the job log:**
+
+```
+##[warning]This workflow WRITES to production. It creates missing baseline
+business domains, disabled and unowned.
+
+Baseline business domains - idempotent initialisation. THIS COMMAND WRITES.
+Created:       executive, sales, finance, people, operations, customer, learning
+Already there: (none)
+Every domain created is Disabled, has no owner, and its access expectation is
+"Not yet determined".
+```
+
+**`Already there: (none)` is the useful half of that output.** It says this was
+genuinely the first run — the seven were created here, not found already
+present, so the count below is the result of this command rather than of
+something that had happened earlier.
+
+### 9.3 The state afterwards — read-only
+
+Every one of the seven, verbatim from the second step:
+
+| `code` | `kind` | `status` | `access_expectation` | `has_owner` |
+| --- | --- | --- | --- | --- |
+| `executive` | baseline | **disabled** | undecided | **false** |
+| `sales` | baseline | **disabled** | undecided | **false** |
+| `finance` | baseline | **disabled** | undecided | **false** |
+| `people` | baseline | **disabled** | undecided | **false** |
+| `operations` | baseline | **disabled** | undecided | **false** |
+| `customer` | baseline | **disabled** | undecided | **false** |
+| `learning` | baseline | **disabled** | undecided | **false** |
+
+`domains_total: 7` · **`ownership_rows_total: 0`**
+
+**No name, email or identifier was read** by that report — codes, kinds,
+statuses and booleans only.
+
+**`ownership_rows_total: 0` is the D-46 decision, observed.** SemantIQ supplied
+the vocabulary and made nobody accountable for any of it. Every domain in
+production is disabled, unowned and undecided, exactly as it should be before
+the Product Owner has decided anything.
+
+### 9.4 The routes in production — anonymous, cache-busted
+
+| Request | Observed | What it shows |
+| --- | --- | --- |
+| `/console/domains` | **302** → the entry page | Delivered **and gated** |
+| `/console/domains/1` | 302 → the entry page | Authentication decided **before** any record is looked up |
+| `/console/domains/999999` | 302 → the entry page | **Identical** to a real id — the response cannot say whether the record exists |
+| `/console/domains/owner` | **404** | A word in a record position is **Not Found**, never a lookup for a domain called "owner" |
+| `/console/domains/enable` | **404** | as above |
+
+**The two 404s beside three 302s are the point:** they are *different answers*,
+which is what shows the record route is constrained by `whereNumber` rather than
+merely declared in a lucky order.
+
+**Nothing was signed into, and no production data was read, created or changed
+by §9.4.** Everything past the gate belongs to the Product Owner's test script.
 
 ---
 
