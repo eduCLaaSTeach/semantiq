@@ -1,8 +1,13 @@
 # P1-04 — Business Domains: PLAN
 
 **PLAN ONLY.** No design, no schema written, no migration, no route, no
-controller, no service, no screen, no production data. §19 lists the decisions
-the Product Owner must make before a DESIGN can be written.
+controller, no service, no screen, no production data.
+
+**APPROVED BY THE PRODUCT OWNER, 3 September 2026**, with decisions **D-40 to
+D-48 answered** and one schema correction. §19 records each decision as given.
+Where a decision changed the plan, the affected section was rewritten rather
+than annotated, so no superseded proposal is left standing to be built by
+mistake.
 
 Source of scope: `doc/SemantIQ_v2_PHASE_1_System_Administration.md` → **P1-04 —
 Business Domains**, menu `System Administration → Business Domains`.
@@ -69,7 +74,7 @@ exactly how P1-05 arrives early through the back door.
 | 5 | **Domain owner** — assign, change, clear (§7), as accountability only |
 | 6 | **Default access expectations** recorded as *stated intent*, not enforcement (§13) |
 | 7 | A **description / purpose** per domain, in business language |
-| 8 | **Sensitivity expectation** recorded as a statement of intent only — decision **D-47**, §19 |
+| 8 | The **enable requires an active owner** rule — D-42, §6 |
 | 9 | Read: list of domains, one domain's record |
 | 10 | Refusals, confirmations, and the retention rules of §15 |
 | 11 | Security events for every domain change, through the existing D-12 boundary |
@@ -81,7 +86,7 @@ exactly how P1-05 arrives early through the back door.
 | **Role assignments** | P1-05 |
 | **Domain entitlements** — who may see a domain | **P1-05** |
 | **Scope assignments** | P1-05 |
-| **Sensitivity ceilings** — the enforced value | P1-05 |
+| **Sensitivity — the whole dimension** | **P1-05.** D-47: P1-04 does not model it *at all*, not as a ceiling and not as an inert statement. Standard / Confidential / Restricted and the enforced ceilings are P1-05's, and P1-04 must not pre-model them |
 | **Access Simulator** | P1-05 |
 | **Effective-access calculation** | P1-05 |
 | **Any authorization that reads a domain** | P1-05 |
@@ -127,9 +132,10 @@ find it. A **Kind** column and a filter answer that without navigation.
 one. If any sub-collection is ever added it goes under a static segment, never
 beside `{domain}`.
 
-> **Decision needed — D-40, §19:** is the menu label *Business Domains* and the
-> route `/console/domains`, or should the route read `/console/business-domains`
-> to match the label exactly?
+> **D-40 — DECIDED.** The route is **`/console/domains`**. The user-facing label
+> stays **Business Domains**, unchanged from the approved menu. The route is
+> shorter than the label deliberately; the label is what a person reads and the
+> route is not user-facing copy.
 
 ---
 
@@ -146,7 +152,7 @@ Customer, Learning.**
 | --- | --- | --- |
 | **Create** | **NO** | The baseline set is fixed. A deployment gets all seven; an organisation that does not use one **disables** it |
 | **Read — list / one** | **Yes** | |
-| **Rename display name** | **Decision D-41, §19** | See below |
+| **Rename display name** | **Yes** — D-41 | Display name only. The `code` never changes. See below |
 | **Edit description** | **Yes** | Business language, free text |
 | **Enable / Disable** | **Yes** | §6. This is how an unused baseline domain is put away |
 | **Assign / change / clear owner** | **Yes** | §7 |
@@ -154,18 +160,17 @@ Customer, Learning.**
 | **Delete / purge** | **NO — no such route** | A baseline domain is part of the product's vocabulary. Disabling is the operation |
 | **Change its identity code** | **NO** | §11 — the stable key, never editable |
 
-### Rename, and why it needs a decision
+### Rename — D-41, DECIDED
 
-Allowing rename is *useful*: an organisation that calls it *Commercial* rather
-than *Sales* should see its own word. Allowing rename is also *dangerous* if the
-name is the identity — every later reference breaks, and two deployments become
-incomparable.
+Renaming the **display name is permitted**; the **identity code is immutable**.
 
-**This plan recommends: renaming the DISPLAY NAME is permitted, and the
-IDENTITY CODE is immutable.** `finance` stays `finance` forever; its label may
-read *Financial Performance*. That is the same shape as P1-03's identity key
-being immutable while display information is not, and it is why §11 separates
-the two.
+An organisation that calls it *Commercial* rather than *Sales* sees its own
+word, and the domain remains `sales` in every later unit and in any comparison
+between deployments. The Product Owner's own example: **`sales` may display as
+*Commercial*, but its identity remains `sales`.**
+
+That is the same shape as P1-03's identity key being immutable while display
+information is not, and it is why §11 separates the two.
 
 ---
 
@@ -180,15 +185,17 @@ the two.
 | **Disable** | **Yes** | §6 |
 | **Assign owner** | **Yes** | §7 |
 | **Change owner** | **Yes** | §7 — the previous owner is retained as history, §15 |
-| **Clear owner** | **Decision D-42, §19** | Whether a domain may exist with nobody accountable |
-| **Guarded purge** | **Proposed, narrowly — decision D-43, §19** | §15.3 |
+| **Clear owner** | **Conditionally** — D-42 | Permitted while the domain is **disabled**. **Refused while it is enabled** — assign a replacement, or disable first. §7 |
+| **Guarded purge** | **Yes, narrowly** — D-43 | §15.3. Only a custom domain that has **never had an owner** and nothing referencing it |
 | **Convert to baseline / baseline to custom** | **NO** | The two origins are not interchangeable |
 
-**"Custom Domains" is not itself a domain.** It appears in the source scope list
-alongside the seven, but it names the *capability* to add your own, not an
-eighth baseline entry. The plan reads it that way; **D-44 (§19) asks the Product
-Owner to confirm it**, because reading it wrongly would seed a meaningless
-record into every deployment.
+**"Custom Domains" is not itself a domain — D-44, DECIDED.** It appears in the
+source scope list alongside the seven, but it names the **capability** to add
+your own, not an eighth baseline entry. Reading it the other way would have
+seeded a meaningless record into every deployment.
+
+**The baseline set is exactly seven, and closed:** Executive, Sales, Finance,
+People, Operations, Customer, Learning.
 
 ---
 
@@ -207,6 +214,43 @@ it is NOT.**
 **In P1-04, enabled/disabled describes AVAILABILITY AND READINESS, not
 authorization**, because there is no authorization to describe. That is stated
 plainly on the screen, not left for a reader to infer.
+
+### Enabling requires an active owner — D-42, DECIDED
+
+> **A domain may not be ENABLED unless it has a current owner who is an active,
+> eligible user.**
+
+This is the rule that makes "enabled" mean *this organisation is actually using
+this domain*, and it is why the baseline seven arrive **disabled** (§16, D-46).
+
+| Transition | Rule |
+| --- | --- |
+| **Disabled → Enabled** | **Refused** unless a current owner exists and that owner is **active** and eligible (§12). Refusal names the remedy: *"Assign an owner before enabling this domain."* |
+| **Enabled → Disabled** | Always permitted. Never refused, and it removes nothing |
+| **Clear owner while ENABLED** | **Refused.** *"This domain is enabled. Assign a replacement owner, or disable it first."* |
+| **Clear owner while DISABLED** | Permitted |
+| **Change owner while enabled** | Permitted, and **one operation** — the outgoing period ends and the incoming one begins inside a single transaction. It is never *clear, then assign*, which would pass through a refused state |
+| **The owner is later deactivated** | **Permitted. P1-03's deactivation is never blocked by P1-04** — §12, D-45 |
+
+### The invariant is enforced at the transition, not held continuously
+
+**This must be said plainly rather than discovered in DESIGN.** An enabled
+domain **can** end up with an inactive owner, because deactivating a user is
+P1-03's operation and P1-04 does not get to refuse it. If the rule were written
+as a continuous database invariant, the only way to keep it true would be to
+block a P1-03 deactivation — which **D-36 forbids**, because it would make a
+safe action unsafe.
+
+So the rule is enforced **at the two moments an administrator asks for it** —
+enabling, and clearing an owner — and the drift state that P1-03 can create is
+**surfaced rather than prevented**:
+
+> **Needs attention — owner inactive.** Shown on the domain until it is
+> reassigned. It is a prompt, not a refusal, and the domain stays enabled.
+
+**The domain is not silently disabled** when its owner goes inactive. Disabling
+is an administrator's decision about whether the organisation uses a domain, and
+having it happen by side effect would make the status untrustworthy.
 
 ### The trap DESIGN must be held to
 
@@ -249,13 +293,38 @@ domain's intelligence right, and should it exist?"*
 counter-intuitive and correct, and the screen must say it rather than leave the
 reader to discover it.
 
+### There is ONE source of truth for the current owner — the schema correction
+
+**The ownership-history table is authoritative. `business_domains` carries no
+`owner_user_id` column.**
+
+The first draft of this plan proposed both — a column *and* an open history row
+— which is **two writable sources of truth for the same fact**. They can
+disagree, and when they do nothing in the schema says which one is right. The
+Product Owner rejected it before DESIGN, and the plan is corrected rather than
+annotated.
+
+| Question | Answer |
+| --- | --- |
+| Who owns this domain now? | The ownership row with **`ended_at IS NULL`** |
+| Nobody owns it? | **No such row exists.** Absence, not a NULL column |
+| Change of owner | End the current row, insert the next — **one transaction** |
+| Clear the owner | End the current row. Nothing is inserted |
+| Delete history | **No route. Ever** |
+| Two current owners | **Impossible** — at most one open row, held transactionally (§8) |
+
+**This also makes D-43 naturally safe.** Every ownership period, current or
+ended, is a row with a foreign key to the domain — so a domain that has *ever*
+had an owner is a domain the schema-driven `PurgeDependencies` walk already
+refuses to purge. The rule and the mechanism agree without being made to.
+
 ### The operations
 
 | Operation | Rule |
 | --- | --- |
-| **Assign** where there is none | Permitted. Any eligible user (§12) |
-| **Change** | Permitted. The outgoing owner becomes history (§15), never erased |
-| **Clear** | **Decision D-42, §19** |
+| **Assign** where there is none | Permitted. Any **active** eligible user (§12). Inserts one open row |
+| **Change** | Permitted. Ends the current row and inserts the next **in one transaction**. The outgoing owner becomes history (§15), never erased, never updated in place |
+| **Clear** | Permitted **while disabled**; **refused while enabled** — D-42, §6. Ends the current row |
 | **Effect on the user** | **NONE.** No column on `users` is written. No role, no group, no membership |
 
 ### The guard that makes it true
@@ -282,23 +351,32 @@ risk wearing a different hat.
 | `description` | text | ✓ | ✓ | yes | Business language, what this domain covers |
 | `kind` | enum `baseline` / `custom` | ✓ | ✓ | never | Origin. Not convertible |
 | `status` | enum `enabled` / `disabled` | ✓ | ✓ | yes | §6 |
-| `owner_user_id` | FK → `users`, nullable | ✓ | ✓ | yes | §7. Nullable pending D-42 |
-| `access_expectation` | enum — §13 | ✓ | ✓ | yes | **A stated expectation, not a control** |
-| `sensitivity_expectation` | enum — D-47 | ✓ | ✓ | yes | **A statement of intent.** Not a ceiling |
+| `access_expectation` | enum — §13 | ✓ | ✓ | yes | **A stated expectation, not a control.** Defaults to `undecided` |
 | `created_at` / `updated_at` | timestamps | ✓ | ✓ | never | |
 
-### Owner history
+**Two columns are deliberately absent, and their absence is asserted (§18):**
+
+| Absent | Why |
+| --- | --- |
+| **`owner_user_id`** | The ownership-history table is the single source of truth (§7). A column beside it would be a second one |
+| **`sensitivity_expectation`** | **D-47.** P1-05 owns the whole sensitivity dimension — Standard, Confidential, Restricted and the enforced ceilings. P1-04 does not pre-model it, not even inertly. This also removed a real contradiction in the first draft, which proposed the column while N3b asserted that no column name may contain *sensitivity* |
+
+### Ownership history — the authoritative record
 
 | Field | Notes |
 | --- | --- |
 | `domain_id` | FK |
 | `user_id` | FK. The person who was accountable |
-| `assigned_at` / `ended_at` | Datetimes. **Not dates** — the P1-01 collision, already paid for once in P1-03 |
-| `ended_at IS NULL` | Means current |
+| `assigned_at` / `ended_at` | **DATETIME. Not dates** — the P1-01 collision, already paid for once in P1-03 and then produced by production on its first day |
+| `ended_at IS NULL` | **Means current.** This is the only definition of "current owner" in the system |
 
 **One current owner at most**, held the way P1-03 holds current membership: a
 locking read inside the write transaction, because MySQL 8.4 has no partial
 index. That mechanism is proven and is reused rather than reinvented.
+
+**No uniqueness on `(domain_id, assigned_at)`.** Two ownership periods on one
+calendar day must both be recordable — the same rule, for the same reason, that
+correction 4 of P1-03 exists for. N22 breaks it deliberately.
 
 ### What is deliberately ABSENT
 
@@ -318,9 +396,8 @@ words — the guard P1-03 proved non-vacuous.
 | `description` | The organisation | Editable |
 | `kind` | SemantIQ | Set at creation, never changed |
 | `status` | The organisation | Editable |
-| `owner_user_id` | The organisation, chosen from **existing genuine SemantIQ users** (P1-03) | No user is created by P1-04 |
+| **Current owner** — the open ownership row | The organisation, chosen from **existing genuine, active SemantIQ users** (P1-03) | No user is created by P1-04. No column on `users` is written |
 | `access_expectation` | The organisation | **A statement. P1-05 decides what, if anything, honours it** |
-| `sensitivity_expectation` | The organisation | Same |
 
 **Nothing here is sourced from Microsoft Entra**, and P1-04 adds no Graph
 permission. Domains are a SemantIQ concept.
@@ -339,6 +416,9 @@ permission. Domains are a SemantIQ concept.
 | `description` ≤ 500 | Both | |
 | Owner must be eligible (§12) | Both | §12's sentence |
 | Owner must belong to the same organisation | Both | D-16, exactly as P1-03 |
+| **Enable requires a current, active owner** | Both | *"Assign an owner before enabling this domain."* — D-42, §6 |
+| **Clearing the owner of an enabled domain** | Both | *"This domain is enabled. Assign a replacement owner, or disable it first."* |
+| `access_expectation` must be one of the four in §13 | Both | Anything else is rejected, not coerced |
 | `kind` never accepted from a request | Both | Ignored, not sanitised — P1-03's N11 shape |
 | Baseline domains cannot be created or deleted | Baseline | No route exists |
 
@@ -368,8 +448,8 @@ posture, P1-07 reviews, Phase 2 classification. A mutable identity means those
 references silently retarget. This is the same rule, for the same reason, as
 P1-03's `external_subject`.
 
-**Baseline identity survives a rename.** If D-41 permits renaming *Sales* to
-*Commercial*, the code stays `sales`, and the domain remains the same domain in
+**Baseline identity survives a rename.** D-41 permits renaming *Sales* to
+*Commercial*; the code stays `sales`, and the domain remains the same domain in
 every later unit and in any comparison between deployments.
 
 ### Reserved codes
@@ -388,23 +468,28 @@ user and provisions nobody.
 | Candidate | May be newly assigned? | May remain as current owner? | Retained in history? |
 | --- | --- | --- | --- |
 | Active user, same organisation | **Yes** | Yes | Yes |
-| **Inactive** user | **NO — decision D-45, §19** | **Decision D-45** | **Yes, always** |
+| **Inactive** user | **NO** — D-45 | **Yes** — D-45. Surfaced as needing attention | **Yes, always** |
 | User with **no organisation** | **No.** D-16 fails closed, exactly as group membership does | n/a | n/a |
 | User in a **different organisation** | **No** | n/a | n/a |
 | A **group** | **No.** Accountability is a person. A group owner is a committee, and a committee is not accountable | n/a | n/a |
 
-### The inactive-owner question, stated properly
+### The inactive-owner question — D-45, DECIDED, all three parts
 
-Three distinguishable things, and D-45 must answer all three:
+These are three different questions and the first draft was right to refuse to
+answer them as one:
 
-1. **Newly assigning** an inactive user as owner — this plan recommends **refuse**.
-   Naming someone who cannot sign in as accountable is a fiction.
-2. **A current owner who is later deactivated** — this plan recommends
-   **permitted, and surfaced**: the domain shows *"Owner is inactive"* and the
-   administrator is prompted to reassign. Refusing deactivation would make P1-03's
-   safe action unsafe, which D-36 forbids.
-3. **Historical owners who are inactive** — **always retained.** History is not
-   rewritten because somebody left.
+| # | Question | **Decided** |
+| --- | --- | --- |
+| 1 | **Newly assigning** an inactive user as owner | **REFUSED.** Naming someone who cannot sign in as accountable is a fiction |
+| 2 | A **current owner who is later deactivated** | **PERMITTED, and surfaced.** P1-03's deactivation is **never blocked by P1-04.** The domain shows *"Needs attention — owner inactive"* until it is reassigned |
+| 3 | **Historical** owners who are inactive | **ALWAYS RETAINED.** History is not rewritten because somebody left |
+
+**Why 2 is permitted rather than refused.** Refusing a deactivation because the
+user happens to own a domain would make P1-03's safe action unsafe — the thing
+**D-36 exists to forbid** — and would mean an administrator could not offboard
+somebody without first hunting through domains. The drift is real, so it is made
+**visible** instead of impossible. §6 explains why that means the rule is
+enforced at the transition rather than held continuously.
 
 ---
 
@@ -414,14 +499,30 @@ This is the phrase from the source scope, and it is the one most likely to be
 built as a control by accident. **In P1-04 it is a written statement of intent.
 Nothing reads it. Nothing enforces it.**
 
-Proposed shape: one value per domain, from a small fixed vocabulary.
+One value per domain, from a small fixed vocabulary. **D-48, DECIDED:**
 
-| Value | Means | Enforced by P1-04? |
+| Value | Shown to the administrator as | Enforced by P1-04? |
 | --- | --- | --- |
-| `broad` | *"Most people in the organisation would be expected to see this."* | **No** |
-| `restricted` | *"Only specific roles would be expected to see this."* | **No** |
-| `confidential` | *"Access should be exceptional and reviewed."* | **No** |
-| `undecided` | *"Not yet determined."* — the honest default | **No** |
+| **`undecided`** | **Not yet determined** — the default, and the honest one | **No** |
+| **`broad`** | **Broad access is expected** | **No** |
+| **`limited`** | **Access is expected to be limited to selected roles or functions** | **No** |
+| **`exceptional`** | **Access is expected to be tightly limited and reviewed** | **No** |
+
+### Why `confidential` and `restricted` were removed
+
+The first draft used *restricted* and *confidential*. **Those two words belong to
+the P1-05 sensitivity dimension** — Standard / Confidential / Restricted — and
+reusing them here would put two different concepts behind one vocabulary.
+
+The damage is not cosmetic. An administrator who sets a domain to *Confidential*
+in P1-04 and later meets *Confidential* in P1-05 would reasonably assume they had
+already answered that question, and a developer would reasonably assume the two
+fields should agree. **This field is advisory and that one will be enforced**, so
+they must not be able to be mistaken for each other.
+
+`broad` / `limited` / `exceptional` describe **how widely access is expected to
+be given**. Sensitivity describes **what the data is**. Different questions, and
+now different words.
 
 ### How the screen must say it
 
@@ -429,6 +530,10 @@ The screen states, in words the administrator reads:
 
 > **This is a statement of intent. It does not grant or restrict anything today.
 > Access is assigned in Roles & Access.**
+
+The value is **advisory only. Nothing may read it to make an authorization
+decision**, in P1-04 or afterwards without a decision — N25 breaks that
+deliberately.
 
 Anything softer — a lock icon, a shield, the word *policy*, a coloured
 "security" badge — implies enforcement that does not exist, and is exactly the
@@ -458,6 +563,8 @@ than reconstructing it later. It is a note to the future, deliberately inert.
 | S8 | Every refusal is a business sentence. **No database or constraint wording ever reaches an administrator** |
 | S9 | Every write confirms itself, in past tense, carrying no business content |
 | S10 | **Assigning an owner changes nothing about that user.** Asserted behaviourally, not only in source |
+| S11 | **P1-04 never refuses a P1-03 deactivation.** Owning a domain is not a reason a person cannot be offboarded — D-45, D-36 |
+| S12 | **`access_expectation` is never read to make a decision**, by any code in the application |
 
 ---
 
@@ -478,25 +585,32 @@ written for the second state, not the first.
 
 | Thing | Retained? |
 | --- | --- |
-| Owner history | **Always.** Ending an ownership sets `ended_at`; the row stays |
+| Owner history | **Always.** Ending an ownership sets `ended_at`; the row stays. **It is never updated in place and there is no route that deletes one** |
 | A disabled domain | **Always.** Disabling deletes nothing |
 | A renamed domain | **Always the same domain.** The code did not change |
 | A baseline domain | **Always.** No delete route exists |
 
-### 15.3 Guarded purge — proposed narrowly, decision D-43
+### 15.3 Guarded purge — D-43, APPROVED NARROWLY
 
-**Recommendation: permit permanent removal of a CUSTOM domain only, and only
-when all of these hold.**
+**Permanent removal of a CUSTOM domain only, and only when all four hold.**
 
 | # | Condition |
 | --- | --- |
 | 1 | `kind = custom` — never a baseline domain |
 | 2 | **No owner has ever been assigned** — not current, not historical |
-| 3 | Nothing references it, by the schema-driven `PurgeDependencies` walk |
-| 4 | Re-checked **inside** the write transaction, as D-24 and D-39 require |
+| 3 | **No durable schema reference exists**, by the schema-driven `PurgeDependencies` walk |
+| 4 | The dependency check is **repeated inside the write transaction**, as D-24 and D-39 require |
 
-That is deliberately narrower than D-39's user purge. It exists for **the domain
-created by mistake five minutes ago**, and for nothing else.
+**Once a domain has history, disable rather than purge.** That is the Product
+Owner's wording and it is the whole rule: this exists for **the domain created
+by mistake five minutes ago**, and for nothing else.
+
+**Conditions 2 and 3 agree by construction.** Since the ownership-history table
+is the source of truth (§7), every ownership period is a row with a foreign key
+to the domain — so a domain that has ever had an owner is already a domain the
+walk refuses. Condition 2 is stated **as well**, not instead: two independent
+reasons to refuse, and the explicit one does not depend on anybody remembering
+why the implicit one works.
 
 > **⚠ The condition that will matter later.** `PurgeDependencies` is
 > schema-driven, so a foreign key added by P1-05 becomes a blocker with no change
@@ -517,8 +631,8 @@ answer and simpler to defend.
 
 | Table | Purpose |
 | --- | --- |
-| `business_domains` | One row per domain. Columns per §8 |
-| `business_domain_owners` | Ownership periods. `assigned_at` / `ended_at` as **DATETIME**, no uniqueness on `assigned_at` |
+| `business_domains` | One row per domain. Columns per §8. **No `owner_user_id`** |
+| `business_domain_owners` | **The authoritative record of ownership.** Periods with `assigned_at` / `ended_at` as **DATETIME**, no uniqueness on `assigned_at`. `ended_at IS NULL` is the current owner |
 
 **The membership lesson is applied at the schema, not discovered again.** P1-01
 keyed team membership on `(team_id, user_id, joined_at)` over dates and could
@@ -526,17 +640,21 @@ not represent two periods in one day; P1-03 paid for that with a correction.
 Owner history has exactly the same shape and takes the fixed form from the start.
 
 Constraints: `organisation_id` FK; unique `(organisation_id, code)`; unique
-`(organisation_id, name)`; index on `owner_user_id`. Identifier names kept within
-MySQL's 64-character limit — `MigrationIdentifierLengthTest` already asserts it.
+`(organisation_id, name)`; on `business_domain_owners` a FK to the domain, a FK
+to `users`, and an index supporting the *current owner* lookup. **No unique key
+involving `assigned_at`** — that is the P1-01 collision, and it is refused here
+rather than corrected later. Identifier names kept within MySQL's 64-character
+limit — `MigrationIdentifierLengthTest` already asserts it.
 
 `RequireOrganisation` is used **where it lives**, in the Organisation module. It
 depends on `OrganisationService`, so promoting it to Platform would make Platform
 depend backwards — settled as correction 3 of P1-03 and not reopened.
 
-### How the seven baseline domains enter a deployment
+### How the seven baseline domains enter a deployment — D-46, DECIDED
 
-**This must be decided, not defaulted — D-46, §19.** Three mechanisms, with the
-recommendation stated.
+**Controlled initialisation. Not migration seeding, and not a static
+catalogue.** The seven are materialised **idempotently, once the Organisation
+exists**. The three mechanisms as they were weighed:
 
 | Option | Mechanism | For | Against |
 | --- | --- | --- | --- |
@@ -544,20 +662,58 @@ recommendation stated.
 | **B — recommended** | **Controlled initialisation at Company Profile creation**, in the same transaction that creates the organisation | The organisation exists, so `organisation_id` is real. One explicit place. Testable. Mirrors D-16, which already associates the creating administrator there | Touches a P1-01 path — a change that must be small, reviewed and asserted |
 | **C** | **A static catalogue in code**, with rows created on first use | No seeding at all | Two sources of truth for what a domain is; every screen must merge them |
 
-**Recommendation: B.** It is the only option where `organisation_id` is knowable,
-and it puts the decision in one reviewable place rather than in a migration that
-runs before the organisation exists.
+**B, DECIDED.** It is the only option where `organisation_id` is knowable, and
+it puts the decision in one reviewable place rather than in a migration that runs
+before the organisation exists.
 
-**Whichever is chosen, it is stated and not silent.** The standing rule is *do
-not seed business data without saying why*; the why here is that the seven
-baseline domains are **product vocabulary, not the organisation's data** — the
-organisation's contribution is which ones it enables, what it calls them, and who
-owns them.
+### The initial state of a baseline domain — DECIDED, and it matters
 
-**Existing deployments.** Production already has an organisation and will not run
-Company Profile creation again. DESIGN must state how the seven arrive there —
-almost certainly a one-off idempotent initialisation, keyed on `code` so running
-it twice changes nothing.
+| Field | Initial value |
+| --- | --- |
+| `code` | The standard immutable code — `executive`, `sales`, `finance`, `people`, `operations`, `customer`, `learning` |
+| `name` | The standard display name |
+| `status` | **Disabled** |
+| Owner | **None.** No ownership row is created |
+| `access_expectation` | **`undecided`** |
+
+> **Do not pretend the organisation uses every baseline domain simply because
+> SemantIQ knows the vocabulary.**
+
+That single sentence is why the initial status is *Disabled* and not *Enabled*,
+and it is the reason the D-42 enable rule is coherent: **enabling a domain is an
+act**, performed by an administrator who has decided the organisation uses it and
+has named somebody accountable for it. Arriving enabled would have made *enabled*
+mean nothing on the first screen anybody sees.
+
+### Three constraints on how initialisation is built
+
+| # | Constraint |
+| --- | --- |
+| 1 | **No silent business-row seeding from a schema migration.** A migration writes structure, not the organisation's rows |
+| 2 | **No mutation as a side effect of an ordinary GET request.** Opening the Business Domains screen must never be what creates the seven — a read that writes is untestable, unauditable, and races itself under two administrators |
+| 3 | **Do not materially redesign P1-01.** DESIGN defines the **smallest safe integration point** into Company Profile creation, and it must be small enough to be read and asserted in full |
+
+Constraint 2 is stated because it is the shortcut that would otherwise be
+reached for: *materialise on first view* looks convenient and quietly makes a
+read path a write path.
+
+**Seeding is stated, not silent.** The standing rule is *do not seed business
+data without saying why*. The why: the seven baseline domains are **product
+vocabulary, not the organisation's data.** The organisation's contribution is
+which of them it enables, what it calls them, and who owns them — and every one
+of those starts empty.
+
+### The existing production Organisation
+
+Production already has an organisation and **will not run Company Profile
+creation again**. It gets an **explicit, idempotent, one-time P1-04
+initialisation**, keyed on `code`, so running it twice changes nothing and
+running it after an administrator has renamed or enabled a domain changes
+nothing either.
+
+**Two distinct paths, both required, and DESIGN must specify both:** the one-time
+initialisation for the deployment that already exists, and the integration point
+for every Company Profile created afterwards.
 
 ---
 
@@ -568,16 +724,20 @@ P1-04 is complete when a System Administrator can:
 | # | Criterion |
 | --- | --- |
 | 1 | Reach **Business Domains** from the sidebar, as a link |
-| 2 | See the seven baseline domains, correctly marked as baseline |
-| 3 | Read one domain's record: name, code, description, kind, status, owner, expectations |
-| 4 | **Disable** a baseline domain not used by this organisation, and **enable** it again |
-| 5 | **Create** a custom domain; be refused a duplicate name, a duplicate code, and a reserved baseline code — each in a business sentence |
-| 6 | **Assign** an owner from existing users; **change** it and see the previous owner retained as history |
-| 7 | Confirm, on screen, that the owner **has gained no access** — the sentence is present and true |
-| 8 | Record a default access expectation, and read the statement that it enforces nothing |
-| 9 | Be refused every operation §14 forbids, in business language |
-| 10 | See every write confirm itself |
-| 11 | Read every screen in both themes and at small width, with no implementation wording |
+| 2 | See the seven baseline domains, marked as baseline, **all of them Disabled, none of them owned** |
+| 3 | Read one domain's record: name, code, description, kind, status, current owner, ownership history, access expectation |
+| 4 | **Be refused when enabling a domain that has no owner**, in a sentence naming the remedy |
+| 5 | **Assign** an active owner, then **enable** the domain; **disable** it again |
+| 6 | **Be refused when clearing the owner of an enabled domain**, and permitted once it is disabled |
+| 7 | **Create** a custom domain; be refused a duplicate name, a duplicate code, and a reserved baseline code — each in a business sentence |
+| 8 | **Change** an owner and see the previous one retained as history, with both periods visible |
+| 9 | **Rename** a baseline domain and see its `code` unchanged |
+| 10 | Confirm, on screen, that the owner **has gained no access** — the sentence is present and true |
+| 11 | Record an access expectation from the four values, and read the statement that it enforces nothing |
+| 12 | **Deactivate a user who owns a domain, and not be blocked** — then see that domain marked *Needs attention — owner inactive* |
+| 13 | Be refused every operation §14 forbids, in business language |
+| 14 | See every write confirm itself |
+| 15 | Read every screen in both themes and at small width, with no implementation wording |
 
 ### Carried gate created by this unit
 
@@ -599,6 +759,8 @@ Every guard broken deliberately and observed to fail, per `CLAUDE.md` §2.
 | N2 | **Assigning a Domain Owner changes nothing about that user** — no column on `users`, no role, no group, no membership | Have the assignment write `platform_role` |
 | N3 | **Nothing outside the Domains module reads a domain to authorize anything** | Have any authorization path read `business_domains` |
 | N3b | `business_domains` and `business_domain_owners` have **exactly** their physical column sets, timestamps included; **no column name contains** role, permission, scope, sensitivity, entitlement, ceiling, grant, allow or deny | Add `grantee_role`; add it **and** update the expected list without reading why it is there |
+| N3c | **`business_domains` has no `owner_user_id` column** — the ownership table is the only source of truth (§7) | Add the column and have assignment write both. The test must fail on the column's *existence*, not on the two disagreeing, because a second source of truth is wrong even while it agrees |
+| N3d | **No column anywhere in P1-04 has a name containing `sensitivity`** — D-47 defers the whole dimension to P1-05 | Add `sensitivity_expectation` back |
 | N4 | **No P1-04 path writes `platform_role`** | Add it to a request |
 | N5 | `PlatformRole` still has one case | Add a second |
 | N6 | **A domain owner gets exactly the same answer from every route as a non-owner** | Have any route consult ownership |
@@ -629,18 +791,31 @@ Every guard broken deliberately and observed to fail, per `CLAUDE.md` §2.
 | N21 | Owner history **cannot be deleted** | Add a delete route |
 | N22 | Two ownership periods **on one calendar day** are both recorded | Key ownership on `(domain_id, assigned_at)` over dates — the P1-01 collision |
 | N23 | Deactivating a user **does not** clear their domain ownership | Have it clear them |
-| N24 | An inactive user cannot be **newly** assigned, per D-45 | Allow it |
+| N24 | An inactive user cannot be **newly** assigned — D-45 | Allow it |
+| N24b | **Deactivating a domain owner is never refused by P1-04** — D-45, D-36. P1-03's operation still succeeds | Have the owner check refuse the deactivation |
+| N24c | A domain whose current owner is inactive shows **Needs attention — owner inactive**, and is **still enabled** | Have the drift auto-disable the domain; remove the surfaced state |
+| N24d | **Current owner is read from the open ownership row**, never from a cached or duplicated field | Answer it from anywhere else |
+| N24e | Changing an owner is **one transaction** — it never passes through an ownerless state observable to anyone else, and never trips the enabled-domain clear-owner refusal | Implement change as *clear, then assign* |
 
 ### Expectations, enable/disable, and presentation
 
 | # | Case | Mutation |
 | --- | --- | --- |
-| N25 | **Nothing in the codebase reads `access_expectation` or `sensitivity_expectation` to make a decision** | Have any path branch on it |
+| N25 | **Nothing in the codebase reads `access_expectation` to make a decision** | Have any path branch on it |
 | N26 | **Nothing reads `status` to make an authorization decision** | Have any path branch on it |
+| N26b | **Enabling a domain with no owner is refused**, in a sentence naming the remedy — D-42 | Drop the check; check only that an ownership row exists **ever**, rather than a current one |
+| N26c | **Enabling a domain whose only owner is inactive is refused** | Check for a current owner without checking that they are active |
+| N26d | **Clearing the owner of an ENABLED domain is refused**; clearing it while disabled is permitted | Allow it in both states; refuse it in both states |
+| N26e | Disabling is **never** refused, whatever the owner state | Add any condition to disable |
 | N27 | The screen states that expectations enforce nothing | Remove the sentence; add a lock icon or the word *policy* |
 | N28 | A disabled domain is **not deleted** and keeps its owner and history | Have disable clear the owner |
 | N29 | No security event carries a name, email or identifier | Add one to the context |
 | N30 | Search, filter and pagination work against seeded volume | Remove the limit; ignore the filter |
+| N30b | Baseline initialisation is **idempotent** — running it twice produces seven domains, not fourteen | Key it on anything but `code`; drop the existence check |
+| N30c | Initialisation run **after** an administrator has renamed, enabled or assigned an owner **changes none of that** | Have it reset `name` or `status` to the standard value |
+| N30d | The seven arrive **Disabled, unowned, `undecided`** — D-46 | Have initialisation create them enabled, or owned by the creating administrator |
+| N30e | **No migration writes a `business_domains` row** — asserted against the migration source | Move initialisation into a migration |
+| N30f | **No GET request creates a domain.** Loading the Business Domains screen with an empty table leaves it empty | Materialise the seven on first view |
 | N31 | Every Domains surface is readable in both themes | Use a raw semantic hex |
 | N32 | **No database integrity error ever reaches the administrator** | Let a constraint surface instead of the service refusing first |
 
@@ -650,21 +825,45 @@ operation precisely so these can be written before the implementation.
 
 ---
 
-## 19. Product Owner decisions required before DESIGN
+## 19. Product Owner decisions — ANSWERED, 3 September 2026
 
-**No DESIGN is written until these are answered.**
+All nine were answered at PLAN review. **Each is now a decision of record and
+DESIGN is bound by it.** Where an answer changed the plan, the section above was
+rewritten; nothing superseded is left standing.
 
-| # | Decision | Options | Plan recommends |
-| --- | --- | --- | --- |
-| **D-40** | Route and label | `/console/domains` vs `/console/business-domains`; label *Business Domains* | `/console/domains`, label *Business Domains* — shorter route, label unchanged from the approved menu |
-| **D-41** | May a **baseline** domain's display name be changed? | (a) No — fixed vocabulary; (b) **Yes, display name only, code immutable** | **(b)** — the organisation's word, SemantIQ's identity |
-| **D-42** | May a domain exist with **no owner**? | (a) Owner mandatory; (b) **Owner optional, unassigned surfaced as needing attention** | **(b)** — mandatory ownership forces a fictitious name at the moment of creation |
-| **D-43** | Is there a **guarded purge** for custom domains? | (a) **Yes, on the four conditions in §15.3**; (b) No — disable only | **(a)**, narrowly. It exists for the domain created by mistake, not the domain no longer used |
-| **D-44** | Is **"Custom Domains"** the capability to add your own, or an eighth baseline domain? | (a) **The capability**; (b) A baseline domain | **(a)** — reading it as (b) seeds a meaningless record into every deployment |
-| **D-45** | **Inactive users and ownership** — three separate answers | Newly assign: **refuse** / permit · Current owner deactivated: **permit and surface** / refuse · Historical: **always retained** | As marked. Refusing deactivation would make P1-03's safe action unsafe, which D-36 forbids |
-| **D-46** | How do the **seven baseline domains** enter a deployment? | (a) Migration; (b) **Controlled initialisation at Company Profile creation**; (c) Static catalogue | **(b)** — the only option where `organisation_id` is knowable. And how they reach the **existing** production deployment, which will not run that path again |
-| **D-47** | Is **`sensitivity_expectation`** in scope at all for P1-04? | (a) **Yes, as an inert statement of intent**; (b) No — defer entirely to P1-05 | **(a)**, provided §13's wording rules hold. It is the organisation's intent, best captured while the domain is being defined |
-| **D-48** | The **`access_expectation`** vocabulary | The four values in §13, or a different set | The four in §13, `undecided` as the honest default |
+| # | Decision | **Answer** |
+| --- | --- | --- |
+| **D-40** | Route and label | **`/console/domains`.** User-facing label stays **Business Domains** |
+| **D-41** | May a baseline domain's display name change? | **Yes — display name only.** The `code` is immutable. `sales` may display as *Commercial*; its identity remains `sales` |
+| **D-42** | May a domain exist with no owner? | **Yes, temporarily — with three refinements.** A domain **may not be enabled** without a current, active, eligible owner. **Clearing the owner of an enabled domain is refused** — assign a replacement or disable first. An owner who later goes inactive **does not block their deactivation**; the domain shows **Needs attention — owner inactive** until reassigned |
+| **D-43** | Guarded purge for custom domains? | **Yes, narrowly.** `kind = custom`, **no owner ever assigned**, no durable schema reference, dependency check repeated transactionally. **Once a domain has history, disable rather than purge** |
+| **D-44** | Is *Custom Domains* a capability or an eighth baseline domain? | **A capability.** The baseline set is exactly seven and closed: Executive, Sales, Finance, People, Operations, Customer, Learning |
+| **D-45** | Inactive users and ownership | **Three answers.** Newly assign an inactive user: **refused.** Deactivating an existing owner: **permitted.** An inactive current owner: **surfaced as needing attention.** Historical ownership: **always retained** |
+| **D-46** | How do the seven baseline domains enter a deployment? | **Controlled initialisation** — not migration seeding, not a static catalogue. Materialised **idempotently once the Organisation exists**, as **standard code, standard name, Disabled, no owner, `undecided`**. The existing production Organisation gets an **explicit idempotent one-time P1-04 initialisation**; DESIGN defines the **smallest safe integration point** for future Company Profile creation. **No silent seeding from a migration. No mutation on a GET. No material redesign of P1-01** |
+| **D-47** | Is `sensitivity_expectation` in scope? | **NO. Deferred entirely to P1-05.** P1-04 must not pre-model Standard / Confidential / Restricted or any ceiling |
+| **D-48** | The access-expectation vocabulary | **Revised:** `undecided`, `broad`, `limited`, `exceptional`. **`confidential` and `restricted` are not used** — those words belong to the P1-05 sensitivity dimension. **Advisory only; nothing may read it for authorization** |
+
+### The two corrections that changed the plan, not just annotated it
+
+**D-47 resolved a real contradiction, not a preference.** The first draft
+proposed a `sensitivity_expectation` column **while N3b asserted that no column
+name may contain *sensitivity***. Those cannot both be built. One of them was
+going to be quietly dropped during EXECUTE, and the odds are it would have been
+the assertion rather than the column — a guard deleted to make a feature pass,
+which is precisely the failure `CLAUDE.md` §2 exists to catch. The column is
+gone and **N3d now breaks the rule deliberately** to prove the guard works.
+
+**The ownership schema correction removed a second source of truth.** The first
+draft proposed **both** `business_domains.owner_user_id` **and** an ownership
+history table with an open row. Two writable records of one fact, able to
+disagree, with nothing in the schema to say which is right. §7 now makes the
+history table authoritative and the column does not exist; **N3c fails on the
+column's existence**, not on the two disagreeing, because a duplicate source of
+truth is wrong even during the period it happens to agree.
+
+That correction also made **D-43 safe by construction**: every ownership period
+is a foreign-key row, so a domain that ever had an owner is one the
+`PurgeDependencies` walk already refuses.
 
 ---
 
@@ -675,15 +874,20 @@ Stated so that DESIGN cannot quietly widen the unit.
 - **No role assignment.** P1-05.
 - **No domain entitlement.** P1-05 — this is the single most likely thing to be built by accident, because a domain and an entitlement look alike on a screen.
 - **No scope.** P1-05.
-- **No sensitivity ceiling.** The *enforced* value is P1-05's; only an inert statement of intent is proposed here, subject to D-47.
+- **No sensitivity of any kind.** D-47: not the ceiling, not an inert statement, not the vocabulary. Standard / Confidential / Restricted are P1-05's words and P1-04 does not borrow them — which is also why `access_expectation` reads `limited` and `exceptional` rather than `restricted` and `confidential`.
 - **No Access Simulator.** P1-05.
 - **No effective-access calculation.** P1-05.
 - **No domain-derived authorization of any kind.** P1-05.
 - **No mapping of source data to a domain.** Phase 2.
 - **No durable audit table.** P1-08.
 - **No navigation or branding change.** The UI foundation is frozen.
-- **No production data created by anybody but the Product Owner.**
+- **No production data created by anybody but the Product Owner** — with one stated exception, the baseline initialisation of D-46, which creates **product vocabulary** in a disabled, unowned, undecided state and is described in §16 rather than done silently.
+- **No change to the `srikanth@lithan.com` record.** It stays exactly as P1-03 left it. That is a separate operational item (`P1-03-USERS-GROUPS-VERIFICATION.md` §12.3) and P1-04 does not touch or purge it.
 
 ---
 
-**P1-04 PLAN — awaiting Product Owner review.** Nine decisions in §19.
+**P1-04 PLAN — APPROVED by the Product Owner, 3 September 2026**, with D-40 to
+D-48 answered (§19) and the ownership schema corrected before DESIGN.
+
+**Next: DESIGN.** No implementation, migration, route, screen or production
+change until the DESIGN is approved in turn.
