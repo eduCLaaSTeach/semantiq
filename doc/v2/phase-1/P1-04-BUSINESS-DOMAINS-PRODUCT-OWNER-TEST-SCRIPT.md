@@ -6,6 +6,36 @@ including §12 — **what cannot be tested, and why.**
 
 ---
 
+## RESULT — 3 September 2026
+
+**P1-04 — BUSINESS DOMAINS — PRODUCT OWNER ACCEPTED.**
+
+**All executed steps PASS. No failures observed.** Recorded on the Product
+Owner's confirmation, which is what acceptance is.
+
+### What was recorded, and what was not
+
+| | |
+| --- | --- |
+| Per-step result | **PASS**, on the Product Owner's confirmation that all steps passed |
+| **Verbatim refusal wording (E1–E8)** | **NOT CAPTURED.** The Product Owner did not supply the exact sentences, and they have **not been reconstructed from the source code** to fill the gap |
+| **The optional non-administrator check** (§8, "one more, if you are willing") | **NOT SPECIFICALLY CAPTURED.** It is not recorded as observed. The automated coverage stands (`DomainAccessBoundaryTest`), and the live observation is simply not claimed |
+
+**That is a real limit on this evidence and it is stated rather than glossed.**
+A future reader can know each step passed, and cannot quote what any refusal
+said. §10 asked for those sentences precisely because P1-03's went unrecorded;
+they went unrecorded again, and writing them here from the code would be
+inventing evidence.
+
+### What this acceptance does NOT close
+
+The five items in §12 are unchanged. In particular **U1 — that disabling a
+domain does not broaden access — is carried to P1-05 as a mandatory gate**, and
+nothing in this run bears on it. There is no access engine in P1-04 to test it
+against.
+
+---
+
 ## 1. Feature being tested
 
 **P1-04 — Business Domains.** Naming the intelligence domains this organisation
