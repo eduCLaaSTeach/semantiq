@@ -8,6 +8,33 @@ blocked or was skipped, it says so and says why (`CLAUDE.md` §6).
 | PLAN merge SHA | `bc18725f76248e491a26a931168f8e062a8da296` |
 | DESIGN merge SHA | `9e67749cc38e4717e30b9359a1933f28ea9e2b47` |
 | Implementation merge SHA | `cb73f14c4c6cc7aa06a47adb11d0e656bd53b79c` (PR #84) |
+| **Status** | **P1-03 PRODUCT OWNER ACCEPTED — 3 September 2026** |
+
+---
+
+## 0. Acceptance
+
+**P1-03 — USERS & GROUPS — PRODUCT OWNER ACCEPTED, 3 September 2026.**
+
+The Product Owner ran the test script on production as `salil@lithan.com` and
+confirmed: **all executed steps PASS, no failures observed.** Recorded on their
+confirmation, which is what acceptance is.
+
+### The two carried-gate observations
+
+| Step | Gate | Result |
+| --- | --- | --- |
+| **34 / E4** | Sole System Administrator deactivation refusal | **PASS — observed by the Product Owner** |
+| **43 / E5** | Multi-user management-cycle refusal | **PASS — observed by the Product Owner** |
+
+**The verbatim wording of neither refusal was retained or provided.** It is not
+reproduced anywhere in this document, and it has not been reconstructed from the
+source. The behaviour is recorded as the Product Owner observed it; the exact
+sentences they saw are not part of this record, and saying otherwise would be
+inventing evidence.
+
+That is a real limit on this evidence and it is stated rather than glossed: a
+future reader can know the refusals occurred, and cannot quote them.
 
 ---
 
@@ -307,12 +334,14 @@ Neither was found by a failing test. Both are now guarded.
 
 | Gate | Status |
 | --- | --- |
-| **1 — P1-01 management cycle**, needing a genuine second user | **Open, and carried into the Product Owner script (step 43).** P1-03 makes it closable for the first time: the Product Owner provisions one genuine colleague, and the cycle is exercised against them |
-| **2 — P1-02 non-administrator refusal**, needing a genuine non-administrator | **Open, and carried into the script (steps 44–45).** Every user P1-03 creates has `platform_role = NULL`, so it needs no special setup |
-| **3 — P1-02 provider-wide Re-check lock** | **MOVED TO P1-05** by Product Owner decision. P1-03 cannot assign `platform_role`, so closing it here would mean manufacturing a second privileged production account. Automated evidence stands |
+| **1 — P1-01 multi-user management cycle** | **CLOSED, 3 September 2026.** Step 43 run against a genuine second user, refusal observed by the Product Owner. Carried through two units for want of a second account; P1-03 provided it |
+| **2 — P1-02 non-administrator refusal** | **CLOSED, 3 September 2026.** Steps 44–45. `semantiq@educlaas.com` — a real user with `platform_role = NULL` — signed in, saw an empty System Administration area, and was told so. No account was manufactured for it |
+| **3 — P1-02 provider-wide Re-check lock** | **STILL CARRIED, to P1-05.** Unchanged by Product Owner decision: it needs a second **privileged** account, and P1-03 cannot assign `platform_role` to anybody. Automated evidence stands |
 
-**No production user was created by anybody but the Product Owner.** Nothing in
-this delivery seeded, invented or manufactured a person.
+For gates 1 and 2 the verbatim refusal text was not retained — see §0.
+
+**No production user was created by anybody but the Product Owner**, at any
+point in this unit.
 
 ---
 
@@ -325,3 +354,8 @@ this delivery seeded, invented or manufactured a person.
   and could not be.
 - It does **not** claim any Object ID was validated against Microsoft Entra.
   Nothing in SemantIQ can do that.
+- It does **not** record a PASS or FAIL for any numbered step of the Product
+  Owner test script. §12 records what was observed on screens sent during the
+  run; the per-step result, the verbatim refusal messages (E4, E5) and the
+  acceptance decision are the Product Owner's and are not written here on their
+  behalf.

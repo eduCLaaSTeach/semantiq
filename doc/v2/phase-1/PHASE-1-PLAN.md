@@ -488,16 +488,24 @@ rather than quietly lost.
 
 | From | To | Gate | Why it could not run in the originating unit |
 | --- | --- | --- | --- |
-| **P1-01** *(ACCEPTED 2 Sep 2026)* | **P1-03** | Live multi-user management-cycle refusal, observed in production | Self-management is refused before the chain walk, so a genuine cycle needs at least two SemantIQ users. P1-01 ships with `users_total = 1`; P1-03 provisions the second |
-| **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-03** | A real non-administrator being refused at Identity & SSO | Production held one account, so there was nobody to sign in as. P1-03 owns provisioning, and every user it creates has `platform_role = NULL` — so this needs no special setup and no manufactured account |
+| **P1-01** *(ACCEPTED 2 Sep 2026)* | **P1-03** | Live multi-user management-cycle refusal, observed in production | **CLOSED 3 Sep 2026** — observed by the Product Owner against a genuine second user. Verbatim wording not retained |
+| **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-03** | A real non-administrator being refused at Identity & SSO | **CLOSED 3 Sep 2026** — `semantiq@educlaas.com`, a real user with no role, signed in and saw an empty System Administration area. No account was manufactured for it |
 | **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-05** | The provider-wide Re-check limit, observed with two administrators | Needs a second **privileged** account. **Moved from P1-03 to P1-05 by Product Owner decision:** P1-03 cannot assign `platform_role` at all, so closing it there would have meant manufacturing a second privileged production account. Automated evidence stands |
 
 These two were recorded in the P1-02 Product Owner test script §12 and were
 missing from this register — which is the exact way a carried gate gets quietly
-lost, and the reason this table exists. Added when P1-03 was delivered.
+lost, and the reason this table exists. Added when P1-03 was delivered, and
+closed by it the next day.
+
+**One gate remains open across the whole of Phase 1 so far**, and it is the one
+that cannot be closed without a second privileged account. It stays with P1-05.
 
 **P1-03 is not accepted until every gate carried into it has been executed and
-recorded with observed output.**
+recorded with observed output.** Both were, and **P1-03 was accepted on
+3 September 2026** — see `P1-03-USERS-GROUPS-VERIFICATION.md` §0. The observed
+output is the Product Owner's confirmation that each refusal occurred; the
+verbatim wording was not retained, and is recorded as missing rather than
+reconstructed.
 
 The originating unit keeps its own automated coverage as its evidence — for the
 P1-01 cycle rule that is negative case 8, proven non-vacuous by the mutation
