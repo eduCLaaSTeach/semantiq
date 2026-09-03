@@ -151,6 +151,46 @@ jobs:
           echo "${passed} People tests passed against MySQL 8.4."
 
 
+      # The Domains suite on MySQL, and this one is not optional.
+      #
+      # P1-04's serialisation boundary is a row lock on business_domains, and
+      # SQLite HAS NO SELECT ... FOR UPDATE - the locking reads compile away
+      # entirely there. DomainConcurrencyTest's lock cases skip on SQLite with a
+      # stated reason rather than passing vacuously, so THIS IS THE ONLY PLACE
+      # THEY EVER FIRE. A green suite without this step would be reporting
+      # safety it has not checked.
+      - name: Run the Domains suite against MySQL
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: semantiq_ci
+          DB_USERNAME: root
+          DB_PASSWORD: ci-root
+        run: |
+          set -eo pipefail
+
+          php artisan test tests/Feature/Domains | tee domains-mysql.log
+
+          # A PATH THAT MATCHES NOTHING EXITS 0, so the count is asserted.
+          passed=$(grep -oE '[0-9]+ passed' domains-mysql.log | head -1 | grep -oE '[0-9]+' || echo 0)
+
+          if [ "${passed:-0}" -lt 40 ]; then
+            echo "::error::Only ${passed:-0} Domains tests ran against MySQL. The suite is larger than that, so the path matched little or nothing."
+            exit 1
+          fi
+
+          # AND THE CONCURRENCY CASES ACTUALLY RAN. On SQLite they skip; here
+          # they must not, and a skip in this step means the lock guard was
+          # never exercised on any engine at all.
+          if grep -qiE 'skipped|SQLite has no SELECT' domains-mysql.log; then
+            echo "::error::A Domains test skipped on MySQL. The concurrency cases skip only on SQLite, so this step just failed to prove the row lock exists."
+            exit 1
+          fi
+
+          echo "${passed} Domains tests passed against MySQL 8.4, concurrency cases included."
+
+
       # deploy.yml stages files that live outside the application tree, so
       # nothing in the test suite touches them. Deleting one is invisible until a
       # deployment fails - which is what happened when the repository was cleaned

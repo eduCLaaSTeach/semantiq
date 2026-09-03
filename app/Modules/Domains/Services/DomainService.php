@@ -179,12 +179,23 @@ final class DomainService
      */
     public function purge(BusinessDomain $domain, User $actor): void
     {
+        // `kind` is immutable, so this one cannot go stale and costs no query.
         if ($domain->isBaseline()) {
             throw DomainViolation::baselineNotRemovable();
         }
 
-        $this->refuseIfInUse($domain);
-
+        /*
+         * THERE IS DELIBERATELY NO DEPENDENCY PRE-CHECK HERE.
+         *
+         * P1-03's group purge runs one before the transaction as a fast path.
+         * Doing that here would read business_domain_owners BEFORE the domain
+         * row is locked, which breaks the one lock order this unit promises -
+         * domain, then ownership, then dependencies - and DomainConcurrencyTest
+         * caught it. A fast refusal is not worth two orders.
+         *
+         * Nothing is lost: isPurgeable() still decides whether the screen offers
+         * the control, and the check below is the guard either way.
+         */
         DB::transaction(function () use ($domain, $actor): void {
             $locked = $this->ownership->lockDomain($domain);
             $this->ownership->lockCurrentOwnership($locked);

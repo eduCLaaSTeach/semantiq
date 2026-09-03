@@ -37,6 +37,14 @@ use Illuminate\Support\Carbon;
  */
 final class DomainOwnership extends Model
 {
+    /**
+     * Named explicitly. Eloquent would infer `domain_ownerships` from the class
+     * name, and the table is `business_domain_owners` - a domain OWNER reads
+     * better in a schema than a domain OWNERSHIP, and the class reads better the
+     * other way round. Stated rather than left to a convention that guesses.
+     */
+    protected $table = 'business_domain_owners';
+
     protected $fillable = ['business_domain_id', 'user_id', 'assigned_at', 'ended_at'];
 
     protected function casts(): array
