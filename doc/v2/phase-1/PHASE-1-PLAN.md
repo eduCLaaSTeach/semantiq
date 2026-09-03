@@ -82,7 +82,7 @@ Unit design: `P1-BASE-APPLICATION-BASELINE-DESIGN.md` — drafted, awaiting appr
 | 3 | **P1-01** | Organisation, business units, departments, teams, hierarchy, legal entities | Scope source established |
 | 4 | **P1-02** | Identity & SSO administration, health, session policy | Identity supportable without exposing secrets |
 | 5 | **P1-03** | Users & Groups, directory sync, lifecycle | Users exist with no accidental data access **+ carried gate from P1-01: live multi-user management-cycle refusal** |
-| 6 | **P1-04** | Business Domains, owners, defaults | Domains assignable |
+| 6 | **P1-04** | Business Domains, owners, accountability, access expectations | The organisation's intelligence estate is named and owned — **and none of it grants access to anything** |
 | 7 | **P1-05** | Roles, entitlements, scopes, sensitivity, Access Simulator | Effective-access engine proven |
 | 8 | **P1-06** | Security Status | Posture legible without security expertise |
 | 9 | **P1-07** | Access Reviews | Sensitive access has a review lifecycle |
