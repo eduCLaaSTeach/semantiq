@@ -29,9 +29,9 @@ it is worth more than any of the numbered steps below.
 | --- | --- |
 | PLAN merge SHA | `b083b30f261820a00f8fdfc37addcd1a6e063789` (PR #88) |
 | DESIGN merge SHA | `bffa100032cf9fe2d18869961b1659f4003c7aae` (PR #89) |
-| Implementation merge SHA | *(recorded at merge)* |
+| Implementation merge SHA | `920600279561224d2955debc78c71892eecd5f73` (PR #90) |
 | Deployed to | <https://semantiq.claas2saas.com> |
-| Baseline initialisation | *(the `domains:initialise` run and its output are recorded in the verification document)* |
+| Baseline initialisation | **Run once, 3 September 2026.** Created all seven; `Already there: (none)`. Full output in the verification document §9.2 |
 
 ---
 
