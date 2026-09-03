@@ -260,6 +260,29 @@ Stated rather than inferred from a passing test, and never silently omitted.
 
 ---
 
+## Before you add `srikanth@lithan.com`
+
+Recorded 3 September 2026, during the acceptance test.
+
+A record already exists for **`srikanth@lithan.com`** carrying an **incorrect
+Object ID** (begins `3f2504e0`, ends `3311`). **He can never sign in with it** —
+the identity key is wrong, and the identity key is not editable by design.
+
+It has never signed in and holds no history, so the guarded purge still applies.
+When you come to add him properly:
+
+1. **Remove the existing record permanently** — Users → open it → *Remove
+   permanently*
+2. **Then add him again** with the Object ID copied from the Entra admin centre
+
+If you add him alongside it instead, both records will exist — the identity keys
+differ, so nothing will refuse it — and the directory will carry a permanently
+dead record for a real person with no way to tell which is which.
+
+Full context: `P1-03-USERS-GROUPS-VERIFICATION.md` §12.3.
+
+---
+
 ## What to do when you are finished
 
 Reply with:
