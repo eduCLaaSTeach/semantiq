@@ -21,7 +21,10 @@ export default function Record({ domain, history, expectations, candidates }) {
         access_expectation: domain.expectation,
     })
 
-    const owner = useForm({ user_id: domain.owner ? String(domain.owner.id) : '' })
+    // Empty on purpose: this picker chooses the NEXT owner. The current one
+    // is stated above it, and pre-selecting a person who may be inactive - and
+    // therefore absent from the list - is what made the control lie.
+    const owner = useForm({ user_id: '' })
 
     const save = (event) => {
         event.preventDefault()
@@ -53,8 +56,21 @@ export default function Record({ domain, history, expectations, candidates }) {
 
                     <label>
                         Identity code
-                        <input value={domain.code} readOnly disabled />
-                        <span className="org-hint">This never changes, even if the name does.</span>
+                        {/*
+                          * Read-only, and it LOOKS read-only. An input styled
+                          * identically to the editable one beside it invites an
+                          * administrator to try, and then says nothing when
+                          * nothing happens.
+                          */}
+                        <input className="org-readonly" value={domain.code} readOnly disabled />
+                        {/*
+                          * org-hint-plain because .org-hint is UPPERCASED - it is
+                          * a label for a control, not prose. A whole sentence in
+                          * caps shouts, and the first browser pass caught it.
+                          */}
+                        <span className="org-hint org-hint-plain">
+                            This never changes, even if the name does.
+                        </span>
                     </label>
 
                     <label>
@@ -83,7 +99,7 @@ export default function Record({ domain, history, expectations, candidates }) {
                           * enforcement that does not exist. P1-02 was corrected
                           * for the same class of overclaim.
                           */}
-                        <span className="org-hint">
+                        <span className="org-hint org-hint-plain">
                             This is a statement of intent. It does not grant or restrict anything today.
                             Access is assigned in Roles &amp; Access.
                         </span>
@@ -111,9 +127,32 @@ export default function Record({ domain, history, expectations, candidates }) {
                     </div>
                 ) : null}
 
+                {/*
+                  * WHO OWNS IT NOW is stated as a fact, separately from the
+                  * control that changes it.
+                  *
+                  * The first version bound the select to the current owner's id
+                  * and showed "Choose a person" whenever that person was
+                  * INACTIVE - because the picker offers active people only. A
+                  * domain with an owner then read as a domain with none, which
+                  * is the opposite of what the screen is for.
+                  */}
+                <p className="org-meta">
+                    {domain.owner ? (
+                        <>
+                            Currently accountable: <strong>{domain.owner.name}</strong>
+                            {domain.owner.active ? null : (
+                                <span className="org-pill org-pill-attention">Inactive</span>
+                            )}
+                        </>
+                    ) : (
+                        <>Nobody is currently accountable for this domain.</>
+                    )}
+                </p>
+
                 <form className="org-form org-form-inline" onSubmit={assign}>
                     <label>
-                        Owner
+                        {domain.owner ? 'Replace with' : 'Owner'}
                         <select value={owner.data.user_id} onChange={(e) => owner.setData('user_id', e.target.value)} required>
                             <option value="">Choose a person</option>
                             {candidates.map((candidate) => (

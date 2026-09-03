@@ -1367,6 +1367,16 @@ button.shell-link:hover .icon { color: var(--accent); }
   font-size: 13px;
 }
 
+/* A field that is READ-ONLY and looks it. An input styled identically to the
+   editable one beside it invites an administrator to try to change it, and then
+   says nothing when nothing happens. Caught in the first browser pass. */
+.org-readonly,
+.org-form input.org-readonly {
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  cursor: default;
+}
+
 /* An empty state inside a section, rather than in place of a page. */
 .org-empty-inline {
   color: var(--text-muted);

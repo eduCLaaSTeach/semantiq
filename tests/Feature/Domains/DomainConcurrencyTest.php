@@ -18,30 +18,25 @@ use Tests\Support\OrganisationFactory;
 use Tests\TestCase;
 
 /**
- * The races the D-42 invariant has to survive - C1 to C7.
+ * The races the D-42 invariant has to survive - C2 to C7.
  *
- * WHY THE SERIALISATION BOUNDARY IS THE DOMAIN ROW AND NOT THE OWNERSHIP ROW.
+ * THESE ARE STALE-INSTANCE TESTS, and that is the whole design.
  *
- * The first design locked the open ownership row. When a domain has NO current
- * owner there is NO ROW TO LOCK, so two concurrent first-owner assignments both
- * find nothing and both insert. test_the_ownership_row_is_not_a_boundary_when_
- * there_is_no_owner DEMONSTRATES that on real MySQL rather than asserting it in
- * prose - it is the reason the correction exists.
+ * Laravel resolves {domain} BEFORE the transaction opens, so the model a
+ * service is handed is a snapshot taken before any lock existed. Every test
+ * here passes a deliberately stale instance into a service and asserts the
+ * service RE-READS under the lock rather than deciding from what it was given.
+ * That is what makes the lock do work: a lock held while the decision is taken
+ * from a pre-lock snapshot is decoration.
  *
- * TWO KINDS OF TEST HERE, and the distinction is deliberate.
+ * They run on EVERY ENGINE, because they are about WHERE THE DECISION IS TAKEN
+ * rather than about what the database does with a lock.
  *
- *   1. STALE-INSTANCE tests. Laravel resolves {domain} before the transaction
- *      opens, so that model is a snapshot from before the lock. Every test that
- *      passes a deliberately stale instance into a service proves the service
- *      RE-READS under the lock instead of deciding from what it was handed.
- *      These run on every engine, because they are about where the decision is
- *      taken rather than about locking.
- *
- *   2. LOCK-BLOCKING tests, MySQL only. SQLite has no SELECT ... FOR UPDATE, so
- *      the locking reads compile away entirely and a lock test there would pass
- *      against a service holding no lock at all. Those SKIP EXPLICITLY WITH A
- *      STATED REASON rather than passing vacuously, and CI runs them on MySQL
- *      8.4 - the engine production uses.
+ * WHETHER THE ROW IS ACTUALLY HELD against another connection is a different
+ * question and is measured in DomainLockBoundaryTest. It needs COMMITTED data
+ * and two real connections, so it cannot live in a class wrapped by
+ * RefreshDatabase - the first version of that measurement was in this file and
+ * CI caught it giving the right answer for the wrong reason.
  */
 final class DomainConcurrencyTest extends TestCase
 {
@@ -352,79 +347,6 @@ final class DomainConcurrencyTest extends TestCase
     }
 
     /**
-     * C1. THE DEMONSTRATION THAT THE CORRECTION EXISTS FOR.
-     *
-     * On real MySQL, with two connections:
-     *
-     *   Locking the OPEN OWNERSHIP ROW of a domain that has NO owner locks
-     *   NOTHING - a second connection inserts a first owner straight through it.
-     *   That is the first design, and it is why two concurrent first-owner
-     *   assignments could both succeed.
-     *
-     *   Locking the DOMAIN ROW blocks the second connection, whether or not any
-     *   ownership row exists. That is the boundary.
-     *
-     * MySQL only, and skipped explicitly elsewhere: SQLite has no
-     * SELECT ... FOR UPDATE, so the locking reads compile away and this test
-     * would pass against a service holding no lock at all.
-     */
-    public function test_the_ownership_row_is_not_a_boundary_when_there_is_no_owner(): void
-    {
-        $this->skipUnlessMysql();
-
-        $organisation = $this->make->organisation();
-        $owner = $this->make->user($organisation);
-        $domain = $this->domains->domain($organisation);
-
-        $second = $this->secondConnection();
-
-        // (a) The FIRST DESIGN. Lock the open ownership row - there is none.
-        DB::beginTransaction();
-
-        app(DomainOwnershipService::class)->lockCurrentOwnership($domain);
-
-        $blockedByOwnershipLock = $this->blocks(
-            fn () => $second->table('business_domain_owners')->insert([
-                'business_domain_id' => $domain->id,
-                'user_id' => $owner->id,
-                'assigned_at' => now(),
-                'ended_at' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ])
-        );
-
-        DB::rollBack();
-
-        $this->assertFalse(
-            $blockedByOwnershipLock,
-            'Locking the open ownership row DID block a concurrent first-owner insert. If that is '
-            .'genuinely true on this engine the correction is unnecessary - check the engine before '
-            .'changing the service.'
-        );
-
-        // (b) THE CORRECTION. Lock the domain row instead.
-        DB::beginTransaction();
-
-        app(DomainOwnershipService::class)->lockDomain($domain);
-
-        $blockedByDomainLock = $this->blocks(
-            fn () => $second->table('business_domains')
-                ->where('id', $domain->id)
-                ->lockForUpdate()
-                ->get()
-        );
-
-        DB::rollBack();
-
-        $this->assertTrue(
-            $blockedByDomainLock,
-            'The domain row was not locked, so nothing serialises the five operations that decide '
-            .'from the domain status and its ownership together.'
-        );
-    }
-
-    /**
      * The tables read by an operation, in the order they were first touched.
      *
      * @return list<string>
@@ -457,45 +379,5 @@ final class DomainConcurrencyTest extends TestCase
         DB::disableQueryLog();
 
         return $order;
-    }
-
-    /** Whether a statement blocked on a row lock rather than completing. */
-    private function blocks(callable $statement): bool
-    {
-        try {
-            $statement();
-
-            return false;
-        } catch (\Throwable $exception) {
-            $message = $exception->getMessage();
-
-            if (str_contains($message, 'Lock wait timeout') || str_contains($message, 'try restarting transaction')) {
-                return true;
-            }
-
-            throw $exception;
-        }
-    }
-
-    /** A genuinely separate connection, with a short lock-wait so a block is observable. */
-    private function secondConnection(): Connection
-    {
-        config(['database.connections.probe' => config('database.connections.'.config('database.default'))]);
-
-        $connection = DB::connection('probe');
-        $connection->statement('SET SESSION innodb_lock_wait_timeout = 1');
-
-        return $connection;
-    }
-
-    private function skipUnlessMysql(): void
-    {
-        if (DB::connection()->getDriverName() !== 'mysql') {
-            $this->markTestSkipped(
-                'SQLite has no SELECT ... FOR UPDATE, so the locking reads compile away entirely and '
-                .'this test would pass against a service holding no lock at all. It runs against '
-                .'MySQL 8.4 in CI, which is the engine production uses.'
-            );
-        }
     }
 }
