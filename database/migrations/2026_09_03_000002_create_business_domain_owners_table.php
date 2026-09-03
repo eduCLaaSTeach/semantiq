@@ -27,11 +27,15 @@ use Illuminate\Support\Facades\Schema;
  *
  * MySQL 8.4 has no partial index, so that invariant cannot be declared here. It
  * is enforced by locking reads inside the write transaction - and the lock is
- * taken on the PARENT business_domains ROW FIRST, because when a domain has no
- * current owner there is no ownership row to lock at all. Locking only the open
- * row would be strongest where it is least needed and absent where it is needed
- * most: two concurrent first-owner assignments would both find nothing and both
- * insert. DomainConcurrencyTest breaks it deliberately, against MySQL.
+ * taken on the PARENT business_domains ROW FIRST.
+ *
+ * NOT for the reason first written here. The claim was that with no current
+ * owner there is no ownership row to lock, so nothing is held; measured against
+ * MySQL 8.4 that is FALSE, because InnoDB gap-locks the empty range under
+ * REPEATABLE READ. The parent row is the boundary because every operation
+ * decides from the domain's STATUS and its OWNERSHIP together - and because the
+ * gap lock depends on this very index and on the isolation level, neither of
+ * which is visible to anyone reading the service.
  *
  * Lock order everywhere: DOMAIN -> OWNERSHIP -> DEPENDENCY CHECKS.
  *

@@ -442,11 +442,30 @@ The first draft locked the current ownership row:
 DomainOwnership::where(...)->whereNull('ended_at')->lockForUpdate()->first();
 ```
 
-**That is not a boundary at all in the case that matters most.** When a domain
-has **no** current owner there is **no row to lock**, so `lockForUpdate()` locks
-nothing and two concurrent first-owner assignments both see "nobody owns this"
-and both insert. The lock is strongest exactly when it is least needed and
-absent exactly when it is needed most.
+**That is not a boundary you can rely on**, and the reason is not the one this
+DESIGN first gave.
+
+> **CORRECTED 3 September 2026, from a measurement against MySQL 8.4.** This
+> paragraph originally read: *"When a domain has no current owner there is no
+> row to lock, so `lockForUpdate()` locks nothing and two concurrent first-owner
+> assignments both insert."* **That is false on this engine.**
+> `DomainLockBoundaryTest` ran it and reported that locking the open ownership
+> row **DID block** a concurrent first-owner insert — InnoDB takes a **gap lock**
+> on the empty range under REPEATABLE READ. The original argument was plausible,
+> widely believed, and wrong, and it is left visible here rather than quietly
+> replaced.
+
+**The correction stands, on the two reasons that survive measurement:**
+
+1. **It is the wrong object.** Enable, disable, set owner, clear owner and purge
+   each read **two** things — the domain's `status` **and** its current
+   ownership — and decide from the pair. A lock on one of them cannot serialise
+   a decision taken over both. No gap-lock behaviour changes that.
+2. **It works by accident, not by design.** The protection above comes from an
+   index shape and an isolation level. Change `domain_owners_domain_ended_idx`,
+   or run READ COMMITTED, and it is gone — with no change to the service and no
+   test that would notice. **An invariant should not rest on a thing nobody
+   reading the service can see.**
 
 It is also the wrong *object*. Enable, disable, set owner, clear owner and purge
 each read **two** things — the domain's `status` **and** its current ownership —

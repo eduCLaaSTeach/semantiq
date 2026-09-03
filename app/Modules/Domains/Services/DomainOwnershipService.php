@@ -21,12 +21,23 @@ use Illuminate\Support\Facades\DB;
  *
  * THE SERIALISATION BOUNDARY IS THE DOMAIN ROW.
  *
- * The first design locked the open ownership row. That is not a boundary in the
- * case that matters most: when a domain has NO current owner there is NO ROW TO
- * LOCK, so two concurrent first-owner assignments both see "nobody owns this"
- * and both insert. It is also the wrong object - every operation here decides
- * from the domain's STATUS and its CURRENT OWNERSHIP together, and a lock on
- * one cannot serialise a decision taken over both.
+ * The first design locked the open ownership row, and this comment used to say
+ * that with no owner there is no row to lock and so nothing is held.
+ * MEASURED AGAINST MySQL 8.4, THAT IS FALSE: InnoDB takes a gap lock on the
+ * empty range under REPEATABLE READ, and DomainLockBoundaryTest reports that it
+ * DID block a concurrent first-owner insert.
+ *
+ * The boundary still belongs on the domain row, for the two reasons that
+ * survive being measured:
+ *
+ *   IT IS THE WRONG OBJECT. Every operation here decides from the domain's
+ *   STATUS and its CURRENT OWNERSHIP together, and a lock on one of two things
+ *   cannot serialise a decision taken over both.
+ *
+ *   IT WORKS BY ACCIDENT. That gap lock comes from an index shape and an
+ *   isolation level. Change domain_owners_domain_ended_idx, or run READ
+ *   COMMITTED, and it is gone - with no change to this file and no test that
+ *   would notice.
  *
  * So: lock the business_domains row first, then the ownership row, then run any
  * dependency checks. DOMAIN -> OWNERSHIP -> DEPENDENCIES, the same order in

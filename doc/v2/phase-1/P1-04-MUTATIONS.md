@@ -166,13 +166,53 @@ that was allowed a fast path. The pre-check was removed rather than the test
 weakened; `isPurgeable()` still drives the screen, and the in-transaction check
 was always the guard.
 
-**C1 — the demonstration the whole correction exists for** — runs on **MySQL
-only**, with two connections, and is not in the table above because it is not a
-mutation: it is a measurement. With no ownership row present it shows that
-locking the open ownership row **blocks nothing**, and that locking the domain
-row **does** block a second connection. SQLite has no `SELECT ... FOR UPDATE`,
-so it **skips explicitly with a stated reason** rather than passing vacuously,
-and CI fails the MySQL step if anything in the Domains suite skips there.
+### C1 — the measurement that contradicted my own reasoning
+
+**C1 is not a mutation. It is a measurement**, run on MySQL 8.4 with two real
+connections, and it did not say what this unit's DESIGN predicted.
+
+The prediction, written in the DESIGN, in the service and in the migration:
+*with no current owner there is no ownership row to lock, so `lockForUpdate()`
+holds nothing and two concurrent first-owner assignments both insert.*
+
+**What MySQL actually reported:**
+
+> `[C1] With no ownership row present: locking the open ownership row **BLOCKED**
+> a concurrent first-owner insert; locking the domain row **BLOCKED** a
+> concurrent domain read.`
+
+**The prediction was false.** InnoDB takes a **gap lock** on the empty index
+range under REPEATABLE READ, so the ownership-row lock does hold that insert. The
+argument was plausible, widely believed, and wrong — and it had been written into
+three files as though it were established.
+
+**The correction still stands, on the two reasons that survive being measured:**
+
+1. **The ownership row is the wrong object.** Enable, disable, set owner, clear
+   owner and purge each decide from the domain's `status` **and** its ownership
+   together, and a lock on one of two things cannot serialise a decision taken
+   over both. No gap-lock behaviour changes that.
+2. **It works by accident.** That protection comes from the shape of
+   `domain_owners_domain_ended_idx` and from the isolation level. Change either
+   and it disappears, with no change to the service and no test that would
+   notice. An invariant must not rest on something nobody reading the code can
+   see.
+
+**The test now reports that reading rather than asserting a direction**, and
+asserts only what must be true: **the domain row is held**, and the lock is
+released when the transaction ends. The DESIGN, the service docblock and the
+migration were all corrected, with the original claim left visible rather than
+quietly replaced.
+
+**It also had to be moved.** The first version lived in `DomainConcurrencyTest`,
+which uses `RefreshDatabase` — so the domain row was **uncommitted**, and the
+second connection blocked on the **foreign key to that uncommitted parent**
+rather than on any lock. CI caught it. It now lives in `DomainLockBoundaryTest`,
+which commits its data, uses two real connections and cleans up after itself.
+
+SQLite has no `SELECT ... FOR UPDATE`, so it **skips explicitly with a stated
+reason** rather than passing vacuously, and CI **fails the Domains MySQL step if
+anything skips there**.
 
 ## 5. Initialisation
 
