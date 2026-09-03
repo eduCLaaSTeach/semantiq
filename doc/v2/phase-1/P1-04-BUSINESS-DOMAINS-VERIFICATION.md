@@ -310,6 +310,66 @@ merely declared in a lucky order.
 **Nothing was signed into, and no production data was read, created or changed
 by §9.4.** Everything past the gate belongs to the Product Owner's test script.
 
+### 9.5 Final read-only verification, AFTER acceptance — 3 September 2026
+
+`verify-domains.yml` dispatched from `main`,
+[run 33751962653](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33751962653),
+**success**, 11:51:20 → 11:51:34 UTC. Ref `61a302a13c02ce9765b88ca85982d2b0b86f3f4e`.
+
+**No production mutation.** Every statement below comes from a `SELECT`; the
+workflow contains no write. No name, description, email or identifier was read.
+
+| Count | Value |
+| --- | --- |
+| `domains_total` | **8** |
+| `enabled_total` | **0** |
+| `custom_total` | **1** |
+| `ownership_rows_total` | **1** |
+| `current_owners_total` | **1** |
+| `platform_roles_total` | **1** |
+
+| `code` | kind | status | expectation | renamed | current owner | periods |
+| --- | --- | --- | --- | --- | --- | --- |
+| `executive` · `sales` · `finance` · `people` · `operations` · `customer` · `learning` | baseline | **disabled** | undecided | **false** | **false** | 0 |
+| **`software`** | **custom** | disabled | undecided | — | **true** | **1** |
+
+#### What this evidence establishes
+
+| Reading | Standing |
+| --- | --- |
+| **A custom domain `software` exists, with one ownership period** | **The Product Owner exercised the real path**: created a custom domain and assigned somebody accountable for it. This is not seeded data |
+| `platform_roles_total: 1` | The P1-00 seam is **exactly where P1-04 left it**. P1-04 did not start writing roles, and P1-05 inherits one row to migrate — §3.4.1 of the P1-05 plan |
+| All seven baseline domains present, none duplicated | Initialisation was correct and was not run into a second copy |
+
+#### ⚠ OPEN OPERATIONAL ITEM — `software` can never be permanently removed
+
+`software` has **one ownership period**, so under D-43 it has history and the
+guarded purge no longer applies to it. **It can only ever be disabled.**
+
+That is the design working exactly as intended, and it is flagged here for the
+same reason the `srikanth@lithan.com` record was: it is a permanent consequence
+of a test action, and the Product Owner should know it exists rather than
+discover it later. **No action is required and none should be taken** — nothing
+is wrong with it.
+
+#### What this evidence does NOT establish
+
+**Stated plainly, because two of these are easy to read into the numbers.**
+
+- **The "enabled domain must have an owner" guard did not fire.** There are
+  **zero enabled domains**, so the loop that checks it had nothing to iterate.
+  The guard passed **vacuously**, and the correct reading is *"this run found no
+  violation because there was nothing to check"* — not *"the invariant was
+  verified in production"*.
+- **`renamed: false` on every baseline domain does not mean the rename step was
+  skipped.** The report is a snapshot. Renaming *Sales* to *Commercial* and back
+  again produces exactly this reading, and so does never renaming it. **This
+  evidence cannot distinguish the two**, and the Product Owner's PASS covers
+  the step; the snapshot simply does not corroborate it either way.
+- **`enabled_total: 0` does not mean nothing was ever enabled.** The test script
+  enables and disables repeatedly; a snapshot after the fact shows only where it
+  finished.
+
 ---
 
 ## 10. Statements this document does NOT make
