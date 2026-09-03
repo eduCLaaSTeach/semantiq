@@ -60,8 +60,19 @@ app/Modules/Domains/
     Http/Controllers/
         DomainController.php
         Concerns/InteractsWithDomains.php
-    Providers/DomainsServiceProvider.php
 ```
+
+**No `DomainsServiceProvider`.** The first draft listed one; reading the
+codebase shows **People has none either**. Services are autowired from their
+constructors, and the navigation menu is registered once by
+`OrganisationServiceProvider` from `ApprovedMenu`, which is a static list. A
+provider that registered nothing would be a file whose only content is the
+appearance of structure.
+
+**Command registration** therefore goes in `bootstrap/app.php`
+(`->withCommands([...])`), which is where this application already declares its
+providers and routing — not `bootstrap/providers.php`, which holds only
+`AppServiceProvider`. Corrected here rather than discovered during EXECUTE.
 
 ### What it reads from outside itself
 
@@ -104,7 +115,8 @@ the module from leaking into the rest of the backend.
 | Exception | What is permitted |
 | --- | --- |
 | `routes/web.php` | **Wiring only** — the route block, controller references, middleware |
-| `bootstrap/providers.php` | **Wiring only** — registering `DomainsServiceProvider` |
+| `bootstrap/app.php` | **Wiring only** — registering the `domains:initialise` command |
+| `App\Shared\Navigation\ApprovedMenu` | **One line** — *Business Domains* moving from `locked()` to `leaf()` with its route name. The single edit that entry was designed for |
 | `OrganisationService::createProfile()` | The approved initialisation integration of §4.1. **One constructor argument and one statement**, and nothing else |
 
 | Out of scope for Guard A | Why |
