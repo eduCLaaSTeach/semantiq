@@ -109,7 +109,10 @@ final class ApprovedMenu
             // Creating a user or adding somebody to a group grants nothing.
             NavigationNode::leaf($area, 'Users & Groups', 'i-users', 'people.users', 'people.view'),
             NavigationNode::locked($area, 'Roles & Access', 'i-key', $policy),
-            NavigationNode::locked($area, 'Business Domains', 'i-layers', $policy),
+            // P1-04. Delivered: one list, one record page, System Administrator
+            // only. A domain existing, being enabled, or having an owner grants
+            // ZERO access - to its owner or to anybody.
+            NavigationNode::leaf($area, 'Business Domains', 'i-layers', 'domains.index', 'domains.view'),
             // P1-02. Delivered: five route-backed tabs, read-only, System
             // Administrator only. Every route re-authorises on its own.
             NavigationNode::leaf($area, 'Identity & SSO', 'i-fingerprint', 'identity.entra', 'identity.view'),

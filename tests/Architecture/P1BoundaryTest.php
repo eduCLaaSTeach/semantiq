@@ -108,10 +108,10 @@ final class P1BoundaryTest extends TestCase
 
         $this->assertNotEmpty($declared);
 
-        // P1-01 adds the structural event families, P1-02 identity health, and
-        // P1-03 the user and group families. Anything outside this list is an
-        // event nobody reviewed.
-        $families = 'auth|bootstrap|organisation|legal_entity|business_unit|department|team|management|identity|user|group';
+        // P1-01 adds the structural event families, P1-02 identity health,
+        // P1-03 the user and group families, and P1-04 business_domain.
+        // Anything outside this list is an event nobody reviewed.
+        $families = 'auth|bootstrap|organisation|legal_entity|business_unit|department|team|management|identity|user|group|business_domain';
 
         foreach ($declared as $event) {
             $this->assertMatchesRegularExpression('/^('.$families.')\./', $event);
@@ -119,15 +119,19 @@ final class P1BoundaryTest extends TestCase
     }
 
     /**
-     * P1-00 owns identity. It does not own roles, domains, scopes or
-     * sensitivity, and no migration may create them.
+     * P1-00 owns identity. It does not own roles, scopes or sensitivity, and no
+     * migration may create them.
+     *
+     * `domains` and `business_domains` left this list on 3 September 2026 as a
+     * REVIEWED TRANSFER to P1-04, the same way organisations, teams and
+     * business_units moved to P1-01 and users to P1-00. What remains belongs to
+     * P1-05 and later - and it staying here is the point, because removing one
+     * of these to make an implementation pass is how the guard is really lost.
+     * NoBusinessSchemaTest asserts the P1-05 names are still forbidden.
      */
     public function test_p1_00_creates_no_later_unit_schema(): void
     {
-        // organisations, teams and business_units were transferred to P1-01 on
-        // 31 August 2026 as a reviewed transfer. What remains belongs to units
-        // that have not been delivered.
-        $forbidden = ['roles', 'permissions', 'domains', 'business_domains', 'scopes',
+        $forbidden = ['roles', 'permissions', 'scopes',
             'sensitivity', 'entitlements', 'audit'];
 
         foreach (glob(__DIR__.'/../../database/migrations/*.php') ?: [] as $file) {

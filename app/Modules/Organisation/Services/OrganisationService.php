@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Organisation\Services;
 
+use App\Modules\Domains\Services\BaselineDomainInitialiser;
 use App\Modules\Organisation\Models\LegalEntity;
 use App\Modules\Organisation\Models\Organisation;
 use App\Modules\Organisation\Models\StructureStatus;
@@ -20,7 +21,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class OrganisationService
 {
-    public function __construct(private readonly SecurityEventLogger $events) {}
+    public function __construct(
+        private readonly SecurityEventLogger $events,
+        private readonly BaselineDomainInitialiser $baselineDomains,
+    ) {}
 
     public function current(): ?Organisation
     {
@@ -55,6 +59,19 @@ final class OrganisationService
             $organisation = Organisation::query()->create($attributes + ['status' => StructureStatus::Active]);
 
             $creator->forceFill(['organisation_id' => $organisation->id])->save();
+
+            /*
+             * P1-04, D-46. The seven baseline domains, in the SAME transaction,
+             * for the same reason D-16's association above is in it: an
+             * organisation that existed without its baseline vocabulary would
+             * need a repair path this unit deliberately does not have. Either
+             * both happen or neither does.
+             *
+             * They arrive DISABLED, UNOWNED and "Not yet determined". SemantIQ
+             * supplies the words; the organisation supplies which of them it
+             * uses, what it calls them and who owns them.
+             */
+            $this->baselineDomains->initialise($organisation, $creator);
 
             $this->events->record(SecurityEventLogger::ORGANISATION_CREATED, [
                 'user_id' => $creator->id,

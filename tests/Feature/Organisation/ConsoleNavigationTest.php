@@ -71,6 +71,8 @@ final class ConsoleNavigationTest extends TestCase
             [
                 'Organisation' => '/console/organisation',
                 'Users & Groups' => '/console/people/users',
+                'Business Domains' => '/console/domains',
+                'Business Domains' => '/console/domains',
                 'Identity & SSO' => '/console/identity',
             ],
             $this->reachable($areas),
@@ -93,6 +95,7 @@ final class ConsoleNavigationTest extends TestCase
         $this->assertSame([
             'Organisation' => '/console/organisation',
             'Users & Groups' => '/console/people/users',
+            'Business Domains' => '/console/domains',
             'Identity & SSO' => '/console/identity',
         ], $reachable);
 
@@ -164,7 +167,7 @@ final class ConsoleNavigationTest extends TestCase
 
         $inert = 0;
 
-        $delivered = ['Organisation', 'Users & Groups', 'Identity & SSO'];
+        $delivered = ['Organisation', 'Users & Groups', 'Business Domains', 'Identity & SSO'];
 
         foreach ($this->flatten($areas) as $node) {
             if (in_array($node['label'], $delivered, true)) {
