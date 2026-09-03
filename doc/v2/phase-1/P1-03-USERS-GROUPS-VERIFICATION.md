@@ -8,6 +8,7 @@ blocked or was skipped, it says so and says why (`CLAUDE.md` §6).
 | PLAN merge SHA | `bc18725f76248e491a26a931168f8e062a8da296` |
 | DESIGN merge SHA | `9e67749cc38e4717e30b9359a1933f28ea9e2b47` |
 | Implementation merge SHA | `cb73f14c4c6cc7aa06a47adb11d0e656bd53b79c` (PR #84) |
+| Acceptance merge SHA | `5ec9327e56e0403fc4acf52437d6c4ad287b0613` (PR #87) |
 | **Status** | **P1-03 PRODUCT OWNER ACCEPTED — 3 September 2026** |
 
 ---
@@ -345,6 +346,86 @@ point in this unit.
 
 ---
 
+## 12. Production observations during the acceptance test — 3 September 2026
+
+The Product Owner ran the test script on the live system as
+`salil@lithan.com`. **This section records only what was observed directly, in
+screens the Product Owner sent during the run.** The per-step PASS/FAIL result
+is theirs to give and is not restated here as though it were mine.
+
+### 12.1 What the live system demonstrated
+
+| Observed | What it settles |
+| --- | --- |
+| **A same-day rejoin, on real data.** `semantiq@educlaas.com` shows **two membership periods both dated 2026-09-03** — one ended, one current, the ended one retained above it, newest first | **This is the P1-01 collision, not happening.** Under P1-01's `(team_id, user_id, joined_at)` key over DATE values, the second row carries the same three key values as the first and the database refuses it with an integrity error the administrator did nothing to cause. Correction 4 changed the column types and dropped that uniqueness precisely so this would work. Negative case **N42**, observed in production rather than inferred |
+| An **ended membership retained and quietened**, with no *End membership* control on the ended row | Membership history is evidence, not state to be erased |
+| A group **deactivated and reactivated**, with its membership rows intact | D-36's counterpart for groups: deactivation removes nothing |
+| `semantiq@educlaas.com` — a **real non-administrator** — signed in successfully, saw an **empty System Administration area**, and was told *"No application access has been assigned to your account yet."* | **Carried gate 2, closed.** Every user P1-03 creates has `platform_role = NULL`, and this is what that looks like to the person holding it |
+| `semantiq01@educlaas.com`, an identity with **no record**, was refused with *"Access not assigned"* | The unknown-identity path, and its deliberate indistinguishability from an inactive account |
+
+### 12.2 The guarded purge earned its place on day one
+
+D-39 exists for **the onboarding mistake, not the departure**. On the first day
+of production use, the Product Owner added a genuine colleague using an
+**incorrect Object ID** — the exact failure the Add User form warns about and
+that SemantIQ, having no Graph permission by decision, cannot detect.
+
+That is not a defect. It is the scenario the design anticipated, arriving
+unprompted, and the remedy the design provides was available: the record has
+never signed in, so it remains removable.
+
+**It also shows what step 13 is for.** *Reveal* on the record page exists so an
+administrator can compare the stored identifier against Entra **before** the
+person tries to sign in. Used at the point of entry, it would have caught this.
+
+### 12.3 OPEN OPERATIONAL ITEM — a record that can never sign in
+
+**Read this before adding `srikanth@lithan.com`.**
+
+| | |
+| --- | --- |
+| Account | `srikanth@lithan.com` |
+| Object ID held | begins `3f2504e0`, ends `3311` — **incorrect** |
+| State | Active, organisation assigned, **never signed in**, no membership history |
+| Consequence | **He can never sign in with this record.** The identity key is wrong, and the identity key is not editable — by design (N10) |
+| Still removable? | **Yes.** Never signed in and no history, so the D-39 guarded purge still applies |
+
+The Product Owner has deliberately left it in place for now. **When
+`srikanth@lithan.com` is next entered, this record must be dealt with first**,
+or the organisation will hold two records for one person — one of them
+permanently unusable.
+
+Two supported ways forward, both available today:
+
+1. **Remove the record permanently**, then add him again with the correct Object
+   ID copied from the Entra admin centre. This is the intended correction path
+   and leaves one clean record.
+2. **Leave it and add him correctly alongside it.** Permitted — the identity keys
+   differ, so nothing refuses it — but the organisation then carries a dead
+   record for a real person, and whoever reads the directory later has no way to
+   tell which one is real.
+
+**Option 1 is the honest one**, and it stops being available the moment anything
+attaches history to that record.
+
+### 12.4 A group named "Super Admin" that confers nothing
+
+The group created during the test is called **Super Admin**. It contains the
+System Administrator and one ordinary user, and it **grants neither of them
+anything** — the screen says so directly beneath the name.
+
+As a demonstration of **D-35** this is stronger than any test in §3: a group with
+the most privilege-suggesting name available confers no role, no domain, no
+scope and no access, and cannot be made to.
+
+**Carried to P1-05 as a hazard, not a defect.** P1-05 owns whether groups ever
+participate in access. When it does, a group called *Super Admin* is the obvious
+candidate for someone to wire administration into **by assumption rather than by
+decision**. The name must not be read as conferring anything, and P1-05 must
+treat it as it would any other group.
+
+---
+
 ## 11. Statements this document does NOT make
 
 - It does **not** claim search, filter or pagination were observed at scale in
@@ -359,3 +440,64 @@ point in this unit.
   run; the per-step result, the verbatim refusal messages (E4, E5) and the
   acceptance decision are the Product Owner's and are not written here on their
   behalf.
+
+---
+
+## 13. Final read-only production verification — 3 September 2026
+
+Run **after** acceptance, from `main`, by manual dispatch of
+`.github/workflows/verify-people.yml`.
+
+| | |
+| --- | --- |
+| Workflow | *Verify P1-03 people state (read-only)* |
+| Run | [33732549184](https://github.com/eduCLaaSTeach/semantiq/actions/runs/33732549184), attempt 1, `workflow_dispatch` |
+| Ref | `main` |
+| **Acceptance merge SHA** | **`5ec9327e56e0403fc4acf52437d6c4ad287b0613`** (PR [#87](https://github.com/eduCLaaSTeach/semantiq/pull/87)) |
+| Started | 2026-09-03 08:17:23 UTC — completed 08:17:37 UTC |
+| Result | **success** |
+
+**No production data was created, changed or removed by this verification.**
+Every statement it makes comes from a `SELECT`; the workflow contains no write
+and no live probe.
+
+### 13.1 What it actually reported
+
+Verbatim from the job log, masked exactly as the record screen masks (D-27/D-37):
+
+| Object ID (masked) | System Administrator | Status | Ever signed in | Organisation |
+| --- | --- | --- | --- | --- |
+| `682bc391…1a03` | **yes** | active | yes | assigned |
+| `3f2504e0…3311` | no | active | **no** | assigned |
+| `d74ff6dc…447f` | no | active | yes | assigned |
+
+| Count | Value |
+| --- | --- |
+| `users_total` | **3** |
+| `active_system_admins` | **1** |
+| `groups_total` | **1** |
+| `group_memberships_total` | **3** |
+| `group_memberships_current` | **2** |
+
+### 13.2 What those numbers corroborate, and what they do not
+
+| Reading | Standing |
+| --- | --- |
+| `active_system_admins: 1` | The deployment is administrable, and the sole-administrator refusal of step 34 was protecting a real *one*, not a hypothetical one |
+| `3f2504e0…3311` — **never signed in** | **§12.3 remains correctable.** The D-39 guarded purge still applies to the `srikanth@lithan.com` record, because nothing has attached history to it since the test |
+| `d74ff6dc…447f` — not an administrator, has signed in | Independent corroboration of carried gate 2: a real account with `platform_role = NULL` reached the application |
+| 3 memberships of which 2 are current, across 1 group | **Consistent with** the two same-day periods observed in §12.1 — one ended, one current — plus the administrator's own current period. It is corroboration, not proof: the workflow reports counts, not which row belongs to whom |
+
+### 13.3 The three guards, and that they were exercised rather than decorative
+
+All three ran against the real output above and all three passed:
+
+| Guard | Behaviour |
+| --- | --- |
+| Full Object ID in the output | Would fail the step. The output carries only 8+4 characters either side of an ellipsis, so it did not fire — and it is the reason nobody has to trust the query to mask |
+| Email address in the output | Would fail the step. No name or address is read by the query at all |
+| Fewer than one active System Administrator | Would fail the step. Reported 1 |
+
+**Stated plainly:** the first two guards passing is evidence that *this* output
+was clean, not evidence that they can catch a leak. They were proven against a
+deliberately dirtied string when the workflow was written, not by this run.
