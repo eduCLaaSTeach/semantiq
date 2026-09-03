@@ -2,8 +2,7 @@
 
 **PLAN ONLY.** No design, no schema written, no migration, no route, no
 controller, no service, no screen, no access engine, no role, no assignment, no
-production privilege change. §31 lists the decisions the Product Owner must make
-before a DESIGN can be written.
+production privilege change. §31 records the decisions **as answered**.
 
 Source of scope: `doc/SemantIQ_v2_PHASE_1_System_Administration.md` → **P1-05 —
 Roles & Access**, and `doc/SemantIQ_v2.2_Ground_Zero_Architecture_Reset_Three_Phase_Blueprint.md` §2.
@@ -11,8 +10,43 @@ Roles & Access**, and `doc/SemantIQ_v2.2_Ground_Zero_Architecture_Reset_Three_Ph
 | | |
 | --- | --- |
 | Preceding units | P1-00 · P1-01 · P1-02 · P1-03 · P1-04, all **ACCEPTED** |
-| Gates carried into this unit | **2** — §31.13 and §11 |
-| Status | **Awaiting Product Owner review** |
+| Gates carried into this unit | **2** — §11.3 (P1-04) and §29 (P1-02) |
+| **Decisions** | **D-49 to D-73 — ANSWERED at PLAN review, 3 September 2026.** §31 |
+| Status | **APPROVED. Proceeding to DESIGN** |
+
+### The Ground-Zero baseline, and it is binding
+
+| Dimension | Controls |
+| --- | --- |
+| **Role** | **What actions** a person may perform |
+| **Business Domain** | **Which business area** is visible |
+| **Scope** | **Which records / rows** inside that area |
+| **Sensitivity** | **Which fields / objects** may be exposed |
+
+**A System Administrator receives no business data automatically.** Every
+section below is written against these four sentences, and §30 breaks each.
+
+### What the Product Owner review changed
+
+Seven decisions came back **changed or new**, and each changed the plan rather
+than being annotated onto it:
+
+| # | Change | Where |
+| --- | --- | --- |
+| **D-52** | Baseline role names are **NOT editable**. They are security vocabulary, not branding — *"Super Admin"* must be unreachable | §3.2 |
+| **Role schema** | **No mutable `roles` table.** An immutable catalogue plus a `role_code` on assignments — because with D-51/52/53/54 answered, **nothing about a role is manageable** | §3.6 |
+| **D-60** | Ceiling is **per entitlement only**, never also per person | §7 |
+| **D-62** | **Independent complete grant paths** replace the widest/lowest rule entirely | §10 |
+| **D-63** | Above the ceiling → the engine returns **DENY**. No redaction engine here | §7.3 |
+| **D-71** | Log **privileged-surface** denials. **No repeated-denial detector** in this unit | §27 |
+| **D-73 — NEW** | **Privileged step-up re-authentication.** SYS-018, missing from the first draft | **§11b** |
+
+**Two structural rules also arrived**, and both prevent a specific bug:
+
+| Rule | Prevents |
+| --- | --- |
+| **Grant-path parentage** — entitlement belongs to a role-assignment period; scope and ceiling belong to an entitlement period | **Old access silently returning** when a role is re-assigned later |
+| **Platform-scoped assignments** — `system_administrator` may exist with **no organisation** | Bootstrap being unable to create the first administrator, because it runs **before any Company Profile exists** |
 
 ---
 
@@ -34,8 +68,8 @@ by somebody solving a real problem at four in the afternoon.
 | --- | --- |
 | Being a **System Administrator** | **Nothing.** Platform administration is not business-data entitlement |
 | Being a **Domain Owner** | **Nothing.** Accountability is not entitlement — P1-04, D-42 |
-| Being somebody's **manager** | **Nothing** on its own. It participates **only** in Team scope, and only where §16 says |
-| Being in a **group** | **Nothing** — P1-03, D-35. Whether that changes at all is **D-58**, §31, and it must not be assumed |
+| Being somebody's **manager** | **Nothing** on its own. It participates **only** through an **explicitly assigned** Team scope — **never recursively**, D-66, §16 |
+| Being in a **group** | **Nothing — D-58 CONFIRMED IT.** P1-03 groups keep granting nothing, and **the engine must not read `group_memberships` at all** |
 | **Owning** a domain | **Nothing.** Same as row 2, stated twice because it is the one people re-derive |
 | Being in a **Business Unit** | **Nothing** on its own. It participates **only** in Business Unit scope |
 
@@ -92,19 +126,21 @@ the screens before the engine is specified, the DESIGN is wrong.
 | # | Item |
 | --- | --- |
 | 1 | The **effective-access engine** — one implementation, §9 |
-| 2 | **Roles** — the seven baseline, their lifecycle, whether custom roles exist (**D-51**) |
-| 3 | **Role assignments** — a person holds a role, §4 |
+| 2 | **The immutable role catalogue** — the seven baseline roles, **and an explicit role → permitted-action matrix**, §3 |
+| 3 | **Role assignments** — a person holds a role. **Platform-scoped or organisation-scoped**, §4 |
 | 4 | **Domain entitlements** — a person may see a domain, §5 |
-| 5 | **Scope assignments** — which records inside it, §6 |
-| 6 | **Sensitivity ceilings** — which fields and actions, §7 |
+| 5 | **Scope assignments** — which records inside it, with **explicit structural targets**, §6 |
+| 6 | **Sensitivity ceilings — one per entitlement**, §7 |
 | 7 | **The Access Simulator** — preview, §8 |
 | 8 | **Deny by default**, and failing closed on anything unknown or conflicting, §11 |
-| 9 | **Backend enforcement** on every protected route and API, §23 |
-| 10 | **Resolution of the `users.platform_role` seam**, §3.4 — P1-05 owns it |
-| 11 | **Revocation with immediate effect**, §22 |
-| 12 | Security events for every privileged change, §27 |
-| 13 | **The P1-04 carried gate**, proven — §11.3 |
-| 14 | Search, filter and administrative usability at real volume, §28 |
+| 9 | **Privileged step-up re-authentication** — D-73, §11b |
+| 10 | **Backend enforcement** on every protected route and API, §23 |
+| 11 | **Removal of `users.platform_role`**, with bootstrap, `BootstrapState`, `RequireSystemAdministrator` and the last-administrator guard all moved to the assignment authority — §3.4 |
+| 12 | **Enumerated migration of existing P1-01…P1-04 administration routes** to Organisation Administrator where appropriate — §13.2 |
+| 13 | **Revocation with immediate effect**, §22 |
+| 14 | Security events for every privileged change, §27 |
+| 15 | **The P1-04 carried gate**, closed — §11.3 |
+| 16 | Search, filter and administrative usability at real volume, §28 |
 
 ### Out of scope — each owned elsewhere
 
@@ -154,197 +190,430 @@ Conflating the two is how *"Executive"* silently becomes *"sees everything"*.
 **The word "CRUD" appears nowhere in this plan.** P1-01's most expensive defect
 was Update missing from four entity types behind that word.
 
-| Operation | Baseline role | Custom role (if D-51 permits) |
-| --- | --- | --- |
-| **Create** | **NO** — the seven are the product's vocabulary | Yes, if D-51 permits |
-| **Read** — list, one | Yes | Yes |
-| **Change display name** | **D-52** | Yes |
-| **Change description** | Yes | Yes |
-| **Change what the role permits** | **D-53** — the most dangerous operation in the unit | D-53 |
-| **Activate / Deactivate** | **D-54** — and what happens to live assignments | D-54 |
-| **Assign** | §4 | §4 |
-| **Replace / Revoke** | §4 | §4 |
-| **Retain history** | **Always.** Never rewritten | Always |
-| **Purge** | **NO** for baseline. **Never**, once it has ever been assigned | Only if never assigned — §3.5 |
-| **Change its stable code** | **NO, ever** — §3.3 | **NO, ever** |
+**Four decisions came back and between them they empty this table:**
 
-### 3.3 A role has an immutable code, exactly as a domain does
+| Operation | Available | Decision |
+| --- | --- | --- |
+| **Create** a role | **NO** | D-51 — the seven are the product's vocabulary. **No custom roles** |
+| **Read** — list, one | **Yes** | The screen shows the seven and what each means |
+| **Change display name** | **NO** | **D-52 — CHANGED at review.** See below |
+| **Change description** | **NO** | Follows D-52. A description that contradicts a fixed name is the same hazard |
+| **Change what the role permits** | **NO** | D-53 — fixed in Release 1, and named in an explicit catalogue (§3.3) |
+| **Activate / Deactivate** | **NO** | D-54 |
+| **Assign** | **Yes** | §4 |
+| **Replace / Revoke** | **Yes** | §4 |
+| **Retain history** | **Always** | §4 |
+| **Purge** a role | **NO** | Nothing to purge — there is no role record to remove |
+| **Change its stable code** | **NO, ever** | §3.5 |
+
+#### D-52 — role names are NOT editable, and the reason is the "Super Admin" hazard
+
+The first draft recommended permitting a display-name change, by analogy with
+D-41 for domains. **The Product Owner refused it, and the analogy was wrong.**
+
+> **A domain name is the organisation's word for its own business area. A role
+> name is SECURITY VOCABULARY.**
+
+*Sales* may be called *Commercial* with no consequence at all. **Renaming
+*Business User* to *Super Admin* changes what every administrator believes they
+are granting** — and P1-03 already produced that exact hazard on its first day
+of production use, when a group called *Super Admin* appeared and was carried
+forward to this unit as a naming risk.
+
+An editable role name also means **the same role means different things in
+different deployments**, so no screenshot, no runbook and no support
+conversation transfers between them.
+
+### 3.3 The role → permitted-action catalogue — D-53, and it is a DESIGN deliverable
+
+> **"A role says what a person may do" is prose, and prose is not a control.**
+> DESIGN must produce **one explicit catalogue**: for each of the seven roles,
+> exactly which actions it permits.
+
+**At minimum the catalogue distinguishes five action classes**, and the
+separation between the first four and the fifth is the whole point:
+
+| Class | Examples | Requires domain + scope + sensitivity? |
+| --- | --- | --- |
+| **Platform administration** | Identity & SSO, session policy, providers, deployment-facing settings | **No** — and it grants **no** business data |
+| **Organisation administration** | Users, groups, teams, hierarchy, domains, company profile | **No** — and it grants **no** business data |
+| **Access administration** | Role assignments, entitlements, scopes, ceilings | **No** — and it grants **no** business data |
+| **Evidence / audit read** | Who holds what, when it changed, security events | **No** — and it grants **no** business data |
+| **Business-data actions** | Reading, exporting, querying business records | **YES — always.** Role alone never suffices |
+
+**System Administrator and Organisation Administrator administration rights are
+separate from business-data entitlement, and the catalogue must show that as a
+structural fact** rather than as a sentence somebody has to believe.
+
+### 3.4 THE `users.platform_role` SEAM — D-49, APPROVED: assignments only
+
+**Assignments become the single source of truth. The column is removed in this
+unit. No compatibility column is left behind.**
+
+That was option (c) of the first draft, and it is approved because it is the
+only one that cannot produce **two competing authorization models** — a column
+`RequireSystemAdministrator` reads and an assignment table the engine reads,
+with nothing saying which wins when they disagree. They *would* disagree, the
+first time a revocation updated one and not the other.
+
+#### 3.4.1 THE BOOTSTRAP CORRECTION — and it is the reason this is not a simple swap
+
+> **System Administrator is a PLATFORM-SCOPED role. It must be assignable before
+> a Company Profile exists.**
+
+This was missed by the first draft and it changes the data model:
+
+| Role | Organisation |
+| --- | --- |
+| **`system_administrator`** | **May be NULL.** A platform-scoped assignment |
+| **Every other role** | **REQUIRED.** Organisation and business roles are meaningless without one |
+
+**Why it matters, concretely.** `GrantRedeemer::redeem()` creates the very first
+user on a deployment that has **no organisation at all** — `organisation_id` is
+still null, and P1-01's Company Profile has not been created. An assignment
+model that required an organisation would make the first administrator
+**impossible to create**, and the failure would appear only on a genuinely
+empty deployment, which is the one case no existing test covers by accident.
+
+#### 3.4.2 The exact seam DESIGN must replace — not assume
+
+**`GrantRedeemer` writes `'platform_role' => PlatformRole::SystemAdministrator`
+inside its atomic transaction, at line 63.** DESIGN must replace **that exact
+statement** with the creation of a role assignment **inside the same
+transaction**, so that either both the user and their assignment exist or
+neither does. A bootstrap that creates a user and then separately assigns a role
+has a window in which the deployment has a user who is nobody.
+
+**Every reader of the column, enumerated from the source rather than
+remembered:**
+
+| Where | Reads | Must become |
+| --- | --- | --- |
+| `GrantRedeemer::redeem()` | **Writes** `platform_role` | Creates the assignment, same transaction |
+| `BootstrapState` | `User::activeSystemAdministrators()->exists()` | The same question, asked of assignments |
+| `RequireSystemAdministrator` | `$user->isSystemAdministrator()` | The engine |
+| `User::isSystemAdministrator()` | `platform_role === SystemAdministrator` | The engine — **one implementation** |
+| `User::scopeActiveSystemAdministrators()` | `where('platform_role', …)` | A join to active assignments |
+| `UserDirectoryService::refuseIfLastAdministrator()` | The same scope, under `lockForUpdate()` | §3.4.3 |
+| `SystemAdministratorNavigationAuthorizer` | `isSystemAdministrator()` | The engine |
+| `ConsoleController` | `isSystemAdministrator()` for a prop | The engine |
+| `PlatformRole` enum, `users.platform_role` column, its migration | — | **Removed** |
+
+**Nine call sites. Not one may keep its own answer.**
+
+#### 3.4.3 The last-administrator guard must survive the migration
+
+P1-03 delivered a guard that refuses to deactivate the **only** active System
+Administrator, held by a **locking read inside the write transaction** so that
+two administrators cannot concurrently remove each other and leave zero.
+
+> **That guard must still hold after the column disappears — and it now has
+> more ways to be reached.**
+
+| Path that could reach zero administrators | Must be refused |
+| --- | --- |
+| Deactivating the last active one (P1-03) | Already guarded. **Must keep working** |
+| **Revoking the last active one's role assignment** — new in P1-05 | **Must be guarded** |
+| Two administrators revoking each other **concurrently** | **Must be serialised**, exactly as P1-04 serialises on the parent row |
+
+**Zero administrators is unrecoverable**: bootstrap does not reopen once a
+System Administrator has existed. §30 breaks the guard, and the concurrency case
+runs against **MySQL**, because SQLite has no `SELECT … FOR UPDATE` and would
+report a lock that is not there — the lesson P1-04 paid for.
+
+#### 3.4.4 What the migration must prove before it is safe
+
+| # | Requirement |
+| --- | --- |
+| 1 | **The existing `platform_role` value becomes a role assignment**, in the same migration |
+| 2 | **The column, the enum and the guard test are removed in that same unit.** A dead column that once meant something is the second model wearing a disguise |
+| 3 | **Exactly one implementation** of *"is this person a System Administrator"* remains, asserted structurally |
+| 4 | **migrate → rollback → migrate leaves the administrator still an administrator**, proven on **MySQL** |
+| 5 | **Bootstrap still produces a working first administrator on an empty deployment** — with no organisation |
+| 6 | **Production has exactly one row to migrate**, already confirmed: `platform_roles_total: 1`, `P1-04-BUSINESS-DOMAINS-VERIFICATION.md` §9.5 |
+
+### 3.5 The role code is immutable
 
 `system_administrator`, `organisation_administrator`, `executive`,
 `domain_owner`, `manager`, `business_user`, `auditor`.
 
-**Immutable, for the same reason P1-04's domain code is:** every assignment,
-every audit line and every Phase 2 security mapping will join to it, and a
-mutable identity silently retargets all of them. The display name is the
-organisation's word; the code is SemantIQ's.
+Every assignment, every security event and every Phase 2 security mapping joins
+to it. Immutable for the same reason P1-03's `external_subject` and P1-04's
+domain code are.
 
-### 3.4 THE `users.platform_role` SEAM — P1-05 owns resolving it
+### 3.6 THERE IS NO `roles` TABLE — the schema simplification
 
-P1-00 introduced `users.platform_role` with exactly one value,
-`system_administrator`, and `PlatformRole` has one case with a test asserting it
-stays that way. Its own docblock says **"P1-05 OWNS REPLACING THIS."**
+**Because D-51, D-52, D-53 and D-54 were all answered "no", NOTHING ABOUT A ROLE
+IS MANAGEABLE.** No creation, no rename, no re-description, no capability
+change, no deactivation.
 
-> **The instruction this plan takes seriously: do not casually extend the column
-> with seven values.**
+> **Building a mutable `roles` table anyway would be creating a role-management
+> data model for a thing nobody can manage** — a screen with a Save button that
+> can never be pressed, a service with no operations, and a migration that
+> exists only to look extensible.
 
-Adding six cases to that enum is the smallest diff and the worst outcome,
-because it produces **two competing authorization models** — a column that
-`RequireSystemAdministrator` reads, and an assignment table that the engine
-reads — with nothing saying which wins when they disagree. They *will* disagree:
-the first time somebody's role assignment is revoked and the column is not
-updated, or vice versa.
+**Instead:**
 
-**Three options, and this plan recommends the third. D-49, §31.**
-
-| | Option | For | Against |
-| --- | --- | --- | --- |
-| **A** | **Extend the enum to seven values.** The column is the role | Smallest change; no new join for the common check | **A person can hold only ONE role**, which the model does not say. No history, no effective dates, no scope. And every later question ("who is a Manager for which team?") has nowhere to go |
-| **B** | **Keep the column for platform administration; add assignments for everything else** | `RequireSystemAdministrator` is untouched | **This is the two-models outcome, made permanent.** Two places answer "what is this person", and the first divergence is a security incident nobody can diagnose |
-| **C — recommended** | **The assignment table becomes the single source of truth. The column is migrated into it and then REMOVED, in this unit** | **One model.** History, effective dates and scope all have somewhere to live. `RequireSystemAdministrator` asks the engine, and asking it is the only way to answer | The migration must be exactly right, and it must not lock the only administrator out. §3.4.1 |
-
-#### 3.4.1 What option C must prove before it is safe
-
-| # | Requirement |
+| | |
 | --- | --- |
-| 1 | **Every existing `platform_role` value becomes a role assignment**, in the same migration, with its own effective-from |
-| 2 | **The column is dropped in that same unit**, not left behind "for now". A dead column that once meant something is the second model wearing a disguise |
-| 3 | **`RequireSystemAdministrator` reads the engine**, and there is exactly one implementation of "is this person a System Administrator" in the codebase — asserted (§30) |
-| 4 | **A migrate → rollback → migrate cycle leaves the administrator still an administrator.** Proven on MySQL, because that is the day it matters |
-| 5 | **Bootstrap is unaffected.** P1-00's grant path must still produce a working first administrator on an empty deployment |
-| 6 | **Production has exactly one row to migrate** — confirmed by the read-only verification, which already reports `platform_roles_total` |
+| **The catalogue** | An **immutable product constant** — the seven codes, their names, and the actions each permits (§3.3). The same shape as P1-04's `BaselineDomains` |
+| **Assignments** | Store a controlled **`role_code`**, validated against the catalogue on write |
+| **The screen** | Still shows the seven roles and what each one means, **read-only**. Nothing is lost from the administrator's view |
 
-**If any of those cannot be proven, option B is the honest fallback** — but it
-must then be written down as a *known duplicate model* with an owner and a date,
-not left implicit.
+**This is the difference between the catalogue and P1-04's rejected "static
+catalogue as source of truth" (D-46).** There, domains were rows an organisation
+owns and a code-only catalogue would have been a second source of truth. Here
+**the roles are product vocabulary that no deployment may vary**, so a constant
+is the *correct* source of truth and a table would be the second one.
 
-### 3.5 Purge
+**If a later release genuinely needs custom roles**, that is a schema change
+with a decision behind it — not a table built in advance for a requirement
+nobody has.
 
-A role that has **ever** been assigned can never be permanently removed —
-history is evidence. `PurgeDependencies` gives that for free once assignments
-carry a foreign key, and it is stated explicitly as well, exactly as P1-04 does.
+### 3.7 Purge
+
+**There is nothing to purge.** With no `roles` table there is no role record to
+remove, and an **assignment** is never deleted by any route — it is revoked, and
+the history stays. §30 N-L1.
 
 ---
 
 ## 4. Role Assignment lifecycle
 
-**A role assignment is: this person holds this role, from this moment, until
-this moment.**
+**A role assignment is: this person holds this role, in this organisation (or
+platform-wide), from this moment until this moment.**
+
+### 4.1 Platform-scoped versus organisation-scoped — D-49
+
+| Role | Organisation on the assignment |
+| --- | --- |
+| **`system_administrator`** | **May be NULL — platform-scoped.** It must be assignable before a Company Profile exists (§3.4.1) |
+| All six others | **REQUIRED.** Refused without one |
+
+**This is a validation rule with two directions**, and both are asserted: a
+`system_administrator` assignment must be *permitted* with no organisation, and
+every other role must be *refused* without one. §30 N-A1.
+
+### 4.2 Operations
 
 | Operation | Available | Notes |
 | --- | --- | --- |
-| **Create / Assign** | Yes | To a **person**. To a **group** only if D-58 permits — §21 |
+| **Create / Assign** | Yes | **To a PERSON. Never to a group** — D-58 |
 | **Read** | Yes | Per person, and per role |
-| **Change** the person or the role on an existing assignment | **NO** | That is a revoke plus an assign, and it must look like two events, because it *is* two |
-| **Replace** | Yes | Revoke the current, create the next, **in one transaction** — the P1-04 pattern |
-| **Revoke** | Yes | Ends the assignment. **Takes effect immediately** — §22 |
+| **Change** the person or the role on an existing assignment | **NO** | That is a revoke plus an assign, and it must look like two events because it **is** two |
+| **Replace** | Yes | Revoke the current, create the next, **in one transaction** |
+| **Revoke** | Yes | Immediate — §22. **Ends its child grants too** — §4.4 |
 | **Retain history** | **Always.** Never deleted, never updated in place | |
-| **Activate / Deactivate the assignment** | **NO** | A third state between assigned and revoked is a state every query must remember to exclude. Revoke and re-assign |
-| **Purge** | **NO route** | An assignment that existed is evidence that somebody had access |
+| **Activate / Deactivate the assignment** | **NO** | A third state between assigned and revoked is one every query must remember to exclude. Revoke and re-assign |
+| **Purge** | **NO route** | An assignment that existed is evidence somebody had access |
 
-**May one person hold several roles at once? D-55, §31.** The plan recommends
-**yes**, because a real Finance Manager is plausibly *Manager* and *Business
-User*, and forbidding it forces one role to absorb the other's meaning. §10 then
-has to define precedence, which is why the two decisions are linked.
+**Several roles at once — D-55, approved.** A real Finance Manager is plausibly
+*Manager* **and** *Business User*, and forbidding it forces one role to absorb
+the other's meaning. §10 governs how they combine.
 
-**Effective dating — D-56.** Whether an assignment may be scheduled to begin or
-end in the future. The plan recommends **not in P1-05**: future-dated access is
-a real requirement and a large one, and adding it here makes every query
+**No future dating — D-56.** An assignment **begins when it commits and ends
+when it is revoked.** No scheduled starts, no expiries. Future-dated access is a
+real requirement and a large one; adding it here makes every query
 time-dependent and every test harder to trust.
+
+### 4.3 The last System Administrator cannot be revoked away
+
+Revoking a role assignment is a **new path to zero administrators** that P1-03's
+deactivation guard never had to cover. §3.4.3 — refused, and serialised against
+a concurrent second revocation.
+
+### 4.4 GRANT-PATH PARENTAGE — the rule that stops old access returning
+
+> **A domain entitlement belongs to a specific role-assignment PERIOD. A scope
+> and a ceiling belong to a specific entitlement PERIOD.**
+
+```
+role assignment period
+   └── domain entitlement period
+          ├── scope
+          └── sensitivity ceiling
+```
+
+**Revoking a role assignment ends that grant path and all its active children,
+transactionally.** Re-assigning the same role later creates a **new** period —
+and **must not silently reactivate the old entitlements.**
+
+**The bug this prevents is specific and it is quiet.** Without parentage:
+
+> An Executive's *Manager* role is revoked. Their Finance entitlement, scope and
+> ceiling remain as orphan rows. Months later they are made a *Manager* again
+> for an unrelated reason — **and Finance comes back**, with the scope somebody
+> set in a different context, without anybody granting it and without appearing
+> in any change record.
+
+The same applies one level down: revoking and later re-granting an **entitlement
+must not resurrect an old scope or ceiling.**
+
+#### This is NOT the same as an external state gate
+
+**Two different mechanisms, and conflating them breaks one of them:**
+
+| | Parentage — §4.4 | External state gates — §20 |
+| --- | --- | --- |
+| Examples | Revoking a role assignment; revoking an entitlement | User deactivated / reactivated · domain disabled / re-enabled |
+| The grant | **Ended.** It is over | **Preserved.** Untouched |
+| Coming back | Requires a **new, deliberate grant** | Access returns **exactly** when the state becomes valid again |
+| Why | Somebody **decided** to remove it | Somebody changed a **state**, not a decision |
+
+**Deactivating a user is not a revocation, and disabling a domain is not a
+revocation.** Both must leave every assignment intact — P1-04's D-42 says so for
+domains, and P1-03's D-36 says so for users. §30 breaks both directions.
 
 ---
 
 ## 5. Domain Entitlement lifecycle
 
-**An entitlement is: this person, in this role, may see this domain.**
+**An entitlement is: this person, through THIS role-assignment period, may see
+this domain.**
 
 | Operation | Available | Notes |
 | --- | --- | --- |
-| **Grant** | Yes | Person (or group, D-58) × domain |
-| **Read** | Yes | By person, and by domain — *"who can see Finance"* is P1-07's question and must be answerable here |
+| **Grant** | Yes | **Person only** — D-58 |
+| **Read** | Yes | By person, and by domain — *"who can see Finance"* must be answerable here |
 | **Change** the domain on an existing entitlement | **NO** | Revoke and grant |
-| **Revoke** | Yes | Immediate — §22 |
+| **Revoke** | Yes | Immediate, and **ends its scope and ceiling** — §4.4 |
 | **Retain history** | **Always** | |
 | **Purge** | **NO route** | |
 
 **An entitlement to a DISABLED domain grants nothing, and is not deleted** —
-§11.3, and the P1-04 carried gate. Disabling is the organisation saying *"we are
-not using this"*; it is not a revocation and must not silently destroy the
-administrator's assignment work.
+§11.3. Disabling is the organisation saying *"we are not using this"*; it is not
+a revocation and must not destroy the administrator's work.
 
-**No entitlement is ever created automatically.** Not by ownership, not by
-domain creation, not by role assignment, not by being in a business unit. **D-57
-asks whether ANY role carries an implicit entitlement**, and the plan recommends
-**no — every entitlement is explicit**, because an implicit one is invisible in
-the very screen built to make access reviewable.
+**No entitlement is ever created automatically — D-57.** Not by ownership, not
+by domain creation, not by role assignment, not by business-unit membership.
+**Every entitlement is explicit**, because an implicit one is invisible in the
+very screen built to make access reviewable.
 
 ---
 
 ## 6. Scope Assignment lifecycle
 
-**Scope answers: WHICH RECORDS inside a domain the person may see.**
+**Scope answers: WHICH RECORDS inside an entitled domain.** It belongs to an
+entitlement period (D-59, §4.4), never to a person.
 
-| Scope | Means | Derived from |
+### 6.1 Every scope needs an EXPLICIT structural target — D-59
+
+> **The Ground-Zero rule (SYS-005): managers inherit visibility only for
+> EXPLICITLY ASSIGNED teams and hierarchies.**
+
+**Vague scopes are forbidden.** *"Their business unit"* and *"the team their
+report happens to belong to"* are inferences, and an inference nobody assigned
+is an entitlement nobody can review.
+
+| Scope | Target it must carry | Grounded in |
 | --- | --- | --- |
-| **Own** | Records belonging to that person | Identity |
-| **Team** | Records of the teams they are in — and, for a Manager, the teams they manage (§16) | P1-01 `team_memberships`, `management_relationships` |
-| **Business Unit** | Records within their business unit | P1-01 `business_units` → departments → teams |
-| **Domain** | All records in the entitled domain | The entitlement itself |
-| **Organisation** | Everything in the organisation, within the domain and ceiling | The organisation |
+| **Own** | **None.** The identity is the target | P1-00 identity |
+| **Team** | **A specific `teams.id`**, assigned deliberately. More than one team means more than one scope | P1-01 `teams`, `team_memberships` |
+| **Business Unit** | **A specific `business_units.id`**, assigned deliberately | P1-01 `business_units` → `departments` → `teams` |
+| **Domain** | **None.** The entitlement already names it | The entitlement |
+| **Organisation** | **None.** The organisation on the assignment | P1-01 `organisations` |
 
-**Scope is per entitlement, not per person.** *Sales + Team* and *Finance +
-Own* must be expressible for one person at once; a single scope per user cannot
-represent a real organisation. **D-59** confirms this.
+**A Team scope is a named team, not "the teams they are in".** DESIGN must
+define the reference explicitly and §30 breaks the inference version.
+
+### 6.2 Domain and Organisation scope — the honest answer
+
+**D-59 asked for this and the honest answer is uncomfortable:**
+
+> **Under Release 1's single-organisation model, with the entitlement already
+> naming a domain, `Domain` and `Organisation` scope RESOLVE TO THE SAME RECORD
+> SET.**
+
+Both mean *every record in this domain*. There is no organisational partition
+above business unit for them to differ across, and there is only one
+organisation.
+
+**Two labels that silently mean the same thing is exactly what D-59 forbids**,
+so one of these must be chosen and written down — **D-74, §31:**
+
+| | Option | For | Against |
+| --- | --- | --- | --- |
+| **A** | **Deliver `Organisation` only** and drop `Domain` in Release 1 | No two labels for one meaning. An administrator cannot pick the wrong one | The Ground-Zero source lists five scopes; delivering four needs stating |
+| **B** | **Deliver both, and document that they are equivalent today**, with `Domain` reserved for the future partition | Matches the source vocabulary | Two identical choices on a screen is a question with no right answer |
+| **C — recommended** | **Deliver `Domain` only** and defer `Organisation` until it can mean something different | The entitlement is domain-shaped, so `Domain` is the honest name for "all of it". Keeps the source's five as a vocabulary while shipping four that differ | Same statement required as (A) |
+
+**Whichever is chosen, the reason is recorded** — because the next reader will
+otherwise re-derive the equivalence and assume it was an oversight.
+
+### 6.3 Operations
 
 | Operation | Available |
 | --- | --- |
-| **Assign** — a scope to an entitlement | Yes |
-| **Change** | **Yes** — this is a *change of degree*, not of subject, so unlike §4 and §5 it may be edited in place, **with the previous value retained as history** |
-| **Revoke** | Yes — the entitlement then grants nothing, rather than defaulting to something wider |
+| **Assign** a scope to an entitlement | Yes |
+| **Change** | **Yes** — a change of degree, not of subject, so it may be edited in place **with the previous value retained as history** |
+| **Revoke** | Yes — the entitlement then grants **nothing**, never a default |
 | **Retain history** | Always |
 | **Purge** | **NO route** |
 
 > **The trap.** Removing a scope must **narrow to nothing**, never fall back to
-> a default. A missing scope that is read as *"no restriction"* is the same
-> class of defect as the P1-04 disabled-domain gate, and §30 breaks it.
+> a default. A missing scope read as *"no restriction"* is the same class of
+> defect as the P1-04 disabled-domain gate. §30 N-D8.
 
 **Scope never widens the domain.** *Organisation* scope on a Sales entitlement
-means *all Sales records in the organisation* — **not** all records in the
-organisation. §30 N-S4.
+means *all Sales records*, **not** all records. §30 N-P5.
 
 ---
 
-## 7. Sensitivity Ceiling lifecycle
+## 7. Sensitivity Ceiling — ONE PER ENTITLEMENT
 
-**A ceiling answers: which FIELDS and ACTIONS, within what they can already
-see.**
+**D-60, CHANGED at review: the ceiling is per entitlement only.**
 
 | Level | Means |
 | --- | --- |
-| **Standard** | Ordinary business fields |
+| **Standard** | The **default**. Ordinary business fields |
 | **Confidential** | Sensitive business fields — commercially or personally significant |
-| **Restricted** | Bank, identity, medical and equivalent. Exceptional, and reviewed |
+| **Restricted** | Bank, identity, medical and equivalent. Exceptional, and **requires step-up to grant** (§11b) |
 
-**A ceiling only ever REDUCES.** It is a maximum, never a grant: holding a
-Restricted ceiling gives access to nothing by itself. **The lowest applicable
-ceiling wins** — §10.
+### 7.1 Why not also a per-person ceiling
+
+The first draft proposed **both**, with the lowest winning. The Product Owner
+refused it, and the refusal is right:
+
+> **Two independent cap paths create a confusing double-grant requirement.**
+
+An administrator raising an entitlement to *Confidential* would find it still
+capped by an invisible person-level *Standard* set months earlier by somebody
+else — and the screen showing the entitlement would not explain why. **One
+ceiling, on the thing it caps.**
+
+**A future global person maximum may be introduced as a separately reviewed
+rule** if a real need appears. It is not needed to make Release 1 correct.
+
+### 7.2 Operations
 
 | Operation | Available |
 | --- | --- |
-| **Set** — per person, or per entitlement (**D-60**) | Yes |
+| **Set** — on an entitlement | Yes. **Defaults to Standard** |
 | **Change** | Yes, retained as history |
-| **Clear** | Yes → falls back to the **most restrictive** default, never the most permissive |
+| **Clear** | Yes → falls back to **Standard**, the most restrictive default — never the most permissive |
 | **Retain history** | Always |
 | **Purge** | **NO route** |
 
-**Default when nothing is set: Standard.** Stated so nobody has to infer it,
-and asserted (§30).
+### 7.3 Above the ceiling → the engine returns DENY — D-63, CHANGED
 
-> **P1-04 deliberately shipped no sensitivity of any kind — D-47.** The
-> `access_expectation` field it does carry (`undecided` / `broad` / `limited` /
-> `exceptional`) is **advisory and must remain so.** **D-61** asks whether P1-05
-> reads it at all; the plan recommends **it is shown to the administrator as
-> context and never read by the engine**, because the moment it is enforced,
-> P1-04 has retrospectively become an access-control unit.
+> **The engine answers `deny` for that field or action. It does not redact.**
+
+The first draft proposed redaction. **P1-05 has no business data to redact**,
+and building a generic redaction engine over data that does not exist would be
+designing against an imagined shape.
+
+| Layer | Responsibility |
+| --- | --- |
+| **The engine (P1-05)** | **Allow or deny**, per field and per action. Nothing else |
+| **Phase 2 consumers** | May **omit** a denied field so a report is usable — **and must indicate that content was withheld** |
+
+> **NO SILENT REDACTION.** A report that quietly drops a column is a report
+> whose reader believes they are seeing everything. The decision comes from this
+> engine; the presentation of the withholding is the consumer's, and it must be
+> visible.
+
+**P1-04's `access_expectation` is context only — D-61.** The engine never reads
+it. Enforcing it would make P1-04 retrospectively an access-control unit.
 
 ---
 
@@ -440,30 +709,80 @@ Named so a reviewer can search for them:
 
 ---
 
-## 10. Conflict and precedence rules
+## 10. Independent grant paths — D-62, REPLACING the first draft's rule
 
-**Real people hold several assignments. The rules must be stated, not
-discovered.**
+**The first draft's "widest scope, lowest ceiling, across all grants" rule is
+NOT APPROVED and has been removed.** It is replaced by something simpler and
+safer to reason about.
 
-| Dimension | Proposed rule | Why |
-| --- | --- | --- |
-| **Two roles** | The **union of ACTIONS** | A Manager who is also a Business User can do both jobs. Actions are not dangerous on their own — data is |
-| **Two entitlements to the same domain** | The **widest SCOPE** of the two | Two grants for the same domain express the same decision twice |
-| **Two entitlements, different domains** | Independent. **Never merged** | Sales + Finance is not "Sales and Finance data mixed" |
-| **Two scopes** | The **widest** | Same reasoning as above |
-| **Two ceilings** | **THE LOWEST. Always.** | A ceiling is a maximum. Taking the higher of two would let a second assignment *raise* a cap, which is the opposite of a cap |
-| **A grant and a revocation** | **The revocation wins, always** | §22 |
-| **Anything ambiguous, unrecognised or contradictory** | **DENY** | §11 |
+### 10.1 The rule
 
-> **The asymmetry is deliberate and is the heart of §10.** Scopes take the
-> **widest**; ceilings take the **LOWEST**. Applying one rule uniformly to both
-> — the obvious simplification — silently raises every ceiling the moment a
-> person holds two assignments. **D-62** confirms it; §30 breaks it.
+> **A GRANT PATH is: an active role assignment + an active domain entitlement +
+> its scope + its sensitivity ceiling.**
+>
+> **The request is ALLOWED when at least one complete, active grant path
+> authorises it.**
 
-**Explicit deny records — D-64.** Whether an administrator may record *"this
-person must NOT see X"* as a first-class object. The plan recommends **not in
-P1-05**: deny records interact with everything above and are a large design in
-their own right, and absence of a grant already denies.
+```
+grant path  =  role assignment (active)
+                 └── domain entitlement (active, domain enabled)
+                        ├── scope        (covers this record)
+                        └── ceiling      (covers this field/action)
+```
+
+Each path is evaluated **whole and independently**. A path either authorises the
+request or it does not; it never contributes half an answer to another path.
+
+### 10.2 What follows from it
+
+| # | Consequence |
+| --- | --- |
+| 1 | **Role actions combine as a union.** Holding Manager and Business User permits both sets of actions |
+| 2 | **Several entitlements widen reachable records** through their **own** scopes — independently, not by merging |
+| 3 | **A restrictive second grant NEVER reduces access already granted by another valid path.** A narrow Finance grant cannot claw back a wide Sales one |
+| 4 | **A ceiling caps its OWN path only.** It is not a global maximum and it does not reach across |
+| 5 | **Revoked and historical rows simply stop contributing.** They are not evaluated |
+| 6 | **A revoked grant is NOT a deny against a separate active grant** |
+
+### 10.3 Why consequence 6 is the important one
+
+**P1-05 rejects explicit deny records — D-64.** If a revoked historical row were
+allowed to subtract from a live grant, it would **become** a deny record — an
+invisible one, created by an ordinary revocation, that nobody chose and no
+screen shows.
+
+> **A revocation ends a path. It does not create a rule.**
+
+§30 N-P3 breaks exactly that: *let a revoked row veto an active path.*
+
+### 10.4 Why this is safer than the rule it replaces
+
+The first draft took the **widest** scope and the **lowest** ceiling across
+*all* grants — mixing dimensions from different decisions. Two problems:
+
+| | |
+| --- | --- |
+| It **combined halves of unrelated decisions** | A wide scope from one grant could pair with a low ceiling from another, producing an effective access **nobody ever assigned** and no screen could explain |
+| The asymmetry was **easy to get wrong** | Widest-for-one and lowest-for-the-other invites the uniform simplification, which silently **raises** every ceiling |
+
+**Independent paths remove both**, because there is nothing to combine. The
+simulator's *"why"* also becomes answerable in one sentence: **which path
+allowed it**, or, for a refusal, **which link in every path was missing**.
+
+### 10.5 The global gates are absolute and sit OUTSIDE any path
+
+**No grant path can satisfy these. They are checked first and they deny
+outright:**
+
+| Gate |
+| --- |
+| **Unauthenticated** → deny |
+| **Inactive user** → deny |
+| **Organisation mismatch** → deny |
+| **Disabled domain** → deny |
+| **Unknown, malformed or conflicting state** → deny |
+
+**A gate is not a path and a path cannot outvote a gate.** §30 N-D1 breaks it.
 
 ---
 
@@ -513,6 +832,61 @@ guard the other.
 
 ---
 
+## 11b. Privileged step-up re-authentication — D-73, NEW
+
+**SYS-018 of the Ground-Zero source requires that designated privileged actions
+support step-up authentication. The first draft of this plan missed it
+entirely** — and P1-05 is the first unit that can actually grant privilege, so
+this is where it stops being theoretical.
+
+### 11b.1 What requires fresh re-authentication
+
+| Action | Why |
+| --- | --- |
+| **Granting System Administrator** | Creates a second platform administrator |
+| **Revoking System Administrator** | The highest-consequence revocation there is |
+| **Granting Organisation Administrator** | Creates somebody who can assign access |
+| **Self-granting** a role or a domain entitlement | §13.1 |
+| **Granting a Restricted sensitivity ceiling** | The highest data classification there is |
+
+### 11b.2 What it must NOT be
+
+| Forbidden | Why |
+| --- | --- |
+| **A password screen** | SemantIQ has no passwords. Adding one would invent the credential store the whole identity design exists to avoid |
+| **A confirmation dialog labelled "step-up"** | A dialog proves the browser is present, not that the human is. **Do not fake it** |
+| **A "recently signed in" flag the application sets itself** | The application would be asserting freshness rather than proving it |
+
+### 11b.3 What it must be
+
+> **A fresh authentication through the trusted Microsoft boundary**, reusing
+> P1-00's provider rather than working around it.
+
+DESIGN must specify **three things**, none optional:
+
+| # | |
+| --- | --- |
+| 1 | **The secure return-to-action mechanism** — how the intended action survives the round trip **without becoming a way to replay or forge one**. The action, its target and its parameters are bound to the request, never carried in a URL somebody can edit |
+| 2 | **The freshness proof** — how the application knows the authentication *just* happened, **from the provider's response** rather than from its own state, and what "just" means as a bounded number |
+| 3 | **Anti-replay** — a completed step-up authorises **one** action, **once**. Not a window in which everything is privileged |
+
+### 11b.4 It must not weaken P1-00
+
+P1-02 spent a whole unit making the identity path fail closed, and D-31/D-32
+settled the session policy. **Step-up must not reopen any of it.**
+
+**If correct Microsoft re-authentication needs a bounded extension to P1-00's
+auth path — a `prompt` or `max_age` parameter, a second callback route, a
+distinct state store — DESIGN must say so explicitly**, name exactly what
+changes, and treat it as a **reviewed change to P1-00** rather than a quiet
+addition.
+
+> **Faking step-up is worse than not having it**, because it puts the word into
+> a security document while proving nothing, and every later reader will believe
+> the control exists.
+
+---
+
 ## 12. System Administrator boundary
 
 > **A System Administrator administers the platform and receives ZERO business
@@ -543,17 +917,60 @@ System Administrator, receives no business data for it.**
 
 | May | May not |
 | --- | --- |
-| Manage users, groups, teams, hierarchy | See business data without an explicit entitlement |
-| Assign roles, entitlements, scopes | Assign themselves something they could not otherwise have — **D-65, §31** |
-| See who has access to what | Change identity/SSO, session policy or platform configuration |
+| Manage users, groups, teams, hierarchy, domains | See business data without an explicit entitlement |
+| Assign roles, entitlements, scopes, ceilings | **Grant the System Administrator platform role — NEVER** |
+| See who has access to what | Change Identity & SSO, session policy or platform configuration |
 
-> **D-65 is the self-assignment question and it is not decorative.** An
-> administrator who can grant themselves Finance has, in effect, Finance. Three
-> answers: permit it and log it prominently; refuse it and require a second
-> administrator; or permit it only for roles they already hold. The plan
-> recommends **permit-and-log for P1-05**, and flags **four-eyes as P1-07's**
-> — because refusing it in a single-administrator deployment makes the product
-> unusable, and P1-07 owns recertification.
+### 13.1 Self-assignment — D-65, approved WITH a security condition
+
+An administrator who can grant themselves Finance has, in effect, Finance.
+**It is permitted in Release 1 because the deployment has exactly one System
+Administrator**, and refusing it would make the product unusable — but only with
+all three of these:
+
+| # | Condition |
+| --- | --- |
+| 1 | **Explicit confirmation** — the screen states plainly that they are granting themselves access |
+| 2 | **A privileged security event**, distinguishable from an ordinary grant |
+| 3 | **Fresh re-authentication** under §11b |
+
+> **Correction to the first draft: P1-07 does NOT supply four-eyes approval.**
+> The first draft said it did. **P1-07 supplies later review and
+> recertification — it is not an approval workflow**, and describing it as one
+> would have left a control nobody was building, in a document that made it look
+> covered.
+
+### 13.2 An Organisation Administrator may never grant System Administrator
+
+**That is a platform-scoped role and organisation administration does not reach
+it.**
+
+This is the single most valuable privilege-escalation guard in the unit:
+without it, **organisation administration is platform administration one
+assignment away**, and the whole §12/§13 separation collapses in a way that
+would look, on any screen, like an ordinary grant. §30 N-B9 breaks it.
+
+### 13.3 Which existing routes become Organisation Administrator's — ENUMERATED, not swapped
+
+P1-01 to P1-04 put **every** administration route behind
+`RequireSystemAdministrator`, because that was the only role that existed.
+
+> **DESIGN must enumerate those routes ONE BY ONE and state, for each, whether
+> an Organisation Administrator may reach it. Do not replace every
+> `RequireSystemAdministrator` blindly.**
+
+| Area | Expected outcome |
+| --- | --- |
+| **Identity & SSO** (P1-02) | **SYSTEM ADMINISTRATOR ONLY.** Providers, session policy, secrets and health are platform authority |
+| Organisation, business units, departments, teams (P1-01) | Expected to open to Organisation Administrator |
+| Users & Groups (P1-03) | Expected to open |
+| Business Domains (P1-04) | Expected to open |
+| Roles & Access (P1-05) | Expected to open — **except** granting the System Administrator role (§13.2) |
+
+**Every row is a decision, and the enumeration is the deliverable.** A
+find-and-replace across the route file would hand Identity & SSO to organisation
+administration in a single commit that reviewed as trivial — and §30 N-E9
+asserts the Identity routes stay System-Administrator-only.
 
 ---
 
@@ -599,7 +1016,7 @@ the Domain Owner role to the domains they own*.
 
 ---
 
-## 16. Manager hierarchy behaviour
+## 16. Manager hierarchy behaviour — NO RECURSION
 
 **A Manager's Team scope follows P1-01's hierarchy — and that is the ONLY place
 management participates.**
@@ -607,19 +1024,30 @@ management participates.**
 | | |
 | --- | --- |
 | Source | `management_relationships` and `team_memberships`, **read, never rewritten** |
-| Grants | **Nothing on its own.** Manager + entitlement + Team scope grants team records **in that domain** |
+| Grants | **Nothing on its own.** Manager + entitlement + an **explicitly assigned** Team scope grants that team's records **in that domain** |
 | Unrelated teams | **Never** — the source case from the Phase 1 document |
-| Depth | **D-66:** direct reports only, or the whole chain? |
+| Depth | **NO RECURSION — D-66** |
 
-> **D-66 matters more than it looks.** *Whole chain* means a senior manager's
-> scope grows silently every time somebody is hired three levels below them,
-> with no assignment change and no review. The plan recommends **direct reports
-> plus the teams they manage**, with deeper reach requiring an explicit
-> assignment — **visible, reviewable, and deliberate**.
+### D-66, approved: no recursive management chain
+
+> **Manager Team scope is limited to EXPLICITLY ASSIGNED, current team and
+> hierarchy relationships.** SYS-005: *managers inherit visibility only for
+> explicitly assigned teams and hierarchies.*
+
+**Two inferences are forbidden by name, because both are exactly the sort of
+thing that gets written as a convenience:**
+
+| Forbidden | Why |
+| --- | --- |
+| **Granting a whole team because ONE direct report happens to belong to it** | The manager was never given that team. The report's membership is **their** fact, not the manager's grant |
+| **Including reports-of-reports** — the recursive chain | A senior manager's scope would grow **silently** every time somebody is hired three levels below them, with **no assignment change and no review.** Access that expands through hiring is access nobody granted |
+
+**Deeper reach is available and it is deliberate**: assign the team explicitly.
+It then appears in the entitlement, in the simulator's explanation and in
+P1-07's review. §30 N-B6 and N-M2 break both inferences.
 
 **A management relationship must never grant across domains.** Managing
 somebody who works in Finance does not entitle a Sales manager to Finance.
-§30 breaks it.
 
 ---
 
@@ -652,10 +1080,11 @@ is how the engine gets a second implementation.
 **Auditor is read-only, and that is a property of the role rather than of the
 screens.** §30: no write path anywhere accepts an Auditor.
 
-**D-68:** whether Auditor is organisation-wide by definition or itself scoped.
-The plan recommends **organisation-wide for evidence, and no business-data
-entitlement at all** — a scoped auditor who cannot see all the evidence cannot
-do the job the role exists for.
+**D-68, approved: Auditor is ORGANISATION-WIDE for access and security
+evidence, read-only, with zero automatic business-data entitlement.** A scoped
+auditor who cannot see all the evidence cannot do the job the role exists for —
+and an auditor who could read business data would be an auditor with something
+to audit about themselves.
 
 ---
 
@@ -686,7 +1115,7 @@ likely to be quietly dropped when multi-tenancy arrives.
 | **User reactivated** | Access returns to **exactly** what it was — no more | Unchanged |
 | **Domain disabled** (P1-04) | Entitlements to it grant **nothing** | **Retained**, never deleted — §11.3 case 4 |
 | **Domain re-enabled** | Access returns to exactly what it was | Unchanged |
-| **Group deactivated** (P1-03) | If groups participate at all (D-58): **grants nothing** | Retained |
+| **Group deactivated** (P1-03) | **Nothing changes — groups never granted anything.** D-58 | Retained |
 | **Team or business unit deactivated** (P1-01) | Scopes resolving through it **narrow**, never widen | Retained |
 | **Organisation inactive** | **Everything denies** | Retained |
 
@@ -700,31 +1129,32 @@ likely to be quietly dropped when multi-tenancy arrives.
 
 ---
 
-## 21. Group use in access — NOT ASSUMED
+## 21. Groups grant nothing — D-58, USERS ONLY
 
-**P1-03 groups grant nothing. D-35 was defended through a whole unit, and P1-05
-is where it would change. That decision is the Product Owner's — D-58.**
+**D-58, approved: access is assigned to USERS ONLY in P1-05.**
 
-| | Option | For | Against |
-| --- | --- | --- | --- |
-| **A** | **Users only.** Groups keep granting nothing | Simplest to reason about, review and test. Every grant names a person | Assigning 200 people individually. Group screens keep looking like they should do something |
-| **B** | **Groups only** | Tidy at scale | Cannot express a one-person exception without a group of one |
-| **C** | **Both** | Matches how organisations work | **Two paths to the same access**, and the union rules of §10 must cover them. "Why can this person see Finance?" needs an answer that names the group |
-
-**If groups participate (B or C), all of these must hold:**
-
-| # | Requirement |
+| | |
 | --- | --- |
-| 1 | **Membership changes take effect immediately** — adding somebody to an entitled group grants access at once, removing them revokes it at once |
-| 2 | **No assignment history is silently rewritten.** The group's grant is one record; who was in the group when is P1-03's membership history. **Neither is edited to reflect the other** |
-| 3 | **The simulator must say WHICH GROUP** produced an answer, or the explanation is useless |
-| 4 | **A deactivated group grants nothing**, and its assignments are retained |
-| 5 | **P1-04's "Super Admin" hazard applies.** A group with a privilege-suggesting name is where somebody wires administration in **by assumption rather than by decision** — carried from the P1-03 acceptance |
+| P1-03 groups | **Continue granting nothing.** D-35 unchanged |
+| The access engine | **MUST NOT READ `group_memberships` AT ALL** |
+| Every role assignment and entitlement | Names a **person** |
 
-**The plan recommends A for P1-05**, and that group-based assignment be
-considered as a distinct, separately reviewed change once the engine is proven —
-because every requirement above is a way the engine can be got wrong, and none
-of them is about the engine itself.
+**That is a stronger statement than "groups are not used."** The engine must not
+read the table at all, so a later convenience cannot quietly become a grant
+path. §30 N-B4 asserts it against the engine's source **and** behaviourally.
+
+### Why users only, and why the reasoning is kept visible
+
+The pressure to add groups will return the first time somebody has two hundred
+people to assign, so the trade is recorded rather than assumed:
+
+| | |
+| --- | --- |
+| **Every grant names a person**, so *"why can this person see Finance?"* has exactly one kind of answer | |
+| **Group-based assignment brings five requirements of its own** — immediate effect on membership change; no silent rewriting of assignment history; the simulator naming **which group**; a deactivated group granting nothing; and P1-04's *"Super Admin"* naming hazard | **None of them is about the engine, and every one is a way to get the engine wrong while it is still unproven** |
+
+**Group-based access is a separately reviewed future enhancement, after the
+engine is proven.** It is not a stretch goal of this unit.
 
 ---
 
@@ -742,15 +1172,16 @@ of them is about the engine itself.
 | Domain disabled | Immediate |
 | Group membership removed (if D-58 permits) | Immediate |
 
-**"Immediate" must be defined, not implied — D-69.** The plan proposes: **the
-next authorization decision after the change commits reflects the change**, with
-no stale window at all.
+**D-69, approved: the NEXT authorization decision after the change commits
+reflects it.** No stale window at all — and **session expiry is not the
+revocation mechanism.** A revoked user is denied on their next request, not at
+their next sign-in.
 
 ### Caching
 
 | | |
 | --- | --- |
-| **If there is no cache** | Simplest, correct, and the plan's recommendation for P1-05. Phase 1 has no data volume to justify one |
+| **NO PERMISSION CACHE IN P1-05 — D-69, approved** | Phase 1 has no data volume to justify one, and a cache is the mechanism by which "immediate" quietly becomes "eventually" |
 | **If there is** | It must be **invalidated by the write, in the same transaction** — never time-based expiry, and never "usually within a minute". A permission cache with a TTL is a documented window in which revoked access still works |
 | **In every case** | **A cold, stale or unavailable cache DENIES and recomputes.** Never serves a permissive default |
 
@@ -830,9 +1261,10 @@ discouraged, the first performance problem makes it attractive.
 | 3 | **A stable identity key** for that projection — P1-00's `(provider, external_subject, tenant_id)`, never email |
 | 4 | **A written statement that Phase 2 DERIVES and never restates.** If Phase 2 needs a rule this engine cannot express, that is a change **here**, not a second model there |
 
-**D-70:** whether P1-05 delivers that projection interface now or names it as
-Phase 2's first task. The plan recommends **naming and shaping it now, building
-it in Phase 2** — designing it with no consumer risks designing the wrong thing.
+**D-70, approved: define the projection CONTRACT now; implement its adapter in
+Phase 2.** And **P1-05 must expose an engine usable outside an HTTP request** —
+Phase 2's propagation is not a web request, and an engine reachable only through
+middleware would force Phase 2 to build its own.
 
 ---
 
@@ -842,11 +1274,15 @@ it in Phase 2** — designing it with no consumer risks designing the wrong thin
 
 | Table | Purpose |
 | --- | --- |
-| `roles` | The seven baseline, plus custom if D-51. Immutable `code`, editable name |
-| `role_assignments` | Who holds which role, and when. **History, never rewritten** |
-| `domain_entitlements` | Who may see which domain, in which role |
-| `entitlement_scopes` | The scope on an entitlement, with history |
-| `sensitivity_ceilings` | The cap, per person or per entitlement (D-60), with history |
+| ~~`roles`~~ | **NOT CREATED — §3.6.** An immutable product catalogue instead, because with D-51/52/53/54 answered **nothing about a role is manageable** |
+| `role_assignments` | Who holds which `role_code`, in which organisation (**NULLABLE for `system_administrator`** — §4.1), and when. **History, never rewritten** |
+| `domain_entitlements` | Who may see which domain — **a child of a role-assignment period**, §4.4 |
+| `entitlement_scopes` | The scope on an entitlement, **with its explicit structural target** (§6.1), with history |
+| `entitlement_ceilings` | **One per entitlement**, D-60. Defaults to Standard |
+
+**Every child carries its parent's period**, so ending a parent ends its
+children transactionally (§4.4), and a later re-grant creates new rows rather
+than reviving old ones.
 
 **Shape rules carried from every earlier unit, applied here rather than
 rediscovered:**
@@ -878,23 +1314,45 @@ that ordinary administrators cannot disable.
 | `role_assignment.*` | granted, revoked |
 | `domain_entitlement.*` | granted, revoked |
 | `entitlement_scope.*` | set, changed, removed |
-| `sensitivity_ceiling.*` | set, changed, cleared |
-| `access.denied` | **D-71** — see below |
+| `entitlement_ceiling.*` | set, changed, cleared |
+| `access.self_granted` | The D-65 self-assignment — **distinguishable from an ordinary grant** |
+| `access.step_up.*` | required, completed, refused — §11b |
+| `access.denied.privileged` | **D-71**, privileged surfaces only |
 
-**The D-12 key boundary is unchanged unless a decision changes it.** P1-04
-delivered seven events with **no new context key**, and the same discipline
-applies: if this unit needs a key for free text, that is a sign it is trying to
-log business content.
+### D-72, approved — four new context keys, and `role` is a CODE
 
-**A new key may genuinely be needed** — `role_id`, `domain_id`, `scope`,
-`sensitivity` are structural identifiers, not content. **D-72** asks the Product
-Owner to approve exactly which, one at a time.
+| Key | Carries |
+| --- | --- |
+| **`role`** | **One of the seven fixed role codes. NEVER free text** |
+| **`domain_id`** | The domain's identifier |
+| **`scope`** | The scope value |
+| **`sensitivity`** | The ceiling value |
 
-> **D-71 — logging denials.** Logging every denial produces enormous volume and
-> buries what matters; logging none loses the signal that somebody is probing.
-> The plan recommends **log privileged-surface denials and repeated denials, not
-> every routine one**, and that P1-08 revisit it with the whole picture. This is
-> the same judgement P1-02 and P1-04 already made about refusals.
+**`related_id` continues to carry structural target references** where it is
+sufficient, rather than a fifth key being added for each one.
+
+> **`role` being a CODE rather than a name is the whole reason it is safe.**
+> The logger has **no free-text channel at all** — deliberately, since P1-01 —
+> and that principle is preserved: **no names, no emails, no descriptions, no
+> business content, no arbitrary reason text.** A key that accepted free text
+> would be the leak channel the D-12 boundary exists to remove, and at the call
+> site it would look identical to these four.
+
+**Each of the four is validated on write**, so `role` cannot receive an
+invented string, and §30 N-EV1 breaks that.
+
+### D-71, refined — log PRIVILEGED-SURFACE denials only
+
+| | |
+| --- | --- |
+| **Logged** | Denials on **privileged surfaces** — administration, access management, step-up |
+| **Not logged** | **Routine business denials.** They would flood the security log and bury what matters |
+| **NOT BUILT IN THIS UNIT** | **A repeated-denial detector.** It needs aggregation, a window and state, and belongs with **P1-06 / P1-08 monitoring** |
+
+**The refinement matters.** The first draft said *"privileged and repeated
+denials"*, which reads as one decision and is two: the first is a filter at the
+call site; the second is a **stateful detector** that would have been built here
+by implication — badly, with window semantics nobody had agreed.
 
 **P1-08 owns durable audit storage.** P1-05 emits through the existing boundary.
 
@@ -927,27 +1385,31 @@ P1-05 is complete when:
 
 | # | Criterion |
 | --- | --- |
-| 1 | A System Administrator can reach **Roles & Access** and see the seven baseline roles |
+| 1 | Reach **Roles & Access** and see the **seven roles read-only**, each with the actions it permits (§3.3) |
 | 2 | Assign a role; see it in history; **revoke** it and see the history retained |
-| 3 | Grant a **domain entitlement**, set a **scope**, set a **ceiling** |
-| 4 | Use the **Access Simulator** to see current access, proposed access, **and why** |
-| 5 | See that a **System Administrator with no entitlement can see no business data** |
-| 6 | See that a **Domain Owner receives nothing automatically** |
-| 7 | **Disable a domain and observe access disappear**; re-enable and observe it return unchanged |
+| 3 | Grant a **domain entitlement**, set a **scope with an explicit target**, set a **ceiling** |
+| 4 | Use the **Access Simulator** to see current access, proposed access, **and which grant path produced each answer** |
+| 5 | A **System Administrator with no entitlement can see no business data** |
+| 6 | A **Domain Owner receives nothing automatically** |
+| 7 | **Disable a domain and observe access disappear**; re-enable and observe it return **unchanged** |
 | 8 | **Disable every domain and observe that nothing is granted** — not everything |
-| 9 | **Revoke access and observe it stop working on the next request**, without signing out |
-| 10 | **Deactivate a user and observe access end**, with assignments retained |
-| 11 | Be refused every operation §12–§19 forbid, in business language |
-| 12 | See the whole matrix of §30 pass, each guard proven non-vacuous |
-| 13 | Read every screen in both themes and at small width, with no implementation wording |
-| 14 | **The `platform_role` seam is resolved** and there is demonstrably **one** authorization model — §3.4 |
+| 9 | **Revoke access and observe it stop on the next request**, without signing out |
+| 10 | **Deactivate a user and observe access end**, with assignments **retained** |
+| 11 | **Revoke a role assignment, re-assign the same role, and observe that the old entitlements DO NOT return** — §4.4 |
+| 12 | **Be required to re-authenticate** before granting System Administrator, Organisation Administrator, a self-grant, or a Restricted ceiling — §11b |
+| 13 | An **Organisation Administrator cannot grant System Administrator**, and **cannot reach Identity & SSO** |
+| 14 | Be refused every operation §12–§19 forbid, in business language |
+| 15 | See the §30 matrix pass, every guard proven non-vacuous |
+| 16 | Read every screen in both themes and at small width, with no implementation wording |
+| 17 | **`users.platform_role` is gone**, and there is demonstrably **one** authorization model — §3.4 |
+| 18 | **Bootstrap still produces a working first administrator on an empty deployment** — with no organisation |
 
-### Gates that must be closed or explicitly carried
+### Gates
 
 | Gate | Requirement |
 | --- | --- |
-| **P1-04 — disabled domain never broadens access** | **Must be CLOSED here.** All five cases of §11.3 |
-| **P1-02 — provider-wide SSO Re-check lock** | Closed **only if** P1-05 legitimately establishes another **real** System Administrator. **A fake privileged account must not be created.** Otherwise it stays open and says so |
+| **P1-04 — a disabled domain never broadens access** | **MUST BE CLOSED HERE.** All five cases of §11.3, especially **no enabled domains = no domain access, never allow-all** |
+| **P1-02 — provider-wide SSO Re-check lock** | **Do not manufacture a second System Administrator.** If a **genuine** one is legitimately assigned during Product Owner testing, use them to close the live observation. **Otherwise carry it forward honestly** and say so |
 
 ---
 
@@ -976,6 +1438,11 @@ write**, not the one easiest to make fail.
 | **M13** | Denied **API** request | **No protected payload of any kind** |
 | **M14** | **AI/agent** query | **Exactly** the requesting user's effective access — never more |
 | **M15** | **Revocation** during a live session | Denied on the **next request**, no cache wait |
+| **M16** | A manager whose **one direct report** belongs to a team they were **not assigned** | **DENY** for that team — D-66 |
+| **M17** | A **reports-of-reports** record, no explicit assignment | **DENY** — no recursion |
+| **M18** | An **Organisation Administrator** granting System Administrator | **REFUSED** |
+| **M19** | A role revoked, then **re-assigned later** | Old entitlements **do not return** |
+| **M20** | A privileged grant **without** fresh re-authentication | **REFUSED** until step-up completes |
 
 ### The boundary
 
@@ -989,6 +1456,8 @@ write**, not the one easiest to make fail.
 | N-B6 | **Management** grants nothing outside Team scope | Let a manager read a report's other-domain records |
 | N-B7 | **ONE engine.** No second implementation anywhere | Give the simulator its own copy; add a "quick check" helper |
 | N-B8 | **ONE definition** of "is a System Administrator" | Leave `users.platform_role` readable beside the assignment table |
+| **N-B9** | **An Organisation Administrator can NEVER grant System Administrator** | Permit it. **The single most valuable privilege-escalation guard in the unit** |
+| N-B10 | Administration actions grant **no** business rows, for every one of the seven roles | Let any administration role satisfy a business-data path |
 
 ### Deny by default and the P1-04 gate
 
@@ -1009,11 +1478,12 @@ write**, not the one easiest to make fail.
 
 | # | Guard | Mutation |
 | --- | --- | --- |
-| N-P1 | Two scopes → **widest** | Take the narrowest, or the first |
-| N-P2 | Two ceilings → **LOWEST** | **Take the highest** — the uniform-rule simplification |
-| N-P3 | Revocation beats a grant | Order by id and take the last |
-| N-P4 | Two entitlements to **different** domains never merge | Union the domains into one set |
+| N-P1 | **A complete active path allows; an incomplete one does not contribute** | Let a path missing its scope still authorise |
+| N-P2 | **A ceiling caps ITS OWN path only** | Make the lowest ceiling anywhere a global maximum — the first draft's rule |
+| **N-P3** | **A REVOKED ROW IS NOT A DENY.** It stops contributing; it never subtracts from a separate active path | Let a revoked row veto an active grant — which would make it an **invisible deny record**, and D-64 rejected those |
+| N-P4 | A **restrictive** second grant never reduces access an earlier valid grant gave | Intersect the paths instead of evaluating them independently |
 | N-P5 | Scope never widens the domain | Let Organisation scope reach outside the entitled domain |
+| N-P6 | **A global gate cannot be outvoted by any path** | Evaluate paths first and let one satisfy an inactive user |
 
 ### Enforcement
 
@@ -1027,6 +1497,8 @@ write**, not the one easiest to make fail.
 | N-E6 | No authorization in JavaScript | Compute one in the frontend |
 | N-E7 | **Auditor writes nothing** | Let an Auditor through one write path |
 | N-E8 | Cross-organisation is **Not Found** | Return 403 |
+| **N-E9** | **Identity & SSO stays System-Administrator-only** after §13.3's route migration | Open it to Organisation Administrator — the find-and-replace outcome |
+| N-E10 | Every route opened to Organisation Administrator is on the **enumerated** list | Open one that is not |
 
 ### Lifecycle and history
 
@@ -1038,61 +1510,117 @@ write**, not the one easiest to make fail.
 | N-L4 | Role **codes** are immutable | Make them fillable |
 | N-L5 | **Every operation named in §3–§7 exists** | Delete one — the P1-01 presence guard |
 | N-L6 | Every write **confirms itself** | Bare redirect |
-| N-L7 | The `platform_role` migration is **reversible and leaves the administrator an administrator** | Roll back and check |
+| N-L7 | The `platform_role` migration is **reversible and leaves the administrator an administrator** | Roll back and check. **MySQL** |
 | N-L8 | **No schema column caches an effective-access answer** | Add `effective_domains` |
+| **N-L9** | **Re-assigning a revoked role does NOT resurrect its old entitlements** — §4.4 | Leave entitlements orphaned rather than ending them with their parent |
+| N-L10 | Re-granting a revoked entitlement does not resurrect its old scope or ceiling | As above, one level down |
+| N-L11 | **Deactivate → reactivate a user returns access EXACTLY**, no more and no less | End the assignments on deactivation |
+| N-L12 | **Disable → re-enable a domain returns access EXACTLY** | Delete the entitlements on disable |
+| **N-L13** | **A `system_administrator` assignment is permitted with NO organisation**; every other role is **refused** without one | Require an organisation on all of them — **bootstrap then cannot create the first administrator on an empty deployment** |
+| N-L14 | **Bootstrap creates the user and the assignment in ONE transaction** | Create the user, then assign separately — a window in which the deployment has a user who is nobody |
+| **N-L15** | **The last active System Administrator cannot be REVOKED away**, and two concurrent revocations cannot reach zero | Drop the guard; move the locking read outside the transaction. **MySQL** |
+
+### Step-up, events and the catalogue
+
+| # | Guard | Mutation |
+| --- | --- | --- |
+| N-S1 | **Each of the five privileged actions requires fresh re-authentication** | Drop one |
+| N-S2 | **A completed step-up authorises ONE action, once** | Make it a time window |
+| N-S3 | The freshness proof comes **from the provider**, not from application state | Set a local flag |
+| N-S4 | **The step-up return does not weaken P1-00** — state, nonce and tenant checks unchanged | Relax one for the return path |
+| N-EV1 | The `role` context key accepts **only the seven codes** | Pass free text |
+| N-EV2 | **No free-text key exists** on the logger | Add `reason` |
+| N-EV3 | A **self-grant** logs a distinguishable privileged event | Log it as an ordinary grant |
+| N-EV4 | **Routine business denials are NOT logged** | Log every denial |
+| N-C1 | The role catalogue holds **exactly seven** codes, and none can be renamed | Add an eighth; make the name mutable — *"Super Admin"* |
+| N-C2 | **No `roles` table exists** | Create one |
 
 ---
 
-## 31. Product Owner decisions required before DESIGN
+## 31. Product Owner decisions — ANSWERED, 3 September 2026
 
-**No DESIGN is written until these are answered.**
+**All twenty-four were answered at PLAN review, plus one new decision the review
+added and one this plan raises in return.** Each is now a decision of record and
+DESIGN is bound by it.
+
+### Answered as recommended
+
+| # | Decision | **Answer** |
+| --- | --- | --- |
+| **D-49** | The `platform_role` seam | **Assignments are the single source of truth. Migrate the existing System Administrator; update Bootstrap, `BootstrapState`, `RequireSystemAdministrator`, the last-admin guard and every admin check to one authority; REMOVE the column; leave no compatibility column.** Plus the bootstrap correction of §3.4.1 |
+| **D-50** | One unit or split | **One unit, internally staged: engine → enforcement → administration UI → simulator → verification** |
+| **D-51** | Custom roles | **No. Baseline seven only** |
+| **D-53** | Editable role capabilities | **No — fixed in Release 1.** And DESIGN must produce **one explicit role → action catalogue** (§3.3) |
+| **D-54** | Deactivating a role | **No** |
+| **D-55** | Several roles at once | **Yes** |
+| **D-56** | Effective dating | **No.** Begins on commit, ends on revoke |
+| **D-57** | Implicit entitlements | **None. Always explicit** |
+| **D-58** | Groups | **USERS ONLY.** Groups keep granting nothing, and **the engine must not read group membership** |
+| **D-59** | Scope per entitlement | **Yes** — with **explicit structural targets** (§6.1) and the honest Domain/Organisation answer (§6.2) |
+| **D-61** | `access_expectation` | **Context only. The engine never reads it** |
+| **D-64** | Explicit deny records | **No** |
+| **D-65** | Self-assignment | **Permitted, with confirmation + a privileged event + step-up.** And **P1-07 does not supply four-eyes** |
+| **D-66** | Manager depth | **No recursion. Explicitly assigned teams and hierarchies only** |
+| **D-67** | What "Own" means | **P1-05 defines the contract; Phase 2 implements it, and must not reinterpret it** |
+| **D-68** | Auditor | **Organisation-wide for evidence, read-only, zero business entitlement** |
+| **D-69** | "Immediate" | **The next decision after commit. No permission cache. Session expiry is not the mechanism** |
+| **D-70** | Phase 2 projection | **Define the contract now, implement the adapter in Phase 2.** The engine must be usable outside HTTP |
+
+### Answered DIFFERENTLY from the recommendation — and each changed the plan
+
+| # | Recommended | **Decided** | Why the decision is right |
+| --- | --- | --- | --- |
+| **D-52** | Display name editable, code immutable | **NOT EDITABLE** | A domain name is the organisation's word for its business; **a role name is security vocabulary**. Renaming *Business User* to *"Super Admin"* changes what every administrator believes they are granting — and P1-03 produced that exact hazard on day one |
+| **D-60** | Ceiling per person **and** per entitlement, lowest wins | **PER ENTITLEMENT ONLY** | Two independent cap paths create a confusing double-grant requirement, where an entitlement raised to *Confidential* stays capped by an invisible person-level *Standard* the screen cannot explain |
+| **D-62** | Widest scope, lowest ceiling, across all grants | **INDEPENDENT COMPLETE GRANT PATHS** | The old rule combined **halves of unrelated decisions** into an effective access nobody assigned. §10.4 |
+| **D-63** | Redact above the ceiling | **DENY at the engine.** Phase 2 consumers may omit, and **must indicate content was withheld** | P1-05 has no business data to redact; a generic redaction engine would be designed against an imagined shape. **No silent redaction** |
+| **D-71** | Privileged **and repeated** denials | **PRIVILEGED SURFACES ONLY. No repeated-denial detector in this unit** | "Repeated" is a **stateful detector** needing aggregation and a window — it would have been built here by implication, badly |
+| **D-72** | Approve keys individually | **`role` (a fixed CODE, never free text), `domain_id`, `scope`, `sensitivity`.** `related_id` continues for targets | The logger has **no free-text channel** and that principle is preserved |
+
+### New, added by the review
+
+| # | Decision | **Answer** |
+| --- | --- | --- |
+| **D-73** | **Privileged step-up re-authentication — SYS-018** | **Required before granting/revoking System Administrator, granting Organisation Administrator, self-granting, and granting Restricted.** Fresh **Microsoft** re-authentication — **no password screen, and no dialog pretending to be step-up.** A bounded P1-00 extension must be documented explicitly if one is needed. §11b |
+
+> **D-73 is a gap this plan had and the review caught.** SYS-018 is in the
+> Ground-Zero source, P1-05 is the first unit that can actually grant privilege,
+> and the first draft did not mention it once.
+
+### Raised in return, by this plan
 
 | # | Decision | Options | Plan recommends |
 | --- | --- | --- | --- |
-| **D-49** | **The `platform_role` seam** | (a) extend the enum to seven; (b) column **and** assignments; (c) **assignments only, column migrated then removed** | **(c)** — the only one that cannot produce two competing models. §3.4.1 lists what it must prove first |
-| **D-50** | Does P1-05 deliver the engine **and** the full administration UI, or split? | (a) one unit; (b) engine first, then admin | **(a) with a staged internal order** — engine, enforcement, then screens. `PHASE-1-PLAN.md` §"risks" already flags splitting this unit |
-| **D-51** | **Custom roles** in P1-05? | (a) baseline seven only; (b) custom permitted | **(a)** — custom roles multiply the matrix before the baseline is proven |
-| **D-52** | May a **baseline role's display name** change? | (a) no; (b) yes, code immutable | **(b)** — as D-41 for domains |
-| **D-53** | May a role's **permitted actions** be edited? | (a) fixed in this release; (b) editable | **(a)** — an editable role definition means the same role name means different things in different deployments, and every test becomes deployment-specific |
-| **D-54** | Can a role be **deactivated**, and what happens to live assignments? | (a) not in P1-05; (b) deactivate and suspend assignments; (c) deactivate and require revocation first | **(a)** — a suspended-but-assigned state is a third state every query must remember |
-| **D-55** | May one person hold **several roles**? | (a) one; (b) **several** | **(b)** — one role per person forces one role to absorb another's meaning. §10 then governs |
-| **D-56** | **Effective dating** — future-dated grants and expiries? | (a) **not in P1-05**; (b) yes | **(a)** — it makes every query time-dependent and every test harder to trust |
-| **D-57** | Does **any** role carry an implicit entitlement? | (a) **no, all explicit**; (b) some roles do | **(a)** — an implicit entitlement is invisible in the screen built to make access reviewable |
-| **D-58** | **Groups in access** — §21 | (a) **users only**; (b) groups only; (c) both | **(a) for P1-05**, revisited as a separate change once the engine is proven. **Not assumed** |
-| **D-59** | Is scope **per entitlement** or per person? | (a) **per entitlement**; (b) per person | **(a)** — one scope per person cannot represent a real organisation |
-| **D-60** | Is the ceiling **per person** or **per entitlement**? | (a) per person; (b) per entitlement; (c) both, lowest wins | **(c)** with the lowest winning — §10 |
-| **D-61** | Does the engine read P1-04's **`access_expectation`**? | (a) **no — shown as context only**; (b) yes | **(a)** — enforcing it makes P1-04 retrospectively an access-control unit |
-| **D-62** | **Precedence** — widest scope, **lowest** ceiling | (a) **as §10**; (b) another rule | **(a)**, and the asymmetry is deliberate |
-| **D-63** | A field above the ceiling — **deny the request or redact the field**? | (a) deny; (b) **redact, and say a field was withheld**; (c) deny for actions, redact for fields | **(c)** — denying a whole report for one field is unusable; silently redacting is dishonest |
-| **D-64** | **Explicit deny records**? | (a) **not in P1-05**; (b) yes | **(a)** — absence of a grant already denies, and deny records interact with everything |
-| **D-65** | May an administrator **grant access to themselves**? | (a) **permit and log prominently**; (b) refuse, require a second administrator; (c) only roles they already hold | **(a) for P1-05**, with four-eyes as **P1-07's**. Refusing it in a single-administrator deployment makes the product unusable |
-| **D-66** | **Manager depth** | (a) **direct reports and teams they manage**; (b) the whole chain | **(a)** — the whole chain grows silently with every hire three levels down, with no assignment change and no review |
-| **D-67** | What **"Own"** means before Phase 2 data exists | (a) **P1-05 defines the contract, Phase 2 supplies the mapping**; (b) defer entirely | **(a)** — deferring lets Phase 2 invent it, which is a second implementation |
-| **D-68** | **Auditor** — organisation-wide or scoped? | (a) **organisation-wide for evidence, no data entitlement**; (b) scoped | **(a)** — an auditor who cannot see all the evidence cannot do the job |
-| **D-69** | What **"immediate"** means for revocation | (a) **the next decision after the write commits**; (b) a stated maximum window | **(a)**, with **no permission cache in P1-05** |
-| **D-70** | The **Phase 2 projection interface** — now or then? | (a) **shape it now, build it in Phase 2**; (b) build it now; (c) leave it to Phase 2 | **(a)** — designing it with no consumer risks designing the wrong thing; leaving it entirely invites a second model |
-| **D-71** | **Log denials?** | (a) **privileged-surface and repeated denials only**; (b) all; (c) none | **(a)** — the same judgement P1-02 and P1-04 already made |
-| **D-72** | **New security-event context keys** | Approve each individually | `role_id`, `domain_id`, `scope`, `sensitivity` — **structural identifiers only, no free text** |
+| **D-74** | **`Domain` and `Organisation` scope resolve to the SAME record set** under Release 1's single organisation, with the entitlement already naming a domain (§6.2). D-59 forbids two labels that silently mean one thing — so which is delivered? | (a) `Organisation` only; (b) **both, documented as equivalent today**; (c) **`Domain` only**, deferring `Organisation` until it can differ | **(c)** — the entitlement is domain-shaped, so `Domain` is the honest name for *all of it*. Whichever is chosen, **the reason is recorded**, or the next reader re-derives the equivalence and assumes it was an oversight |
 
 ---
 
 ## 32. What this plan deliberately does not build
 
-- **No Fabric integration, no semantic model, no Power BI RLS/OLS.** Phase 2 — and it **derives** from this engine (§25).
+- **No Fabric integration, no semantic model, no Power BI RLS/OLS.** Phase 2 — and it **derives** from this engine (§25), never restates it.
 - **No AI surface.** Phase 3 — but the boundary it must respect is defined here.
-- **No access reviews or recertification.** P1-07.
-- **No durable audit table.** P1-08.
+- **No access reviews or recertification.** P1-07 — **and P1-07 is not an approval workflow**, so nothing here may depend on it as one.
+- **No durable audit table**, and **no repeated-denial detector.** P1-06 / P1-08.
 - **No business data.** There is none.
-- **No custom roles**, subject to D-51.
-- **No effective dating**, subject to D-56.
-- **No explicit deny records**, subject to D-64.
-- **No group-based assignment**, subject to D-58 — and **not assumed either way**.
-- **No permission cache**, subject to D-69.
-- **No navigation or branding change.** *Roles & Access* moves from `locked()` to `leaf()` — the single edit that entry was designed for.
-- **No fake privileged account.** The P1-02 gate closes only if a **real** second System Administrator is legitimately established.
-- **No change to the `srikanth@lithan.com` record.** Still a separate operational item — `P1-03-USERS-GROUPS-VERIFICATION.md` §12.3.
+- **No `roles` table** — §3.6.
+- **No custom roles, no role rename, no editable capabilities, no role deactivation** — D-51, D-52, D-53, D-54.
+- **No effective dating** — D-56.
+- **No explicit deny records** — D-64. And **no revoked row may become one**, §10.3.
+- **No group-based assignment**, and **the engine does not read group membership** — D-58.
+- **No permission cache** — D-69.
+- **No redaction engine** — D-63. Deny at the engine; presentation is Phase 2's, and it must be visible.
+- **No person-level sensitivity ceiling** — D-60.
+- **No password screen, and no dialog pretending to be step-up** — D-73.
+- **No compatibility column left behind** — D-49.
+- **No navigation or branding change.** *Roles & Access* moves from `locked()` to `leaf()`.
+- **No fake privileged account.** The P1-02 gate closes only if a **real** second System Administrator is legitimately established during testing; otherwise it is carried forward and said so.
+- **No change to the `srikanth@lithan.com` record**, and none to the `software` domain — both open operational items recorded in P1-03 and P1-04 verification.
 
 ---
 
-**P1-05 PLAN — awaiting Product Owner review.** Twenty-four decisions in §31.
-No DESIGN until they are answered.
+**P1-05 PLAN — APPROVED 3 September 2026** with D-49 to D-73 answered (§31),
+six decisions changed from the recommendation, and **D-73 added by the review**.
+**One decision is raised in return — D-74**, §6.2.
+
+**Next: DESIGN.** No implementation, schema, migration, engine, role assignment
+or production privilege change until it is approved.
