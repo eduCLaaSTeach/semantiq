@@ -4,7 +4,8 @@
 controller, no service, no screen, no production data.
 
 **APPROVED BY THE PRODUCT OWNER, 3 September 2026**, with decisions **D-40 to
-D-48 answered** and one schema correction. §19 records each decision as given.
+D-48 answered** and one schema correction. **PLAN merge SHA
+`b083b30f261820a00f8fdfc37addcd1a6e063789`** (PR #88). §19 records each decision as given.
 Where a decision changed the plan, the affected section was rewritten rather
 than annotated, so no superseded proposal is left standing to be built by
 mistake.
