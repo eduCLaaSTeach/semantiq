@@ -9,7 +9,16 @@ be built so that it can be argued with before it exists.
 | PLAN | `P1-04-BUSINESS-DOMAINS-PLAN.md` — **APPROVED 3 September 2026** |
 | PLAN merge SHA | `b083b30f261820a00f8fdfc37addcd1a6e063789` (PR #88) |
 | Decisions binding this design | **D-40 to D-48**, PLAN §19 |
-| Status | **Awaiting Product Owner review** |
+| DESIGN reviewed | **APPROVED 3 September 2026**, with three corrections applied below |
+| Status | **Corrections applied. Proceeding to EXECUTE** |
+
+### The three corrections from that review
+
+| # | Correction | Where |
+| --- | --- | --- |
+| **1** | **Serialise on the `business_domains` row, not only the current ownership row.** With no current owner there is no row to lock. Lock order **Domain → ownership → dependency checks**, identical in all five operations, with seven concurrency cases | **§6.2**, §7.1, §11, §16 C1–C7 |
+| **2** | **Rescope the architecture guard.** The repository-wide string rule could not hold — migrations, tests and React legitimately name a domain. Split into **Guard A** (module dependency within `app/`) and **Guard B** (nothing anywhere authorizes from domain state) | **§1**, §16 N3 / N3e / N3f |
+| **3** | **Narrow the inactive-owner wording.** *"This domain still works exactly as before"* claims more than P1-04 can know, because P1-04 implements no domain data access | **§8.3** |
 
 ---
 
@@ -65,18 +74,66 @@ app/Modules/Domains/
 | `Organisation`, `User` | `Organisation\Models`, `Platform\Models` | Read only. **No column on `users` is ever written** |
 | `AppShell`, `StatusPill`, `Pagination`, `ConfirmPurge`, the `org-*` classes | `resources/js` | §2. The UI foundation is frozen |
 
-### What may touch it
+### What may touch it — and the scope this guard actually has
 
-**Nothing.** No code outside `App\Modules\Domains` may reference
-`BusinessDomain`, `business_domains`, `DomainOwnership` or `access_expectation`
-— with exactly three declared exceptions, each asserted as an allow-list rather
-than assumed:
+**Correction, Product Owner review of 3 September 2026.** The first draft said
+*"nothing outside the module may reference a domain, except three files."*
+Read literally that is **not achievable and not what the boundary is for**:
+migrations define the schema, tests are the evidence, React renders the props,
+and the route file and provider have to wire it up. A rule that cannot hold gets
+weakened the first time it fails, and a weakened rule protects nothing.
 
-1. `routes/web.php` — the route block.
-2. `bootstrap/providers.php` — the service provider registration.
-3. `OrganisationService::createProfile()` — **one line**, §4.
+**The boundary is about authorization, not about the string `BusinessDomain`.**
 
-§16 asserts that list is complete. A fourth reference fails the build.
+> **No production backend code outside `App\Modules\Domains` may read domain
+> state to make an authorization or entitlement decision.**
+
+### Two separate guards, each with a scope it can actually keep
+
+| Guard | Scope | Rule |
+| --- | --- | --- |
+| **A — module dependency** | **`app/` only**, excluding `app/Modules/Domains` | May reference Domains **only** in the declared exceptions below |
+| **B — authorization** | **`app/` and `resources/js/`**, the whole application, module included | **Nothing anywhere** may use a domain's status, its owner or its access expectation to grant, deny, widen or narrow access |
+
+**Guard B is the one that matters** and it has no exceptions at all — not even
+inside the Domains module. Guard A is the narrower structural rule that keeps
+the module from leaking into the rest of the backend.
+
+### Guard A — the declared exceptions, and what is out of scope
+
+| Exception | What is permitted |
+| --- | --- |
+| `routes/web.php` | **Wiring only** — the route block, controller references, middleware |
+| `bootstrap/providers.php` | **Wiring only** — registering `DomainsServiceProvider` |
+| `OrganisationService::createProfile()` | The approved initialisation integration of §4.1. **One constructor argument and one statement**, and nothing else |
+
+| Out of scope for Guard A | Why |
+| --- | --- |
+| `database/migrations/` | Schema **definition**, not module dependency. A migration that creates a table is not a caller of it |
+| `tests/` | Evidence. A test that could not name the thing it tests would test nothing |
+| `resources/js/` | **Presentation.** The React screens receive domain props and render them. Guard **B** is what stops presentation becoming enforcement |
+| `config/`, `lang/` | No behaviour |
+
+**A wiring exception is a wiring exception.** If `routes/web.php` ever contains a
+*decision* about a domain rather than a route declaration, that is a Guard B
+failure whatever Guard A says about the file.
+
+### Guard B — nothing authorizes from a domain, anywhere
+
+Asserted across the **whole** application, the Domains module included:
+
+- No middleware, policy, gate, authorization service or unrelated module reads
+  `business_domains`, `DomainStatus`, `access_expectation`, or ownership in
+  order to decide what somebody may see or do.
+- **The frontend may render domain state and must never enforce with it.** No
+  React component hides, shows, enables or disables anything **other than a
+  domain's own management controls** based on domain state. Hiding *Enable* on
+  an already-enabled domain is presentation; hiding a menu, a route or another
+  unit's data would be enforcement.
+- `DomainStatus` and `AccessExpectation` are never read outside the Domains
+  module and its screens at all.
+
+§16 N3 and N3e break both guards deliberately.
 
 ---
 
@@ -362,26 +419,119 @@ Owner rejected it before DESIGN.
 | Nobody? | **No such row.** Absence, not a NULL column |
 | Who owned it before? | Every row with `ended_at` set |
 
-### 6.2 The operations
+### 6.2 The serialisation boundary — the DOMAIN row, not the ownership row
 
-**Setting an owner is ONE operation and one transaction**, whether or not
-somebody already holds it. `DomainOwnershipService::setOwner()`:
+**Correction, Product Owner review of 3 September 2026. This replaces the
+weaker boundary the first draft proposed.**
+
+The first draft locked the current ownership row:
 
 ```
-DB::transaction(function () {
-    $current = DomainOwnership::where('business_domain_id', $domain->id)
+DomainOwnership::where(...)->whereNull('ended_at')->lockForUpdate()->first();
+```
+
+**That is not a boundary at all in the case that matters most.** When a domain
+has **no** current owner there is **no row to lock**, so `lockForUpdate()` locks
+nothing and two concurrent first-owner assignments both see "nobody owns this"
+and both insert. The lock is strongest exactly when it is least needed and
+absent exactly when it is needed most.
+
+It is also the wrong *object*. Enable, disable, set owner, clear owner and purge
+each read **two** things — the domain's `status` **and** its current ownership —
+and decide from the pair. A lock on one of them cannot serialise a decision
+taken over both.
+
+> **The `business_domains` row is the serialisation boundary for every operation
+> that can affect the D-42 invariant.**
+
+### 6.2.1 The lock order, and it is the same everywhere
+
+**Domain → ownership → dependency checks.** One order, in every service, so two
+services cannot deadlock by approaching the same two tables from opposite ends.
+
+Every one of `setOwner`, `clearOwner`, `enable`, `disable` and `purge` follows
+exactly this shape:
+
+```
+DB::transaction(function () use ($domain) {
+    // 1. THE BOUNDARY. Re-read the domain FROM THE DATABASE under a row lock.
+    //    Not the model that was route-bound - that snapshot is already stale.
+    $locked = BusinessDomain::query()
+        ->whereKey($domain->getKey())
+        ->lockForUpdate()
+        ->firstOrFail();
+
+    // 2. Ownership, now that nobody else can be inside this domain.
+    $current = DomainOwnership::query()
+        ->where('business_domain_id', $locked->id)
         ->whereNull('ended_at')
-        ->lockForUpdate()          // the invariant, held here
+        ->lockForUpdate()
         ->first();
 
-    refuseIfNotEligible($newOwner);           // §8
-    if ($current?->user_id === $newOwner->id) { return $current; }   // no-op, no history churn
+    // 3. Dependency checks, where the operation has any (purge only).
 
-    $current?->forceFill(['ended_at' => now()])->save();
-    $next = DomainOwnership::create([... 'assigned_at' => now(), 'ended_at' => null]);
+    // 4. RE-CHECK EVERY RULE against $locked and $current, not against
+    //    anything read before the transaction opened.
 
-    record(BUSINESS_DOMAIN_OWNER_ASSIGNED);
-});
+    // 5. Write.
+});                                                        // 6. Commit.
+```
+
+**Why `firstOrFail()` on a re-read rather than using the bound model.** Laravel
+resolved `{domain}` before the transaction opened. Under MySQL's REPEATABLE READ
+that instance is a snapshot from before the lock, and deciding from it would
+make the lock decorative — the same class of mistake as checking a dependency
+outside the transaction that deletes.
+
+**Steps 4 and 5 must both sit inside.** A rule checked before `DB::transaction`
+opens has already been overtaken.
+
+### 6.2.2 The five races this must survive
+
+Each is a test, not a claim. `DomainConcurrencyTest` runs each against **MySQL**,
+because SQLite does not implement `SELECT ... FOR UPDATE` — the suite skips these
+explicitly on SQLite and says so rather than passing vacuously, and CI runs them
+in the MySQL step.
+
+| # | Race | Must not be possible |
+| --- | --- | --- |
+| **C1** | Two concurrent **first-owner assignments** on an unowned domain | Two rows with `ended_at IS NULL`. **This is the race the ownership-row lock could not see** |
+| **C2** | **Enable** racing **Clear owner** | Committing *Enabled with no current owner* |
+| **C3** | **Clear owner** racing **Enable** — the same pair in the other order | Clearing the owner of a domain that has just become enabled, bypassing D-42 |
+| **C4** | Two concurrent **owner replacements** | Two open rows, a lost period, or a period ended twice |
+| **C5** | **Purge** racing a **first-owner assignment** | A purged domain leaving an orphan ownership row, or an ownership row surviving its domain |
+
+**In every case the loser must be refused in a business sentence.** A serialised
+transaction that then fails a foreign key or a uniqueness constraint has produced
+a **database integrity error for an administrator who did nothing wrong** — which
+is the exact defect P1-03 shipped and had to correct. Winning the race is not
+enough; losing it has to be readable.
+
+### 6.2.3 What did NOT change
+
+The correction is to the **locking**, and to nothing else:
+
+- the **ownership-history table stays authoritative**;
+- there is still **no `owner_user_id`** on `business_domains`;
+- **no ownership row is ever deleted**;
+- the current owner is still, and only, the row with `ended_at IS NULL`.
+
+### 6.3 The operations
+
+**Setting an owner is ONE operation and one transaction**, whether or not
+somebody already holds it. `DomainOwnershipService::setOwner()`, inside the
+skeleton of §6.2.1:
+
+```
+// 1. lock the domain    2. lock the current ownership row (may be null)
+
+refuseIfNotEligible($newOwner);                                    // §8
+if ($current?->user_id === $newOwner->id) { return $current; }     // no-op
+
+$current?->forceFill(['ended_at' => now()])->save();
+DomainOwnership::create([... 'assigned_at' => now(), 'ended_at' => null]);
+
+record(BUSINESS_DOMAIN_OWNER_ASSIGNED);
 ```
 
 **It is never *clear, then assign*.** That sequence passes through an ownerless
@@ -397,12 +547,13 @@ domain it is refused (§7).
 
 **Nothing deletes an ownership row, and no route could.** Ending sets `ended_at`.
 
-### 6.3 The locking read, and why it is here
+### 6.4 Why a lock is doing this at all
 
 MySQL 8.4 has **no partial index**, so *at most one row per domain with
-`ended_at IS NULL`* cannot be declared in the schema. It is enforced by a
-`lockForUpdate()` read **inside** the write transaction — the mechanism P1-03
-proved for group membership and the D-24 purge guard.
+`ended_at IS NULL`* cannot be declared in the schema. It is enforced by the
+locking reads of §6.2.1 — the mechanism P1-03 proved for group membership and
+the D-24 purge guard, applied here to the **parent row** so that it holds when
+there is no child row to lock.
 
 **This is why the test must measure correctly.** P1-03 had two mutations
 *survive* because the assertion measured `transactionLevel() > 0`, which is true
@@ -410,7 +561,7 @@ under `RefreshDatabase` regardless. The domain tests capture a **baseline
 transaction level before the service call** and assert the increase. Stated here
 so it is not rediscovered.
 
-### 6.4 History is DATETIME, and `assigned_at` carries no uniqueness
+### 6.5 History is DATETIME, and `assigned_at` carries no uniqueness
 
 `assigned_at` and `ended_at` are `DATETIME`. There is **no unique key involving
 `assigned_at`**.
@@ -440,9 +591,14 @@ schema here rather than learned a third time.
 | Clear owner while **disabled** | Permitted |
 | Set owner, either status | Permitted, subject to §8 |
 
-Both enable refusals are checked with the **same locking read** that
-`setOwner()` uses, inside the enable transaction, so an owner cannot be cleared
-concurrently between the check and the write.
+**Both enable refusals are re-checked inside the transaction, after the domain
+row has been locked** — §6.2.1, lock order Domain → ownership. Checking them
+before the transaction opens would leave races **C2** and **C3** open: an owner
+cleared between the check and the write would commit *Enabled with no owner*,
+which is the one state D-42 exists to make impossible.
+
+The owner's **`status` is read from the locked read too**, not from a model
+loaded earlier, for the same reason.
 
 ### 7.2 The invariant is enforced at the transition, not held continuously
 
@@ -507,15 +663,23 @@ A **derived** state. **No column stores it.**
 | Where | How it appears |
 | --- | --- |
 | List | An attention pill beside the owner's name, and a filter value |
-| Record | A banner in the Accountability section: **Needs attention — owner inactive.** *This domain still works exactly as before. Assign an active owner when you can.* |
+| Record | A banner in the Accountability section: **Needs attention — owner inactive.** *The domain remains enabled. Assign an active owner when you can. This ownership status does not change anyone's access.* |
 
 It uses the **existing** `--badge-attention-bg` / `--badge-attention-fg` tokens
 P1-02 added for its own third state. **No new colour token is introduced by this
 unit.**
 
-**The wording is deliberately un-alarming.** Nothing is broken and nothing has
-changed for anybody; a person is unreachable. An alarm-coloured banner claiming
-otherwise would be the same overclaim `CLAUDE.md` §4 forbids.
+**The wording is deliberately un-alarming, and deliberately narrow.**
+
+The first draft said *"This domain still works exactly as before."* Corrected at
+Product Owner review: **P1-04 does not implement domain data access, so "works"
+claims more than this unit can know.** It is the mirror image of the overclaim
+`CLAUDE.md` §4 forbids — a reassurance about behaviour that does not exist yet.
+
+The approved wording says only what is true today: **the status is unchanged,
+and nobody's access moved** — which is the whole content of the news, because
+in P1-04 there is no access to move. An alarm-coloured banner, or a broader
+reassurance, would both be claims this unit cannot support.
 
 ---
 
@@ -594,9 +758,15 @@ stored flag, consistent with §8.3.
 
 | # | Condition | Checked |
 | --- | --- | --- |
-| 1 | `kind = custom` | Before, and again inside the transaction |
+| 1 | `kind = custom` | Before, and again inside, against the **locked** domain row |
 | 2 | **No ownership row has ever existed** — current or ended | Before, and again inside |
 | 3 | **No durable schema reference**, by `PurgeDependencies` | Before, and again inside |
+
+**Purge follows the same lock order as everything else** — Domain → ownership →
+dependency checks (§6.2.1). The domain row is locked first, so race **C5** —
+purge against a first-owner assignment — is serialised rather than left to a
+foreign key to catch after the fact. The loser is refused in the sentence below,
+not with an integrity error.
 | 4 | The administrator confirms in the `ConfirmPurge` dialog, which **shows the domain's name** so they can see which record, and gives **Cancel** the initial focus | Reused from P1-01, unchanged. It is not the guard — the server re-checks 1–3 inside the transaction |
 
 **Conditions 2 and 3 agree by construction, and both are stated.** Because
@@ -820,7 +990,9 @@ write**, not the one that is easiest to make fail.
 | --- | --- | --- |
 | **N1** | Anonymous and non-administrator refused on **every** route | Drop the gate from one route |
 | **N2** | Assigning an owner writes **nothing** to `users` — no role, no group, no membership, no column | Have `setOwner()` write `platform_role` |
-| **N3** | **Nothing outside `App\Modules\Domains` references a domain**, except the three declared exceptions of §1 | Read `business_domains` from any authorization path |
+| **N3** | **Guard A.** Within `app/`, nothing outside `App\Modules\Domains` references Domains except the three wiring/integration exceptions of §1. Migrations, tests and `resources/js` are **out of this guard's scope** and the test says so in its own name and message | Add a `BusinessDomain` reference to an unrelated service. **And the second mutation that matters: add the reference and then widen the exception list to admit it** — which is how a boundary is really lost |
+| **N3e** | **Guard B.** No middleware, policy, gate, authorization service or module **anywhere** — Domains included — reads `business_domains`, `DomainStatus`, `access_expectation` or ownership to decide what somebody may see or do. Scanned across `app/` **and** `resources/js/` | Have `RequireSystemAdministrator` consult a domain; have a React component hide a **menu entry** on `DomainStatus`. Both must fail |
+| **N3f** | Guard A **is not vacuous** — it actually finds a violation when one exists | Point the scanner at a directory that contains none, so it passes by scanning nothing. The test asserts it scanned a **non-zero number of files** |
 | **N3b** | Both tables have **exactly** their physical column sets; **no column name contains** role, permission, scope, sensitivity, entitlement, ceiling, grant, allow or deny | Add `grantee_role`; then add it **and** update the expected list without reading why the list is there |
 | **N3c** | **`business_domains` has no `owner_user_id`** | Add the column and write both. **The test fails on the column's existence**, not on the two disagreeing — a duplicate source of truth is wrong even while it agrees |
 | **N3d** | **No column name contains `sensitivity`** | Add `sensitivity_expectation` back |
@@ -861,6 +1033,22 @@ write**, not the one that is easiest to make fail.
 | **N26** | The current owner is read from the **open row**, never a cached field | Answer it from anywhere else |
 | **N27** | Setting an owner is **one transaction** and never passes through an ownerless state | Implement it as clear-then-assign |
 | **N28** | Reassigning the **same** person creates no new period | Always insert |
+
+### Concurrency — §6.2, and MySQL only
+
+SQLite does not implement `SELECT ... FOR UPDATE`. These cases **skip explicitly
+on SQLite with a stated reason** rather than passing vacuously, and CI runs them
+in the MySQL step where they are real.
+
+| # | Race | Mutation |
+| --- | --- | --- |
+| **C1** | Two concurrent **first-owner assignments** cannot create two current owners | **Lock the ownership row instead of the domain row** — the first draft's design. With no current owner there is no row to lock, so both transactions insert. This mutation must fail, and it is the reason the correction exists |
+| **C2** | **Enable** racing **Clear owner** cannot commit *Enabled with no owner* | Check the owner **before** `DB::transaction` opens |
+| **C3** | **Clear owner** racing **Enable** cannot bypass D-42 | Decide from the **route-bound** `$domain` instead of re-reading it under the lock — the stale-snapshot mistake |
+| **C4** | Two concurrent **owner replacements** leave one open period and no lost history | Drop the domain lock and rely on the ownership lock alone |
+| **C5** | **Purge** racing a **first-owner assignment** leaves no orphan row either way | Run the dependency walk before the transaction |
+| **C6** | **The loser of every race above is refused in a business sentence** — no integrity error, no constraint text, no 500 | Remove the in-transaction re-check and let the database refuse. The test asserts on the **message the administrator sees**, not merely that something failed |
+| **C7** | Every one of the five operations uses the **same lock order** — domain, then ownership, then dependencies | Reverse it in one service. Asserted by reading the service source for the order of the two locking reads, so a future service cannot quietly invent its own |
 
 ### Enable, disable, expectation
 
@@ -1004,5 +1192,5 @@ Stated in advance so it is not presented later as a pass:
 
 ---
 
-**P1-04 DESIGN — awaiting Product Owner review.** No implementation, migration,
-route, screen or production change until it is approved.
+**P1-04 DESIGN — APPROVED 3 September 2026** with the three corrections above
+applied. No further DESIGN review is required. EXECUTE follows.
