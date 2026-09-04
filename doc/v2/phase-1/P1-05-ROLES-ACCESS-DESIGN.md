@@ -709,7 +709,8 @@ log (§12) and P1-07's review all read it.
 | --- | --- |
 | `allowed_by_path` | A complete active path authorised it — `path` names which |
 | `denied_unauthenticated` · `denied_inactive_user` · `denied_organisation_mismatch` · `denied_domain_disabled` | A **global gate** (§6.4) |
-| `denied_no_role` · `denied_no_entitlement` · `denied_scope` · `denied_ceiling` | **Which link** was missing in every candidate path |
+| `denied_no_role` · `denied_no_entitlement` · `denied_scope` · `denied_ceiling` | **Which link** was missing or refused in every candidate path. `denied_scope` is also the incomplete-entitlement answer — §4.5.1 |
+| `denied_ceiling_missing` | **No current ceiling row at all** — a malformed state. **Fails closed**, never assumed `standard` — §8.3 |
 | `denied_unknown_state` | Something stored is unrecognised — **and this is a security event** |
 | `denied_engine_failure` | The engine could not decide. **Deny** |
 
