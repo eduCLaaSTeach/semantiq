@@ -11,7 +11,7 @@ what will be built so it can be argued with before it exists.
 | Decisions binding this design | **D-49 to D-73**, PLAN §31 |
 | Decision raised here and **DECIDED** | **D-74** — §7.4, *both scopes delivered, documented as equivalent today* |
 | Gates that must close here | **P1-04** (§13.3) · **P1-02** (§14.6) |
-| Status | **Awaiting Product Owner review** |
+| Status | **Under Product Owner review** — §1 **APPROVED** 4 Sep 2026; D-74 **decided** |
 
 ---
 
@@ -30,6 +30,9 @@ produce something that demonstrates beautifully and enforces nothing.
 ---
 
 ## 1. The immutable role/action catalogue
+
+> **§1 — PRODUCT OWNER APPROVED, 4 September 2026**, subject to the §1.5
+> boundary correction recorded below.
 
 **D-51, D-52, D-53, D-54 all answered "no", so nothing about a role is
 manageable. There is no `roles` table.**
@@ -85,25 +88,78 @@ routes into the grant-path evaluation of §6. §13 breaks it.
 | **System Administrator** | Full platform and system administration. **No business rows by default.** Identity & SSO is theirs alone |
 | **Organisation Administrator** | Organisation, users, groups, domains and access administration. **No Identity & SSO. No platform authority. No business rows by default.** And **never** able to grant `system_administrator` — §2.2 |
 | **Executive** | **No administration at all.** Business actions only through explicit domain + scope + sensitivity grants |
-| **Domain Owner / Director** | **NO automatic entitlement, from ownership or from the role.** Any limited domain-governance action must be **named explicitly in this catalogue** — §1.5. Nothing is inferred |
+| **Domain Owner / Director** | A **security/persona role** — *not* the source of domain accountability, which stays in P1-04's `business_domain_owners` (§1.5). It permits `BUSINESS_DATA`, but confers **no automatic entitlement, from ownership or from the role**. Any domain-governance action must be **named explicitly in this catalogue**. Nothing is inferred, in either direction |
 | **Manager** | Business actions only, through explicit entitlement and **explicitly assigned** scope — no recursion (§7.2) |
 | **Business User** | Business actions only, through explicit entitlement and assigned scope |
 | **Auditor** | **Read-only access and security evidence, organisation-wide.** No business rows without a separate business grant |
 
-### 1.5 The Domain Owner question, answered rather than left open
+### 1.5 Domain Owner / Director — a security role, NOT the source of accountability
 
-**PLAN §15 says ownership grants nothing and the role grants nothing.** That
-leaves a real question: *does the Domain Owner role permit anything at all?*
+**Corrected by Product Owner decision, 4 September 2026.** An earlier draft said
+the role exists so that accountability can be *recorded in the access model*.
+**That was wrong.** It reconnected the two concepts P1-04 deliberately
+separated. The corrected statement follows and is binding.
 
-**This design's answer: in Release 1, `domain_owner` permits exactly the same
-action classes as `business_user` — that is, none beyond `BUSINESS_DATA` through
-explicit grants.** It exists as a role so that accountability can be *recorded
-in the access model* and reviewed in P1-07, not because it unlocks anything.
+#### 1.5.1 Accountability lives in P1-04, and only there
 
-> **If a domain-governance action is wanted later** — approving an entitlement
-> to one's own domain, say — it is **added to this catalogue by decision**, and
-> the catalogue is where a reviewer sees it. It is never inferred from
-> ownership.
+> **P1-04's `business_domain_owners` remains the SOLE source of domain
+> accountability. The P1-05 `domain_owner` role is a security / persona role
+> only.**
+
+**Five rules this design must keep true:**
+
+| # | Rule |
+| --- | --- |
+| 1 | **Owning a domain does NOT automatically assign the `domain_owner` role** |
+| 2 | **Holding the `domain_owner` role does NOT make the person owner of any domain** |
+| 3 | **Neither relationship may be DERIVED from the other** — not at read time, not at write time, not for display |
+| 4 | **Changing P1-04 ownership MUST NOT change P1-05 role assignments** |
+| 5 | **Changing P1-05 role assignments MUST NOT change P1-04 ownership history** |
+
+**All four combinations are legitimate. None is an error state:**
+
+| Owns a domain | Holds `domain_owner` | Legitimate |
+| :---: | :---: | --- |
+| **Yes** | **No** | **Yes** — owns Finance, holds no such role |
+| **No** | **Yes** | **Yes** — holds the role, owns no domain |
+| **Yes** | **Yes** | **Yes** |
+| **No** | **No** | **Yes** |
+
+**No screen, service, engine path or report may treat any of these four as an
+inconsistency to be reconciled**, and nothing may offer to "fix" one by writing
+the other.
+
+#### 1.5.2 The role is NOT decorative
+
+It participates fully in the Role dimension and **permits the `BUSINESS_DATA`
+action class**, exactly as §1.3 shows.
+
+What it does not do is shortcut the other three dimensions. Business-data access
+still requires a **complete, valid path**:
+
+> **Role + explicit Domain Entitlement + Scope + Sensitivity** — §6.1.
+
+So the correct statement, used everywhere in this document:
+
+> **Domain Owner / Director provides no automatic domain entitlement and no
+> ownership-derived access.**
+
+That is a different claim from *"it does nothing"*. A `domain_owner` with a
+complete grant path reaches business data through it like any other business
+role. **`✓ through grants only` in §1.3 is correct and stays.**
+
+#### 1.5.3 If governance authority is wanted later
+
+> It is **added to this catalogue by decision**, where a reviewer sees it. It is
+> **never** inferred from ownership — and adding it here would still not make
+> the role a source of accountability. P1-04 would remain that.
+
+#### 1.5.4 The separation is guarded, not merely stated
+
+**§13 N-B11 to N-B16** break each direction deliberately. They exist because
+this is precisely the coupling a well-meaning developer adds as a convenience —
+*"they own it, so give them the role"* — and **every functional test would still
+pass.**
 
 ### 1.6 The catalogue is asserted, not just written
 
@@ -114,6 +170,7 @@ in the access model* and reviewed in P1-07, not because it unlocks anything.
 | `BUSINESS_DATA` is the **only** class that reaches grant-path evaluation |
 | The four administration classes appear in **no** business-data decision |
 | **No `roles` table exists** |
+| **P1-04 ownership and the `domain_owner` role are structurally independent**, neither derived from the other — §1.5, §13 N-B11 to N-B16 |
 
 ---
 
@@ -793,6 +850,12 @@ write**.
 | N-B8 | **ONE definition** of "is a System Administrator" | Add a second helper |
 | **N-B9** | **Organisation Administrator can NEVER grant `system_administrator`** | Permit it |
 | N-B10 | The four administration classes reach **no** business-data decision | Let `ORG_ADMIN` satisfy a business path |
+| **N-B11** | Assigning a **P1-04 domain owner** creates **no** P1-05 role assignment | Assign `domain_owner` on ownership — *"they own it, so give them the role"* |
+| **N-B12** | Assigning the **`domain_owner` role** creates or changes **no** `business_domain_owners` row | Write an ownership row on role assignment |
+| **N-B13** | **Removing ownership** does not revoke the role | Revoke it when the ownership period ends |
+| **N-B14** | **Revoking the role** does not alter ownership or its history | End the ownership period on revocation |
+| **N-B15** | **Neither ownership nor the role alone creates a Domain Entitlement** | Auto-create one from either — the shortcut that makes the role appear to work |
+| **N-B16** | The **Access** module never reads `business_domain_owners` to decide a role, and the **Domains** module never reads role assignments to decide ownership | Add either read. **Architecture test** — it fails at the dependency, not at a behaviour |
 
 ### Deny by default, and the P1-04 gate
 
