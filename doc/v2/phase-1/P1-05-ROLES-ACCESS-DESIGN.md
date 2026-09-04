@@ -9,7 +9,7 @@ what will be built so it can be argued with before it exists.
 | PLAN | `P1-05-ROLES-ACCESS-PLAN.md` — **APPROVED 3 September 2026** |
 | PLAN merge SHA | `c313a39652681bc198045fa1c175e2e70964c9be` (PR #93) |
 | Decisions binding this design | **D-49 to D-73**, PLAN §31 |
-| Decision raised and still open | **D-74** — §7.4 |
+| Decision raised here and **DECIDED** | **D-74** — §7.4, *both scopes delivered, documented as equivalent today* |
 | Gates that must close here | **P1-04** (§13.3) · **P1-02** (§14.6) |
 | Status | **Awaiting Product Owner review** |
 
@@ -450,7 +450,7 @@ breaks it.
 | **`team`** | **`team_id`, NOT NULL** | Records of **that one team**. More teams means more scope rows |
 | **`business_unit`** | **`business_unit_id`, NOT NULL** | Records of that business unit, through P1-01's `business_units → departments → teams` |
 | **`domain`** | **none** | Every record in the entitled domain |
-| **`organisation`** | **none** | See §7.4 |
+| **`organisation`** | **none** | Every record in the entitled domain — **the same set as `domain` today**, D-74/§7.4 |
 
 **A target is required exactly where the table says so, and refused where it
 does not apply** — a `team_id` on an `own` scope is a stored contradiction, and
@@ -481,25 +481,50 @@ in the entitlement, in the simulator and in P1-07.
 downward from the named unit only.** Never inferred from where the person
 happens to sit.
 
-### 7.4 Domain and Organisation — D-74, STILL OPEN
+### 7.4 Domain and Organisation — D-74, **DECIDED: both, documented as equivalent**
 
-**Stated plainly because it has not been decided:**
+**Product Owner decision, 4 September 2026 — option (b).** Both scopes are
+delivered. **Neither is dropped.** The enum keeps all five values:
+`own`, `team`, `business_unit`, `domain`, `organisation`.
+
+**The fact this decision was taken about, stated plainly:**
 
 > Under Release 1's single organisation, with the entitlement already naming a
 > domain, **`domain` and `organisation` scope resolve to the SAME record set.**
 
 There is no partition above business unit for them to differ across, and there
-is one organisation.
+is one organisation. That is true **today**, and this design does not pretend
+otherwise.
 
-| Option | Consequence for this DESIGN |
+**Why both are kept — recorded, not left to be re-derived:**
+
+| | |
 | --- | --- |
-| **(a)** `organisation` only | The enum drops `domain` |
-| **(b)** Both, documented as equivalent today | The enum keeps both, and **the screen must say they are the same today** |
-| **(c) — recommended** | The enum drops `organisation` until it can mean something different |
+| **`organisation` is the honest name for what is granted today** | Everything in the entitled domain, across every business unit. A person granting access reads *organisation* and gets what they expect |
+| **`domain` is reserved for the partition that does not exist yet** | When a domain is later partitioned — a second organisation, a tenant, a legal entity — `domain` becomes **narrower** than `organisation`. Removing it now would mean a migration of live grants to reintroduce it |
+| **Dropping either one would have to be reversed** | Both directions of option (a) and (c) delete a word from a security vocabulary that P1-07 will read back. Deleting is cheap; re-adding it to grants already made is not |
 
-**This design is written for (c) and will change to match whichever is chosen.**
-It is called out here rather than resolved silently, because two identical
-choices on a screen is a question with no right answer.
+**The obligation that comes with keeping both.** Two identical choices on a
+screen, unexplained, is a trap: the next person to grant access assumes one of
+them must be narrower, and picks the wrong one on purpose.
+
+> **The scope control MUST state, on the screen, that Domain and Organisation
+> grant the same records today, and that Domain is reserved for a future
+> partition.**
+
+This is a **delivery requirement of this unit, not a note in this document.**
+It is guarded — **§13 N-Q2** asserts the statement against the rendered screen
+source, and removing the sentence must fail the test. `ScreenSource::rendered()`
+strips comments, so a docblock cannot satisfy it.
+
+**What this decision does NOT do:**
+
+- It does **not** make `organisation` reach outside the entitled domain. §7.5
+  still holds, and **§13 N-P5** still breaks it.
+- It does **not** give the two scopes two code paths. They resolve through
+  **one** resolution, and **§13 N-Q1** breaks a second one — because two paths
+  that are equal today drift silently the day a partition arrives.
+- It does **not** create the future partition, or any column for it.
 
 ### 7.5 Scope never widens the domain
 
@@ -799,6 +824,13 @@ exists for.
 | N-P4 | A restrictive grant never reduces another | Intersect paths instead of evaluating independently |
 | N-P5 | Scope never widens the domain | Let organisation scope reach outside it |
 
+### Scope equivalence — D-74
+
+| # | Guard | Mutation |
+| --- | --- | --- |
+| **N-Q1** | **`domain` and `organisation` resolve through ONE resolution** and return the identical record set for the same entitlement | Give `organisation` a second code path — the two are equal today, so **the mutation passes every functional test and the guard is the only thing that catches it** |
+| **N-Q2** | **The scope control STATES the equivalence and the reservation** on the rendered screen | Delete the sentence. Asserted against `ScreenSource::rendered()`, which strips comments, so a docblock cannot satisfy it |
+
 ### Enforcement
 
 | # | Guard | Mutation |
@@ -950,11 +982,13 @@ to close the provider-wide SSO Re-check lock observation**, carried since P1-02.
 - **No durable audit table**, and **no repeated-denial detector.**
 - **No password screen, and no dialog pretending to be step-up.**
 - **No compatibility column** left behind by D-49.
+- **No future organisation partition, and no column for one** — D-74 reserves the *word* `domain`, and builds nothing behind it.
 - **No fake privileged account.**
 - **No change to the `srikanth@lithan.com` record or the `software` domain** — both open operational items.
 
 ---
 
-**P1-05 DESIGN — awaiting Product Owner review.** One decision is still open —
-**D-74**, §7.4. No implementation, schema, migration, engine, role assignment or
-production privilege change until this is approved.
+**P1-05 DESIGN — awaiting Product Owner review.** **D-74 is now decided** —
+§7.4, *both scopes delivered and documented as equivalent today.* No decision
+remains open. No implementation, schema, migration, engine, role assignment or
+production privilege change until this design is approved.
