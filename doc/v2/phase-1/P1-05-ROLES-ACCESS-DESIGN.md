@@ -11,7 +11,7 @@ what will be built so it can be argued with before it exists.
 | Decisions binding this design | **D-49 to D-73**, PLAN §31 |
 | Decision raised here and **DECIDED** | **D-74** — §7.4, *both scopes delivered, documented as equivalent today* |
 | Gates that must close here | **P1-04** (§13.3) · **P1-02** (§14.6) |
-| Status | **Under Product Owner review** — **§1, §2 and §2.6 APPROVED 4 Sep 2026** (items 1–3); D-74 **decided** |
+| Status | **Under Product Owner review** — **§1, §2, §2.6 and §4 APPROVED 4 Sep 2026** (items 1–4); D-74 **decided** |
 
 ---
 
@@ -547,6 +547,8 @@ policed by a rule** — which is the strongest form it can take.
 
 ## 4. The historical parent–child grant model
 
+> **§4 — PRODUCT OWNER APPROVED, 4 September 2026**, with §4.5 as decided.
+
 ```
 role_assignment            (user, role_code, organisation?, assigned_at, ended_at)
    └── domain_entitlement  (role_assignment_id, domain_id, granted_at, ended_at)
@@ -596,6 +598,78 @@ first, then assignments, then children, then any dependency check.** One order
 in every service, so two services cannot deadlock approaching the same tables
 from opposite ends.
 
+### 4.5 A revoked child does NOT revoke its parent — decided 4 September 2026
+
+**Product Owner decision: revoking the last current scope does NOT end the
+Domain Entitlement.** The entitlement remains current and becomes an
+**incomplete, non-authorising grant path** until a new scope is explicitly
+assigned.
+
+> **Removing a child must never silently mean that its parent was revoked.**
+
+**The four levels mean four different things, and that is why:**
+
+| Level | Question it answers |
+| --- | --- |
+| **Role Assignment** | What business/security **role** the person holds |
+| **Domain Entitlement** | Which business **domain** they are entitled to participate in |
+| **Scope** | Which **records** inside that domain they may access |
+| **Sensitivity Ceiling** | Which **fields and actions** that path may expose |
+
+#### 4.5.1 Exact behaviour when the last scope is revoked
+
+| # | |
+| --- | --- |
+| 1 | The **Domain Entitlement remains current** |
+| 2 | The old scope period gets **`ended_at`** |
+| 3 | **No old scope is revived** |
+| 4 | **Effective business access through that entitlement becomes ZERO immediately** |
+| 5 | The engine returns **`denied_scope`** |
+| 6 | Assigning a new scope creates a **new scope period** |
+| 7 | **The entitlement itself does not need to be re-granted** |
+
+**This is secure because §6 already requires a COMPLETE grant path.** A missing
+scope cannot authorise anything — §7.6, N-D8. The entitlement being current is
+not the same claim as the entitlement being effective.
+
+#### 4.5.2 The screen must not imply usable access
+
+**An entitlement in this state is NOT shown as though it grants access.**
+
+| | |
+| --- | --- |
+| **Status** | **No access — scope required** |
+| **Supporting text** | *"This domain entitlement has no active scope and currently grants no business-data access."* |
+
+| Requirement |
+| --- |
+| **The Access Simulator shows the SAME reason from the REAL engine** — §11. It does not reproduce this logic in the UI |
+| **Search, filter and status must let an administrator FIND** *Incomplete / No scope* entitlements |
+
+This also gives **P1-07** a clean future review condition, rather than hiding a
+technically current but ineffective assignment.
+
+#### 4.5.3 Ceilings follow the same parent/child principle — with the Release 1 rule intact
+
+**Ending a ceiling does not end the entitlement either.** But the sensitivity
+rule already approved for Release 1 is preserved and is **not** the same shape as
+scope:
+
+> **"Clear ceiling" means deliberately resetting to `standard` — by creating or
+> maintaining a CURRENT `standard` ceiling row.** It must **never** produce an
+> invisible permissive default.
+
+> **If a malformed state somehow exists with NO current ceiling, the engine
+> FAILS CLOSED.** It never assumes `standard`, `confidential` or `restricted`.
+
+**"Missing ceiling" is never silently turned into a default grant.** Clearing is
+a deliberate write that leaves a visible row; absence is a fault, and a fault
+denies. §8.3, and **§13 N-C7 / N-C8**.
+
+#### 4.5.4 Guards
+
+**§13 N-C1 to N-C10.** Each breaks the shortcut a developer takes when an
+incomplete entitlement looks like a bug to be tidied away.
 ---
 
 ## 5. One effective-access engine — the contract
@@ -837,10 +911,18 @@ reader believes they are seeing everything. **P1-05 builds no redaction
 engine**, because there is no business data to redact and designing one now
 would be designing against an imagined shape.
 
-### 8.3 Clearing falls back to the most restrictive
+### 8.3 Clearing is a deliberate write, and absence FAILS CLOSED
 
-Clearing a ceiling returns it to **`standard`** — never to the most permissive.
-§13 N-D8b.
+**Two different things, kept apart — §4.5.3:**
+
+| State | Meaning | Engine |
+| --- | --- | --- |
+| **Cleared** | A **current `standard` ceiling row exists**, written deliberately | Caps at `standard` |
+| **Absent** | **No current ceiling row at all** — a malformed state | **DENY.** `denied_ceiling_missing` |
+
+**Clearing never produces an invisible permissive default**, and **absence is
+never silently read as `standard`**. It returns to `standard` by writing
+`standard`, not by deleting a row. §13 N-D8b, **N-C7, N-C8**.
 
 ---
 
@@ -1089,6 +1171,21 @@ write**.
 **N-D3 to N-D7 are the P1-04 carried gate.** All five run, and
 **`no enabled domains = no domain access, never allow-all`** is the one the gate
 exists for.
+
+### Incomplete grant paths — §4.5
+
+| # | Guard | Mutation |
+| --- | --- | --- |
+| **N-C1** | Revoking the **last scope** leaves the entitlement **CURRENT** | End the entitlement too — *"an entitlement with no scope must be a mistake"* |
+| **N-C2** | …and business access through it becomes **ZERO immediately** | Let the last decision stand until the next scope is assigned |
+| **N-C3** | A missing scope **never defaults** to `domain` or `organisation` | `scope ?? Scope::Domain` — the widest possible mistake |
+| **N-C4** | Re-scoping creates a **NEW scope period** | Reopen the ended row by nulling `ended_at` |
+| **N-C5** | A previously ended scope **never revives** automatically | Revive the most recent one on re-scope |
+| **N-C6** | **Simulator and enforcement return the SAME `denied_scope`** | Give the simulator its own message — it would read correct and prove nothing |
+| **N-C7** | **No current ceiling → DENY**, never an assumed level | `ceiling ?? Sensitivity::Standard` — the invisible permissive default |
+| **N-C8** | **Clearing WRITES a current `standard` row**; it does not delete | Delete the row and rely on N-C7's absence path |
+| **N-C9** | The screen shows **"No access — scope required"** and the supporting sentence | Show it as an ordinary active entitlement. Asserted against rendered screen source |
+| **N-C10** | An administrator can **FIND** incomplete entitlements by search/filter/status | Remove the filter — the state exists but nobody can reach it, the P1-04 discoverability defect |
 
 ### Independent paths
 
