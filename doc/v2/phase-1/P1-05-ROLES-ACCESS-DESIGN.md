@@ -11,7 +11,7 @@ what will be built so it can be argued with before it exists.
 | Decisions binding this design | **D-49 to D-73**, PLAN §31 |
 | Decision raised here and **DECIDED** | **D-74** — §7.4, *both scopes delivered, documented as equivalent today* |
 | Gates that must close here | **P1-04** (§13.3) · **P1-02** (§14.6) |
-| Status | **Under Product Owner review** — §1 **APPROVED** 4 Sep 2026; D-74 **decided** |
+| Status | **Under Product Owner review** — **§1 and §2 APPROVED 4 Sep 2026**; D-74 **decided** |
 
 ---
 
@@ -176,6 +176,9 @@ pass.**
 
 ## 2. D-49 — the bootstrap migration, rollback and deployment sequence
 
+> **§2 — PRODUCT OWNER APPROVED, 4 September 2026**, with the §2.7 rollback
+> contract as decided.
+
 **The single most dangerous change in Phase 1 so far**, because getting it wrong
 locks the only administrator out of a live deployment, and bootstrap does not
 reopen.
@@ -220,9 +223,11 @@ one implementation of *"is this person a System Administrator"* in the codebase.
 | 4 | **`migrate_platform_role_to_assignments`** | **Data.** Every `users.platform_role = 'system_administrator'` becomes an active assignment with `organisation_id = users.organisation_id` (which may be NULL) |
 | 5 | **`drop_platform_role_from_users`** | **Only after 4 has run.** Removes the column, and `PlatformRole` and its one-case test go with it |
 
-**Migration 4 is data and it is reversible.** Its `down()` restores the column's
-value from the assignments, so a rollback of 5 then 4 leaves the administrator an
-administrator — asserted, on **MySQL**, in §13.
+**Migration 4 is data and it is reversible.** Its `down()` reconstructs the
+column from the **current** assignment state — never from a remembered original
+value — so a rollback of 5 then 4 leaves the administrator an administrator.
+Asserted on **MySQL** in §13. **§2.7 is the full rollback contract, and it is
+binding: reversible does not mean lossless.**
 
 ### 2.4 The deployment sequence, and the window it must not have
 
@@ -293,6 +298,101 @@ concurrently remove each other.
 another before removing this one."* — the existing sentence, extended to cover
 revocation.
 
+### 2.7 Rollback semantics — decided by the Product Owner, 4 September 2026
+
+**Approved: rollback restores the CURRENT authoritative System Administrator
+truth from role assignments. It is not a time machine.**
+
+Migration 4's `down()` **must not refuse** merely because assignments have
+changed since it ran. Such a refusal would make an emergency application
+rollback impossible **at exactly the moment rollback is needed.**
+
+#### 2.7.1 What `down()` reconstructs
+
+When migration 5 is rolled back and `users.platform_role` is restored, migration
+4's `down()` reconstructs the old seam **from the current role-assignment
+state**:
+
+| Current assignment state | Restored `users.platform_role` |
+| --- | --- |
+| A **current** `system_administrator` assignment exists | `system_administrator` |
+| **No** current `system_administrator` assignment | **`NULL`** |
+
+| Rule |
+| --- |
+| **`users.status` is untouched.** Active/inactive remains entirely independent |
+| **Historical, ended assignments are NOT restored as current roles** |
+| **The original pre-migration value is NOT consulted**, and must not be stored anywhere for that purpose |
+
+This is D-49 carried through: **once migrated, assignments are the single source
+of truth**, including when unwinding.
+
+#### 2.7.2 "Current" means `ended_at IS NULL` — and nothing else
+
+**Do not collapse assignment state and user status.** They answer different
+questions and this design keeps them apart:
+
+> **A current role assignment is `ended_at IS NULL`. It does NOT require the
+> user account to be active.**
+
+P1-03 deactivation **preserves** role and access relationships (D-36 — a
+deactivated person's access must return exactly on reactivation). Therefore:
+
+> **An INACTIVE user holding a still-current System Administrator assignment
+> HAS `platform_role = system_administrator` reconstructed on rollback** — while
+> `users.status = inactive` continues to prevent them signing in.
+
+**This is deliberately different from the lockout invariant in §2.6**, which
+counts assignments **held by active users**, because that guard asks *"can
+anybody actually administer this deployment?"* Two questions, two filters,
+neither borrowed from the other. §13 **N-M13** breaks the borrow in each
+direction.
+
+#### 2.7.3 Deployment rollback is NOT data time travel
+
+**Stated explicitly here and in the deployment note, because the difference is
+the difference between a safe rollback and silent data loss:**
+
+> **A schema/application rollback restores a COMPATIBLE REPRESENTATION OF
+> CURRENT AUTHORITY. It does not restore historical access state.**
+
+**Two rollback windows, and they are not equivalent.**
+
+**A — the deployment validation window.** Immediately after deployment, **before
+any new P1-05 access-administration write is allowed**, five things are verified:
+
+| # | Verification |
+| --- | --- |
+| 1 | The migrated System Administrator assignment exists — exactly one, from one column row |
+| 2 | Sign-in works |
+| 3 | `/console` is reachable |
+| 4 | The last-administrator guard refuses |
+| 5 | Schema and read-only counts report as expected |
+
+**If one of these fails, ordinary `migrate:rollback` is permitted**, and it loses
+nothing — because nothing new has been written.
+
+**B — after P1-05 access administration has been used.** **Ordinary migration
+rollback is NOT lossless and must never be described as though it were.** The
+old `users.platform_role` column **cannot represent**:
+
+| Cannot be represented by the old column |
+| --- |
+| **Multiple roles** |
+| **Domain entitlements** |
+| **Scopes** |
+| **Sensitivity ceilings** |
+| **P1-05 history** — every ended assignment, entitlement, scope and ceiling |
+
+> **A rollback in window B requires the approved backup/recovery procedure and
+> must explicitly account for P1-05 access data. `migrate:rollback` alone does
+> not preserve it.**
+
+#### 2.7.4 The limitation is guarded, not merely promised
+
+**§13 N-M14** asserts that this limitation is **stated in the deployment
+documentation**, so the project cannot quietly come to promise reversible
+business data. The mutation is *deleting the statement* — and it must fail.
 ---
 
 ## 3. Platform-scoped versus organisation-scoped assignments
@@ -939,6 +1039,10 @@ exists for.
 | **N-M8** | **The last active System Administrator cannot be DEACTIVATED away** | Drop the guard |
 | **N-M9** | **…nor REVOKED away** | Drop the new guard |
 | **N-M10** | **Two concurrent revocations cannot reach zero administrators** | Move the locking read outside the transaction. **MySQL only** — SQLite would report a lock that is not there |
+| **N-M11** | `down()` restores `system_administrator` **from a CURRENT assignment**, and `NULL` when there is none | Restore the original pre-migration value — the "time machine" `down()` the Product Owner rejected |
+| **N-M12** | `down()` **never restores an ENDED assignment** as a current role | Ignore `ended_at` |
+| **N-M13** | `down()` restores the role for an **INACTIVE** user with a current assignment, and leaves `users.status` untouched | Filter `down()` by user status — collapsing assignment state into account status. Broken **in both directions**: the §2.6 lockout count must NOT drop its active-user filter |
+| **N-M14** | The **deployment documentation STATES** that rollback after window A is not lossless, naming entitlements, scopes, ceilings and history | Delete the statement — the guard exists so the project cannot come to promise reversible business data |
 
 ### Step-up
 
