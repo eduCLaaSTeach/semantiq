@@ -11,7 +11,7 @@ what will be built so it can be argued with before it exists.
 | Decisions binding this design | **D-49 to D-73**, PLAN §31 |
 | Decision raised here and **DECIDED** | **D-74** — §7.4, *both scopes delivered, documented as equivalent today* |
 | Gates that must close here | **P1-04** (§13.3) · **P1-02** (§14.6) |
-| Status | **Under Product Owner review** — **§1, §2, §2.6 and §4 APPROVED 4 Sep 2026** (items 1–4); D-74 **decided** |
+| Status | **Under Product Owner review** — **§1, §2, §2.6, §4, §5, §6 and §11 APPROVED 4 Sep 2026** (items 1–5); D-74 **decided** |
 
 ---
 
@@ -674,19 +674,27 @@ incomplete entitlement looks like a bug to be tidied away.
 
 ## 5. One effective-access engine — the contract
 
+> **§5, §6 and §11 — PRODUCT OWNER APPROVED, 4 September 2026**, with §5.5,
+> §5.6, §5.7 and §11.4 as decided.
+
 `App\Modules\Access\AccessEngine`. **One implementation. Every enforcement point
 and the simulator call it.**
 
 ### 5.1 It answers a CLOSED question
 
 ```
-decide(AccessQuestion $question): AccessDecision
+decide(AccessQuestion $question):  AccessDecision      // enforcement — short-circuits
+explain(AccessQuestion $question): AccessExplanation   // simulator — all paths
 ```
+
+**Evidence mode is OUTSIDE the question, and one internal evaluator serves
+both — §5.5.**
 
 | | |
 | --- | --- |
-| **`AccessQuestion`** | identity · action · action class · domain (where applicable) · resource reference · sensitivity of the field/action · organisation |
-| **`AccessDecision`** | `allowed: bool` · `reason: DecisionReason` · `path: GrantPathReference|null` |
+| **`AccessQuestion`** | identity · action · action class · domain (where applicable) · resource reference · sensitivity of the field/action · organisation. **Nothing else** — §5.5 |
+| **`AccessDecision`** | `allowed: bool` · `reason: DecisionReason` · `authorising_path: GrantPathReference|null` — **one, deterministically chosen**, §5.6 |
+| **`AccessExplanation`** | The same `allowed` and primary `reason`, **all** authorising paths, and failed candidate-path reasons — §5.5. **Simulator only** |
 
 **Never `whatCanThisPersonSee()`.** An open-ended query is an invitation to
 build a permissive default and then filter it, which is the shape §11 forbids.
@@ -718,8 +726,80 @@ log (§12) and P1-07's review all read it.
 
 Every path through `decide()` returns a decision. **An exception, a timeout or
 an unreachable dependency produces `denied_engine_failure`** — never an error
-that some later change turns into a pass. §13 N-D2.
+that some later change turns into a pass. §13 N-D2. **And it raises an
+operational signal — §5.7 — so a broken engine never looks like an ordinary
+lack of entitlement.**
 
+### 5.5 Evidence mode is OUTSIDE the question — decided 4 September 2026
+
+**Product Owner refinement. My draft put an "all paths" flag inside
+`AccessQuestion`. That is rejected, and rightly:**
+
+> **`AccessQuestion` describes ONLY the security question** — identity · action ·
+> action class · domain · resource · sensitivity · organisation. **Whether the
+> caller wants minimal or detailed evidence is not part of the access question
+> and must never be able to alter policy semantics.**
+
+A flag inside the question is a flag the policy code can read. Keeping it
+outside means it structurally *cannot* change the answer.
+
+**Two entry points, ONE internal evaluator:**
+
+| Entry point | Returns |
+| --- | --- |
+| **`decide(AccessQuestion): AccessDecision`** | `allowed` · `reason` · **one deterministic `authorising_path`** |
+| **`explain(AccessQuestion): AccessExplanation`** | **The same `allowed`** · **the same primary reason** · **ALL authorising paths** · failed candidate-path reasons where useful to the simulator |
+
+| Rule |
+| --- |
+| **Both call the same internal evaluator.** No copied simulator policy logic — §11.1, N-B7 |
+| **The detailed mode NEVER turns an allow into a deny, or a deny into an allow** |
+| **Enforcement short-circuits** on the first complete authorising path. `explain()` does not |
+
+**Why the simulator needs all paths.** Manager → Finance → Team authorises, and
+Executive → Finance → Organisation also authorises. Revoking the Manager path
+must not make the simulator imply Finance access disappears **when the Executive
+path still grants it.** That is precisely the question an administrator asks
+before revoking, and a first-match answer would mislead them.
+
+**Guard — §13 N-EN1:** the same `AccessQuestion` yields **the same allow/deny
+and the same primary reason regardless of evidence mode.**
+
+### 5.6 The primary path is DETERMINISTIC — never database order
+
+> **"First" must not mean whatever the database returned first.**
+
+**One stable ordering selects the primary authorising path, everywhere:**
+
+| Order | By |
+| --- | --- |
+| 1 | `role_assignment_id` ascending |
+| 2 | `domain_entitlement_id` ascending |
+| 3 | `entitlement_scope_id` ascending |
+| 4 | `entitlement_ceiling_id` ascending |
+
+**The chosen path has NO effect on the permission outcome.** Deterministic
+ordering exists so that **simulator explanations, security evidence, tests and
+support diagnostics stay consistent** — an unordered "first" would make a test
+pass on one machine and fail on another, and would make two identical support
+questions get two different answers.
+
+**§13 N-EN2** breaks it by removing the ordering — the mutation that passes
+every allow/deny assertion and only shows up as flakiness.
+
+### 5.7 `denied_engine_failure` raises an operational signal
+
+**A failing engine must not look like an ordinary lack of entitlement.**
+
+| |
+| --- |
+| Engine failure → **fail closed**, `denied_engine_failure` |
+| Malformed / unknown state → **fail closed**, `denied_unknown_state`, **and security evidence** |
+| **`denied_engine_failure` ALSO raises an operational/security signal** |
+| **Ordinary business denials do NOT flood the security log** — D-71, N-EV4 |
+
+Without the signal, a broken engine is indistinguishable from correct refusal,
+and the deployment would look like it was working. **§13 N-EN3.**
 ---
 
 ## 6. Independent grant-path resolution — D-62
@@ -1057,7 +1137,7 @@ added later without one **fails to boot**, rather than defaulting to something.
 ### 11.1 The rule
 
 > **`AccessSimulator` holds no authorization logic. It builds `AccessQuestion`s,
-> calls `AccessEngine::decide()`, and renders the `AccessDecision`.**
+> calls `AccessEngine::explain()`, and renders the result — §11.4.**
 
 A simulator with its own logic gives confident answers that are wrong exactly
 when the two implementations have drifted — which is exactly when somebody most
@@ -1069,7 +1149,7 @@ needs the truth. §13 N-B7.
 | --- | --- |
 | **Current** | Decisions against the stored state |
 | **Proposed** | The same questions **inside a transaction that applies the change and is then ROLLED BACK** — the real engine against the real proposed state, with nothing persisted |
-| **Why** | For an allow, **which grant path**. For a deny, **which link was missing in every candidate path**, from `DecisionReason` |
+| **Why** | For an allow, **every** authorising grant path — `explain()`, §5.5 — so *"what happens if I revoke this?"* is answered truthfully. For a deny, which link was missing in every candidate path. **Always rendered in business language, never as a reason code — §11.4** |
 
 **§6's independent paths are what make "why" answerable in one sentence.**
 
@@ -1082,6 +1162,37 @@ needs the truth. §13 N-B7.
 | **Shows no business data** | It shows *what would be visible*, never values |
 | **Not an approval workflow** | Publishing is the ordinary path |
 
+### 11.4 Business language on the screen — raw reason codes NEVER shown
+
+**The machine reason codes stay exactly as designed** — `denied_scope`,
+`denied_ceiling`, `denied_domain_disabled` and the rest. They are the contract,
+and they remain available internally for **evidence, audit and testing.**
+
+> **The simulator MUST NOT display raw enum or developer terminology to an
+> administrator.** It renders a fixed business-language explanation **derived
+> from** the engine's reason code.
+
+| Reason code | Rendered to the administrator |
+| --- | --- |
+| `denied_scope` | *"The assigned scope does not include this record."* |
+| `denied_ceiling` | *"The assigned sensitivity level does not permit this information."* |
+| `denied_ceiling_missing` | *"This grant has no sensitivity level assigned and cannot be used."* |
+| `denied_domain_disabled` | *"This business domain is currently disabled."* |
+| `denied_no_role` | *"This person holds no role that permits this action."* |
+| `denied_no_entitlement` | *"This person has no entitlement to this business domain."* |
+| `denied_inactive_user` | *"This user account is inactive."* |
+| `denied_organisation_mismatch` | *"This record belongs to a different organisation."* |
+| `denied_unauthenticated` | *"Not signed in."* |
+| `denied_unknown_state` | *"This access configuration could not be interpreted and has been refused."* |
+| `denied_engine_failure` | *"Access could not be determined and was refused."* |
+| `allowed_by_path` | *"Allowed through …"*, naming the grant path in business terms |
+
+**This is PRESENTATION MAPPING ONLY. It is not a second authorization
+decision.** The mapping is total — **every** reason code has a sentence — and
+**§13 N-EN4** breaks it by adding a code with no mapping, which must fail rather
+than leak the enum onto the screen. This is the §4 professional-polish rule from
+`CLAUDE.md` made structural: *raw enum values on a user-facing surface* is
+exactly what that gate names.
 ---
 
 ## 12. The Phase 2 projection contract — D-70
@@ -1204,6 +1315,16 @@ exists for.
 | --- | --- | --- |
 | **N-Q1** | **`domain` and `organisation` resolve through ONE resolution** and return the identical record set for the same entitlement | Give `organisation` a second code path — the two are equal today, so **the mutation passes every functional test and the guard is the only thing that catches it** |
 | **N-Q2** | **The scope control STATES the equivalence and the reservation** on the rendered screen | Delete the sentence. Asserted against `ScreenSource::rendered()`, which strips comments, so a docblock cannot satisfy it |
+
+### The engine contract — §5.5 to §5.7, §11.4
+
+| # | Guard | Mutation |
+| --- | --- | --- |
+| **N-EN1** | The **same `AccessQuestion`** yields the **same allow/deny and the same primary reason** in both evidence modes | Let `explain()` evaluate differently — the drift that gives a confident wrong answer exactly when somebody needs the truth |
+| **N-EN2** | The primary authorising path is chosen by the **deterministic order** of §5.6 | Remove the ordering and take whatever the database returned. **Passes every allow/deny assertion** and surfaces only as flakiness |
+| **N-EN3** | `denied_engine_failure` raises an **operational/security signal** | Return it silently — a broken engine then looks like correct refusal |
+| **N-EN4** | **Every** reason code has a business-language sentence, and **no raw code reaches a screen** | Add a code with no mapping. Must fail, not fall through to the enum |
+| **N-EN5** | Evidence mode is **not a field of `AccessQuestion`** | Add it there. **Architecture test** — it must fail at the shape, before anyone can read it in policy code |
 
 ### Enforcement
 
