@@ -11,7 +11,7 @@ what will be built so it can be argued with before it exists.
 | Decisions binding this design | **D-49 to D-73**, PLAN §31 |
 | Decision raised here and **DECIDED** | **D-74** — §7.4, *both scopes delivered, documented as equivalent today* |
 | Gates that must close here | **P1-04** (§13.3) · **P1-02** (§14.6) |
-| Status | **Under Product Owner review** — **§1 and §2 APPROVED 4 Sep 2026**; D-74 **decided** |
+| Status | **Under Product Owner review** — **§1, §2 and §2.6 APPROVED 4 Sep 2026** (items 1–3); D-74 **decided** |
 
 ---
 
@@ -276,27 +276,140 @@ Profile does not exist yet.
 
 ### 2.6 The last-administrator guard after the column disappears
 
-**Two paths now reach zero administrators, where P1-03 had one:**
+> **§2.6 — PRODUCT OWNER APPROVED, 4 September 2026**, with the two mandatory
+> corrections below applied. **Two earlier statements of mine were wrong and are
+> corrected in place**: the lock order (§2.6.3) and the claim that only a fresh
+> deployment can hold zero administrators (§2.6.6).
 
-| Path | Guard |
+#### 2.6.1 The invariant — corrected
+
+**The earlier wording said zero administrators is reachable only on a genuinely
+empty deployment and only initial bootstrap resolves it. That is incorrect and
+contradicts P1-00, which already approved a controlled recovery path.**
+
+> **NORMAL APPLICATION OPERATIONS MAY NEVER TRANSITION THE EFFECTIVE ACTIVE
+> SYSTEM ADMINISTRATOR COUNT FROM ≥ 1 TO 0.**
+
+**A zero state may legitimately exist:**
+
+| # | Legitimate zero state |
 | --- | --- |
-| Deactivating the last active one | P1-03's, **rewritten to count assignments** |
-| **Revoking the last active one's assignment** | **New. Same shape** |
+| 1 | A **genuinely fresh deployment**, before first bootstrap |
+| 2 | An **exceptional, approved P1-00 recovery condition** in which there are zero active System Administrators |
 
-**Both count the same thing** — active `system_administrator` assignments held
-by active users, excluding the subject — and both take the count **under a
-locking read inside the write transaction**, so two administrators cannot
-concurrently remove each other.
+**In either zero state, ONLY the existing controlled P1-00 bootstrap/recovery
+mechanism may establish a new System Administrator.**
 
-> **The P1-04 lesson applies exactly.** The lock is taken on the **parent** —
-> here the `users` row of the subject — before the assignment rows are read,
-> because the decision is taken over both. And the concurrency case runs against
-> **MySQL**, because SQLite has no `SELECT … FOR UPDATE` and would report a lock
-> that is not there.
+**Effective** means: a `system_administrator` assignment with `ended_at IS NULL`
+**held by a user with `status = active`.** Both filters. This is the lockout
+question — *"can anybody actually administer this deployment?"* — and it is
+**not** the §2.7.2 rollback filter, which asks a different question and
+deliberately ignores `users.status`.
+
+#### 2.6.2 The floor is 1, and a count of 1 warns rather than blocks — D-49a
+
+**Product Owner decision, 4 September 2026: the enforced floor stays at 1.**
+Release 1 does **not** require a minimum of two System Administrators. A second
+genuine administrator is **recommended operationally**, but it is not a
+prerequisite for the product to function.
+
+**When the effective count is exactly 1, a visible, non-blocking warning is
+surfaced:**
+
+> **"Only one active System Administrator remains. Add another trusted
+> administrator to reduce account-lockout risk."**
+
+| It is informational ONLY |
+| --- |
+| **No administrator is created automatically** |
+| **Normal administration is NOT blocked** merely because only one exists |
+| **The only refusal is an operation that would take the effective count from 1 → 0** |
+
+#### 2.6.3 MANDATORY CORRECTION — a COMMON serialisation boundary
+
+**The lock order I proposed — *subject user → subject assignments → count
+others* — is NOT approved and is replaced.** It is subject-scoped, and in the
+two-administrator race transaction A locks user A while transaction B locks user
+B, each then reaching for the other's rows. That is **not one common
+serialisation boundary**: it is a deadlock, resolved by MySQL picking a victim.
+
+> **A deadlock exception is NOT a security mechanism. The invariant protects the
+> whole SET of active System Administrators, so the whole set is what must be
+> locked.**
+
+**Every operation capable of reducing the effective count** — there are exactly
+two:
+
+| Operation |
+| --- |
+| **System Administrator assignment revocation** |
+| **Deactivation of a user holding a current System Administrator assignment** |
+
+**— performs these six steps inside ONE transaction:**
+
+| # | Step |
+| --- | --- |
+| 1 | **Lock the current `system_administrator` role-assignment set** in a deterministic order |
+| 2 | **Lock the corresponding owning `users` rows** in the same deterministic order |
+| 3 | **Re-evaluate** which of those assignments are current *and* held by active users |
+| 4 | Determine whether the requested operation **would leave zero** |
+| 5 | **Refuse, or perform the write** |
+| 6 | **Commit** |
+
+**One consistent order everywhere — assignment id, then user id, both
+ascending.** The order is a property of the guard, not of the caller, so the two
+competing operations **contend on the same locked administrator set** rather
+than on two different subject rows.
 
 **Refusal:** *"This is the only active System Administrator. Add or retain
 another before removing this one."* — the existing sentence, extended to cover
 revocation.
+
+#### 2.6.4 The concurrency evidence required — MySQL only
+
+**Recorded as a delivery requirement, not a test suggestion.** Three races, each
+proven against **MySQL**:
+
+| # | Race | Must show |
+| --- | --- | --- |
+| **C-A** | A **deactivation** racing B **revocation** | Cannot reach zero |
+| **C-B** | A **revocation** racing B **revocation** | Cannot reach zero |
+| **C-C** | A **deactivation** racing B **deactivation** | Cannot reach zero |
+
+**And in every one of the three:**
+
+| |
+| --- |
+| **One request completes** |
+| **The other re-evaluates AFTER the first commit** and receives the **normal business refusal** |
+| **No raw deadlock, integrity or database error reaches the administrator** |
+
+**SQLite is kept out of this evidence entirely.** It has no `SELECT … FOR
+UPDATE` and would report a lock that is not there — the P1-04 C1 lesson, where a
+measurement gave the right answer for the wrong reason.
+
+#### 2.6.5 What P1-05 changes about bootstrap and recovery — nothing but the predicate
+
+> **P1-05 ONLY replaces the old `platform_role` predicate with the new
+> assignment-based predicate.**
+
+`BootstrapState` is computed, never stored — `User::activeSystemAdministrators()`
+today. It continues to be computed, from the same question, against role
+assignments instead of a column.
+
+| Explicitly NOT done by P1-05 |
+| --- |
+| **No new P1-05 recovery mechanism** |
+| **No manual database editing**, ever |
+| **No weakening of SSH + fresh auditable grant + full Entra SSO** |
+| No special mode, no flag — recovery remains **the same UNCONFIGURED predicate returning true again** |
+
+#### 2.6.6 Why the correction matters
+
+My earlier statement would have made a **correct, already-approved recovery path
+look like a defect** to the next reader, and the plausible "fix" — a P1-05
+recovery route of its own — is precisely the thing that must never exist. The
+wrong statement is left visible above rather than deleted.
 
 ### 2.7 Rollback semantics — decided by the Product Owner, 4 September 2026
 
@@ -1038,11 +1151,24 @@ exists for.
 | **N-M7** | **`users.platform_role` and `PlatformRole` are GONE** | Leave the column readable — the second model |
 | **N-M8** | **The last active System Administrator cannot be DEACTIVATED away** | Drop the guard |
 | **N-M9** | **…nor REVOKED away** | Drop the new guard |
-| **N-M10** | **Two concurrent revocations cannot reach zero administrators** | Move the locking read outside the transaction. **MySQL only** — SQLite would report a lock that is not there |
+| **N-M10** | **Two concurrent revocations cannot reach zero administrators** | Move the locking read outside the transaction. **MySQL only.** Superseded in shape by **N-M15 to N-M20**, §2.6.3 — the set, not the subject, is what is locked |
 | **N-M11** | `down()` restores `system_administrator` **from a CURRENT assignment**, and `NULL` when there is none | Restore the original pre-migration value — the "time machine" `down()` the Product Owner rejected |
 | **N-M12** | `down()` **never restores an ENDED assignment** as a current role | Ignore `ended_at` |
 | **N-M13** | `down()` restores the role for an **INACTIVE** user with a current assignment, and leaves `users.status` untouched | Filter `down()` by user status — collapsing assignment state into account status. Broken **in both directions**: the §2.6 lockout count must NOT drop its active-user filter |
 | **N-M14** | The **deployment documentation STATES** that rollback after window A is not lossless, naming entitlements, scopes, ceilings and history | Delete the statement — the guard exists so the project cannot come to promise reversible business data |
+
+### The administrator-set serialisation — MySQL only, §2.6
+
+| # | Guard | Mutation |
+| --- | --- | --- |
+| **N-M15** | Both reducing operations lock **the whole current administrator SET** in one deterministic order, not the subject row | Lock the subject first — **the design I proposed and the Product Owner rejected.** It passes every single-request test |
+| **N-M16** | **C-A** — deactivation racing revocation cannot reach zero | As above |
+| **N-M17** | **C-B** — revocation racing revocation cannot reach zero | As above |
+| **N-M18** | **C-C** — deactivation racing deactivation cannot reach zero | As above |
+| **N-M19** | The losing request **re-evaluates after the winner commits** and returns the **business refusal** | Return the refusal without re-reading — right answer, wrong reason |
+| **N-M20** | **No raw deadlock, integrity or database error reaches the administrator** in any of the three races | Let the driver exception surface. A deadlock victim is **not** the security mechanism |
+| **N-M21** | A count of exactly **1 warns and does NOT block** normal administration | Refuse an unrelated administrative operation while the count is 1 |
+| **N-M22** | `BootstrapState` stays **computed** from the assignment predicate, and P1-05 adds **no** recovery route of its own | Store a flag; add a P1-05 "reset administrator" path |
 
 ### Step-up
 
