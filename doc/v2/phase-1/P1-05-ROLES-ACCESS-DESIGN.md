@@ -11,7 +11,7 @@ what will be built so it can be argued with before it exists.
 | Decisions binding this design | **D-49 to D-73**, PLAN §31 |
 | Decision raised here and **DECIDED** | **D-74** — §7.4, *both scopes delivered, documented as equivalent today* |
 | Gates that must close here | **P1-04** (§13.3) · **P1-02** (§14.6) |
-| Status | **Under Product Owner review** — **§1, §2, §2.6, §4, §5, §6 and §11 APPROVED 4 Sep 2026** (items 1–5); D-74 **decided** |
+| Status | **Under Product Owner review** — **§1, §2, §2.6, §4, §5, §6 and §11 APPROVED 4 Sep 2026**; **§7 APPROVED 6 Sep 2026** (items 1–6); D-74 **decided** |
 
 ---
 
@@ -865,6 +865,8 @@ breaks it.
 
 ## 7. Exact scope semantics
 
+> **§7 — PRODUCT OWNER APPROVED, 6 September 2026**, with §7.7 as decided.
+
 **Scope belongs to an entitlement period — D-59, §4.**
 
 ### 7.1 The structural target each scope carries
@@ -876,6 +878,8 @@ breaks it.
 | **`business_unit`** | **`business_unit_id`, NOT NULL** | Records of that business unit, through P1-01's `business_units → departments → teams` |
 | **`domain`** | **none** | Every record in the entitled domain |
 | **`organisation`** | **none** | Every record in the entitled domain — **the same set as `domain` today**, D-74/§7.4 |
+
+**An entitlement may hold SEVERAL current scope rows, and they UNION — §7.7.**
 
 **A target is required exactly where the table says so, and refused where it
 does not apply** — a `team_id` on an `own` scope is a stored contradiction, and
@@ -962,6 +966,102 @@ records. §13 N-P5.
 nothing until a new one is assigned. §13 N-D8 — the same class of defect as the
 P1-04 disabled-domain gate.
 
+### 7.7 Several current scopes on one entitlement — UNION — decided 6 September 2026
+
+**Product Owner decision: several current scope rows under one Domain
+Entitlement combine as a UNION.** An entitlement may hold **multiple current
+scope rows**.
+
+> **For one entitlement: the requested record is WITHIN SCOPE when ANY current
+> scope row on that entitlement covers it.**
+
+**It is not an intersection. One scope never reduces or cancels another current
+scope.**
+
+| Finance entitlement holds | Authorises Finance records belonging to |
+| --- | --- |
+| Team A · Team B · Team C | **Team A OR Team B OR Team C** |
+
+#### 7.7.1 The union widens RECORDS, never the DOMAIN
+
+Passing the scope test is not the decision. **The rest of the same grant path
+still has to pass:**
+
+| # | Still required |
+| --- | --- |
+| 1 | A **current Role Assignment** |
+| 2 | A **current Domain Entitlement** |
+| 3 | The **domain ENABLED** — the carried P1-04 gate |
+| 4 | The **sensitivity ceiling** covers the field/action |
+
+> **Scope union widens only record coverage INSIDE the already-entitled domain.
+> It cannot widen the domain itself.** §7.5, N-P5.
+
+#### 7.7.2 Mixed scope TYPES are permitted, and also union
+
+| Entitlement holds | Authorises |
+| --- | --- |
+| Team A · Team B · **Business Unit X** | **Team A OR Team B OR Business Unit X** |
+
+**Every row is an explicit grant** and **must remain visible in administration,
+in the simulator, and in later access review (P1-07).**
+
+**No implicit intersection semantics are invented**, anywhere — not for mixed
+types, not for repeated types.
+
+#### 7.7.3 Broad plus narrow — redundant, NOT restrictive
+
+An entitlement holding **`organisation`** *and* **Team A**: `organisation`
+already covers Team A within that entitled domain.
+
+| Rule |
+| --- |
+| The Team row is **REDUNDANT, not restrictive** |
+| **The narrower row does NOT reduce Organisation scope** |
+| **No historical or current narrower row is automatically deleted** because a broader row was added |
+
+**The screen makes the effective result understandable**, for example:
+
+> *"Organisation scope already includes the selected Team scope."*
+
+**This is informational only.** It is not a refusal, not a correction, and not a
+prompt to remove anything.
+
+#### 7.7.4 Revoking one of several scopes
+
+| Before | Action | Effective coverage |
+| --- | --- | --- |
+| Team A · Team B · Team C | Revoke **Team B** | **Team A OR Team C** |
+
+**Only that scope period ends. The entitlement remains current.**
+
+**If the LAST current scope is revoked**, §4.5 applies unchanged: the entitlement
+remains current, access through it becomes **zero**, the engine returns
+**`denied_scope`**, and the screen shows **"No access — scope required"**.
+
+#### 7.7.5 Duplicate protection
+
+> **A duplicate CURRENT scope grant for the same entitlement and the same
+> effective target is REFUSED.**
+
+| Refused |
+| --- |
+| Same entitlement + `team` + **the same `team_id`** twice |
+| Same entitlement + `business_unit` + **the same `business_unit_id`** twice |
+| Same entitlement + `domain` twice |
+| Same entitlement + `organisation` twice |
+
+**Historical, ended rows do NOT prevent a new later period being created** — that
+is an ordinary re-grant, and §4.5.1 already requires it to be a **new period**
+rather than a revival.
+
+#### 7.7.6 What this decision does NOT introduce
+
+| Forbidden |
+| --- |
+| **No explicit deny semantics.** A scope never subtracts — D-64, §6.3, N-P3 |
+| **No scope calculated in JavaScript** — N-E6 |
+| **No second scope-resolution engine for the simulator** — N-B7, N-C6, §11.1 |
 ---
 
 ## 8. Per-entitlement sensitivity — D-60, D-63
@@ -1325,6 +1425,21 @@ exists for.
 | **N-EN3** | `denied_engine_failure` raises an **operational/security signal** | Return it silently — a broken engine then looks like correct refusal |
 | **N-EN4** | **Every** reason code has a business-language sentence, and **no raw code reaches a screen** | Add a code with no mapping. Must fail, not fall through to the enum |
 | **N-EN5** | Evidence mode is **not a field of `AccessQuestion`** | Add it there. **Architecture test** — it must fail at the shape, before anyone can read it in policy code |
+
+### Scope union — §7.7
+
+| # | Guard | Mutation |
+| --- | --- | --- |
+| **N-SC1** | **Three `team` scopes UNION** | Intersect them — the entitlement then authorises nothing, and the mutation looks like a tightening |
+| **N-SC2** | **`team` + `business_unit` UNION** across types | Require one scope type per entitlement |
+| **N-SC3** | **Row ORDER cannot alter the decision** | Return on the first row instead of testing all. Passes whenever the fixture happens to order the covering row first |
+| **N-SC4** | **A narrower scope never restricts a broader one** | Let `team` cap an `organisation` row — an invisible deny, which D-64 rejects |
+| **N-SC5** | **`organisation` scope never escapes the entitled domain** | Reach outside it. Same defect as N-P5, reached through the union |
+| **N-SC6** | **Revoking one of several scopes preserves access through the others** | End every scope on the entitlement |
+| **N-SC7** | **Revoking the FINAL scope produces ZERO access**, entitlement still current | Fall back to the domain — §4.5, N-C2, N-C3 |
+| **N-SC8** | **Duplicate CURRENT scope + effective target is REFUSED** | Permit it. Two identical current rows make revocation ambiguous and the screen wrong |
+| **N-SC9** | **Ended historical scopes do NOT participate** | Drop the `ended_at IS NULL` filter — the mutation that silently restores revoked access |
+| **N-SC10** | **`domain` and `organisation` run through the SAME D-74 resolver** while staying separate business intentions | Give either its own resolution — §7.4, N-Q1 |
 
 ### Enforcement
 
