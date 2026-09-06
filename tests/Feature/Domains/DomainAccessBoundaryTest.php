@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Domains;
 
+use App\Modules\Access\Engine\AccessEngine;
+use App\Modules\Access\Models\RoleAssignment;
+use App\Modules\Access\Services\AdministratorSetGuard;
+use App\Modules\Access\Support\RoleCatalogue;
+use App\Modules\Access\Support\RoleCode;
 use App\Modules\Domains\Models\BusinessDomain;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
-use App\Modules\Platform\Models\PlatformRole;
 use App\Modules\Platform\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -171,12 +175,18 @@ final class DomainAccessBoundaryTest extends TestCase
     /**
      * N2, behavioural half. Assigning an owner writes NOTHING to that user.
      *
-     * The source guard proves the string `platform_role` is not assigned in the
-     * module; this proves the behaviour, which a source scan could never
-     * establish for a column written through a variable.
+     * The source guard proves no role is assigned in the module; this proves
+     * the behaviour, which a source scan could never establish for a write made
+     * through a variable.
      *
-     * Mutation: have DomainOwnershipService::set() write platform_role, a
-     * group membership, or any users column.
+     * P1-05 MAKES THIS SHARPER, not weaker. P1-04's version asserted the users
+     * row was untouched and that platform_role stayed NULL. Now that roles live
+     * in their own table, the assertion is that assigning an owner creates NO
+     * ROLE ASSIGNMENT AT ALL - which is N-B11, and the exact convenience a
+     * well-meaning developer adds: "they own it, so give them the role".
+     *
+     * Mutation: have DomainOwnershipService::set() create a role assignment, a
+     * group membership, or write any users column.
      */
     public function test_assigning_an_owner_changes_nothing_about_that_user(): void
     {
@@ -197,8 +207,19 @@ final class DomainAccessBoundaryTest extends TestCase
         unset($before['updated_at'], $after['updated_at']);
 
         $this->assertSame($before, $after, 'Assigning an owner altered the users row.');
-        $this->assertNull($owner->fresh()->platform_role, 'Assigning an owner granted a platform role.');
-        $this->assertFalse($owner->fresh()->isSystemAdministrator());
+
+        $this->assertSame(
+            0,
+            RoleAssignment::query()->where('user_id', $owner->id)->count(),
+            'Assigning a domain owner created a role assignment. P1-04 ownership and the P1-05 '
+            .'domain_owner role are structurally independent, and neither may be derived from '
+            .'the other.'
+        );
+
+        $this->assertFalse(
+            app(AccessEngine::class)->holdsRole($owner->fresh(), RoleCode::SystemAdministrator),
+            'Assigning an owner granted a platform role.'
+        );
 
         // And it made no difference to what they can reach.
         foreach (['/console/domains', '/console/people/users', '/console/organisation'] as $uri) {
@@ -211,9 +232,12 @@ final class DomainAccessBoundaryTest extends TestCase
     }
 
     /**
-     * N4. No P1-04 path writes platform_role, however the request is crafted.
+     * N4. No P1-04 path grants a role, however the request is crafted.
      *
-     * Mutation: add platform_role to the accepted fields of store or update.
+     * The crafted fields are now the P1-05 ones - role_code and the old
+     * platform_role both, because a request carrying either must be ignored.
+     *
+     * Mutation: add role_code to the accepted fields of store or update.
      */
     public function test_a_crafted_request_cannot_grant_a_platform_role(): void
     {
@@ -226,32 +250,56 @@ final class DomainAccessBoundaryTest extends TestCase
         $this->actingAsUser($admin)->post('/console/domains', [
             'name' => 'Crafted',
             'code' => 'crafted',
-            'platform_role' => PlatformRole::SystemAdministrator->value,
+            'platform_role' => RoleCode::SystemAdministrator->value,
+            'role_code' => RoleCode::SystemAdministrator->value,
             'user_id' => $target->id,
         ]);
 
         $this->actingAsUser($admin)->put("/console/domains/{$domain->id}", [
             'name' => 'Renamed',
             'access_expectation' => 'undecided',
-            'platform_role' => PlatformRole::SystemAdministrator->value,
+            'platform_role' => RoleCode::SystemAdministrator->value,
+            'role_code' => RoleCode::SystemAdministrator->value,
         ]);
 
-        $this->assertNull($target->fresh()->platform_role);
-        $this->assertSame(1, User::query()->where('platform_role', PlatformRole::SystemAdministrator->value)->count());
+        $this->assertSame(
+            0,
+            RoleAssignment::query()->where('user_id', $target->id)->count(),
+            'A crafted Business Domains request created a role assignment.'
+        );
+
+        // And the administrator count is unchanged - the fixture administrator
+        // and nobody else.
+        $this->assertSame(1, app(AdministratorSetGuard::class)->effectiveCount());
     }
 
     /**
-     * N5. PlatformRole still has exactly one case.
+     * N5, CARRIED FORWARD BY P1-05.
      *
-     * P1-05 owns the role model. A second case appearing here would mean it had
-     * arrived early, through whichever unit added it.
+     * This used to assert that PlatformRole still had exactly one case, because
+     * a second would have meant P1-05 arriving early through whichever unit
+     * added it. P1-05 has now arrived, so the property that replaces it is the
+     * one that always mattered here: the DOMAIN OWNER ROLE grants nothing that
+     * ownership did not.
      *
-     * Mutation: add a second case.
+     * Mutation: give domain_owner an action class of its own, or make it permit
+     * an administration class.
      */
-    public function test_the_platform_role_enum_still_has_one_case(): void
+    public function test_the_domain_owner_role_permits_nothing_beyond_a_business_user(): void
     {
-        $this->assertCount(1, PlatformRole::cases());
-        $this->assertSame(PlatformRole::SystemAdministrator, PlatformRole::cases()[0]);
+        $this->assertSame(
+            RoleCatalogue::classesFor(RoleCode::BusinessUser),
+            RoleCatalogue::classesFor(RoleCode::DomainOwner),
+            'The Domain Owner role permits something a Business User does not. Owning a domain and '
+            .'holding the domain_owner role both grant nothing on their own.'
+        );
+
+        foreach (RoleCatalogue::administrationClasses() as $class) {
+            $this->assertFalse(
+                RoleCatalogue::permits(RoleCode::DomainOwner, $class),
+                'The Domain Owner role reaches an administration class.'
+            );
+        }
     }
 
     /**

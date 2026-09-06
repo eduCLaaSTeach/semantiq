@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Identity;
 
+use App\Modules\Access\Engine\AccessEngine;
+use App\Modules\Access\Engine\AccessQuestion;
+use App\Modules\Access\Models\RoleAssignment;
+use App\Modules\Access\Support\ActionClass;
+use App\Modules\Access\Support\RoleCode;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
 use App\Modules\Platform\Identity\Microsoft\EntraProvider;
-use App\Modules\Platform\Models\PlatformRole;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -194,7 +198,7 @@ final class AuthenticationFlowTest extends TestCase
      */
     public function test_a_system_administrator_receives_no_business_domain_access(): void
     {
-        $admin = $this->existingUser(role: PlatformRole::SystemAdministrator);
+        $admin = $this->existingUser(administrator: true);
 
         $response = $this->withSession([
             EnsureSessionIsCurrent::SESSION_USER_ID => $admin->id,
@@ -203,11 +207,32 @@ final class AuthenticationFlowTest extends TestCase
 
         $response->assertOk();
 
-        // The role exists and is readable...
-        $this->assertTrue($admin->fresh()->isSystemAdministrator());
+        // The role exists and is readable, through the ONE engine...
+        $this->assertTrue(
+            app(AccessEngine::class)->holdsRole($admin->fresh(), RoleCode::SystemAdministrator)
+        );
 
-        // ...and confers nothing. There is no entitlement surface at all, and
-        // no helper that could be mistaken for one.
+        /*
+         * ...and confers nothing. Under P1-05 this is sharper than it was: the
+         * engine is asked the BUSINESS question directly, and the four
+         * administration classes never reach grant-path evaluation at all.
+         *
+         * Asserted against the boundary rather than against an empty result -
+         * there is still no business data to request, so a test that merely
+         * found nothing would keep passing after the boundary was removed.
+         */
+        $decision = app(AccessEngine::class)->decide(new AccessQuestion(
+            $admin->fresh(),
+            'read',
+            ActionClass::BusinessData,
+            businessDomainId: null,
+            resource: null,
+        ));
+
+        $this->assertFalse($decision->allowed, 'A System Administrator reached business data.');
+
+        // And no helper on the user that could be mistaken for an entitlement
+        // surface. The role model lives in its own tables, not on this model.
         $this->assertFalse(method_exists($admin, 'domains'));
         $this->assertFalse(method_exists($admin, 'scopes'));
         $this->assertFalse(method_exists($admin, 'entitlements'));
@@ -250,7 +275,15 @@ final class AuthenticationFlowTest extends TestCase
             [
                 'Organisation' => '/console/organisation',
                 'Users & Groups' => '/console/people/users',
-                'Business Domains' => '/console/domains',
+                // P1-05 adds a THIRD, and it is the same kind of thing again:
+                // Roles & Access is System Administration. Reaching the screen
+                // that GRANTS access is not holding any - this administrator
+                // has no entitlement, and the decide() assertion above proves
+                // the boundary rather than the menu.
+                'Roles & Access' => '/console/access',
+                // Listed once. The earlier version of this array repeated
+                // 'Business Domains'; PHP collapses a duplicate key silently,
+                // so the second line asserted nothing at all.
                 'Business Domains' => '/console/domains',
                 'Identity & SSO' => '/console/identity',
             ],
@@ -294,17 +327,31 @@ final class AuthenticationFlowTest extends TestCase
 
     private function existingUser(
         UserStatus $status = UserStatus::Active,
-        ?PlatformRole $role = null,
+        bool $administrator = false,
     ): User {
-        return User::query()->create([
+        $user = User::query()->create([
             'provider' => 'microsoft',
             'external_subject' => '33333333-3333-3333-3333-333333333333',
             'tenant_id' => EntraTokenFactory::TENANT,
             'email' => 'person@example.test',
             'display_name' => 'Test Person',
             'status' => $status,
-            'platform_role' => $role,
         ]);
+
+        if ($administrator) {
+            // Platform-scoped, exactly as bootstrap creates it. A fixture that
+            // took a shortcut here would be a fixture more helpful than reality.
+            RoleAssignment::query()->create([
+                'user_id' => $user->id,
+                'organisation_id' => null,
+                'role_code' => RoleCode::SystemAdministrator,
+                'assigned_at' => now(),
+                'ended_at' => null,
+                'assigned_by_user_id' => null,
+            ]);
+        }
+
+        return $user;
     }
 
     private function completeSignIn(array $claimOverrides = [])

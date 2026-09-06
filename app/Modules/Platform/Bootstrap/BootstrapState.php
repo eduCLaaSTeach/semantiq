@@ -6,7 +6,6 @@ namespace App\Modules\Platform\Bootstrap;
 
 use App\Modules\Access\Models\RoleAssignment;
 use App\Modules\Access\Support\RoleCode;
-use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
 
 /**

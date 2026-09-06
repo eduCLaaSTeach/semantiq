@@ -71,22 +71,30 @@ final class AdministratorSetGuard
     }
 
     /**
-     * Refuse if removing this person's System Administrator authority would
-     * leave zero.
+     * Would removing this person's System Administrator authority leave zero?
      *
-     * Called INSIDE serialise(), after the set is locked and re-read. Passing
-     * the re-read set rather than querying again is what makes the losing
-     * request in a race re-evaluate the winner's committed state rather than
-     * its own stale snapshot.
+     * A PREDICATE, not a refusal. Each module raises its OWN violation - People
+     * a PeopleViolation, Access an AccessViolation - because each has its own
+     * refusal channel and its own sentence, and a screen renders the message
+     * from its module rather than a message from somewhere else.
+     *
+     * The DECISION is here and is not duplicated. Only the wording differs, and
+     * the wording is the part that should differ: "before deactivating this
+     * account" and "before removing this one" are the right sentences for two
+     * different operations.
+     *
+     * Called INSIDE serialise(), against the set that was just locked and
+     * re-read - which is what makes the losing request in a race see the
+     * winner's committed state rather than its own stale snapshot.
      *
      * @param  list<int>  $effective
      */
-    public function refuseIfLast(array $effective, User $subject): void
+    public function wouldLeaveZero(array $effective, User $subject): bool
     {
         if (! in_array($subject->getKey(), $effective, true)) {
             // Not currently an effective administrator, so removing their
             // authority cannot reduce the count.
-            return;
+            return false;
         }
 
         $others = array_values(array_filter(
@@ -94,7 +102,17 @@ final class AdministratorSetGuard
             static fn (int $id): bool => $id !== $subject->getKey(),
         ));
 
-        if ($others === []) {
+        return $others === [];
+    }
+
+    /**
+     * The same decision, refused in the Access module's own language.
+     *
+     * @param  list<int>  $effective
+     */
+    public function refuseIfLast(array $effective, User $subject): void
+    {
+        if ($this->wouldLeaveZero($effective, $subject)) {
             throw AccessViolation::soleAdministrator();
         }
     }

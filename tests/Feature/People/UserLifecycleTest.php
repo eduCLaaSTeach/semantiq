@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\People;
 
+use App\Modules\Access\Services\AdministratorSetGuard;
 use App\Modules\Organisation\Models\ManagementRelationship;
 use App\Modules\Organisation\Models\TeamMembership;
 use App\Modules\People\Services\UserDirectoryService;
@@ -127,7 +128,7 @@ final class UserLifecycleTest extends TestCase
 
         $this->assertSame(
             1,
-            User::query()->activeSystemAdministrators()->count(),
+            app(AdministratorSetGuard::class)->effectiveCount(),
             'SemantIQ was left with a different number of active System Administrators.'
         );
     }
@@ -161,7 +162,7 @@ final class UserLifecycleTest extends TestCase
             ->patch("/console/people/users/{$first->id}/deactivate")
             ->assertSessionHasErrors('people');
 
-        $this->assertSame(1, User::query()->activeSystemAdministrators()->count());
+        $this->assertSame(1, app(AdministratorSetGuard::class)->effectiveCount());
     }
 
     /**
@@ -216,56 +217,78 @@ final class UserLifecycleTest extends TestCase
 
         app(UserDirectoryService::class)->deactivate($second, $first);
 
-        $counting = array_values(array_filter(
+        /*
+         * WHAT IS MEASURED CHANGED WITH P1-05, AND THE INSTRUMENT DID NOT.
+         *
+         * The guard used to COUNT other administrators on users.platform_role.
+         * It now LOCKS THE WHOLE current system_administrator assignment set
+         * and its owning users rows, because the invariant protects a set and
+         * the old subject-first order gave two competing removals two different
+         * lock roots - a deadlock, resolved by MySQL picking a victim rather
+         * than by anything this code does.
+         *
+         * So the statement looked for is the SET read, not a count(*).
+         */
+        $setReads = array_values(array_filter(
             $statements,
-            fn (array $statement): bool => str_contains($statement['sql'], 'count(*)')
-                && str_contains($statement['sql'], 'platform_role')
+            fn (array $statement): bool => str_contains($statement['sql'], 'from "role_assignments"')
+                || str_contains($statement['sql'], 'from `role_assignments`')
         ));
 
-        $this->assertNotEmpty($counting, 'The administrator count was never read.');
+        $this->assertNotEmpty($setReads, 'The administrator set was never read.');
 
-        foreach ($counting as $statement) {
+        foreach ($setReads as $statement) {
             $this->assertGreaterThan(
                 $baseline,
                 $statement['depth'],
-                'The administrator count is read outside the transaction, so a change committed '
+                'The administrator set is read outside the transaction, so a change committed '
                 .'between the check and the write would not be seen and two concurrent '
-                .'deactivations could leave zero administrators.'
+                .'removals could leave zero administrators.'
             );
         }
 
         if (DB::connection()->getDriverName() === 'sqlite') {
-            // The clause does not exist on this engine. Assert the code asks for
-            // it; CI's MySQL job asserts that it arrives.
-            // The guard's own method, not the whole file. Across the file a
+            // The clause does not exist on this engine. Assert the code asks
+            // for it; CI's MySQL job asserts that it arrives.
+            //
+            // The guard's own method, not the whole file: across the file a
             // dotall match could be satisfied by a lockForUpdate() belonging to
             // some other query entirely.
-            $source = file_get_contents(base_path('app/Modules/People/Services/UserDirectoryService.php')) ?: '';
+            $source = file_get_contents(base_path('app/Modules/Access/Services/AdministratorSetGuard.php')) ?: '';
 
             preg_match(
-                '/private function refuseIfLastAdministrator\(User \$user\): void\s*\{(.*?)\n    \}/s',
+                '/private function lockAndReadEffectiveSet\(\): array\s*\{(.*?)\n    \}/s',
                 $source,
                 $method
             );
 
-            $this->assertNotEmpty($method, 'refuseIfLastAdministrator() was not found.');
+            $this->assertNotEmpty($method, 'lockAndReadEffectiveSet() was not found.');
 
-            $this->assertStringContainsString(
-                '->lockForUpdate()',
-                $method[1],
-                'The administrator count does not ask for a locking read. Under MySQL REPEATABLE '
-                .'READ a plain SELECT reads the transaction snapshot and cannot see a change '
-                .'committed after it opened.'
+            // BOTH locking reads, in order. Locking the assignments and not
+            // their owning users rows would still let a concurrent deactivation
+            // change the answer under the guard's feet.
+            $this->assertSame(
+                2,
+                substr_count($method[1], '->lockForUpdate()'),
+                'The administrator set is not locked in both steps. Under MySQL REPEATABLE READ a '
+                .'plain SELECT reads the transaction snapshot and cannot see a change committed '
+                .'after it opened, and locking only one of the two tables leaves the other free '
+                .'to change.'
             );
+
+            // The DETERMINISTIC ORDER, which is what makes the boundary common
+            // rather than merely present. Two callers ordering differently
+            // deadlock exactly as the subject-first design did.
+            $this->assertStringContainsString("->orderBy('id')", $method[1]);
 
             return;
         }
 
-        foreach ($counting as $statement) {
+        foreach ($setReads as $statement) {
             $this->assertStringContainsString(
                 'for update',
                 $statement['sql'],
-                'The administrator count is not a locking read.'
+                'The administrator set is not a locking read.'
             );
         }
     }

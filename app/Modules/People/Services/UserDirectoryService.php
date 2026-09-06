@@ -133,7 +133,12 @@ final class UserDirectoryService
         // transaction its own lock root, deadlock, and leave MySQL's victim
         // selection as the thing standing between the deployment and lockout.
         return $this->administrators->serialise(function (array $effective) use ($user, $actor): User {
-            $this->administrators->refuseIfLast($effective, $user);
+            // The decision comes from the shared guard; the SENTENCE is this
+            // module's, because this module's screen renders it and "before
+            // deactivating this account" is the right wording here.
+            if ($this->administrators->wouldLeaveZero($effective, $user)) {
+                throw PeopleViolation::soleAdministrator();
+            }
 
             $user->forceFill(['status' => UserStatus::Inactive->value])->save();
 

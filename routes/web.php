@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Modules\Access\Http\Controllers\AccessController;
+use App\Modules\Access\Http\Controllers\SimulatorController;
+use App\Modules\Access\Http\Controllers\StepUpController;
+use App\Modules\Access\Http\Middleware\RequireActionClass;
 use App\Modules\Access\Support\ActionClass;
 use App\Modules\Domains\Http\Controllers\DomainController;
 use App\Modules\Identity\Http\Controllers\EntraController;
@@ -26,10 +30,6 @@ use App\Modules\Platform\Http\Controllers\ConsoleController;
 use App\Modules\Platform\Http\Controllers\EntryController;
 use App\Modules\Platform\Http\Controllers\FirstRun\BeginController;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
-use App\Modules\Access\Http\Controllers\AccessController;
-use App\Modules\Access\Http\Controllers\SimulatorController;
-use App\Modules\Access\Http\Controllers\StepUpController;
-use App\Modules\Access\Http\Middleware\RequireActionClass;
 use Illuminate\Support\Facades\Route;
 
 /*

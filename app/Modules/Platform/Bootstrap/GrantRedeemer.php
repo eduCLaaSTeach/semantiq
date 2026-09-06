@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Bootstrap;
 
+use App\Modules\Access\Models\RoleAssignment;
+use App\Modules\Access\Support\RoleCode;
 use App\Modules\Platform\Identity\AuthenticationFailed;
 use App\Modules\Platform\Identity\VerifiedIdentity;
 use App\Modules\Platform\Models\BootstrapGrant;
-use App\Modules\Access\Models\RoleAssignment;
-use App\Modules\Access\Support\RoleCode;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
 use App\Modules\Platform\Security\SecurityEventLogger;

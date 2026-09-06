@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Identity;
 
+use App\Modules\Access\StepUp\StepUpVerification;
 use App\Modules\Identity\Health\IdentityHealthCheck;
 use App\Modules\Identity\Health\IdentityHealthReport;
 use App\Modules\Identity\Support\ApprovedProviders;
 use App\Modules\Identity\Support\ProviderInventory;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
-use App\Modules\Access\StepUp\StepUpVerification;
 use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Identity\VerifiedIdentity;
 use Illuminate\Foundation\Testing\RefreshDatabase;

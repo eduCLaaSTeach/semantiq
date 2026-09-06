@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Identity;
 
+use App\Modules\Access\Models\RoleAssignment;
+use App\Modules\Access\Support\RoleCode;
 use App\Modules\Platform\Bootstrap\GrantIssuer;
 use App\Modules\Platform\Http\Controllers\FirstRun\BeginController;
 use App\Modules\Platform\Identity\Microsoft\EntraProvider;
 use App\Modules\Platform\Models\BootstrapGrant;
-use App\Modules\Platform\Models\PlatformRole;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -42,7 +43,23 @@ final class BootstrapTest extends TestCase
 
         $admin = User::query()->sole();
 
-        $this->assertSame(PlatformRole::SystemAdministrator, $admin->platform_role);
+        /*
+         * D-49: bootstrap now creates a ROLE ASSIGNMENT, in the same
+         * transaction as the user and the grant consumption.
+         *
+         * organisation_id is NULL and that is asserted rather than incidental:
+         * system_administrator is platform-scoped precisely because the Company
+         * Profile does not exist yet, and an assignment requiring one here
+         * would make a fresh deployment unbootstrappable.
+         */
+        $assignment = RoleAssignment::query()->sole();
+
+        $this->assertSame($admin->id, $assignment->user_id);
+        $this->assertSame(RoleCode::SystemAdministrator, $assignment->role_code);
+        $this->assertNull($assignment->organisation_id, 'The bootstrap assignment is not platform-scoped.');
+        $this->assertNull($assignment->ended_at);
+        $this->assertNull($assignment->assigned_by_user_id, 'A person was recorded as granting it.');
+
         $this->assertSame(UserStatus::Active, $admin->status);
         $this->assertSame('33333333-3333-3333-3333-333333333333', $admin->external_subject);
         $this->assertNotNull(BootstrapGrant::query()->sole()->consumed_at);

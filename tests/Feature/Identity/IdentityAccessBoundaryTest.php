@@ -154,7 +154,14 @@ final class IdentityAccessBoundaryTest extends TestCase
             [
                 'Organisation' => '/console/organisation',
                 'Users & Groups' => '/console/people/users',
-                'Business Domains' => '/console/domains',
+                // P1-05 delivered Roles & Access. Reaching the screen that
+                // GRANTS access is not the same as holding any: this
+                // administrator has no entitlement, and the assertion below is
+                // still that no BUSINESS destination appeared.
+                'Roles & Access' => '/console/access',
+                // The earlier version of this array listed 'Business Domains'
+                // twice. PHP collapses a duplicate key silently, so the second
+                // line asserted nothing at all.
                 'Business Domains' => '/console/domains',
                 'Identity & SSO' => '/console/identity',
             ],

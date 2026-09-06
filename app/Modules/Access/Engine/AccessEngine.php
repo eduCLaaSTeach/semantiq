@@ -8,7 +8,6 @@ use App\Modules\Access\Models\DomainEntitlement;
 use App\Modules\Access\Models\EntitlementCeiling;
 use App\Modules\Access\Models\EntitlementScope;
 use App\Modules\Access\Models\RoleAssignment;
-use App\Modules\Access\Support\ActionClass;
 use App\Modules\Access\Support\DecisionReason;
 use App\Modules\Access\Support\RoleCatalogue;
 use App\Modules\Access\Support\RoleCode;

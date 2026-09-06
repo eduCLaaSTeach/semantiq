@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Organisation;
 
+use App\Modules\Access\Http\Middleware\RequireActionClass;
+use App\Modules\Access\Support\ActionClass;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
-use App\Modules\Platform\Http\Middleware\RequireSystemAdministrator;
 use App\Modules\Platform\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -188,11 +189,35 @@ final class AccessBoundaryTest extends TestCase
 
             $found++;
 
-            $this->assertContains(
-                RequireSystemAdministrator::class,
-                $route->gatherMiddleware(),
-                "Route [{$route->uri()}] permanently destroys a record without the System "
-                .'Administrator gate. D-24 grants purge to that role and to no other.'
+            /*
+             * P1-05 REPLACED THE GATE, NOT THE RULE.
+             *
+             * RequireSystemAdministrator became RequireActionClass, declaring
+             * the class each route needs. A purge still sits behind an
+             * administration gate, and the assertion is on the DECLARED CLASS
+             * rather than merely on "some middleware is present" - a route
+             * carrying RequireActionClass with no parameter, or with a
+             * business-data class, would pass a looser check and destroy
+             * records for somebody who should not reach them.
+             */
+            $middleware = $route->gatherMiddleware();
+
+            $declared = array_values(array_filter(
+                $middleware,
+                static fn (mixed $entry): bool => is_string($entry)
+                    && str_starts_with($entry, RequireActionClass::class.':'),
+            ));
+
+            $this->assertNotEmpty(
+                $declared,
+                "Route [{$route->uri()}] permanently destroys a record without an authorization "
+                .'class. D-24 grants purge to an administrator and to no other.'
+            );
+
+            $this->assertSame(
+                [RequireActionClass::class.':'.ActionClass::OrgAdmin->value],
+                $declared,
+                "Route [{$route->uri()}] declares the wrong authorization class for a purge."
             );
         }
 
@@ -274,12 +299,41 @@ final class AccessBoundaryTest extends TestCase
         ]);
     }
 
-    /** The gate must stay a single explicit check, not grow into a role framework. */
-    public function test_the_authorisation_gate_reads_only_the_platform_role(): void
+    /**
+     * The gate asks ONE question, of ONE authority, and decides nothing itself.
+     *
+     * P1-05 replaced a check against a column with a call into AccessEngine,
+     * and the property worth keeping is unchanged: the middleware must not grow
+     * its own idea of who may do what. It builds a question, asks the engine,
+     * and refuses or continues.
+     *
+     * tenant_id stays forbidden here for the P1-01 reason - tenant_id is a
+     * DIRECTORY boundary and organisation_id is a SemantIQ TENANCY boundary,
+     * and a gate that read one for the other would be right by accident in
+     * single-tenant Release 1 and wrong the moment it stopped being one.
+     *
+     * Mutation: give the middleware its own role check, or a second definition
+     * of "is this person an administrator".
+     */
+    public function test_the_authorisation_gate_decides_nothing_itself(): void
     {
-        $source = file_get_contents((new ReflectionClass(RequireSystemAdministrator::class))->getFileName());
+        $source = file_get_contents((new ReflectionClass(RequireActionClass::class))->getFileName());
 
-        $this->assertStringContainsString('isSystemAdministrator()', $source);
+        $this->assertStringContainsString(
+            '$this->engine->decide(',
+            $source,
+            'The route gate no longer asks the engine. One engine means one place decides.'
+        );
+
         $this->assertStringNotContainsString('tenant_id', $source);
+
+        foreach (['role_assignments', 'RoleCode::', 'RoleCatalogue'] as $forbidden) {
+            $this->assertStringNotContainsString(
+                $forbidden,
+                $source,
+                "The route gate reads [{$forbidden}] directly. That is a second definition of who "
+                .'may do what, drifting from the engine the first time either is changed.'
+            );
+        }
     }
 }

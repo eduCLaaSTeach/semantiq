@@ -6,9 +6,9 @@ namespace Tests\Architecture;
 
 use App\Modules\Access\Support\RoleCatalogue;
 use App\Modules\Access\Support\RoleCode;
-use Illuminate\Support\Facades\Schema;
 use App\Modules\Platform\Security\SecurityEventLogger;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use ReflectionEnum;
 use Tests\TestCase;
 
