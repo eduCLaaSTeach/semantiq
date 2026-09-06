@@ -8,10 +8,12 @@ what will be built so it can be argued with before it exists.
 | --- | --- |
 | PLAN | `P1-05-ROLES-ACCESS-PLAN.md` — **APPROVED 3 September 2026** |
 | PLAN merge SHA | `c313a39652681bc198045fa1c175e2e70964c9be` (PR #93) |
-| Decisions binding this design | **D-49 to D-73**, PLAN §31 |
-| Decision raised here and **DECIDED** | **D-74** — §7.4, *both scopes delivered, documented as equivalent today* |
-| Gates that must close here | **P1-04** (§13.3) · **P1-02** (§14.6) |
-| Status | **Under Product Owner review** — **§1, §2, §2.6, §4, §5, §6 and §11 APPROVED 4 Sep 2026**; **§7 APPROVED 6 Sep 2026** (items 1–6); D-74 **decided** |
+| Decisions binding this design | **D-49 to D-74**, PLAN §31 and §16.1 |
+| Decisions closed here | **D-74** — §7.4, *both scopes delivered, documented as equivalent today* · **D-49a** — §2.6.2 |
+| Product Owner corrections recorded | **Thirteen** — §16.2 |
+| Binding before EXECUTE | **§17** — the engineering quality gate |
+| Gates that must close here | **P1-04** — §13 *Deny by default*, N-D3 to N-D7 · **P1-02** — §14.6, **carried** |
+| Status | **PRODUCT OWNER APPROVED — 6 September 2026.** All ten review items approved, §16. **No decision open** |
 
 ---
 
@@ -849,7 +851,7 @@ revocation, chosen by nobody and shown on no screen.
 | Unauthenticated | `denied_unauthenticated` |
 | Inactive user | `denied_inactive_user` |
 | Organisation mismatch | `denied_organisation_mismatch` |
-| **Disabled domain** | `denied_domain_disabled` — §13.3 |
+| **Disabled domain** | `denied_domain_disabled` — §13 *Deny by default*, N-D3 to N-D7 |
 | Unknown / malformed / conflicting state | `denied_unknown_state`, **and logged** |
 
 ### 6.5 Evaluation order, and why it is a narrowing
@@ -858,8 +860,8 @@ revocation, chosen by nobody and shown on no screen.
 action class. 3. For each, its active entitlements for this domain. 4. Domain
 enabled? 5. Scope covers the record? 6. Ceiling covers the sensitivity?
 
-**Every step narrows. No step may widen what an earlier one allowed.** §13 N-D
-breaks it.
+**Every step narrows. No step may widen what an earlier one allowed.** §13
+N-D1 breaks it — *default to allow; evaluate paths before gates.*
 
 ---
 
@@ -883,7 +885,7 @@ breaks it.
 
 **A target is required exactly where the table says so, and refused where it
 does not apply** — a `team_id` on an `own` scope is a stored contradiction, and
-§13 N-S breaks both directions.
+§13 **N-SC11** and **N-SC12** break both directions.
 
 ### 7.2 Manager scope — NO INFERENCE, NO RECURSION — D-66
 
@@ -1109,6 +1111,9 @@ never silently read as `standard`**. It returns to `standard` by writing
 
 ## 9. Step-up re-authentication — D-73
 
+> **§9 — PRODUCT OWNER APPROVED, 6 September 2026** (item 7), with §9.7 to §9.9
+> as decided.
+
 ### 9.1 The five actions
 
 | Action |
@@ -1174,9 +1179,84 @@ required-claims check, the session policy (D-10/D-31) and every refusal state.**
 **Step-up may only ADD a check. It may never relax one**, and §13 N-S4 asserts
 that a step-up return still passes every P1-00 validation.
 
+### 9.7 MFA and `amr` — decided 6 September 2026
+
+**Product Owner decision: MFA / `amr` is NOT a mandatory P1-05 requirement.**
+
+> **Release 1 step-up proves a FRESH PROVIDER AUTHENTICATION EVENT. It does not
+> prove a guaranteed specific credential factor.**
+
+**What is sent and what is required:**
+
+| # | |
+| --- | --- |
+| 1 | Send **both** `prompt=login` **and** `max_age=0` where supported |
+| 2 | Require a **valid, fresh `auth_time`** from the provider |
+
+**Fail closed — no privileged action — when:**
+
+| # | Condition |
+| --- | --- |
+| 1 | **`auth_time` is ABSENT** where it is required |
+| 2 | **`auth_time` PREDATES the step-up request** |
+| 3 | **`auth_time` falls outside the approved freshness tolerance** |
+
+#### 9.7.1 The limitation, recorded plainly
+
+> **SemantIQ can verify that Microsoft reports a fresh authentication event. It
+> cannot independently prove which credential or factor Microsoft required,
+> unless the tenant's Entra authentication policy provides and guarantees that
+> assurance.**
+
+**"MFA verified" MUST NOT be claimed** — on a screen, in a log, in the Product
+Owner Test Script or in any evidence record — **unless it is genuinely enforced
+by an approved Entra policy.**
+
+**This is a real constraint of federated SSO, not a P1-05 defect and not
+something P1-05 can close.** MFA / Conditional Access assurance can be
+introduced later as an **explicit security-policy enhancement, without
+redesigning P1-05** — the freshness check would gain a factor check beside it,
+and nothing else in §9 would move.
+
+### 9.8 Failure, cancellation, expiry and replay
+
+**Approved 6 September 2026. In EVERY case below the privileged action does NOT
+happen.**
+
+| Event | Behaviour |
+| --- | --- |
+| **Provider returns an error** | No action. **Reference CONSUMED** |
+| **User cancels at Microsoft** | No action. **Reference CONSUMED.** Returned to the originating screen: *"The action was cancelled and has not been applied."* |
+| **Reference EXPIRES before return** | No action. **Cannot be reused.** The administrator starts again |
+| **Stale or invalid freshness** | No action, **and a security event** — this is the replay-shaped case |
+| **Replayed reference** | **Refused and logged** |
+
+> **Failing FORWARD is the defect.** Leaving the reference alive *"so the user
+> can try again"* converts a cancelled step-up into a reusable one, and it is
+> exactly the change someone makes to improve the experience. **§13 N-S6 to
+> N-S10.**
+
+### 9.9 An already-fresh authentication does NOT satisfy another action
+
+> **No time window in which everything is privileged.** Someone who has just
+> signed in, or who has just completed a step-up **for a different action**,
+> **must step up again.**
+
+**One step-up authorises one action, once** — §9.5, N-S2, and **N-S11**.
 ---
 
 ## 10. Existing-route authorization migration — enumerated, not swapped
+
+> **§10 — PRODUCT OWNER APPROVED, 6 September 2026** (item 8), using the
+> enumerated design below. **No blanket replacement of
+> `RequireSystemAdministrator`**; every protected route declares its action
+> class; **there is no default class**, and an unclassified protected route
+> **fails closed** (N-E1). Identity & SSO stays `PLATFORM_ADMIN`; Organisation
+> Administrator receives only the explicitly approved surfaces and **can never
+> grant or revoke `system_administrator`** (N-B9); granting or revoking it
+> requires `PLATFORM_ADMIN`. **Administration authority never implies
+> business-data authority** (N-B10), and **UI hiding is never the security
+> boundary** (N-E5).
 
 **73 console routes exist today, all behind `RequireSystemAdministrator`.**
 
@@ -1233,6 +1313,15 @@ added later without one **fails to boot**, rather than defaulting to something.
 ---
 
 ## 11. The simulator calls the same engine
+
+> **§11 — PRODUCT OWNER APPROVED, 6 September 2026** (item 9). The simulator
+> uses **`AccessEngine::explain()`** — no second engine, no authorization logic
+> in React/JavaScript. It shows current and proposed access, **all** authorising
+> paths and **business-readable** explanations, displays **no protected business
+> values**, and is **read-only**: proposed changes never persist. **An actual
+> publish or save is a separate backend transaction that RE-AUTHORIZES and
+> revalidates current state at commit time — an earlier simulation result is
+> NEVER trusted as authorization to write** (§11.5).
 
 ### 11.1 The rule
 
@@ -1293,6 +1382,21 @@ decision.** The mapping is total — **every** reason code has a sentence — an
 than leak the enum onto the screen. This is the §4 professional-polish rule from
 `CLAUDE.md` made structural: *raw enum values on a user-facing surface* is
 exactly what that gate names.
+### 11.5 A simulation is never authorization to write
+
+> **Save re-authorizes.** The publish path is a **separate backend transaction**
+> that re-reads current state and re-runs the decision **at commit time**.
+
+| Rule |
+| --- |
+| An earlier simulation result is **NEVER** trusted as authorization to write |
+| The proposed-state transaction **always rolls back**; nothing it computed is carried into the write |
+| Between simulating and saving, a role may have been revoked, a domain disabled or a user deactivated — **the write must see that, not the simulation's snapshot** |
+
+**§13 N-EN6** breaks it by writing on the simulated decision — the mutation that
+looks like an optimisation and passes every test where nothing changes in
+between.
+
 ---
 
 ## 12. The Phase 2 projection contract — D-70
@@ -1363,6 +1467,8 @@ write**.
 | **N-B14** | **Revoking the role** does not alter ownership or its history | End the ownership period on revocation |
 | **N-B15** | **Neither ownership nor the role alone creates a Domain Entitlement** | Auto-create one from either — the shortcut that makes the role appear to work |
 | **N-B16** | The **Access** module never reads `business_domain_owners` to decide a role, and the **Domains** module never reads role assignments to decide ownership | Add either read. **Architecture test** — it fails at the dependency, not at a behaviour |
+| **N-B17** | **The engine NEVER reads `access_expectation`** — D-61, context only | Read it and let it widen or narrow a decision. P1-04 shipped it as a **label**; this would quietly make it authorization |
+| **N-B18** | **Revocation lands on the NEXT decision** — D-69 — and **no permission cache exists** | Cache the decision, or rely on session expiry. *"Immediate"* then quietly becomes *"eventually"* |
 
 ### Deny by default, and the P1-04 gate
 
@@ -1425,6 +1531,7 @@ exists for.
 | **N-EN3** | `denied_engine_failure` raises an **operational/security signal** | Return it silently — a broken engine then looks like correct refusal |
 | **N-EN4** | **Every** reason code has a business-language sentence, and **no raw code reaches a screen** | Add a code with no mapping. Must fail, not fall through to the enum |
 | **N-EN5** | Evidence mode is **not a field of `AccessQuestion`** | Add it there. **Architecture test** — it must fail at the shape, before anyone can read it in policy code |
+| **N-EN6** | **Save RE-AUTHORIZES at commit time**; a simulation result never authorises a write | Write on the simulated decision. Looks like an optimisation, passes whenever nothing changes in between — §11.5 |
 
 ### Scope union — §7.7
 
@@ -1440,6 +1547,8 @@ exists for.
 | **N-SC8** | **Duplicate CURRENT scope + effective target is REFUSED** | Permit it. Two identical current rows make revocation ambiguous and the screen wrong |
 | **N-SC9** | **Ended historical scopes do NOT participate** | Drop the `ended_at IS NULL` filter — the mutation that silently restores revoked access |
 | **N-SC10** | **`domain` and `organisation` run through the SAME D-74 resolver** while staying separate business intentions | Give either its own resolution — §7.4, N-Q1 |
+| **N-SC11** | A structural target is **REQUIRED** where §7.1 says so | Store a `team` scope with a NULL `team_id` — it would then match everything or nothing, neither of which anybody granted |
+| **N-SC12** | A structural target is **REFUSED** where it does not apply | Store a `team_id` on an `own` or `organisation` scope — a stored contradiction the screen cannot explain |
 
 ### Enforcement
 
@@ -1513,6 +1622,12 @@ exists for.
 | N-S3 | Freshness comes from the **provider's `auth_time`** | Set a local flag |
 | N-S4 | **A step-up return still passes every P1-00 validation** | Relax state, nonce or tenant for the return path |
 | N-S5 | The action is **stored server-side**, not in the URL | Put the target id in the redirect |
+| **N-S6** | A **provider error** performs no action and **CONSUMES** the reference | Leave it reusable *"so they can try again"* — failing forward |
+| **N-S7** | A **user cancellation** performs no action and **CONSUMES** the reference | As above, on the cancel path — the one a developer is most tempted to make friendly |
+| **N-S8** | An **EXPIRED** reference performs no action and cannot be reused | Extend it on return |
+| **N-S9** | **Absent, stale or pre-request `auth_time`** performs no action **and raises a security event** | Accept a missing claim; accept an `auth_time` from the original sign-in |
+| **N-S10** | A **replayed** reference is refused **and logged** | Refuse silently — the replay then leaves no trace |
+| **N-S11** | A **fresh authentication does NOT satisfy a second privileged action** | Open a time window in which everything is privileged — §9.9 |
 
 ### Events
 
@@ -1535,6 +1650,34 @@ grants nothing*, *conflicting fails closed*, *a denied API returns no payload*,
 request*, **and M16–M20**: no manager inference, no recursion, Organisation
 Administrator refused `system_administrator`, re-assignment does not resurrect,
 and a privileged grant without step-up is refused.
+
+### The reconciled guard count
+
+**122 guards, every one with a named mutation.** Reconciled at DESIGN close,
+6 September 2026.
+
+| Family | Subject | Count |
+| --- | --- | :---: |
+| **N-B** | Boundary | **18** |
+| **N-D** | Deny by default and the P1-04 gate | **11** |
+| **N-C** | Incomplete grant paths | **10** |
+| **N-P** | Independent paths | **5** |
+| **N-SC** | Scope union and targets | **12** |
+| **N-Q** | Scope equivalence — D-74 | **2** |
+| **N-E** | Enforcement | **10** |
+| **N-EN** | Engine contract | **6** |
+| **N-L** | Lifecycle and parentage | **11** |
+| **N-M** | D-49 migration, lockout and administrator-set serialisation | **22** |
+| **N-S** | Step-up | **11** |
+| **N-EV** | Events | **4** |
+| | **TOTAL** | **122** |
+
+**Every guard referenced anywhere in this document is defined in one of the
+tables above** — checked mechanically at close, with no dangling reference.
+
+**The count is a floor, not a ceiling.** §17.2 requires mutation coverage of
+**every** dangerous shortcut named in this DESIGN; a guard discovered during
+EXECUTE is added, never traded against one of these.
 
 ---
 
@@ -1615,7 +1758,270 @@ to close the provider-wide SSO Re-check lock observation**, carried since P1-02.
 
 ---
 
-**P1-05 DESIGN — awaiting Product Owner review.** **D-74 is now decided** —
-§7.4, *both scopes delivered and documented as equivalent today.* No decision
-remains open. No implementation, schema, migration, engine, role assignment or
-production privilege change until this design is approved.
+## 16. Product Owner approval register
+
+**The P1-05 DESIGN was reviewed in ten items. All ten are approved. No decision
+is open.**
+
+| Item | Subject | Sections | Approved |
+| :---: | --- | --- | --- |
+| **1** | Role / action catalogue | §1, **§1.5 corrected** | **4 September 2026** |
+| **2** | D-49 bootstrap migration and rollback | §2, **§2.7** | **4 September 2026** |
+| **3** | Last System Administrator concurrency / lockout | **§2.6 corrected** | **4 September 2026** |
+| **4** | Historical parent–child access lifecycle | §4, **§4.5**, §8.3 | **4 September 2026** |
+| **5** | One effective-access engine / decision contract | §5, §6, **§5.5–§5.7**, **§11.4** | **4 September 2026** |
+| **6** | Exact scope semantics | §7, **§7.7** | **6 September 2026** |
+| **7** | Step-up re-authentication | §9, **§9.7–§9.9** | **6 September 2026** |
+| **8** | Existing-route authorization transition | §10 | **6 September 2026** |
+| **9** | Access Simulator | §11 | **6 September 2026** |
+| **10** | P1-04 carried domain gate | §13 *Deny by default*, §14.6 | **6 September 2026** |
+
+### 16.1 Decisions closed during this review
+
+| Decision | Outcome |
+| --- | --- |
+| **D-74** | **CLOSED — option (b).** Both `domain` and `organisation` delivered, documented as equivalent today, `domain` reserved for a future partition. §7.4 |
+| **D-49a** | **Floor of 1** System Administrator, with a **non-blocking warning** at exactly 1. §2.6.2 |
+
+### 16.2 Product Owner corrections recorded during this review
+
+**Each is a statement of mine that was wrong. The original is left visible where
+it was made, so the next reader does not re-derive it.**
+
+| # | Correction | Where |
+| :---: | --- | --- |
+| 1 | The `domain_owner` role is **not** the source of domain accountability — P1-04's `business_domain_owners` is, and neither may be derived from the other | **§1.5** |
+| 2 | Migration 4's `down()` must **not** refuse because assignments changed — that would block an emergency rollback | **§2.7** |
+| 3 | Rollback is **not lossless** after P1-05 administration has been used — two windows, not one | **§2.7.3** |
+| 4 | **"Current" means `ended_at IS NULL`** and does not require an active account — not to be collapsed with the lockout filter | **§2.7.2** |
+| 5 | **Subject-first locking is insufficient.** The administrator SET needs one common serialisation boundary; a deadlock victim is not a security mechanism | **§2.6.3** |
+| 6 | Zero administrators is **not** only a fresh-deployment state — **P1-00 D-03 recovery already exists** and must not be re-invented | **§2.6.1**, **§2.6.5** |
+| 7 | Revoking the last scope does **not** revoke the entitlement | **§4.5** |
+| 8 | A **cleared** ceiling and an **absent** ceiling are different states; absence fails closed | **§8.3** |
+| 9 | Evidence mode belongs **outside** `AccessQuestion` | **§5.5** |
+| 10 | The primary path must be **deterministically ordered**, never database order | **§5.6** |
+| 11 | **Raw reason codes must never reach a screen** | **§11.4** |
+| 12 | Several scopes on one entitlement **UNION** | **§7.7** |
+| 13 | **MFA / `amr` is not claimed** — only a fresh authentication event is proven | **§9.7** |
+
+### 16.4 Decision coverage — D-49 to D-74
+
+**Every decision binding this unit, and the section that carries it.** This is
+the first row of the §17.5 traceability gate: *Decision → Code → Test →
+Evidence.*
+
+| Decision | Subject | Carried by |
+| --- | --- | --- |
+| **D-49** | Bootstrap migration, rollback, deployment | §2, §2.6, §2.7 |
+| **D-49a** | Administrator floor of 1, warning at 1 | §2.6.2 |
+| **D-50** | Build and test order | §14.1 |
+| **D-51 – D-54** | Nothing about a role is manageable — **no `roles` table** | §1, §1.1, §15 |
+| **D-55** | Several roles at once | §6.2 consequence 1 — **role actions UNION** |
+| **D-56** | **No effective dating** — begins on commit, ends on revoke | §4, §15 |
+| **D-57** | **No implicit entitlement, ever** | §1.5, §7.7.1, **N-B15** |
+| **D-58** | **Groups grant nothing**; the engine never reads `group_memberships` | **N-B4** |
+| **D-59** | Scope belongs to an entitlement period | §7, §4 |
+| **D-60** | **One ceiling, on the entitlement** — no person-level ceiling | §8.1 |
+| **D-61** | **`access_expectation` is CONTEXT ONLY** — the engine never reads it | **N-B17** |
+| **D-62** | Independent, complete grant paths | §6 |
+| **D-63** | Above the ceiling → **DENY**, no redaction engine | §8.2 |
+| **D-64** | **No explicit deny records** | §6.3, **N-P3** |
+| **D-65** | Self-assignment | §10.4, and step-up action 4 — §9.1 |
+| **D-66** | **No manager inference, no recursion** | §7.2, **N-B6** |
+| **D-67** | The **"Own"** contract | §12.4 |
+| **D-68** | **Auditor** — organisation-wide evidence, read-only, zero business entitlement | §1.3, §1.4, **N-E7** |
+| **D-69** | **"Immediate" = the next decision after commit. NO permission cache** | **N-L13**, **N-B18** |
+| **D-70** | The Phase 2 projection contract; engine usable outside HTTP | §5.2, §12 |
+| **D-71** | **Privileged-surface denials only** — no repeated-denial detector | **N-EV4**, §15 |
+| **D-72** | Four context keys; **`role` is a CODE**, no free-text channel | **N-EV1**, **N-EV2** |
+| **D-73** | **Step-up re-authentication** | §9, §9.7 – §9.9 |
+| **D-74** | **CLOSED** — both scopes, documented as equivalent | §7.4, §7.7 |
+
+### 16.3 Carried gates
+
+| Gate | Status |
+| --- | --- |
+| **P1-04 — the disabled-domain gate** | **MUST CLOSE HERE.** All five cases, §13 *Deny by default*, N-D3 to N-D7 |
+| **P1-02 — provider-wide SSO Re-check** | **REMAINS OPEN** unless a genuine second System Administrator is legitimately established. **A privileged account must NOT be manufactured to close evidence** — §14.4 |
+
+---
+
+## 17. The engineering quality gate — BINDING BEFORE EXECUTE
+
+**Product Owner instruction, 6 September 2026: review rounds were compressed to
+save time and credits. That does NOT authorise shortcuts, weaker security,
+reduced testing, missing edge cases or lower code quality.**
+
+> **Fewer approval loops + FULL engineering rigor.**
+
+### 17.1 The seven invariants this design must preserve
+
+**Every one is already stated somewhere above. They are gathered here so that no
+single edit can quietly remove one.**
+
+#### 1 — ONE authorization model
+
+| |
+| --- |
+| Role assignments become the **sole** authority |
+| **No competing `users.platform_role` authority** after migration — §2.3, N-M7 |
+| **No duplicated authorization calculations** — N-B8 |
+| **No simulator authorization copy** — N-B7, N-C6, N-EN1 |
+| **No JavaScript authorization** — N-E6 |
+
+#### 2 — FAIL CLOSED, with no permissive fallback
+
+| Condition | Result |
+| --- | --- |
+| Unauthenticated · inactive user · organisation mismatch | **DENY** |
+| **Disabled domain** · **no enabled domain** | **DENY** |
+| **Missing scope** | **DENY** — §4.5, §7.6 |
+| **Missing or malformed ceiling** | **DENY** — §8.3, N-C7 |
+| Unknown or conflicting state | **DENY**, and logged |
+| **Engine failure** | **DENY**, and an operational signal — §5.7 |
+
+#### 3 — NO silent privilege expansion
+
+| |
+| --- |
+| System Administrator **≠** business access — N-B1 |
+| Organisation Administrator **≠** business access — N-B10 |
+| **`domain_owner` role ≠ P1-04 ownership**, and **P1-04 ownership ≠ role assignment** — §1.5, N-B11 to N-B16 |
+| Manager and hierarchy facts **do not invent scope** — §7.2, N-B6 |
+| **Group membership grants nothing** in Release 1 — D-35, N-B4 |
+| **Organisation scope never crosses the entitled domain** — §7.5, N-P5, N-SC5 |
+| **AI, Fabric, Power BI, export and share cannot bypass effective access** — §12.3 |
+
+#### 4 — Concurrency genuinely safe
+
+| |
+| --- |
+| **MySQL evidence wherever locks matter** |
+| **Administrator-set serialisation** — §2.6.3 |
+| **Deterministic lock ordering** — §2.6.3, §4.4 |
+| **No dependence on SQLite locking** |
+| **No dependence on deadlock-victim selection as a security control** — N-M20 |
+
+#### 5 — Historical integrity
+
+| |
+| --- |
+| **No destructive history cleanup** |
+| Parent revocation ends active children **transactionally** — §4.4 |
+| Re-grant creates **new periods** — N-L9, N-L10, N-SC9 |
+| **Old children never silently reactivate** |
+| **User deactivate/reactivate preserves grants** — N-L11 |
+| **Domain disable/re-enable preserves grants** — N-L12 |
+| **Ended rows do not participate** in effective access — N-SC9 |
+
+#### 6 — Step-up remains real
+
+Provider re-authentication · provider freshness proof · exact action binding ·
+short expiry · single-use · anti-replay · **failure or cancel = no privileged
+write** — §9, N-S1 to N-S11.
+
+#### 7 — Backend enforcement BEFORE the protected fetch
+
+> **A denial must not return a protected payload and then hide it in the UI.
+> Enforcement precedes protected retrieval.** — N-E2, N-E3, N-E5.
+
+### 17.2 What EXECUTE must produce — green CI is NOT completion
+
+**When EXECUTE is later authorised, the implementation is not complete merely
+because CI is green.** All of the following are required:
+
+| # | Required |
+| :---: | --- |
+| 1 | Feature tests |
+| 2 | **Architecture** tests |
+| 3 | Negative / security tests |
+| 4 | **Mutation tests covering every dangerous shortcut named in this DESIGN** |
+| 5 | **MySQL concurrency** tests |
+| 6 | Migration tests |
+| 7 | **Rollback** tests |
+| 8 | **Genuine empty-deployment bootstrap** tests |
+| 9 | **Migration of the EXISTING PRODUCTION System Administrator** |
+| 10 | **Last-administrator lockout** tests |
+| 11 | **Route authorization matrix** tests |
+| 12 | **Disabled-domain five-case** tests |
+| 13 | **Scope UNION** tests |
+| 14 | **Incomplete-entitlement** tests |
+| 15 | **Independent grant-path** tests |
+| 16 | **Simulator / enforcement parity** tests |
+| 17 | **Step-up substitution, replay, expiry, cancel and freshness** tests |
+| 18 | Inactive-user tests |
+| 19 | **Immediate revocation** tests |
+| 20 | **Backend no-payload-on-denial** tests |
+| 21 | **Architecture guards preventing a second authorization model** |
+
+> **A difficult test is NEVER deleted or weakened to make CI green. The defect is
+> fixed.** `CLAUDE.md` §2 — and this project has already produced four guards
+> that survived mutation because the *measurement* was wrong, not the code.
+
+### 17.3 UI and professional quality
+
+**The accepted UI, brand and navigation foundation remains FROZEN.** For the
+Roles & Access screens:
+
+| |
+| --- |
+| Use **existing approved design patterns**; tabs where appropriate |
+| **Business terminology only** — no raw enum keys, **no developer-facing reason codes** (§11.4) |
+| Spelling, grammar and capitalisation correct |
+| Correct icons · clean alignment and spacing |
+| **Usable light AND dark themes** |
+| Sensible back / forward navigation |
+| **No misleading "has access" state for an incomplete grant** — §4.5.2 |
+| **Actual browser / visual verification** — `CLAUDE.md` §5 |
+
+**Professional-polish defects are caught BEFORE Product Owner handover** —
+`CLAUDE.md` §4.
+
+### 17.4 The Product Owner Test Script — MANDATORY
+
+**P1-05 implementation is never submitted for acceptance without a complete
+`P1-05 PRODUCT OWNER TEST SCRIPT`**, in simple business steps: what to click ·
+setup and preconditions · what to enter · expected result · the important
+negative/refusal case · evidence to observe.
+
+**It must cover, at minimum:**
+
+| |
+| --- |
+| Role assignment · Domain entitlement · **multiple scope UNION** · Sensitivity |
+| **Disabled domain** · **no-enabled-domain case** |
+| **System Administrator with NO business access** |
+| **Domain Owner with NO automatic entitlement** |
+| **Manager restricted to assigned teams only** |
+| **Incomplete / no-scope entitlement** |
+| Revocation · **re-grant history** |
+| **Access Simulator** · **step-up actions** |
+| **Organisation Administrator boundary** · denied business access |
+
+> **The Product Owner must NOT be required to create fake permanent production
+> data to satisfy testing.** Where a check cannot be exercised without false
+> permanent history, it is marked **NOT CURRENTLY OBSERVABLE WITH REAL
+> PRODUCTION DATA**, its automated evidence is kept, and the live observation is
+> carried forward as a gate — `CLAUDE.md` §3.
+
+### 17.5 The traceability gate
+
+**Before P1-05 acceptance is requested:**
+
+> **Requirement / Decision → Code → Test → Evidence**
+
+**Every important PLAN and DESIGN decision must be traceable.** D-49 to D-74,
+every §16.2 correction, and every guard in §13.
+
+**Nothing may disappear because the review rounds were compressed.** That is the
+whole purpose of this section.
+
+---
+
+**P1-05 DESIGN — PRODUCT OWNER APPROVED, 6 September 2026.** All ten review
+items are approved, **D-74 is closed**, and **no decision is open.**
+
+**NO IMPLEMENTATION HAS STARTED.** This document is documentation only — no
+schema, no migration, no engine, no role assignment, no route change, no screen,
+no production privilege or data change. **EXECUTE requires separate Product
+Owner authorisation**, and §17 binds before it begins.
