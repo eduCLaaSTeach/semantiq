@@ -33,7 +33,7 @@ ran — so that nothing disappeared because the review rounds were compressed.
 | **D-62** independent complete paths | `AccessEngine::evaluateBusinessData()` | `GrantPathIndependenceTest` | **N-P1** to **N-P4** |
 | **D-63** above the ceiling → DENY | `AccessEngine`, `DecisionReason::DeniedCeiling` | `EngineBoundaryTest` | No redaction engine exists |
 | **D-64** no explicit deny records | `AccessEngine` — revoked rows never evaluated | `GrantPathIndependenceTest` | **N-P3**, asserted from SQL |
-| **D-65** self-assignment | `AccessController::stepUpActionForGrant()` | `StepUpTest` | A self-grant is one of the five step-up actions |
+| **D-65** self-assignment | `AccessController::stepUpActionForGrant()` and `AccessController::grantEntitlement()` | `StepUpTest` · `SelfEntitlementStepUpTest` | A self-grant is one of the five step-up actions — **and covers a role and an entitlement alike** |
 | **D-66** no manager inference, no recursion | `AccessEngine::scopeCovers()` | `ScopeUnionTest` | Scope reads the named team only |
 | **D-67** the "Own" contract | `ResourceReference::belongsTo()` | `GrantPathIndependenceTest` | Defined here, implemented by Phase 2 |
 | **D-68** Auditor — evidence read, no business data | `RoleCatalogue::MATRIX` | `Architecture/AccessBoundaryTest` | **N-E7** |
@@ -41,7 +41,8 @@ ran — so that nothing disappeared because the review rounds were compressed.
 | **D-70** the Phase 2 projection contract | `AccessEngine` usable outside HTTP | `Architecture/AccessBoundaryTest` | No session, request or auth in the engine |
 | **D-71** privileged-surface denials only | `AccessEngine::denied()` | `EngineBoundaryTest` | Routine denials are not logged |
 | **D-72** four context keys, `role` is a CODE | `SecurityEventLogger::ALLOWED_KEYS` | `P1BoundaryTest` | No free-text channel |
-| **D-73** step-up re-authentication | `StepUpService` · `StepUpController` · `EntraProvider` | `StepUpTest` | **N-S1** to **N-S11** |
+| **D-73** step-up re-authentication — **self-granting a ROLE** | `AccessController::stepUpActionForGrant` · `StepUpService` · `StepUpController::performGrant` · `EntraProvider` | `StepUpTest` | **N-S1** to **N-S11** |
+| **D-73** step-up re-authentication — **self-granting a DOMAIN ENTITLEMENT** | `AccessController::grantEntitlement` · `StepUpController::performSelfEntitlementGrant` | `SelfEntitlementStepUpTest` | **N-SE1** to **N-SE9**, **N-EV3**, **M-SE1** to **M-SE13** |
 | **D-74** both scopes, documented as equivalent | `ScopeType` · one resolver in `AccessEngine` | `ScopeUnionTest` · `PresentationTest` | **N-Q1**, **N-Q2** |
 
 ---
@@ -55,7 +56,7 @@ ran — so that nothing disappeared because the review rounds were compressed.
 | **3** | **No silent privilege expansion** | `RoleCatalogue`; `ActionClass::requiresGrantPath()` | `EngineBoundaryTest` · `Architecture/*` · **N-B1**, **N-B10**, **N-B11**, **N-B16**, **N-B17** |
 | **4** | **Concurrency genuinely safe** | `AdministratorSetGuard::lockAndReadEffectiveSet()` | `AdministratorConcurrencyTest` — **MySQL only**, CI |
 | **5** | **Historical integrity** | `RoleAssignmentService::endChildrenOf()`; nothing deletes | `LifecycleTest` |
-| **6** | **Step-up remains real** | `StepUpService`; provider `auth_time` | `StepUpTest` |
+| **6** | **Step-up remains real** | `StepUpService`; provider `auth_time` | `StepUpTest` · `SelfEntitlementStepUpTest` |
 | **7** | **Enforcement before the protected fetch** | `RequireActionClass` middleware | `RouteAuthorizationMatrixTest` — no payload on denial |
 
 ---

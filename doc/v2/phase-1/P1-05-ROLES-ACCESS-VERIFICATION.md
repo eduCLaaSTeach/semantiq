@@ -7,7 +7,14 @@ claim as an observed production result, and nothing here is presented as one.
 | --- | --- |
 | PLAN merge SHA | `c313a39652681bc198045fa1c175e2e70964c9be` |
 | DESIGN merge SHA | `73f62bc5ffa3beab17975e8107698f48f4f20f1c` |
-| Status | **Implementation complete. NOT MERGED, NOT DEPLOYED** — awaiting Gate C review |
+| Status | **Gate C blocker corrected. NOT MERGED, NOT DEPLOYED** — awaiting final approval |
+
+**One blocker was found at Gate C review and is fixed here.** Self-granting a
+**domain entitlement** did not require step-up: `AccessController::grantEntitlement`
+called `EntitlementService::grant` directly, so an Access Administrator could
+widen their own reach into a business domain with no re-authentication. The
+role half of D-73 had shipped; the entitlement half had not. **It was found by
+the Product Owner, not by any test here** — §8 records what that means.
 
 ---
 
@@ -15,11 +22,13 @@ claim as an observed production result, and nothing here is presented as one.
 
 | | |
 | --- | --- |
-| Tests | **627** |
-| Passing | **623** |
+| Tests | **641** |
+| Passing | **637** |
 | Failing | **0** |
 | Skipped | **4** |
-| Assertions | **15,025** |
+| Assertions | **15,101** |
+
+Fourteen of those are new, and all fourteen are the Gate C correction.
 
 **The four skips are deliberate and each states its reason.** They are the MySQL
 lock and race measurements: SQLite has no `SELECT … FOR UPDATE`, so the locking
@@ -42,12 +51,20 @@ skips**.
 | `PresentationTest` | 34 | Reason mapping total; incomplete entitlements; D-74 on screen |
 | `Architecture/AccessBoundaryTest` | 6 | One engine; the question's shape; no second model |
 | `AdministratorConcurrencyTest` | 2 | **MySQL only** — the set lock and the three races |
+| `SelfEntitlementStepUpTest` | 14 | **The Gate C correction.** D-73's entitlement half, end to end through the real routes |
 
 ---
 
 ## 2. Mutation testing
 
-**34 run. 34 caught. 0 survived.** Recorded in `P1-05-MUTATIONS.md`.
+**47 run. 47 caught. 0 survived.** Recorded in `P1-05-MUTATIONS.md` — thirty-four
+for the build, and thirteen (**M-SE1** to **M-SE13**) for the Gate C correction.
+
+**M-SE11 survived the new file and is caught by the existing `StepUpTest`.** It
+is recorded that way rather than quietly counted, and the reason is in
+`P1-05-MUTATIONS.md`: a replayed self-grant is refused twice, and the second
+refusal is the database's conditional `UPDATE`, so removing the PHP replay
+check leaves the new file's assertion true.
 
 **Seven survived the first run, and every one of them was a defect in a TEST
 rather than in the code.** They are recorded rather than quietly fixed, because
@@ -121,6 +138,37 @@ created through the real services.
 was showing true information in a place that made it misleading, which no
 assertion about correctness would have caught.
 
+### The Gate C correction, in the browser
+
+Re-verified at both widths in both themes, against seeded data, signed in as a
+System Administrator opening **their own** role record.
+
+| Observed | Result |
+| --- | --- |
+| Another person's record shows no self-grant warning | Yes |
+| The administrator's own record says, in sentence case: *"This role belongs to you. Adding a domain to your own access asks you to confirm your identity with Microsoft first, and nothing is granted until you do."* | Yes, all four viewports |
+| Submitting a self-grant lands on the **step-up confirmation card**, not on a grant | Yes |
+| The card says *"You are about to **grant access to yourself**"* | Yes |
+| The card asks for **no credential** — no password, PIN or passcode field | Yes |
+| The card offers *"Cancel and go back — nothing will be changed"* | Yes |
+| No horizontal overflow; no raw codes; no page errors | Yes |
+| **Database after all four journeys: 9 `self_grant` confirmations, 0 entitlements on the administrator's own assignment** | Yes |
+
+**The verification script itself was wrong on its first run**, and it is worth
+recording because it is the same failure class as everything else in this file.
+It called `waitForLoadState('networkidle')` immediately after submitting.
+Inertia submits over XHR, so "idle" was already true before the round trip
+finished, and the script read the *previous* page — then reported, on all four
+viewports, that a self-grant had not reached step-up. The database said
+otherwise: four `self_grant` rows and no entitlement. The script now waits for
+the navigation.
+
+**One observation, not a defect, for the Product Owner.** The card names the
+*kind* of action — "grant access to yourself" — but not the domain. That is the
+approved wording (DESIGN §9, item 7) and is the same for a role self-grant, so
+it has not been changed here. If an administrator should see *which* domain
+they are confirming, that is a product decision to raise separately.
+
 ---
 
 ## 5. What is NOT verified
@@ -135,6 +183,7 @@ assertion about correctness would have caught.
 | 4 | **Row-level filtering of real business records** | No business data exists in Phase 1 |
 | 5 | **That AI and Fabric receive exactly the requesting user's access** | No AI surface exists. The contract is defined and guarded; the integration is Phase 2/3 |
 | 6 | **The P1-02 SSO Re-check lock** | Needs a genuine second System Administrator. **None was manufactured** |
+| 7 | **A completed self-entitlement step-up in a browser** | The middle step is Microsoft's. The browser was driven up to *"Continue to Microsoft"* and the cancel path; the completed grant, the stale `auth_time`, the replay and the expiry are proven in `SelfEntitlementStepUpTest` against the real routes |
 
 ---
 
@@ -153,3 +202,21 @@ assertion about correctness would have caught.
 
 The `srikanth@lithan.com` record and the `software` custom domain are both
 unchanged, and remain open operational items.
+
+---
+
+## 8. What the Gate C blocker says about this suite
+
+**Thirteen mutations, thirty-four before them, and none of them could have found
+it.** Every mutation in the build run broke a guard that existed. The
+entitlement half of D-73 was not a broken guard — it was an **absent** one, and
+a mutation framework has nothing to delete.
+
+That is the limit of mutation testing stated plainly: it proves the guards
+present are real. It cannot tell you a rule is only half implemented. What
+would have found it is reading D-73 as a sentence — *self-granting any role **or
+entitlement*** — and checking both halves against the code, which is what the
+Product Owner did.
+
+The fourteen new cases and thirteen new mutations do not fix that limitation.
+They fix this instance of it.

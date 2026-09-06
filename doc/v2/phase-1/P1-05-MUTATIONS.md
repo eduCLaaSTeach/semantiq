@@ -6,9 +6,13 @@ reports safety that does not exist.
 
 | | |
 | --- | --- |
-| Mutations run | **34** |
-| Caught | **34** |
+| Mutations run | **47** |
+| Caught | **47** |
 | Survived | **0** |
+
+Thirty-four for the EXECUTE build, and **thirteen more (M-SE1 to M-SE13) for the
+Gate C correction** that made self-granting a domain entitlement require
+step-up.
 
 Each mutation is the one **a person who misunderstood the rule would plausibly
 write** — not an arbitrary edit. Several are a single `&& false`, because the
@@ -54,6 +58,64 @@ defect being modelled is somebody deleting a guard they thought was redundant.
 | **N-S9b** | an auth_time from the original sign-in is accepted | **Caught** |
 | **N-E1** | an unrecognised action class falls open | **Caught** |
 | **N-E5** | the route gate stops asking the engine | **Caught** |
+
+---
+
+## The Gate C correction — D-73, the entitlement half
+
+The Product Owner found at Gate C that self-granting a **domain entitlement**
+did not step up: `AccessController::grantEntitlement` called
+`EntitlementService::grant` directly. **No mutation in the run above could have
+found it**, because none of the thirty-four modelled a rule that was only half
+implemented — every one broke a guard that existed. These thirteen exist so that
+the half now implemented cannot be removed quietly.
+
+| # | Mutation | Result | Caught by |
+| --- | --- | :---: | --- |
+| **M-SE1** | the self-grant branch is removed; `grantEntitlement` calls the service directly, as the first version did | **Caught** | 9 failures and 2 errors across the file |
+| **M-SE2** | *every* entitlement grant is sent to step-up, not only a self-grant | **Caught** | `test_granting_another_person_an_entitlement_does_not_require_step_up` |
+| **M-SE3** | the pre-flight refusals are dropped, so a doomed self-grant is offered a confirmation it can never complete | **Caught** | 8 failures |
+| **M-SE4** | the already-held pre-flight check is dropped | **Caught** | `test_a_self_grant_that_cannot_succeed_is_refused_before_step_up` |
+| **M-SE5** | the exact target is not stored: the assignment id is left out at the controller | **Caught** | 2 failures and 3 errors |
+| **M-SE6** | `SelfGrant` always dispatches to the ROLE grant, so the entitlement half is never performed | **Caught** | `test_one_completed_self_grant_cannot_create_a_second_entitlement` and 4 more |
+| **M-SE7** | the domain is read from the REQUEST instead of the stored row | **Caught** | `test_no_request_parameter_can_substitute_the_assignment_or_the_domain` |
+| **M-SE8** | the assignment is read from the REQUEST instead of the stored row | **Caught** | the same case, as an error |
+| **M-SE9** | the actor re-check on return is dropped | **Caught** | `test_an_assignment_that_stopped_being_the_actors_own_is_not_granted` |
+| **M-SE10** | the organisation re-check on return is dropped | **Caught** | `test_a_confirmation_cannot_be_spent_in_another_organisation` |
+| **M-SE11** | a consumed reference becomes reusable: the replay refusal is removed | **Caught** | `StepUpTest` — **not** by the new file. See below. |
+| **M-SE12** | the stored assignment id is dropped inside `StepUpService::begin` | **Caught** | 2 failures and 3 errors |
+| **M-SE13** | the step-up is logged under a generic reason, so a self-grant and an administrator grant look the same in the log | **Caught** | `test_a_self_granted_entitlement_records_a_distinguishable_event` |
+
+### M-SE11 is recorded honestly
+
+Run against `SelfEntitlementStepUpTest` alone, **M-SE11 survived**. Run against
+the Access suite it is caught, by `test_a_reference_can_be_consumed_only_once`
+and `test_a_cancellation_performs_no_action_and_consumes_the_reference`.
+
+The reason is worth stating rather than hiding: the replayed self-grant is
+refused **twice**, and the second refusal is the database's. Removing the PHP
+replay check still leaves the conditional `UPDATE … WHERE consumed_at IS NULL`
+inside `consumeAndPerform`, which affects zero rows and rolls the whole
+transaction back — so no second entitlement is created either way, and the
+new file's assertion (no second entitlement) is true under both. That is
+defence in depth working, not a vacuous test: the same case is what catches
+M-SE6, and the outer guard has its own non-vacuous cases in `StepUpTest`.
+
+### Two test defects this correction found
+
+**The container hands a request the instance it resolved first.** The step-up
+provider was first faked by calling `$this->app->instance(IdentityProvider::class, …)`
+once per case. The second call had no effect on the request: the "stale
+`auth_time`" case went on using the **cancellation** fake from the previous
+case, so it passed while proving nothing about freshness at all — evidence
+shaped like evidence. The fake is now one mutable object, bound through a
+closure, and each case sets the answer it needs.
+
+**A `git checkout` between mutations reverted uncommitted work.** The first
+mutation run restored three source files from the index, silently undoing the
+correction, and the remaining mutations reported "anchor missing" rather than
+"survived". They were re-run against a committed tree. No mutation result in
+the table above comes from that first run.
 
 ---
 

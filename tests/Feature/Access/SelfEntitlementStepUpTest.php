@@ -19,6 +19,7 @@ use App\Modules\Platform\Identity\AuthenticationFailed;
 use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Identity\VerifiedIdentity;
 use App\Modules\Platform\Models\User;
+use App\Modules\Platform\Security\SecurityEventLogger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -26,6 +27,7 @@ use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Tests\Support\AccessFactory;
 use Tests\Support\OrganisationFactory;
+use Tests\Support\RecordingSecurityEventLogger;
 use Tests\TestCase;
 
 /**
@@ -502,6 +504,41 @@ final class SelfEntitlementStepUpTest extends TestCase
             0,
             DomainEntitlement::query()->count(),
             'A confirmation begun in one organisation was spent in another.'
+        );
+    }
+
+    /**
+     * N-EV3 for this half. A SELF-GRANT IS A DISTINGUISHABLE PRIVILEGED EVENT.
+     *
+     * DESIGN §10.4 requires three things of a self-assignment: confirmation
+     * naming it as a self-grant, step-up, and a security event that can be told
+     * apart from an ordinary grant. The first two are above; this is the third,
+     * for the entitlement half.
+     *
+     * Mutation: record the step-up as an unnamed request, so a self-grant and
+     * an administrator grant look the same in the log.
+     */
+    public function test_a_self_granted_entitlement_records_a_distinguishable_event(): void
+    {
+        $events = new RecordingSecurityEventLogger;
+        $this->app->instance(SecurityEventLogger::class, $events);
+
+        $this->beginASelfGrant();
+
+        $reasons = array_column($events->contextsFor(SecurityEventLogger::STEP_UP_REQUESTED), 'reason');
+
+        $this->assertSame(
+            [StepUpAction::SelfGrant->value],
+            $reasons,
+            'A self-granted domain entitlement was not recorded as a self-grant. In the log it '
+            .'would be indistinguishable from an administrator granting somebody else access.'
+        );
+
+        // And no entitlement event fired, because nothing was granted yet.
+        $this->assertNotContains(
+            SecurityEventLogger::ENTITLEMENT_GRANTED,
+            $events->recordedEvents(),
+            'An entitlement-granted event was recorded before the administrator re-authenticated.'
         );
     }
 

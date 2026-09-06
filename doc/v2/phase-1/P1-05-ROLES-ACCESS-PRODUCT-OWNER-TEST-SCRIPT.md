@@ -159,19 +159,52 @@ grants. They can be revoked, and the record of them is permanent.
 > organisation actually wants one — J1 will succeed for the other person and
 > then refuse for the survivor. **Do not create one just for this test.**
 
-### K — Look at it as a customer would
+### K — Granting access to yourself
+
+**This is the correction you asked for at Gate C.** Adding a business domain to
+**your own** access is the same escalation as giving yourself the role, so it
+now asks you to sign in with Microsoft again first.
+
+> ⚠️ **K5 creates a real, permanent record.** Choose a domain you genuinely
+> should be able to reach. If there is none, do **K1 to K4 and K7 to K9** and
+> mark **K5 and K6 not done** — do not entitle yourself to a domain you should
+> not have, and do not invent one to test with.
+
+> **What "confirm your identity" means here.** Microsoft performs the
+> re-authentication; SemantIQ never sees a password. Whether you are asked for a
+> second factor depends on **your Entra sign-in policy**, not on SemantIQ — so
+> if you are only asked for a password, that is your tenant's policy, not a
+> defect.
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| K1 | Roles & Access → open **your own** row | Your role record opens | |
+| K2 | Select **Add entitlement** | Beneath the domain list: *"This role belongs to you. Adding a domain to your own access asks you to confirm your identity with Microsoft first, and nothing is granted until you do."* | |
+| K3 | Choose a domain and select **Add entitlement** | A **Confirm your identity** page. It says *"You are about to **grant access to yourself**"*, offers **Continue to Microsoft**, and says the confirmation expires in 5 minutes. **It asks you for no password and no code** | |
+| K4 | Select **Cancel and go back** | You return to Roles & Access. **Nothing was granted** — reopen your record and the domain is still absent | |
+| K5 | Repeat K1–K3, then **Continue to Microsoft** and complete the sign-in | You return to your role record: *"Domain entitlement granted. Assign a scope to make it effective."* The domain now appears, marked as having **no active scope** | |
+| K6 | Repeat K1–K3 for a **second** domain, then **cancel at the Microsoft page** | *"The action was cancelled and has not been applied."* The second domain is **not** on your record | |
+| K7 | Open a **colleague's** role record and add an entitlement | It is granted immediately. **No identity confirmation** — this is ordinary administration, not a self-grant | |
+| K8 | On your own record, try to add the **same** domain from K5 again | Refused straight away, on the page, **without sending you to Microsoft** | |
+| K9 | Repeat K1–K3, then leave the confirmation page open for **more than five minutes** before selecting Continue | Refused: *"That confirmation is no longer valid. Start the action again."* Nothing is granted | |
+
+> **K8 matters.** A confirmation you could never complete is a trap: you would
+> re-authenticate with Microsoft and be refused afterwards. The refusal comes
+> first.
+
+### L — Look at it as a customer would
 
 | # | Check | PASS / FAIL |
 | --- | --- | --- |
-| K1 | Spelling, grammar and capitalisation on every screen | |
-| K2 | Nothing in ALL CAPS that should be a sentence | |
-| K3 | No codes, enum values, field names or route names anywhere a person reads | |
-| K4 | Every refusal says **what to do instead**, not just that it failed | |
-| K5 | Every successful save is **confirmed** — never silence | |
-| K6 | Switch to **dark theme** and walk the same screens | |
-| K7 | Narrow the window to phone width and walk them again | |
-| K8 | **Back** and the browser's back button both behave sensibly | |
-| K9 | Would you be comfortable showing these exact screens to a customer? | |
+| L1 | Spelling, grammar and capitalisation on every screen | |
+| L2 | Nothing in ALL CAPS that should be a sentence | |
+| L3 | No codes, enum values, field names or route names anywhere a person reads | |
+| L4 | Every refusal says **what to do instead**, not just that it failed | |
+| L5 | Every successful save is **confirmed** — never silence | |
+| L6 | Switch to **dark theme** and walk the same screens | |
+| L7 | Narrow the window to phone width and walk them again | |
+| L8 | **Back** and the browser's back button both behave sensibly | |
+| L9 | Would you be comfortable showing these exact screens to a customer? | |
 
 ---
 
@@ -187,6 +220,7 @@ test.**
 | **3** | **Two people acting at the same instant** | Two people clicking simultaneously look identical to one person clicking twice | `AdministratorConcurrencyTest` against **real MySQL** in CI: the administrator set is genuinely locked, and the loser of a race gets the business refusal rather than a database error |
 | **4** | **The P1-02 SSO Re-check lock** | It needs a **genuine second System Administrator**, and one must not be manufactured to close a gate | **Carried forward, openly.** A fake privileged account would make the evidence worth less than leaving it open |
 | **5** | **That Microsoft required a particular credential** | SemantIQ can prove Microsoft reports a **fresh sign-in**. It cannot prove which factor was used unless your Entra policy guarantees it | Stated in `P1-05-DEPLOYMENT-NOTE.md` §5. **"MFA verified" is never claimed anywhere** |
+| **6** | **Section K, until the second redirect URI is registered in Entra** | `https://<host>/auth/microsoft/step-up` must exist in the app registration first. Until it does, **K3 onwards fails on the way to Microsoft** — nothing is granted, which is the correct failure, but it is not the test. See `P1-05-DEPLOYMENT-NOTE.md` §1 | `SelfEntitlementStepUpTest` drives all fourteen cases through the real routes: the grant, the cancellation, the stale sign-in, the expiry, the replay, and every attempt to substitute the domain or the assignment on the way back |
 
 ---
 
@@ -201,7 +235,9 @@ test.**
 | 5 | A screenshot of **H4** — no enabled domains, and access refused |
 | 6 | A screenshot of **I6** — the re-granted role with no entitlements |
 | 7 | A screenshot of **J2** — the last-administrator refusal |
-| 8 | Anything under **K** that you would not show a customer |
+| 8 | A screenshot of **K3** — the Confirm your identity page for a self-grant |
+| 9 | A screenshot of **K8** — the immediate refusal, with no trip to Microsoft |
+| 10 | Anything under **L** that you would not show a customer |
 
 ---
 
