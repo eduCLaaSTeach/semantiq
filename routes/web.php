@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Modules\Access\Http\Controllers\AccessController;
+use App\Modules\Access\Http\Controllers\SimulatorController;
+use App\Modules\Access\Http\Controllers\StepUpController;
+use App\Modules\Access\Http\Middleware\RequireActionClass;
+use App\Modules\Access\Support\ActionClass;
 use App\Modules\Domains\Http\Controllers\DomainController;
 use App\Modules\Identity\Http\Controllers\EntraController;
 use App\Modules\Identity\Http\Controllers\HealthController;
@@ -25,7 +30,6 @@ use App\Modules\Platform\Http\Controllers\ConsoleController;
 use App\Modules\Platform\Http\Controllers\EntryController;
 use App\Modules\Platform\Http\Controllers\FirstRun\BeginController;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
-use App\Modules\Platform\Http\Middleware\RequireSystemAdministrator;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -44,6 +48,22 @@ Route::get('/', EntryController::class)->name('entry');
 Route::prefix('auth')->name('auth.')->group(function (): void {
     Route::get('microsoft/redirect', RedirectController::class)->name('microsoft.redirect');
     Route::get('microsoft/callback', CallbackController::class)->name('microsoft.callback');
+
+    /*
+     * D-73: a DISTINCT callback for step-up returns.
+     *
+     * Separate from the sign-in callback on purpose. Sharing it would mean an
+     * ordinary sign-in and a re-authentication arrive at the same code holding
+     * the same session values, and the only thing telling them apart would be
+     * intent stored somewhere - which is exactly the kind of distinction that
+     * fails silently.
+     *
+     * THIS URI MUST BE REGISTERED IN ENTRA as a second redirect URI before
+     * step-up works in production. See doc/v2/phase-1/P1-05-DEPLOYMENT-NOTE.md.
+     */
+    Route::get('microsoft/step-up', [StepUpController::class, 'callback'])
+        ->middleware(EnsureSessionIsCurrent::class)
+        ->name('microsoft.step-up');
 
     // POST only: a GET logout is triggerable by any third-party page.
     Route::post('logout', LogoutController::class)->name('logout');
@@ -92,9 +112,10 @@ Route::prefix('console')
         /*
          * P1-01 - Organisation.
          *
-         * Every route re-authorises through RequireSystemAdministrator. Menu
-         * visibility is never the control: if the navigation filter were wrong,
-         * the request would still be refused here.
+         * Every route re-authorises through RequireActionClass, declaring the
+         * class it actually needs. Menu visibility is never the control: if the
+         * navigation filter were wrong, the request would still be refused
+         * here.
          *
          * The prefix is 'organisation', which is deliberately NOT one of the
          * directories the Apache boundary refuses - RoutePrefixCollisionTest
@@ -107,7 +128,7 @@ Route::prefix('console')
          * the rest of the unit is built to keep. LifecycleCompletenessTest
          * asserts that exact set, so a fifth DELETE fails the build.
          */
-        Route::middleware(RequireSystemAdministrator::class)
+        Route::middleware(RequireActionClass::class.':'.ActionClass::OrgAdmin->value)
             ->prefix('organisation')
             ->name('organisation.')
             ->group(function (): void {
@@ -179,10 +200,9 @@ Route::prefix('console')
          * rather than quietly becoming the .env editor this unit is defined as
          * not having.
          *
-         * Every route re-authorises through RequireSystemAdministrator, which
-         * P1-02 promoted to Platform because it is now needed by two modules and
-         * a second copy of an authorisation gate is the worst possible place for
-         * two sources of truth.
+         * Every route re-authorises through RequireActionClass. P1-05 replaced
+         * the old RequireSystemAdministrator with it - route by route, never as
+         * a blanket substitution.
          */
         /*
          * P1-03 - Users & Groups.
@@ -206,7 +226,7 @@ Route::prefix('console')
          * to the Company Profile, so moving it would make Platform depend
          * backwards on Organisation.
          */
-        Route::middleware([RequireSystemAdministrator::class, RequireOrganisation::class])
+        Route::middleware([RequireActionClass::class.':'.ActionClass::OrgAdmin->value, RequireOrganisation::class])
             ->prefix('people')
             ->name('people.')
             ->group(function (): void {
@@ -255,7 +275,7 @@ Route::prefix('console')
          * gates as People, and no route anywhere reads a domain to decide what
          * a person may see.
          */
-        Route::middleware([RequireSystemAdministrator::class, RequireOrganisation::class])
+        Route::middleware([RequireActionClass::class.':'.ActionClass::OrgAdmin->value, RequireOrganisation::class])
             ->prefix('domains')
             ->name('domains.')
             ->group(function (): void {
@@ -272,7 +292,86 @@ Route::prefix('console')
                 Route::patch('{domain}/owner/clear', [DomainController::class, 'clearOwner'])->name('owner.clear')->whereNumber('domain');
             });
 
-        Route::middleware(RequireSystemAdministrator::class)
+        /*
+         * P1-02 - Identity & SSO. PLATFORM_ADMIN, all seven, and that is the
+         * one line of this file most worth reading twice.
+         *
+         * Every other console prefix moved to ORG_ADMIN so an Organisation
+         * Administrator can reach it. These seven did NOT. Identity & SSO is
+         * the front door of the whole product, and opening one of them to
+         * ORG_ADMIN is precisely the outcome a find-and-replace of the old
+         * middleware would have produced - which is why the routes were
+         * enumerated rather than swapped. N-E9 breaks it by opening one.
+         */
+        /*
+         * P1-05 - Roles & Access. ACCESS_ADMIN.
+         *
+         * FIVE SCREENS AND ONE RECORD PAGE. Role Assignments is the list;
+         * everything below an assignment - entitlements, scopes, ceilings -
+         * lives on the record page for that assignment, because a scope means
+         * nothing without the entitlement it hangs from.
+         *
+         * NOTHING HERE IS A DELETE. Every removal ends a period, so every one
+         * is a PATCH. In this codebase DELETE means a record is permanently
+         * destroyed and the complete DELETE route set is asserted; a DELETE
+         * here would both misdescribe the operation and weaken that assertion.
+         * N-L1 breaks it by adding one.
+         *
+         * EVERY DYNAMIC SEGMENT SITS ONE LEVEL BELOW A STATIC ONE -
+         * assignments/{assignment}, entitlements/{entitlement},
+         * scopes/{scope}, step-up/{reference}. The first draft of this file put
+         * {assignment} directly under /access beside the static `entitlements`,
+         * `scopes` and `simulator` segments, which is EXACTLY the collision
+         * P1-03 correction 1 was written for: a dynamic segment and a static
+         * one at the same depth clash whatever their parent is called.
+         *
+         * whereNumber is defence in depth rather than the mechanism, and
+         * AccessRoutingTest asserts the set still resolves when this file is
+         * read in reverse.
+         */
+        Route::middleware([RequireActionClass::class.':'.ActionClass::AccessAdmin->value, RequireOrganisation::class])
+            ->prefix('access')
+            ->name('access.')
+            ->group(function (): void {
+                Route::get('/', [AccessController::class, 'index'])->name('index');
+                Route::post('assignments', [AccessController::class, 'assignRole'])->name('roles.assign');
+
+                Route::get('assignments/{assignment}', [AccessController::class, 'show'])->name('show')->whereNumber('assignment');
+                Route::patch('assignments/{assignment}/revoke', [AccessController::class, 'revokeRole'])->name('roles.revoke')->whereNumber('assignment');
+                Route::post('assignments/{assignment}/entitlements', [AccessController::class, 'grantEntitlement'])->name('entitlements.grant')->whereNumber('assignment');
+
+                Route::patch('entitlements/{entitlement}/revoke', [AccessController::class, 'revokeEntitlement'])->name('entitlements.revoke')->whereNumber('entitlement');
+                Route::post('entitlements/{entitlement}/scopes', [AccessController::class, 'assignScope'])->name('scopes.assign')->whereNumber('entitlement');
+                Route::patch('entitlements/{entitlement}/ceiling', [AccessController::class, 'setCeiling'])->name('ceiling.set')->whereNumber('entitlement');
+
+                Route::patch('scopes/{scope}/revoke', [AccessController::class, 'revokeScope'])->name('scopes.revoke')->whereNumber('scope');
+
+                /*
+                 * The Access Simulator. GET renders it; POST asks a question.
+                 *
+                 * The POST WRITES NOTHING. It runs the real engine against
+                 * proposed state inside a transaction that always rolls back,
+                 * and it is a POST rather than a GET because it carries a body,
+                 * not because it changes anything.
+                 */
+                Route::get('simulator/run', [SimulatorController::class, 'show'])->name('simulator');
+                Route::post('simulator/run', [SimulatorController::class, 'simulate'])->name('simulator.run');
+
+                /*
+                 * D-73 step-up. The confirmation card and the departure to
+                 * Microsoft. The RETURN is at auth/microsoft/step-up, beside
+                 * the sign-in callback, because that URI is what Entra
+                 * redirects to.
+                 *
+                 * The reference is opaque and single-use. It appears in the
+                 * address bar only between these two routes, and is moved into
+                 * the session before anybody leaves for Microsoft.
+                 */
+                Route::get('step-up/{reference}', [StepUpController::class, 'begin'])->name('step-up.begin');
+                Route::post('step-up/{reference}', [StepUpController::class, 'redirect'])->name('step-up.redirect');
+            });
+
+        Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)
             ->prefix('identity')
             ->name('identity.')
             ->group(function (): void {

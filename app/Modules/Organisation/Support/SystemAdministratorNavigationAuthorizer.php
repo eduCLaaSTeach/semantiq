@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Organisation\Support;
 
+use App\Modules\Access\Engine\AccessEngine;
+use App\Modules\Access\Support\RoleCode;
 use App\Modules\Platform\Models\User;
 use App\Shared\Navigation\Contracts\NavigationAuthorizer;
 
@@ -23,11 +25,18 @@ use App\Shared\Navigation\Contracts\NavigationAuthorizer;
  * authorise.
  *
  * It is not a role framework and does not read the policy key beyond requiring
- * one to exist. Do not grow the future effective-access navigation model here -
- * P1-05 owns it, and replacing this class is part of that unit.
+ * one to exist. Do not grow the future effective-access navigation model here.
+ *
+ * P1-05 REPOINTED IT AT THE ENGINE and changed nothing else. It asks
+ * AccessEngine::holdsRole rather than a column, so there is one definition of
+ * the question. It remains UX: every route still re-authorises on its own, and
+ * filtering the menu and authorising the request stay two code paths so they
+ * cannot be collapsed into one.
  */
 final class SystemAdministratorNavigationAuthorizer implements NavigationAuthorizer
 {
+    public function __construct(private readonly AccessEngine $engine) {}
+
     /**
      * The request is read at CALL time, not injected.
      *
@@ -40,6 +49,8 @@ final class SystemAdministratorNavigationAuthorizer implements NavigationAuthori
     {
         $user = request()->attributes->get('semantiq_user');
 
-        return $user instanceof User && $user->isActive() && $user->isSystemAdministrator();
+        return $user instanceof User
+            && $user->isActive()
+            && $this->engine->holdsRole($user, RoleCode::SystemAdministrator);
     }
 }

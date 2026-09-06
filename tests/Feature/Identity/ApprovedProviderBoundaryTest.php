@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Identity;
 
+use App\Modules\Access\StepUp\StepUpVerification;
 use App\Modules\Identity\Health\IdentityHealthCheck;
 use App\Modules\Identity\Health\IdentityHealthReport;
 use App\Modules\Identity\Support\ApprovedProviders;
@@ -67,6 +68,19 @@ final class ApprovedProviderBoundaryTest extends TestCase
             }
 
             public function completeAuthorization(Request $request): VerifiedIdentity
+            {
+                throw new \RuntimeException('not used');
+            }
+
+            // P1-05 widened the boundary with step-up. An unapproved provider
+            // is never asked to perform one - it is reported and refused long
+            // before that - so these exist to satisfy the contract and say so.
+            public function beginStepUpAuthorization(string $returnUri): RedirectResponse
+            {
+                throw new \RuntimeException('not used');
+            }
+
+            public function completeStepUpAuthorization(Request $request): StepUpVerification
             {
                 throw new \RuntimeException('not used');
             }

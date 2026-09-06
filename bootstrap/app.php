@@ -1,11 +1,11 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Modules\Access\Http\Middleware\RequireActionClass;
 use App\Modules\Domains\Console\InitialiseBusinessDomains;
 use App\Modules\Organisation\Http\Middleware\RequireOrganisation;
 use App\Modules\Organisation\Providers\OrganisationServiceProvider;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
-use App\Modules\Platform\Http\Middleware\RequireSystemAdministrator;
 use App\Modules\Platform\Providers\PlatformServiceProvider;
 use App\Modules\Platform\Support\DeploymentLayout;
 use Illuminate\Foundation\Application;
@@ -55,13 +55,21 @@ $app = Application::configure(basePath: dirname(__DIR__))
          * the organisation by probing identifiers, without ever being allowed
          * to read one. It was found by the P1-01 anonymous sweep, not by review.
          *
-         * With this priority the session and role gates decide first, so both
-         * cases return the same refusal and existence is disclosed to nobody who
-         * is not permitted to see it.
+         * With this priority the session and authorization gates decide first, so
+         * both cases return the same refusal and existence is disclosed to
+         * nobody who is not permitted to see it.
+         *
+         * P1-05 REPOINTED THIS AT RequireActionClass and it matters more than
+         * it looks. Replacing the middleware on the routes without replacing it
+         * HERE left the priority list naming a class no route used, so binding
+         * ran first again and the oracle came straight back - 302 for a record
+         * that exists, 404 for one that does not. The P1-01 sweep caught it
+         * within one test run, which is the whole reason that test asserts the
+         * two status codes are the same rather than asserting a particular one.
          */
         $middleware->prependToPriorityList(SubstituteBindings::class, RequireOrganisation::class);
-        $middleware->prependToPriorityList(RequireOrganisation::class, RequireSystemAdministrator::class);
-        $middleware->prependToPriorityList(RequireSystemAdministrator::class, EnsureSessionIsCurrent::class);
+        $middleware->prependToPriorityList(RequireOrganisation::class, RequireActionClass::class);
+        $middleware->prependToPriorityList(RequireActionClass::class, EnsureSessionIsCurrent::class);
 
         // Laravel's maintenance mode runs before routing, so /up is NOT exempt
         // by default. Without this, a deploy-time probe would be reporting on

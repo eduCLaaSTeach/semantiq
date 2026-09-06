@@ -873,6 +873,57 @@ button.shell-link:hover .icon { color: var(--accent); }
   margin-top: var(--space-1);
 }
 
+/* P1-05. A standing operational note, and deliberately NOT a refusal.
+   "Only one active System Administrator remains" is worth seeing every time the
+   screen loads and must never read as though something has been blocked - so it
+   borrows the attention edge rather than the danger one, and role="status"
+   rather than role="alert". */
+.org-notice {
+  border: 1px solid var(--attention-edge);
+  border-left-width: 4px;
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--text);
+  padding: var(--space-3);
+  font-size: 13px;
+}
+
+/* P1-05. An entitlement that is current but authorises nothing, because its
+   last scope was revoked.
+   It gets its own treatment because the alternative is worse than plain: a row
+   that looks like every other row, on the screen whose whole job is to say who
+   can see what. The words carry the meaning; the edge only makes them findable
+   in a long list. */
+.org-incomplete {
+  border-left: 3px solid var(--attention-edge);
+  padding-left: var(--space-3);
+}
+
+.org-incomplete-label {
+  color: var(--badge-attention-fg);
+  font-weight: 600;
+}
+
+/* The grant path a simulated decision came through. Indented under the answer
+   because it is evidence FOR the answer, not a second answer. */
+.org-path {
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  padding: var(--space-3);
+  font-size: 13px;
+}
+
+.org-path + .org-path {
+  margin-top: var(--space-2);
+}
+
+.org-path-note {
+  color: var(--text-muted);
+  margin: var(--space-1) 0 0;
+  font-size: 12px;
+}
+
 /* The card chrome sits on the SCROLLER, not on the table.
    Two breakpoints were guessed at for this and both were wrong within a day:
    720px, then 1100px, each overtaken the moment a column was added - the third

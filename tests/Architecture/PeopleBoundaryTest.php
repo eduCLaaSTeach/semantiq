@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Architecture;
 
-use App\Modules\Platform\Models\PlatformRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -166,8 +165,13 @@ final class PeopleBoundaryTest extends TestCase
      * guard to be written some indirect way, which is worse code and a worse
      * guard.
      *
-     * Mutation: write 'platform_role' => PlatformRole::SystemAdministrator in
-     * provision(); or add 'platform_role' to a validate() array.
+     * P1-05 REMOVED THE COLUMN, so the string this scanned for is gone. The
+     * property is unchanged and the needles are now the P1-05 ones: no People
+     * code may create a role assignment, and none may accept a role from the
+     * request.
+     *
+     * Mutation: create a RoleAssignment in provision(); or add 'role_code' to a
+     * validate() array.
      */
     public function test_no_people_code_assigns_a_platform_role(): void
     {
@@ -179,20 +183,26 @@ final class PeopleBoundaryTest extends TestCase
             $code = $this->withoutComments(file_get_contents($file) ?: '');
 
             foreach (explode("\n", $code) as $number => $line) {
-                if (! str_contains($line, 'platform_role')) {
-                    continue;
-                }
-
                 $where = "{$relative}:".($number + 1);
 
-                // Assignment to anything but null.
-                if (preg_match("/'platform_role'\s*=>\s*(.+)/", $line, $matches) === 1) {
-                    $this->assertMatchesRegularExpression(
-                        '/^null\s*,?\s*$/',
-                        trim($matches[1]),
-                        "{$where} assigns a platform role. P1-03 grants nothing; P1-05 owns the role model."
+                /*
+                 * Creating a role assignment. The People module reads the
+                 * ADMINISTRATOR SET GUARD - it must, to refuse deactivating the
+                 * last administrator - so the ban is on WRITING, not on naming
+                 * the table. A test that banned the word would have forced the
+                 * lockout guard to be written some indirect way, which is worse
+                 * code and a worse guard.
+                 */
+                foreach (['RoleAssignment::query()->create(', 'RoleAssignment::create(', "'role_code' =>"] as $write) {
+                    $this->assertStringNotContainsString(
+                        $write,
+                        $line,
+                        "{$where} assigns a role. P1-03 grants nothing; P1-05 grants it deliberately, "
+                        .'through Roles & Access, and nowhere else.'
                     );
+                }
 
+                if (! str_contains($line, 'role_code') && ! str_contains($line, 'platform_role')) {
                     continue;
                 }
 
@@ -201,40 +211,57 @@ final class PeopleBoundaryTest extends TestCase
                     $this->assertStringNotContainsString(
                         $inputShape,
                         $line,
-                        "{$where} accepts platform_role from the request."
+                        "{$where} accepts a role from the request."
                     );
                 }
             }
         }
 
         // And the same for the screens, where a control would be the visible
-        // half of the same defect.
+        // half of the same defect. Granting a role is a Roles & Access screen,
+        // never a People one.
         foreach ($this->sourceFiles(base_path('resources/js/Pages/People')) as $file) {
-            $this->assertStringNotContainsString(
-                'platform_role',
-                file_get_contents($file) ?: '',
-                str_replace(base_path().'/', '', $file).' offers a platform role control.'
-            );
+            foreach (['platform_role', 'role_code'] as $needle) {
+                $this->assertStringNotContainsString(
+                    $needle,
+                    file_get_contents($file) ?: '',
+                    str_replace(base_path().'/', '', $file).' offers a role control.'
+                );
+            }
         }
     }
 
     /**
-     * Negative case 4, the behavioural half.
+     * Negative case 4, CARRIED FORWARD.
      *
-     * The source check above proves the string is absent. This proves the
-     * BEHAVIOUR: a request that carries platform_role changes nothing. Both are
-     * needed - a path could write the column through a variable, and a source
-     * scan would never see it.
+     * This used to assert PlatformRole still had exactly one case, because a
+     * second would have been P1-05 being designed by accident. P1-05 has now
+     * been designed on purpose, so the property that replaces it is that the
+     * People module reads the role model and never writes it.
      *
-     * Asserted in PeopleAccessBoundaryTest against a real HTTP request.
+     * The behavioural half is in PeopleAccessBoundaryTest, against a real HTTP
+     * request - both are needed, because a path could create an assignment
+     * through a variable and a source scan would never see it.
      */
-    public function test_the_platform_role_enum_still_has_exactly_one_case(): void
+    public function test_the_people_module_never_writes_a_role(): void
     {
+        $writes = [];
+
+        foreach ($this->sourceFiles(base_path('app/Modules/People')) as $file) {
+            $code = $this->withoutComments(file_get_contents($file) ?: '');
+
+            foreach (['RoleAssignment::query()->create(', 'DomainEntitlement::', 'EntitlementScope::', 'EntitlementCeiling::'] as $write) {
+                if (str_contains($code, $write)) {
+                    $writes[] = str_replace(base_path().'/', '', $file).' -> '.$write;
+                }
+            }
+        }
+
         $this->assertSame(
-            ['SystemAdministrator'],
-            array_column(PlatformRole::cases(), 'name'),
-            'PlatformRole gained a case. P1-03 delivers no role model, and a second case here is '
-            .'P1-05 being designed by accident.'
+            [],
+            $writes,
+            'People code writes the access model. Provisioning somebody, deactivating them or '
+            .'putting them in a group grants nothing - only Roles & Access grants.'
         );
     }
 

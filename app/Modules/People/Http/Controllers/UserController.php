@@ -24,7 +24,7 @@ use Inertia\Response;
 /**
  * People: the list, one person, and their lifecycle.
  *
- * There is no route here that writes platform_role, and no request field that
+ * There is no route here that assigns a role, and no request field that
  * could. Roles are P1-05's, and the record page says so rather than hiding the
  * field - an administrator who cannot find the control should be told it does
  * not exist yet, not left hunting for it.

@@ -211,7 +211,7 @@ final class DomainLockBoundaryTest extends TestCase
             'provider' => 'microsoft', 'external_subject' => 'lock-boundary-subject',
             'tenant_id' => '11111111-1111-1111-1111-111111111111',
             'email' => 'lock-boundary@example.test', 'display_name' => 'Lock Boundary',
-            'status' => 'active', 'platform_role' => null,
+            'status' => 'active',
             'created_at' => now(), 'updated_at' => now(),
         ]);
 

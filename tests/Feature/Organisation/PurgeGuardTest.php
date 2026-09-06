@@ -462,6 +462,13 @@ final class PurgeGuardTest extends TestCase
      * changed to know about the primary legal entity. The migration added a
      * foreign key, the walk found it, and this case started failing until it was
      * updated - which is the guard behaving exactly as it was written to.
+     *
+     * `entitlement_scopes` joined it the same way when P1-05 added access
+     * scopes. Nothing was changed to teach the walk that a scope can name a
+     * team or a business unit; the foreign keys appeared and the purge started
+     * refusing. That is the RIGHT refusal: purging a team an access scope names
+     * would leave a grant pointing at nothing, and a grant pointing at nothing
+     * is a grant nobody can review.
      */
     public function test_the_reference_walk_finds_every_dependency_d24_names(): void
     {
@@ -474,12 +481,20 @@ final class PurgeGuardTest extends TestCase
         );
 
         $this->assertSame(
-            [['business_unit_legal_entity', 'business_unit_id'], ['departments', 'business_unit_id']],
+            [
+                ['business_unit_legal_entity', 'business_unit_id'],
+                ['departments', 'business_unit_id'],
+                ['entitlement_scopes', 'business_unit_id'],
+            ],
             PurgeDependencies::referencesTo('business_units')
         );
 
         $this->assertSame([['teams', 'department_id']], PurgeDependencies::referencesTo('departments'));
-        $this->assertSame([['team_memberships', 'team_id']], PurgeDependencies::referencesTo('teams'));
+
+        $this->assertSame(
+            [['entitlement_scopes', 'team_id'], ['team_memberships', 'team_id']],
+            PurgeDependencies::referencesTo('teams')
+        );
     }
 
     /**

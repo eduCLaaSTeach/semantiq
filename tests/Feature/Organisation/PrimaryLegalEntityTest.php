@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Organisation;
 
+use App\Modules\Access\Models\RoleAssignment;
 use App\Modules\Organisation\Models\LegalEntity;
 use App\Modules\Organisation\Models\Organisation;
 use App\Modules\Organisation\Models\StructureStatus;
@@ -491,7 +492,11 @@ final class PrimaryLegalEntityTest extends TestCase
             ->get('/console/organisation')
             ->assertRedirect(route('auth.access-denied'));
 
-        $this->assertFalse($ordinary->fresh()->isSystemAdministrator());
+        $this->assertSame(
+            0,
+            RoleAssignment::query()->where('user_id', $ordinary->id)->count(),
+            'Selecting a primary legal entity granted somebody a role.'
+        );
     }
 
     /** Nothing writes this column except the Company Profile screen. */

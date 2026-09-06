@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Architecture;
 
-use App\Modules\Platform\Models\PlatformRole;
+use App\Modules\Access\Support\RoleCatalogue;
+use App\Modules\Access\Support\RoleCode;
 use App\Modules\Platform\Security\SecurityEventLogger;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use ReflectionEnum;
 use Tests\TestCase;
 
@@ -19,32 +21,86 @@ use Tests\TestCase;
 final class P1BoundaryTest extends TestCase
 {
     /**
-     * D-09: one value, and one only.
+     * D-09 IS GONE, AND THAT IS THE ASSERTION.
      *
-     * Adding Organisation Administrator, Executive, Manager, Business User or
-     * Auditor here would be building P1-05 early - which is exactly the
-     * pre-building the phase plan forbids, and would quietly become the
-     * authorisation engine nobody designed.
+     * The seam this file used to guard - PlatformRole, one case, documented as
+     * temporary - was replaced by P1-05's role model. What replaced it must not
+     * leave the old one behind: a readable users.platform_role column or a
+     * surviving PlatformRole enum would be a SECOND authority that can disagree
+     * with role_assignments, and the disagreement would appear the first time
+     * somebody updated one of them.
+     *
+     * Mutation: leave the column, or the enum, in place. Both are caught here.
      */
-    public function test_the_platform_role_seam_has_exactly_one_case(): void
+    public function test_the_platform_role_seam_is_gone(): void
     {
-        $cases = PlatformRole::cases();
-
-        $this->assertCount(
-            1,
-            $cases,
-            'The P1-00 seam has grown extra roles. P1-05 owns the role model; this is not it.'
+        $this->assertFalse(
+            class_exists('App\\Modules\\Platform\\Models\\PlatformRole'),
+            'The P1-00 platform_role seam still exists. D-49 replaced it with role assignments, '
+            .'and leaving it readable is the second authorization model P1-05 exists to prevent.'
         );
 
-        $this->assertSame('system_administrator', $cases[0]->value);
+        $this->assertFalse(
+            Schema::hasColumn('users', 'platform_role'),
+            'users.platform_role still exists. It can disagree with role_assignments, and a column '
+            .'that can disagree with a history table eventually does.'
+        );
     }
 
-    /** The seam must be documented as temporary, or the next unit inherits it as design. */
-    public function test_the_platform_role_seam_records_that_p1_05_replaces_it(): void
+    /**
+     * The catalogue that replaced it: SEVEN roles, fixed codes, nothing
+     * manageable at runtime.
+     *
+     * Mutation: add an eighth role; make a label mutable - "Super Admin".
+     */
+    public function test_the_role_catalogue_has_exactly_seven_immutable_roles(): void
     {
-        $doc = (new ReflectionEnum(PlatformRole::class))->getDocComment() ?: '';
+        $roles = RoleCatalogue::roles();
 
-        $this->assertStringContainsString('P1-05', $doc);
+        $this->assertCount(
+            7,
+            $roles,
+            'The role catalogue has changed size. D-51 to D-54 all answered "no": there is no roles '
+            .'table, no custom role and no runtime change, so a new role is a Product Owner decision.'
+        );
+
+        $this->assertSame(
+            [
+                'system_administrator',
+                'organisation_administrator',
+                'executive',
+                'domain_owner',
+                'manager',
+                'business_user',
+                'auditor',
+            ],
+            array_map(static fn (RoleCode $role): string => $role->value, $roles),
+        );
+
+        // An enum has no setter, which is what makes "immutable" structural
+        // rather than a promise. Asserted so that replacing it with a model
+        // backed by a table fails here.
+        $this->assertTrue(
+            (new ReflectionEnum(RoleCode::class))->isEnum(),
+            'RoleCode stopped being an enum. A role backed by a row is a role somebody can rename.'
+        );
+    }
+
+    /**
+     * EXACTLY ONE role may be held without an organisation.
+     *
+     * system_administrator is platform-scoped because bootstrap must create one
+     * before a Company Profile exists. A second platform-scoped role would be a
+     * role that escapes its tenancy boundary.
+     */
+    public function test_only_system_administrator_is_platform_scoped(): void
+    {
+        $platformScoped = array_values(array_filter(
+            RoleCatalogue::roles(),
+            static fn (RoleCode $role): bool => $role->isPlatformScoped(),
+        ));
+
+        $this->assertSame([RoleCode::SystemAdministrator], $platformScoped);
     }
 
     /**
@@ -109,9 +165,9 @@ final class P1BoundaryTest extends TestCase
         $this->assertNotEmpty($declared);
 
         // P1-01 adds the structural event families, P1-02 identity health,
-        // P1-03 the user and group families, and P1-04 business_domain.
-        // Anything outside this list is an event nobody reviewed.
-        $families = 'auth|bootstrap|organisation|legal_entity|business_unit|department|team|management|identity|user|group|business_domain';
+        // P1-03 the user and group families, P1-04 business_domain and P1-05
+        // access. Anything outside this list is an event nobody reviewed.
+        $families = 'auth|bootstrap|organisation|legal_entity|business_unit|department|team|management|identity|user|group|business_domain|access';
 
         foreach ($declared as $event) {
             $this->assertMatchesRegularExpression('/^('.$families.')\./', $event);

@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
+use App\Modules\Access\Models\RoleAssignment;
+use App\Modules\Access\Support\RoleCode;
 use App\Modules\Organisation\Models\BusinessUnit;
 use App\Modules\Organisation\Models\Department;
 use App\Modules\Organisation\Models\LegalEntity;
 use App\Modules\Organisation\Models\Organisation;
 use App\Modules\Organisation\Models\StructureStatus;
 use App\Modules\Organisation\Models\Team;
-use App\Modules\Platform\Models\PlatformRole;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
 
@@ -71,6 +72,13 @@ final class OrganisationFactory
      * organisation_id, so that a guard which reads tenant_id instead of
      * organisation_id gives a different - and wrong - answer. That separation is
      * what makes negative test 19 non-vacuous.
+     *
+     * `administrator: true` now creates a ROLE ASSIGNMENT rather than setting a
+     * column, because D-49 removed the column. The assignment is
+     * platform-scoped - organisation_id NULL - exactly as bootstrap creates it,
+     * so a fixture administrator is the same shape as a real one. A fixture
+     * that took a shortcut here would be a fixture more helpful than reality,
+     * which is the failure CLAUDE.md §2 names.
      */
     public function user(
         ?Organisation $organisation = null,
@@ -81,7 +89,7 @@ final class OrganisationFactory
         static $sequence = 0;
         $sequence++;
 
-        return User::query()->create([
+        $user = User::query()->create([
             'organisation_id' => $organisation?->id,
             'provider' => 'microsoft',
             'external_subject' => "subject-{$sequence}",
@@ -89,7 +97,38 @@ final class OrganisationFactory
             'email' => "user{$sequence}@example.test",
             'display_name' => "User {$sequence}",
             'status' => $status,
-            'platform_role' => $administrator ? PlatformRole::SystemAdministrator : null,
+        ]);
+
+        if ($administrator) {
+            RoleAssignment::query()->create([
+                'user_id' => $user->id,
+                'organisation_id' => null,
+                'role_code' => RoleCode::SystemAdministrator,
+                'assigned_at' => now(),
+                'ended_at' => null,
+                'assigned_by_user_id' => null,
+            ]);
+        }
+
+        return $user;
+    }
+
+    /**
+     * A role assignment, for tests that need a role other than System
+     * Administrator.
+     */
+    public function roleAssignment(
+        User $user,
+        RoleCode $role,
+        ?Organisation $organisation = null,
+    ): RoleAssignment {
+        return RoleAssignment::query()->create([
+            'user_id' => $user->id,
+            'organisation_id' => $role->isPlatformScoped() ? null : ($organisation?->id ?? $user->organisation_id),
+            'role_code' => $role,
+            'assigned_at' => now(),
+            'ended_at' => null,
+            'assigned_by_user_id' => null,
         ]);
     }
 }

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Identity\Microsoft;
 
+use App\Modules\Access\StepUp\StepUpVerification;
 use App\Modules\Platform\Identity\AuthenticationFailed;
 use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Identity\VerifiedIdentity;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -31,6 +33,20 @@ final class EntraProvider implements IdentityProvider
     public const SESSION_NONCE = 'auth.microsoft.nonce';
 
     public const SESSION_VERIFIER = 'auth.microsoft.verifier';
+
+    /*
+     * D-73: a DISTINCT state store for step-up.
+     *
+     * Separate keys, not a flag on the existing ones. A shared store would let
+     * a step-up state satisfy a sign-in and the reverse - and the failure would
+     * be silent, because both flows validate the same way and would simply
+     * find a value that matched.
+     */
+    public const SESSION_STEP_UP_STATE = 'auth.microsoft.step_up.state';
+
+    public const SESSION_STEP_UP_NONCE = 'auth.microsoft.step_up.nonce';
+
+    public const SESSION_STEP_UP_VERIFIER = 'auth.microsoft.step_up.verifier';
 
     private const SCOPES = 'openid profile email';
 
@@ -131,14 +147,16 @@ final class EntraProvider implements IdentityProvider
      * Back channel, server to server. Only the ID token is used; no access token
      * is requested for any API, stored, or returned to the caller.
      */
-    private function exchangeCodeForIdToken(string $code, string $verifier): string
+    private function exchangeCodeForIdToken(string $code, string $verifier, ?string $redirectUri = null): string
     {
         $response = Http::asForm()->timeout(15)->post($this->discovery->tokenEndpoint(), [
             'client_id' => $this->clientId,
             'client_secret' => $this->clientSecret,
             'grant_type' => 'authorization_code',
             'code' => $code,
-            'redirect_uri' => $this->redirectUri,
+            // Must match the URI the code was issued against, which differs
+            // between sign-in and step-up.
+            'redirect_uri' => $redirectUri ?? $this->redirectUri,
             'code_verifier' => $verifier,
             'scope' => self::SCOPES,
         ]);
@@ -154,6 +172,112 @@ final class EntraProvider implements IdentityProvider
         }
 
         return $idToken;
+    }
+
+    /**
+     * D-73. prompt=login forces the provider to re-authenticate; max_age=0 asks
+     * it to treat any existing authentication as too old.
+     *
+     * BOTH ARE REQUESTS TO THE PROVIDER, and the provider decides whether to
+     * honour them. What is VERIFIED on return is auth_time - see
+     * completeStepUpAuthorization. SemantIQ can prove Microsoft reports a fresh
+     * authentication event; it cannot prove which credential or factor Microsoft
+     * required, unless the tenant's Entra authentication policy guarantees that
+     * assurance. "MFA verified" is therefore never claimed anywhere in this
+     * codebase.
+     */
+    public function beginStepUpAuthorization(string $returnUri): RedirectResponse
+    {
+        if (! $this->isConfigured()) {
+            throw AuthenticationFailed::protocol('provider_not_configured');
+        }
+
+        $state = $this->randomValue();
+        $nonce = $this->randomValue();
+        $verifier = $this->randomValue();
+
+        session([
+            self::SESSION_STEP_UP_STATE => $state,
+            self::SESSION_STEP_UP_NONCE => $nonce,
+            self::SESSION_STEP_UP_VERIFIER => $verifier,
+        ]);
+
+        $query = http_build_query([
+            'client_id' => $this->clientId,
+            'response_type' => 'code',
+            'redirect_uri' => $returnUri,
+            'response_mode' => 'query',
+            'scope' => self::SCOPES,
+            'state' => $state,
+            'nonce' => $nonce,
+            'code_challenge' => $this->challengeFor($verifier),
+            'code_challenge_method' => 'S256',
+            'prompt' => 'login',
+            'max_age' => '0',
+        ]);
+
+        return new RedirectResponse($this->discovery->authorizationEndpoint().'?'.$query);
+    }
+
+    /**
+     * Every validation completeAuthorization performs, plus auth_time.
+     *
+     * The step-up store is consumed FIRST, exactly as the sign-in store is, so a
+     * replayed return has nothing to compare against.
+     */
+    public function completeStepUpAuthorization(Request $request): StepUpVerification
+    {
+        $expectedState = $this->pull(self::SESSION_STEP_UP_STATE);
+        $expectedNonce = $this->pull(self::SESSION_STEP_UP_NONCE);
+        $verifier = $this->pull(self::SESSION_STEP_UP_VERIFIER);
+
+        $state = (string) $request->query('state', '');
+
+        if ($expectedState === '' || ! hash_equals($expectedState, $state)) {
+            throw AuthenticationFailed::protocol('state_mismatch');
+        }
+
+        if ($request->query('error') !== null) {
+            throw AuthenticationFailed::protocol('provider_returned_error');
+        }
+
+        $code = (string) $request->query('code', '');
+
+        if ($code === '') {
+            throw AuthenticationFailed::protocol('missing_code');
+        }
+
+        $claims = $this->validator->validate(
+            $this->exchangeCodeForIdToken($code, $verifier, $this->stepUpRedirectUri()),
+            $expectedNonce,
+        );
+
+        $identity = new VerifiedIdentity(
+            provider: $this->key(),
+            subject: (string) $claims['oid'],
+            tenant: (string) $claims['tid'],
+            email: (string) $this->validator->emailFrom($claims),
+            displayName: isset($claims['name']) && is_string($claims['name']) && $claims['name'] !== ''
+                ? $claims['name']
+                : (string) $this->validator->emailFrom($claims),
+        );
+
+        // Read from the PROVIDER's response, never from a flag this application
+        // set. An application-set "recently signed in" flag would be the
+        // application asserting freshness rather than proving it - and a flag is
+        // settable by any future code path.
+        $authTime = null;
+
+        if (isset($claims['auth_time']) && is_numeric($claims['auth_time'])) {
+            $authTime = Carbon::createFromTimestampUTC((int) $claims['auth_time']);
+        }
+
+        return new StepUpVerification($identity, $authTime);
+    }
+
+    public function stepUpRedirectUri(): string
+    {
+        return route('auth.microsoft.step-up');
     }
 
     private function pull(string $key): string

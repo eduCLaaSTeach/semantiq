@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Models;
 
+use App\Modules\Access\Models\RoleAssignment;
 use App\Modules\Organisation\Models\Organisation;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A SemantIQ principal, mapped from a verified external identity.
@@ -33,7 +34,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $email
  * @property string $display_name
  * @property UserStatus $status
- * @property PlatformRole|null $platform_role
  */
 final class User extends Model
 {
@@ -49,7 +49,6 @@ final class User extends Model
         'email',
         'display_name',
         'status',
-        'platform_role',
         'last_signed_in_at',
     ];
 
@@ -57,7 +56,6 @@ final class User extends Model
     {
         return [
             'status' => UserStatus::class,
-            'platform_role' => PlatformRole::class,
             'last_signed_in_at' => 'datetime',
         ];
     }
@@ -85,19 +83,9 @@ final class User extends Model
         return $this->organisation_id !== null;
     }
 
-    public function isSystemAdministrator(): bool
+    /** @return HasMany<RoleAssignment, $this> */
+    public function roleAssignments(): HasMany
     {
-        return $this->platform_role === PlatformRole::SystemAdministrator;
-    }
-
-    /**
-     * @param  Builder<User>  $query
-     * @return Builder<User>
-     */
-    public function scopeActiveSystemAdministrators(Builder $query): Builder
-    {
-        return $query
-            ->where('platform_role', PlatformRole::SystemAdministrator->value)
-            ->where('status', UserStatus::Active->value);
+        return $this->hasMany(RoleAssignment::class);
     }
 }

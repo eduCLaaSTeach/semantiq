@@ -113,6 +113,63 @@ jobs:
           php artisan migrate --force --no-interaction
           php artisan migrate:status
 
+          # N-M5. THE D-49 PAIR, AND THE ADMINISTRATOR WHO MUST SURVIVE IT.
+          #
+          # migrate -> rollback -> migrate must leave the administrator an
+          # administrator. Rolling back ONE migration only unwinds the column
+          # drop; the DATA migration's down() - the one that reconstructs
+          # users.platform_role from the current assignment state - needs TWO,
+          # and it is the half that can lose somebody.
+          #
+          # A seeded administrator is created first, because a rollback with no
+          # administrator to lose proves nothing at all.
+          php artisan tinker --execute="
+            \App\Modules\Platform\Models\User::query()->create([
+              'organisation_id' => null, 'provider' => 'microsoft',
+              'external_subject' => 'ci-rollback-subject',
+              'tenant_id' => '11111111-1111-1111-1111-111111111111',
+              'email' => 'ci-rollback@example.test', 'display_name' => 'CI Rollback',
+              'status' => 'active',
+            ]);
+            \App\Modules\Access\Models\RoleAssignment::query()->create([
+              'user_id' => \App\Modules\Platform\Models\User::query()->where('email','ci-rollback@example.test')->value('id'),
+              'organisation_id' => null, 'role_code' => 'system_administrator',
+              'assigned_at' => now(),
+            ]);
+          "
+
+          php artisan migrate:rollback --force --no-interaction --step=2
+
+          # The column is back, and it names the administrator.
+          restored=$(php artisan tinker --execute="
+            echo (string) \Illuminate\Support\Facades\DB::table('users')
+              ->where('email','ci-rollback@example.test')->value('platform_role');
+          " | tr -d '[:space:]')
+
+          if [ "$restored" != "system_administrator" ]; then
+            echo "::error::Rolling back D-49 did not leave the administrator an administrator. users.platform_role came back as [${restored:-empty}]."
+            exit 1
+          fi
+
+          echo "D-49 rollback reconstructed the administrator from the current assignment state."
+
+          php artisan migrate --force --no-interaction
+
+          # And forward again: the assignment is there, exactly once.
+          count=$(php artisan tinker --execute="
+            echo (string) \App\Modules\Access\Models\RoleAssignment::query()
+              ->where('role_code','system_administrator')->whereNull('ended_at')->count();
+          " | tr -d '[:space:]')
+
+          if [ "$count" != "1" ]; then
+            echo "::error::After migrate -> rollback -> migrate there are [${count}] current System Administrator assignments, not 1."
+            exit 1
+          fi
+
+          echo "migrate -> rollback -> migrate left exactly one current System Administrator assignment."
+
+          php artisan migrate:status
+
       # The People suite again, on MySQL.
       #
       # Two P1-03 guards are about behaviour SQLite cannot express. The locking
@@ -189,6 +246,50 @@ jobs:
           fi
 
           echo "${passed} Domains tests passed against MySQL 8.4, concurrency cases included."
+
+
+      # The Access suite on MySQL, and this one is not optional either.
+      #
+      # P1-05's serialisation boundary is a lock on the WHOLE current
+      # system_administrator assignment set and its owning users rows, and
+      # SQLite has no SELECT ... FOR UPDATE - the locking reads compile away
+      # entirely there. AdministratorConcurrencyTest skips on SQLite with a
+      # stated reason rather than reporting a lock against a guard holding
+      # none, so THIS IS THE ONLY PLACE THE THREE RACES EVER FIRE.
+      #
+      # C-A deactivation vs revocation, C-B revocation vs revocation, C-C
+      # deactivation vs deactivation. A green suite without this step would be
+      # reporting lockout safety it has not checked.
+      - name: Run the Access suite against MySQL
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: semantiq_ci
+          DB_USERNAME: root
+          DB_PASSWORD: ci-root
+        run: |
+          set -eo pipefail
+
+          php artisan test tests/Feature/Access | tee access-mysql.log
+
+          # A PATH THAT MATCHES NOTHING EXITS 0, so the count is asserted.
+          passed=$(grep -oE '[0-9]+ passed' access-mysql.log | head -1 | grep -oE '[0-9]+' || echo 0)
+
+          if [ "${passed:-0}" -lt 50 ]; then
+            echo "::error::Only ${passed:-0} Access tests ran against MySQL. The suite is larger than that, so the path matched little or nothing."
+            exit 1
+          fi
+
+          # AND THE RACES ACTUALLY RAN. On SQLite they skip; here they must not,
+          # and a skip in this step means the administrator-set lock was never
+          # exercised on any engine at all.
+          if grep -qiE 'skipped|SQLite has no SELECT' access-mysql.log; then
+            echo "::error::An Access test skipped on MySQL. The three administrator races skip only on SQLite, so this step just failed to prove the set lock exists."
+            exit 1
+          fi
+
+          echo "${passed} Access tests passed against MySQL 8.4, the three administrator races included."
 
 
       # deploy.yml stages files that live outside the application tree, so

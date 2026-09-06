@@ -49,6 +49,27 @@ final class DomainsBoundaryTest extends TestCase
     private const ALLOWED_OUTSIDE_THE_MODULE = [
         'app/Modules/Organisation/Services/OrganisationService.php',
         'app/Shared/Navigation/ApprovedMenu.php',
+
+        /*
+         * P1-05. The six points at which Roles & Access legitimately names a
+         * domain, and no others.
+         *
+         * A DOMAIN STILL GRANTS NOTHING. What P1-05 added is the opposite: a
+         * DISABLED domain DENIES, as a global gate outside every grant path.
+         * That is a subtraction, and Guard B below is amended to assert exactly
+         * that distinction rather than to exempt these files from it.
+         *
+         * StepUpController is the sixth, added by the Gate C correction: a
+         * self-granted entitlement is performed from the STORED domain id after
+         * re-authentication, so the step-up return has to name the domain it
+         * was confirmed for. It reads one; it decides nothing.
+         */
+        'app/Modules/Access/Engine/AccessEngine.php',
+        'app/Modules/Access/Models/DomainEntitlement.php',
+        'app/Modules/Access/Services/EntitlementService.php',
+        'app/Modules/Access/Http/Controllers/AccessController.php',
+        'app/Modules/Access/Http/Controllers/SimulatorController.php',
+        'app/Modules/Access/Http/Controllers/StepUpController.php',
     ];
 
     /**
@@ -285,14 +306,22 @@ final class DomainsBoundaryTest extends TestCase
     }
 
     /**
-     * GUARD B. NOTHING ANYWHERE AUTHORIZES FROM DOMAIN STATE.
+     * GUARD B. A DOMAIN NEVER GRANTS. AMENDED BY P1-05.
      *
-     * Scope: app/ and resources/js, the Domains module included. No exceptions.
-     * A domain's status, its owner and its access expectation are never read to
-     * decide what somebody may see or do.
+     * As written for P1-04 this asserted that NOTHING anywhere reads domain
+     * state to authorize. P1-05 makes that literally false and deliberately so:
+     * a DISABLED domain is a global DENY gate, checked before any grant path.
      *
-     * Mutation: have RequireSystemAdministrator consult a domain; have a React
-     * component hide a menu entry on DomainStatus.
+     * The distinction that survives, and that this guard now asserts, is the
+     * one that always mattered: domain state may only SUBTRACT. Reading
+     * DomainStatus to deny is the carried P1-04 gate working. Reading domain
+     * OWNERSHIP or its ACCESS EXPECTATION to decide anything would be a grant
+     * derived from a domain, and that is still forbidden everywhere - including
+     * inside the Access module, which is where somebody would now put it.
+     *
+     * Mutation: have RequireActionClass consult a domain's owner; have the
+     * engine read access_expectation; have a React component hide a menu entry
+     * on DomainStatus.
      */
     public function test_no_authorization_path_reads_domain_state(): void
     {
@@ -302,6 +331,7 @@ final class DomainsBoundaryTest extends TestCase
             base_path('app/Modules/Platform/Security'),
             base_path('app/Shared/Navigation'),
             base_path('app/Http/Middleware'),
+            base_path('app/Modules/Access/Http/Middleware'),
         ];
 
         $scanned = 0;
@@ -330,6 +360,82 @@ final class DomainsBoundaryTest extends TestCase
         }
 
         $this->assertGreaterThan(5, $scanned, 'Almost no authorization files were scanned.');
+    }
+
+    /**
+     * GUARD B, THE P1-05 HALF - N-B16 and N-B17.
+     *
+     * The Access module may read a domain's STATUS, because a disabled domain
+     * denies. It may read NOTHING ELSE about a domain.
+     *
+     * DomainOwnership is the one that matters. P1-04's business_domain_owners
+     * remains the SOLE source of domain accountability, and the P1-05
+     * domain_owner role is a security role only - neither may be derived from
+     * the other. The convenience a well-meaning developer adds is "they own it,
+     * so give them the role", and every functional test would still pass.
+     *
+     * access_expectation is D-61: CONTEXT ONLY. P1-04 shipped it as a label,
+     * and reading it here would quietly make it authorization.
+     *
+     * This fails at the DEPENDENCY, not at a behaviour, which is why it is an
+     * architecture test.
+     */
+    public function test_the_access_module_never_reads_domain_ownership_or_expectation(): void
+    {
+        $scanned = 0;
+
+        foreach ($this->phpFilesIn(base_path('app/Modules/Access')) as $file) {
+            $scanned++;
+
+            // COMMENTS STRIPPED FIRST. This file's own docblocks explain the
+            // separation and name the table while doing so; a guard that
+            // matched prose would fail on the documentation that exists to
+            // prevent the defect. The P1-04 lesson, applied the other way
+            // round: there a docblock must not SATISFY an assertion, here it
+            // must not TRIGGER one. Only executable code counts.
+            $source = $this->codeOnly((string) file_get_contents($file));
+
+            foreach (['DomainOwnership', 'business_domain_owners', 'access_expectation', 'AccessExpectation'] as $needle) {
+                $this->assertStringNotContainsString(
+                    $needle,
+                    $source,
+                    basename($file)." reads [{$needle}]. Owning a domain grants no role, holding the "
+                    .'domain_owner role confers no ownership, and access_expectation is context only '
+                    .'(D-61). Neither relationship may be derived from the other.'
+                );
+            }
+        }
+
+        $this->assertGreaterThan(10, $scanned, 'Almost no Access files were scanned.');
+    }
+
+    /**
+     * And the mirror: the Domains module never reads a role assignment to
+     * decide ownership.
+     *
+     * Both directions, because a developer closing one would not necessarily
+     * close the other.
+     */
+    public function test_the_domains_module_never_reads_role_assignments(): void
+    {
+        $scanned = 0;
+
+        foreach ($this->phpFilesIn(base_path('app/Modules/Domains')) as $file) {
+            $scanned++;
+
+            $source = $this->codeOnly((string) file_get_contents($file));
+
+            foreach (['RoleAssignment', 'role_assignments', 'RoleCode', 'AccessEngine'] as $needle) {
+                $this->assertStringNotContainsString(
+                    $needle,
+                    $source,
+                    basename($file)." reads [{$needle}]. Domain accountability is decided by "
+                    .'business_domain_owners alone, never by what role somebody holds.'
+                );
+            }
+        }
+
+        $this->assertGreaterThan(5, $scanned, 'Almost no Domains files were scanned.');
     }
 
     /**
@@ -450,5 +556,34 @@ final class DomainsBoundaryTest extends TestCase
         sort($files);
 
         return $files;
+    }
+
+    /**
+     * PHP source with every comment removed, so a guard reads what the code
+     * DOES rather than what it says about itself.
+     *
+     * token_get_all rather than a regular expression: a regex over PHP source
+     * gets strings containing slashes wrong, and a guard that is wrong in a
+     * corner is a guard nobody trusts.
+     */
+    private function codeOnly(string $source): string
+    {
+        $kept = '';
+
+        foreach (token_get_all($source) as $token) {
+            if (is_array($token)) {
+                if (in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                    continue;
+                }
+
+                $kept .= $token[1];
+
+                continue;
+            }
+
+            $kept .= $token;
+        }
+
+        return $kept;
     }
 }

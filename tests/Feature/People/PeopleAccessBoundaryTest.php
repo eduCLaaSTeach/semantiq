@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\People;
 
+use App\Modules\Access\Models\RoleAssignment;
+use App\Modules\Access\Support\RoleCode;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
-use App\Modules\Platform\Models\PlatformRole;
 use App\Modules\Platform\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -123,7 +124,7 @@ final class PeopleAccessBoundaryTest extends TestCase
      * This is the case that would catch a provisioning path which set a role
      * "so the person can log in and see something".
      *
-     * Mutation: give provision() a platform_role.
+     * Mutation: give provision() a role assignment.
      */
     public function test_a_newly_provisioned_user_can_reach_nothing(): void
     {
@@ -139,7 +140,11 @@ final class PeopleAccessBoundaryTest extends TestCase
         $newcomer = User::query()->where('email', 'newcomer@example.test')->sole();
 
         $this->assertNull($newcomer->platform_role, 'Provisioning granted a platform role.');
-        $this->assertFalse($newcomer->isSystemAdministrator());
+        $this->assertSame(
+            0,
+            RoleAssignment::query()->where('user_id', $newcomer->id)->count(),
+            'Provisioning created a role assignment. Being in SemantIQ grants nothing.'
+        );
 
         foreach ([
             '/console/people/users',
@@ -219,12 +224,15 @@ final class PeopleAccessBoundaryTest extends TestCase
     /**
      * Negative case 4, behavioural half.
      *
-     * A crafted request carrying platform_role changes nothing. The source guard
-     * in PeopleBoundaryTest proves the string is not assigned; this proves the
-     * behaviour, which a source scan could never establish for a column written
+     * A crafted request carrying a role changes nothing. The source guard in
+     * PeopleBoundaryTest proves the string is not assigned; this proves the
+     * behaviour, which a source scan could never establish for a write made
      * through a variable.
      *
-     * Mutation: add 'platform_role' to the update request's validated fields and
+     * Both field names are sent - the old platform_role and the new role_code -
+     * because a request carrying either must be ignored.
+     *
+     * Mutation: add 'role_code' to the update request's validated fields and
      * pass it to the service.
      */
     public function test_a_request_carrying_a_platform_role_grants_nothing(): void
@@ -236,26 +244,41 @@ final class PeopleAccessBoundaryTest extends TestCase
         $this->actingAsUser($admin)->post('/console/people/users', [
             'object_id' => '9b2f4c1e-1111-2222-3333-444455556666',
             'email' => 'aspiring@example.test',
-            'platform_role' => PlatformRole::SystemAdministrator->value,
+            'platform_role' => RoleCode::SystemAdministrator->value,
+            'role_code' => RoleCode::SystemAdministrator->value,
         ])->assertRedirect();
 
         $created = User::query()->where('email', 'aspiring@example.test')->sole();
 
-        $this->assertNull($created->platform_role, 'Provisioning accepted a role from the request.');
+        $this->assertSame(
+            0,
+            RoleAssignment::query()->where('user_id', $created->id)->count(),
+            'Provisioning accepted a role from the request.'
+        );
 
         $this->actingAsUser($admin)->put("/console/people/users/{$person->id}", [
             'organisation_id' => $organisation->id,
-            'platform_role' => PlatformRole::SystemAdministrator->value,
+            'platform_role' => RoleCode::SystemAdministrator->value,
+            'role_code' => RoleCode::SystemAdministrator->value,
         ]);
 
-        $this->assertNull($person->fresh()->platform_role, 'An update accepted a role from the request.');
+        $this->assertSame(
+            0,
+            RoleAssignment::query()->where('user_id', $person->id)->count(),
+            'An update accepted a role from the request.'
+        );
 
         $this->actingAsUser($admin)
             ->patch("/console/people/users/{$person->id}/reactivate", [
-                'platform_role' => PlatformRole::SystemAdministrator->value,
+                'platform_role' => RoleCode::SystemAdministrator->value,
+                'role_code' => RoleCode::SystemAdministrator->value,
             ]);
 
-        $this->assertNull($person->fresh()->platform_role, 'Reactivation accepted a role from the request.');
+        $this->assertSame(
+            0,
+            RoleAssignment::query()->where('user_id', $person->id)->count(),
+            'Reactivation accepted a role from the request.'
+        );
     }
 
     /**

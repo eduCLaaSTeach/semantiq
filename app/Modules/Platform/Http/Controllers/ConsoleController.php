@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Http\Controllers;
 
+use App\Modules\Access\Engine\AccessEngine;
+use App\Modules\Access\Support\RoleCode;
 use App\Modules\Platform\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -20,6 +22,8 @@ use Inertia\Response;
  */
 final class ConsoleController
 {
+    public function __construct(private readonly AccessEngine $engine) {}
+
     public function __invoke(Request $request): Response
     {
         /** @var User $user */
@@ -28,7 +32,10 @@ final class ConsoleController
         return Inertia::render('Console/Home', [
             'displayName' => $user->display_name,
             'email' => $user->email,
-            'isSystemAdministrator' => $user->isSystemAdministrator(),
+            // Asked of the ONE engine. There is exactly one definition of
+            // "is this person a System Administrator" in the codebase, and a
+            // second helper here is what N-B8 breaks.
+            'isSystemAdministrator' => $this->engine->holdsRole($user, RoleCode::SystemAdministrator),
         ]);
     }
 }
