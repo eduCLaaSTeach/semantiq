@@ -85,12 +85,28 @@ final class AccessController
             ->withCount(['entitlements as current_entitlements_count' => fn ($query) => $query->whereNull('ended_at')])
             ->orderBy('role_code')
             ->orderByDesc('assigned_at')
-            ->paginate(self::PER_PAGE)
-            ->withQueryString()
-            ->through(fn (RoleAssignment $assignment): array => $this->summary($assignment));
+            ->paginate(self::PER_PAGE);
 
         return Inertia::render('Access/Index', [
-            'assignments' => $assignments,
+            /*
+             * SHAPED EXPLICITLY, the same way P1-04 shapes its list.
+             *
+             * The first version passed the paginator straight through. Laravel
+             * serialises it as current_page / last_page, the component reads
+             * currentPage / lastPage, and so lastPage was undefined - which is
+             * not <= 1, so the full navigation rendered with the numbers
+             * missing: "Page of - 3 role assignments". Every test passed. Found
+             * in the browser, which is the only place it was visible.
+             */
+            'assignments' => [
+                'data' => collect($assignments->items())
+                    ->map(fn (RoleAssignment $assignment): array => $this->summary($assignment))
+                    ->all(),
+                'total' => $assignments->total(),
+                'perPage' => $assignments->perPage(),
+                'currentPage' => $assignments->currentPage(),
+                'lastPage' => $assignments->lastPage(),
+            ],
             'filters' => ['search' => $search, 'role' => $role, 'state' => $state],
             'roles' => $this->roleOptions(),
             'candidates' => $this->candidates($organisation->id),
