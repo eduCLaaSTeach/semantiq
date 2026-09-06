@@ -149,6 +149,14 @@ final class AccessController
                 'endedAt' => $assignment->ended_at?->toDateString(),
                 'summary' => $assignment->role_code->summary(),
                 'platformScoped' => $assignment->role_code->isPlatformScoped(),
+                // Decided here, never in the screen. A screen that reads a role
+                // code to choose wording is one line from reading it to choose
+                // a control.
+                'requiresStepUpToRevoke' => in_array(
+                    $assignment->role_code,
+                    RoleCatalogue::requiringStepUp(),
+                    true,
+                ),
             ],
             'entitlements' => $entitlements->map(fn (DomainEntitlement $entitlement): array => $this->entitlementSummary($entitlement))->all(),
             'domains' => BusinessDomain::query()

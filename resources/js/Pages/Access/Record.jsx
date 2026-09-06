@@ -81,7 +81,16 @@ export default function Record({ assignment, entitlements, domains, scopeTypes, 
                         <p className="org-hint org-hint-plain">
                             Revoking this role also revokes every entitlement, scope and sensitivity
                             level beneath it. Re-granting the role later does not bring them back.
-                            {assignment.role === 'system_administrator'
+                            {/*
+                              * The SERVER decides whether this needs step-up.
+                              * The first version compared assignment.role to a
+                              * raw role code here - only to pick wording, but
+                              * it is the shape that must not exist: a screen
+                              * that reads a role code today branches on one
+                              * tomorrow, and the code itself does not belong on
+                              * a user surface either.
+                              */}
+                            {assignment.requiresStepUpToRevoke
                                 ? ' You will be asked to confirm your identity with Microsoft first.'
                                 : ''}
                         </p>
