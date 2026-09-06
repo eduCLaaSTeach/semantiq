@@ -125,6 +125,49 @@ final class PurgeDependencies
             'many' => 'it is associated with %d legal entities',
             'counted' => true,
         ],
+        /*
+         * P1-05, and this is D-25 proving itself a THIRD time: nothing in this
+         * class was changed to know that access scopes exist. The migration
+         * added foreign keys from entitlement_scopes to teams and to business
+         * units, the walk found them, and the purge started refusing. All that
+         * was needed here was the sentence.
+         *
+         * It is the right refusal. Purging a team that an access scope names
+         * would leave a grant pointing at nothing - and a grant pointing at
+         * nothing is a grant nobody can review.
+         *
+         * Uncounted, because the question is whether anybody's access depends
+         * on this record, not how many rows do. The advice names the actual way
+         * through: revoke the scopes, on the Roles & Access screen where they
+         * live.
+         */
+        'entitlement_scopes' => [
+            'one' => 'access has been granted through it',
+            'many' => 'access has been granted through it',
+            'counted' => false,
+            'advice' => 'Revoke the scopes that use it on Roles & Access, or deactivate this record '
+                .'instead. Either way the record of who had access is kept.',
+        ],
+        'role_assignments' => [
+            'one' => 'roles have been assigned within it',
+            'many' => 'roles have been assigned within it',
+            'counted' => false,
+            'advice' => 'Revoke those role assignments on Roles & Access first. The record of who '
+                .'held them is kept.',
+        ],
+        'domain_entitlements' => [
+            'one' => 'access has been granted to it',
+            'many' => 'access has been granted to it',
+            'counted' => false,
+            'advice' => 'Revoke those entitlements on Roles & Access, or disable this domain '
+                .'instead. Either way the record of who had access is kept.',
+        ],
+        'pending_step_ups' => [
+            'one' => 'a confirmation is in progress',
+            'many' => 'a confirmation is in progress',
+            'counted' => false,
+            'advice' => 'Wait for it to finish or expire, then try again.',
+        ],
     ];
 
     /**

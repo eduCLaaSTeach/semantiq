@@ -7,7 +7,8 @@ namespace App\Modules\Platform\Bootstrap;
 use App\Modules\Platform\Identity\AuthenticationFailed;
 use App\Modules\Platform\Identity\VerifiedIdentity;
 use App\Modules\Platform\Models\BootstrapGrant;
-use App\Modules\Platform\Models\PlatformRole;
+use App\Modules\Access\Models\RoleAssignment;
+use App\Modules\Access\Support\RoleCode;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
 use App\Modules\Platform\Security\SecurityEventLogger;
@@ -60,8 +61,31 @@ final class GrantRedeemer
                 'email' => $identity->email,
                 'display_name' => $identity->displayName,
                 'status' => UserStatus::Active,
-                'platform_role' => PlatformRole::SystemAdministrator,
                 'last_signed_in_at' => now(),
+            ]);
+
+            // D-49. This replaced the platform_role write, and it is INSIDE the
+            // same transaction rather than one line later.
+            //
+            // The consumed !== 1 guard below rolls the whole transaction back
+            // when another request wins the race. An assignment created
+            // afterwards would leave either an assignment pointing at a
+            // rolled-back user, or - the unrecoverable case - a deployment with
+            // a consumed bootstrap grant and a user who is nobody.
+            //
+            // organisation_id is NULL, and that is the whole of the
+            // platform-scoped rule: the Company Profile does not exist yet, so
+            // requiring one here would make a fresh deployment
+            // unbootstrappable. There is no actor, because the deployment
+            // created this administrator and recording a person who did not
+            // would be a false entry.
+            RoleAssignment::query()->create([
+                'user_id' => $user->id,
+                'organisation_id' => null,
+                'role_code' => RoleCode::SystemAdministrator,
+                'assigned_at' => now(),
+                'ended_at' => null,
+                'assigned_by_user_id' => null,
             ]);
 
             // The guard is in the WHERE clause, not in PHP. Exactly one row must

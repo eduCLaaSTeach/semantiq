@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\People\Services;
 
+use App\Modules\Access\Services\AdministratorSetGuard;
 use App\Modules\Organisation\Models\ManagementRelationship;
 use App\Modules\Organisation\Models\Organisation;
 use App\Modules\Organisation\Models\TeamMembership;
 use App\Modules\People\Models\GroupMembership;
 use App\Modules\People\Support\PeopleViolation;
-use App\Modules\Platform\Models\PlatformRole;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
 use App\Modules\Platform\Security\SecurityEventLogger;
@@ -23,14 +23,17 @@ use Illuminate\Support\Facades\DB;
  * lookup, no invitation, no pending record and no email binding, because email
  * is mutable and the identity key is not.
  *
- * NOTHING HERE GRANTS ANYTHING. platform_role is never written - not by this
+ * NOTHING HERE GRANTS ANYTHING. No role is ever assigned here - not by this
  * class, not by any route, not by any request. P1-05 owns the role model, and
  * PeopleBoundaryTest fails the build if this file so much as mentions the
  * column.
  */
 final class UserDirectoryService
 {
-    public function __construct(private readonly SecurityEventLogger $events) {}
+    public function __construct(
+        private readonly SecurityEventLogger $events,
+        private readonly AdministratorSetGuard $administrators,
+    ) {}
 
     /**
      * Create a person from an Object ID the administrator supplied.
@@ -86,9 +89,9 @@ final class UserDirectoryService
                 'email' => $email,
                 'display_name' => $displayName,
                 'status' => UserStatus::Active->value,
-                // P1-05 owns the role model. Explicit rather than defaulted, so
-                // the intent is visible at the one place a user is created.
-                'platform_role' => null,
+                // A provisioned person holds NO role. P1-05 grants authority
+                // through role_assignments, deliberately and by somebody, and
+                // provisioning is not that act. There is no field here to set.
                 'last_signed_in_at' => null,
             ])->save();
 
@@ -112,14 +115,25 @@ final class UserDirectoryService
      *
      * The exception is lockout. If this is the last active System
      * Administrator, deactivating leaves a deployment with nobody who can
-     * administer it, no route back through the application, and bootstrap
-     * permanently closed - it closes on the EXISTENCE of an administrator
-     * record, not on there being an active one.
+     * administer it and no route back through the application.
+     *
+     * P1-05 moved the guard itself to AdministratorSetGuard, because the same
+     * invariant is now reachable by two operations and a second copy of it is
+     * the worst possible place for two sources of truth.
      */
     public function deactivate(User $user, User $actor): User
     {
-        return DB::transaction(function () use ($user, $actor): User {
-            $this->refuseIfLastAdministrator($user);
+        // THE ADMINISTRATOR-SET BOUNDARY, not this user's row.
+        //
+        // Deactivation is one of exactly two operations that can reduce the
+        // effective System Administrator count; revoking the role is the other.
+        // Both take the SAME boundary, in the same deterministic order, so two
+        // competing removals contend on the same locked set rather than on two
+        // different subject rows. Locking the subject first would give each
+        // transaction its own lock root, deadlock, and leave MySQL's victim
+        // selection as the thing standing between the deployment and lockout.
+        return $this->administrators->serialise(function (array $effective) use ($user, $actor): User {
+            $this->administrators->refuseIfLast($effective, $user);
 
             $user->forceFill(['status' => UserStatus::Inactive->value])->save();
 
@@ -147,40 +161,6 @@ final class UserDirectoryService
         ]);
 
         return $user;
-    }
-
-    /**
-     * The lockout guard.
-     *
-     * THE COUNT IS READ INSIDE THE TRANSACTION, WITH A LOCKING READ. A
-     * check-then-write would let two administrators deactivate each other
-     * concurrently, each seeing the other as the survivor, and leave zero. Under
-     * MySQL's REPEATABLE READ a plain SELECT would also read the transaction's
-     * snapshot and miss a change committed after it opened.
-     *
-     * It reads two columns and refuses one write. It does not reopen bootstrap,
-     * assign anybody a role, or touch platform_role.
-     */
-    private function refuseIfLastAdministrator(User $user): void
-    {
-        if ($user->platform_role !== PlatformRole::SystemAdministrator) {
-            return;
-        }
-
-        if (! $user->isActive()) {
-            return;
-        }
-
-        $others = User::query()
-            ->where('platform_role', PlatformRole::SystemAdministrator->value)
-            ->where('status', UserStatus::Active->value)
-            ->whereKeyNot($user->getKey())
-            ->lockForUpdate()
-            ->count();
-
-        if ($others === 0) {
-            throw PeopleViolation::soleAdministrator();
-        }
     }
 
     /**

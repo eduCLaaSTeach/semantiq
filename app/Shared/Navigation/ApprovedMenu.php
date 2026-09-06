@@ -108,7 +108,11 @@ final class ApprovedMenu
             // P1-03. Delivered: Users and Groups, System Administrator only.
             // Creating a user or adding somebody to a group grants nothing.
             NavigationNode::leaf($area, 'Users & Groups', 'i-users', 'people.users', 'people.view'),
-            NavigationNode::locked($area, 'Roles & Access', 'i-key', $policy),
+            // P1-05. Delivered: role assignments, domain entitlements, scopes,
+            // sensitivity ceilings and the Access Simulator. A role grants
+            // nothing on its own - business information needs a complete path
+            // of role, entitlement, scope and sensitivity.
+            NavigationNode::leaf($area, 'Roles & Access', 'i-key', 'access.index', 'access.view'),
             // P1-04. Delivered: one list, one record page, System Administrator
             // only. A domain existing, being enabled, or having an owner grants
             // ZERO access - to its owner or to anybody.

@@ -192,6 +192,48 @@ final class SecurityEventLogger
 
     public const BUSINESS_DOMAIN_OWNER_CLEARED = 'business_domain.owner.cleared';
 
+    /*
+     * P1-05 roles and access.
+     *
+     * D-71: PRIVILEGED SURFACES ONLY. There is deliberately no event for an
+     * ordinary business denial and no repeated-denial detector - volume buries
+     * what matters, and P1-08 inherits the noise. What is logged is a change to
+     * somebody's authority, a self-grant, a step-up refusal, and a state the
+     * engine could not interpret.
+     *
+     * D-72 adds FOUR context keys and no free-text channel: `role` is a fixed
+     * CODE from the catalogue and never a name, `domain_id` and `scope` are
+     * structural, `sensitivity` is an enum value. A role's LABEL, a domain's
+     * NAME and an administrator's reason are business content, there is nowhere
+     * for them to go, and so a leak here stays unrepresentable rather than
+     * merely discouraged.
+     */
+    public const ROLE_ASSIGNED = 'access.role.assigned';
+
+    public const ROLE_REVOKED = 'access.role.revoked';
+
+    public const ROLE_SELF_ASSIGNED = 'access.role.self_assigned';
+
+    public const ENTITLEMENT_GRANTED = 'access.entitlement.granted';
+
+    public const ENTITLEMENT_REVOKED = 'access.entitlement.revoked';
+
+    public const SCOPE_ASSIGNED = 'access.scope.assigned';
+
+    public const SCOPE_REVOKED = 'access.scope.revoked';
+
+    public const CEILING_SET = 'access.ceiling.set';
+
+    public const STEP_UP_REQUESTED = 'access.step_up.requested';
+
+    public const STEP_UP_COMPLETED = 'access.step_up.completed';
+
+    public const STEP_UP_REFUSED = 'access.step_up.refused';
+
+    public const ACCESS_STATE_UNRECOGNISED = 'access.state.unrecognised';
+
+    public const ACCESS_ENGINE_FAILED = 'access.engine.failed';
+
     private const EVENTS = [
         self::BOOTSTRAP_GRANT_ISSUED,
         self::BOOTSTRAP_COMPLETED,
@@ -251,6 +293,19 @@ final class SecurityEventLogger
         self::BUSINESS_DOMAIN_PURGED,
         self::BUSINESS_DOMAIN_OWNER_ASSIGNED,
         self::BUSINESS_DOMAIN_OWNER_CLEARED,
+        self::ROLE_ASSIGNED,
+        self::ROLE_REVOKED,
+        self::ROLE_SELF_ASSIGNED,
+        self::ENTITLEMENT_GRANTED,
+        self::ENTITLEMENT_REVOKED,
+        self::SCOPE_ASSIGNED,
+        self::SCOPE_REVOKED,
+        self::CEILING_SET,
+        self::STEP_UP_REQUESTED,
+        self::STEP_UP_COMPLETED,
+        self::STEP_UP_REFUSED,
+        self::ACCESS_STATE_UNRECOGNISED,
+        self::ACCESS_ENGINE_FAILED,
     ];
 
     /**
@@ -259,10 +314,17 @@ final class SecurityEventLogger
      * P1-01 adds structural identifiers only. There is deliberately no key for a
      * name, a description or any free text: a name is business content, and a
      * free-text key is where a leak eventually goes.
+     *
+     * P1-05 adds four - D-72, approved individually. `role` carries a CODE from
+     * RoleCatalogue and never a label, so "Super Admin" has nowhere to appear
+     * even if somebody typed it. `domain_id` and `scope` are structural.
+     * `sensitivity` is an enum value. The absence of a `note` or `justification`
+     * key is deliberate and is what keeps this boundary honest.
      */
     private const ALLOWED_KEYS = [
         'provider', 'subject', 'tenant', 'user_id', 'result', 'reason', 'expires_at',
         'organisation_id', 'entity_type', 'entity_id', 'related_id',
+        'role', 'domain_id', 'scope', 'sensitivity',
     ];
 
     /**

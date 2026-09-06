@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Providers;
 
+use App\Modules\Access\Engine\AccessEngine;
+use App\Modules\Access\Services\AdministratorSetGuard;
 use App\Modules\Organisation\Support\SystemAdministratorNavigationAuthorizer;
 use App\Modules\Platform\Console\Commands\IssueBootstrapGrantCommand;
 use App\Modules\Platform\Console\HealthCommand;
@@ -41,6 +43,25 @@ final class PlatformServiceProvider extends ServiceProvider
         ));
 
         $this->registerIdentity();
+        $this->registerAccess();
+    }
+
+    /**
+     * P1-05.
+     *
+     * AccessEngine is a SINGLETON because there must be exactly one of it -
+     * binding it as a singleton is not a performance choice, it is the shape
+     * that makes "one engine" true of the running application as well as of the
+     * source. Everything else resolves normally.
+     *
+     * There is deliberately no AccessServiceProvider: People and Domains have
+     * none either, and a provider per module would be a central list by
+     * another name.
+     */
+    private function registerAccess(): void
+    {
+        $this->app->singleton(AccessEngine::class);
+        $this->app->singleton(AdministratorSetGuard::class);
     }
 
     /**
