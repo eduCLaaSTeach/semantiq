@@ -80,6 +80,20 @@ separately.
 against the P1-04 pattern and run in CI. That is stated rather than implied: the
 races have not been observed locally.
 
+### MySQL caught two test defects that SQLite hid
+
+**The first CI run of the new Access-on-MySQL step failed**, and it was right to.
+
+Two assertions read the emitted SQL for `"ended_at" is null` and
+`from "users"` — **SQLite's double-quote identifier quoting**. MySQL writes
+`` `ended_at` `` and `` from `users` ``, so both passed locally and failed on
+the engine production actually uses. Both are now quote-agnostic.
+
+**Neither was a defect in the application.** Both were assertions that would
+have gone on passing on SQLite forever while proving nothing about production —
+which is precisely why the step exists, and it earned its place on its first
+run.
+
 ---
 
 ## 4. Browser verification

@@ -282,21 +282,30 @@ final class AdministratorLockoutTest extends TestCase
                 );
             }
 
+            /*
+             * QUOTE-AGNOSTIC. SQLite writes from "users"; MySQL writes from
+             * `users`. The first version matched only the SQLite spelling and
+             * passed locally while failing on MySQL - the engine production
+             * uses, and the only one where these locks exist at all.
+             */
+            $fromAssignments = '/from [`"]role_assignments[`"]/';
+            $fromUsers = '/from [`"]users[`"]/';
+
             $reads = array_values(array_filter(
                 $statements,
                 static fn (string $sql): bool => str_contains($sql, 'select')
-                    && (str_contains($sql, 'role_assignments') || str_contains($sql, 'from "users"'))
+                    && (preg_match($fromAssignments, $sql) === 1 || preg_match($fromUsers, $sql) === 1)
             ));
 
             $assignmentIndex = null;
             $usersIndex = null;
 
             foreach ($reads as $index => $sql) {
-                if ($assignmentIndex === null && str_contains($sql, 'from "role_assignments"')) {
+                if ($assignmentIndex === null && preg_match($fromAssignments, $sql) === 1) {
                     $assignmentIndex = $index;
                 }
 
-                if ($assignmentIndex !== null && $usersIndex === null && str_contains($sql, 'from "users"')) {
+                if ($assignmentIndex !== null && $usersIndex === null && preg_match($fromUsers, $sql) === 1) {
                     $usersIndex = $index;
                 }
             }

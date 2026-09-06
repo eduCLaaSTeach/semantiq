@@ -182,8 +182,15 @@ final class GrantPathIndependenceTest extends TestCase
         $this->assertNotEmpty($selects, 'The engine read no assignments, so this proves nothing.');
 
         foreach ($selects as $sql) {
-            $this->assertStringContainsString(
-                'ended_at" is null',
+            /*
+             * QUOTE-AGNOSTIC. SQLite writes "ended_at"; MySQL writes
+             * `ended_at`. The first version asserted the SQLite spelling and
+             * passed locally while FAILING on the engine production uses -
+             * which is the whole reason the Access suite runs against MySQL in
+             * CI, and it caught this on the first run.
+             */
+            $this->assertMatchesRegularExpression(
+                '/[`"]ended_at[`"] is null/',
                 $sql,
                 'The engine read role assignments without filtering to current ones, so a revoked '
                 .'row enters the evaluation and can subtract from it.'
