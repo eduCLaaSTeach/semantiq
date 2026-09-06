@@ -30,6 +30,11 @@ the Product Owner, not by any test here** — §8 records what that means.
 
 Fourteen of those are new, and all fourteen are the Gate C correction.
 
+CI reports the same run as **631 passed · 6 warnings · 4 skipped**: Pest counts
+the three suites carrying MySQL-only skips as warnings rather than folding them
+into the passing total. `631 + 6 + 4 = 641`, and the assertion count is
+identical. The six warnings pre-date this correction.
+
 **The four skips are deliberate and each states its reason.** They are the MySQL
 lock and race measurements: SQLite has no `SELECT … FOR UPDATE`, so the locking
 reads compile away entirely and a test running there would report a lock against
@@ -83,6 +88,18 @@ separately.
 
 ## 3. MySQL
 
+**CI run [236](https://github.com/eduCLaaSTeach/semantiq/actions/runs/34021960632)
+on `a754a5cea2ba1f1c87ee59a2d14704d17a468b14` — green, all sixteen steps.**
+
+| Step | Result |
+| --- | --- |
+| Full suite (SQLite) | **631 passed · 4 skipped · 6 warnings · 15,101 assertions** — the warnings are the three suites that carry the MySQL-only skips, and they pre-date this correction |
+| `migrate` on MySQL 8.4 | Pass |
+| **D-49 `migrate → rollback → migrate`** | Pass — *"rollback reconstructed the administrator from the current assignment state"*, *"left exactly one current System Administrator assignment"* |
+| People suite on MySQL | 62 passed, 762 assertions |
+| Domains suite on MySQL | 69 passed, 443 assertions |
+| **Access suite on MySQL** | **94 passed, 1,846 assertions, nothing skipped** — including all fourteen new cases |
+
 | Measurement | Where | Status |
 | --- | --- | --- |
 | `migrate` on MySQL 8.4 | CI | Runs on every push |
@@ -92,6 +109,7 @@ separately.
 | **C-B** revocation racing revocation | CI | As above |
 | **C-C** deactivation racing deactivation | CI | As above |
 | **No raw database error reaches the administrator** in any race | CI | A `QueryException` fails the test explicitly |
+| **The Gate C correction, on MySQL** | CI — `SelfEntitlementStepUpTest` | All fourteen cases pass on **MySQL 8.4**, not only on SQLite. Run **236**, step 15: **94 passed, 1,846 assertions, nothing skipped** |
 
 **No MySQL is available in the development environment**, so these were written
 against the P1-04 pattern and run in CI. That is stated rather than implied: the
