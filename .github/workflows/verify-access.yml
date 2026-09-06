@@ -1,0 +1,196 @@
+# Read-only P1-05 Roles & Access state verification.
+#
+# MANUAL DISPATCH ONLY, AND IT WRITES NOTHING. Every statement it makes comes
+# from a SELECT. There is no sibling that writes: P1-05 administration happens
+# on the screens, by a person, with step-up where D-73 requires it.
+#
+# IT REPORTS ROLE CODES, SCOPE TYPES, SENSITIVITY LEVELS AND COUNTS. Not a
+# person's name, not an email, not an Object ID, not a domain's name. The whole
+# subject of this unit is who can reach what, so a report about it must be
+# unusually careful not to become the leak it is checking for.
+#
+# WHY IT EXISTS. Deployment validation window A asks questions nobody can answer
+# from outside: did the D-49 migration reconstruct exactly the administrators
+# that the old column held, is users.platform_role really gone as a runtime
+# authority, and has any business access appeared that nobody granted. The
+# screens can only be checked by somebody signed in; this checks the stored
+# state.
+
+name: Verify P1-05 Roles & Access state (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Report Roles & Access state over SSH
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+    steps:
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      # Codes, types, levels and counts. Nothing else leaves the server.
+      - name: Report Roles & Access state
+        run: |
+          set -euo pipefail
+
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
+              \$roles = [];
+              foreach (\App\Modules\Access\Models\RoleAssignment::query()->orderBy(\"id\")->get() as \$a) {
+                \$roles[] = [
+                  \"role\"     => \$a->role_code->value,
+                  \"current\"  => \$a->ended_at === null,
+                  \"platform\" => \$a->organisation_id === null,
+                ];
+              }
+
+              echo json_encode([
+                \"schema\" => [
+                  \"platform_role_column_present\" => \Illuminate\Support\Facades\Schema::hasColumn(\"users\", \"platform_role\"),
+                  \"role_assignments\"             => \Illuminate\Support\Facades\Schema::hasTable(\"role_assignments\"),
+                  \"domain_entitlements\"          => \Illuminate\Support\Facades\Schema::hasTable(\"domain_entitlements\"),
+                  \"entitlement_scopes\"           => \Illuminate\Support\Facades\Schema::hasTable(\"entitlement_scopes\"),
+                  \"entitlement_ceilings\"         => \Illuminate\Support\Facades\Schema::hasTable(\"entitlement_ceilings\"),
+                  \"pending_step_ups\"             => \Illuminate\Support\Facades\Schema::hasTable(\"pending_step_ups\"),
+                  \"step_up_target_column\"        => \Illuminate\Support\Facades\Schema::hasColumn(\"pending_step_ups\", \"role_assignment_id\"),
+                ],
+                \"assignments\"            => \$roles,
+                \"assignments_total\"      => count(\$roles),
+                \"active_system_admins\"   => \app(\App\Modules\Access\Services\AdministratorSetGuard::class)->effectiveCount(),
+                \"entitlements_total\"     => \App\Modules\Access\Models\DomainEntitlement::query()->count(),
+                \"entitlements_current\"   => \App\Modules\Access\Models\DomainEntitlement::query()->whereNull(\"ended_at\")->count(),
+                \"scopes_current\"         => \App\Modules\Access\Models\EntitlementScope::query()->whereNull(\"ended_at\")->count(),
+                \"ceilings_current\"       => \App\Modules\Access\Models\EntitlementCeiling::query()->whereNull(\"ended_at\")->count(),
+                \"restricted_ceilings\"    => \App\Modules\Access\Models\EntitlementCeiling::query()->whereNull(\"ended_at\")->where(\"sensitivity\", \"restricted\")->count(),
+                \"step_ups_total\"         => \App\Modules\Access\StepUp\PendingStepUp::query()->count(),
+                \"step_ups_open\"          => \App\Modules\Access\StepUp\PendingStepUp::query()->whereNull(\"consumed_at\")->count(),
+                \"users_total\"            => \App\Modules\Platform\Models\User::query()->count(),
+                \"enabled_domains\"        => \App\Modules\Domains\Models\BusinessDomain::query()->where(\"status\", \"enabled\")->count(),
+              ], JSON_PRETTY_PRINT);
+            '")"
+
+          echo "$out"
+
+          # GUARDS, NOT DECORATION. This unit is about who can reach what, so a
+          # report on it must not itself carry a person.
+          if printf '%s' "$out" | grep -qE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'; then
+            echo "::error::The report contains an email address. Refusing to leave it in the log."
+            exit 1
+          fi
+
+          python3 - "$out" <<'PYEOF'
+          import json, sys
+          raw = sys.argv[1]
+          data = json.loads(raw[raw.index('{'):raw.rindex('}') + 1])
+          schema = data['schema']
+
+          problems = []
+
+          # 1. THE D-49 MIGRATION LANDED, IN BOTH DIRECTIONS.
+          #
+          # The column must be GONE - while it exists, there are two places a
+          # reader could look for the same fact, and one of them is wrong.
+          if schema['platform_role_column_present']:
+              problems.append('users.platform_role still exists. P1-05 drops it; role assignments are the only authority.')
+
+          for table in ('role_assignments', 'domain_entitlements', 'entitlement_scopes',
+                        'entitlement_ceilings', 'pending_step_ups'):
+              if not schema[table]:
+                  problems.append(f'Table [{table}] is missing. The P1-05 migrations did not complete.')
+
+          # The Gate C correction's column. Without it a self-granted entitlement
+          # cannot name its target and the step-up would fall back to the role
+          # branch.
+          if not schema['step_up_target_column']:
+              problems.append('pending_step_ups.role_assignment_id is missing. The Gate C self-grant correction is not deployed.')
+
+          # 2. THE ADMINISTRATOR FLOOR - D-49a. Never zero.
+          if data['active_system_admins'] < 1:
+              problems.append('There is NO active System Administrator. Nobody can administer the platform.')
+
+          platform_current = [a for a in data['assignments'] if a['current'] and a['role'] == 'system_administrator']
+          if len(platform_current) != data['active_system_admins']:
+              problems.append(
+                  'Current system_administrator assignments (' + str(len(platform_current))
+                  + ') do not match the active administrator count (' + str(data['active_system_admins'])
+                  + '). One of the two is reading something the other is not.')
+
+          # A platform-scoped role carries no organisation, and only that role may.
+          for a in data['assignments']:
+              if a['role'] == 'system_administrator' and not a['platform']:
+                  problems.append('A system_administrator assignment carries an organisation. That role is platform-scoped.')
+              if a['role'] != 'system_administrator' and a['platform']:
+                  problems.append(f"A [{a['role']}] assignment carries no organisation. Only system_administrator is platform-scoped.")
+
+          # 3. NOTHING GRANTED ITSELF DURING THE MIGRATION.
+          #
+          # D-57: no entitlement is ever created automatically. Immediately after
+          # deployment, before anybody has administered anything, there must be
+          # none - and a restricted ceiling least of all.
+          for key, label in (('entitlements_current', 'current domain entitlements'),
+                             ('scopes_current', 'current scopes'),
+                             ('ceilings_current', 'current sensitivity ceilings')):
+              if data[key] > 0:
+                  print(f"::warning::{data[key]} {label} exist. Expected zero immediately after deployment - "
+                        "confirm every one was granted deliberately by a person.")
+
+          if data['restricted_ceilings'] > 0:
+              problems.append(str(data['restricted_ceilings']) + ' RESTRICTED sensitivity ceilings exist. '
+                              'Granting one requires step-up and cannot have happened during a migration.')
+
+          # 4. NO STEP-UP IS SITTING OPEN from before the deployment.
+          if data['step_ups_open'] > 0:
+              print('::warning::' + str(data['step_ups_open']) + ' step-up confirmations are open. '
+                    'They expire in five minutes; this is only worth a look if it persists.')
+
+          for p in problems:
+              print(f'::error::{p}')
+
+          print('::notice::' + str(data['assignments_total']) + ' role assignments, '
+                + str(data['active_system_admins']) + ' active System Administrator(s), '
+                + str(data['entitlements_current']) + ' current entitlements, '
+                + str(data['scopes_current']) + ' current scopes, across '
+                + str(data['users_total']) + ' users and '
+                + str(data['enabled_domains']) + ' enabled domains. '
+                + 'users.platform_role present: ' + str(schema['platform_role_column_present']) + '.')
+
+          sys.exit(1 if problems else 0)
+          PYEOF

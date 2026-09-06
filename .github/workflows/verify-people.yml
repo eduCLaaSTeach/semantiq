@@ -90,7 +90,7 @@ jobs:
               echo json_encode([
                 \"users\" => \$users,
                 \"users_total\" => count(\$users),
-                \"active_system_admins\" => \App\Modules\Platform\Models\User::query()->activeSystemAdministrators()->count(),
+                \"active_system_admins\" => \app(\App\Modules\Access\Services\AdministratorSetGuard::class)->effectiveCount(),
                 \"groups_total\" => \App\Modules\People\Models\Group::query()->count(),
                 \"group_memberships_total\" => \App\Modules\People\Models\GroupMembership::query()->count(),
                 \"group_memberships_current\" => \App\Modules\People\Models\GroupMembership::query()->whereNull(\"left_at\")->count(),
