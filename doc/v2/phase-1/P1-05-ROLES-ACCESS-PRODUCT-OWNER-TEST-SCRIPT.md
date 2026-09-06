@@ -1,0 +1,218 @@
+# P1-05 — Roles & Access: PRODUCT OWNER TEST SCRIPT
+
+**Written for you, not for a developer.** Your words, your screens, your
+decisions. Work through it in order — later steps depend on what earlier ones
+set up.
+
+| | |
+| --- | --- |
+| **1. Feature being tested** | **P1-05 — Roles & Access.** Who holds which role, which business domains that role may take part in, which records inside them, and how sensitive the information may be |
+| **2. Deployed build** | *Merge SHA to be recorded at deployment. Not yet deployed — this script is provided with the implementation pull request* |
+| **3. Where** | **Roles & Access** in the left-hand menu, under System Administration |
+
+---
+
+## ⚠️ 4. READ THIS BEFORE YOU TYPE ANYTHING
+
+**SemantIQ does not delete access records. It ends them.**
+
+| What you do | What happens |
+| --- | --- |
+| **Grant a role, entitlement, scope or sensitivity level** | Revocable — **but the history is permanent.** The record that it was granted, and when, is kept for good |
+| **Revoke anything** | **Permanent.** Re-granting creates a **new** grant. The old entitlements and scopes beneath it **do not come back** |
+| **Grant somebody the System Administrator role** | Assignable and revocable — **but the last one can never be removed.** That is deliberate |
+
+**Nothing in this script asks you to enter false business information**, and
+nothing asks you to create a second System Administrator you do not actually
+want. Where a check cannot be done without doing that, it says so and is marked
+**not testable here**.
+
+---
+
+## 5. Before you start
+
+| # | Must already be true |
+| --- | --- |
+| 1 | The Company Profile exists |
+| 2 | At least one business domain is **enabled** and at least one is **disabled** — Business Domains |
+| 3 | At least two people other than yourself exist in Users & Groups |
+| 4 | At least two **teams** exist — Organisation → Teams |
+
+**Test data you will create:** role assignments, domain entitlements, scopes and
+sensitivity levels for **real people in your organisation**. These are real
+grants. They can be revoked, and the record of them is permanent.
+
+---
+
+## 6. The steps
+
+### A — Nothing is granted, and that is the baseline
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| A1 | Open **Roles & Access** | The list opens. The header says *"A role on its own grants nothing"* and names what a complete grant needs | |
+| A2 | Look at your own row | Your **System Administrator** role is listed. **Domains entitled** reads **"None — grants no access"** | |
+| A3 | Read the notice above the list | If you are the only administrator, it says *"Only one active System Administrator remains…"* — **and nothing is blocked by it** | |
+
+> **A2 is the point of the whole unit.** Being a System Administrator gives you
+> the platform. It gives you **no business information at all**.
+
+### B — Grant a role, and watch it grant nothing
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| B1 | **Grant a role** → choose a colleague → choose **Business User** | The description of what that role does appears beside your choice, **before** you grant it | |
+| B2 | Select **Grant role** | Confirmed. You land on that person's record page | |
+| B3 | Read the page | It says the role has **no domain entitlements, so it gives no access to business information** | |
+
+### C — An entitlement is still not access
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| C1 | **Add entitlement** → choose your **enabled** domain | Confirmed: *"Domain entitlement granted. Assign a scope to make it effective."* | |
+| C2 | Look at the entitlement | It shows **No access — scope required**, and explains that it has no active scope and grants no business-data access | |
+
+> **C2 is a deliberate state, not a fault.** An entitlement without a scope is a
+> grant that does not work, and the screen must say so rather than look normal.
+
+### D — Scope, and scopes adding together
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| D1 | **Add scope** → choose **Team** → choose a team | Confirmed. The *No access* message is gone | |
+| D2 | **Add scope** again → **Team** → a **different** team | Confirmed. **Both** teams are listed, both Current | |
+| D3 | **Add scope** again → **Team** → the **same** team as D1 | **Refused:** *"That scope is already assigned… Scopes add together, so assigning it twice grants nothing further."* | |
+| D4 | **Add scope** → choose **Domain** | A note appears: **Domain and Organisation scope grant the same records today.** Domain is reserved for a future split | |
+
+> **D4 is D-74.** Two choices that do the same thing today, said plainly, so
+> nobody assumes one is narrower than the other.
+
+### E — Sensitivity
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| E1 | Set **Sensitivity level** to **Confidential** | Confirmed. The description of that level is shown beside the choice | |
+| E2 | Set it to **Restricted** | **You are taken to a confirmation page**, then to **Microsoft to sign in again**. Nothing changes until you return | |
+| E3 | **Cancel at Microsoft** | You return to Roles & Access. *"The action was cancelled and has not been applied."* The level is **still Confidential** | |
+| E4 | Try **Restricted** again and complete the Microsoft sign-in | Confirmed. The level is now Restricted | |
+
+> **E2–E4 are step-up.** SemantIQ never asks you for a password — Microsoft
+> does. **One confirmation covers one change, once.**
+
+### F — The Access Simulator
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| F1 | Open **Access Simulator** | The form opens. It says nothing here changes anybody's access and no business information is shown | |
+| F2 | Choose your colleague, the **enabled** domain, **Standard**, and the team from D1 | **Allowed.** Under *How they have it*, the grant is named in a sentence | |
+| F3 | Read the note under that grant | It says whether revoking it **would** remove their access, or whether another grant also allows it | |
+| F4 | Change the team to one you did **not** assign | **Not allowed** — *"The assigned scope does not include this record."* | |
+| F5 | Change sensitivity to a level above their ceiling | **Not allowed** — *"The assigned sensitivity level does not permit this information."* | |
+| F6 | Look at every message on this screen | **Plain English throughout.** No codes, no field names, nothing that looks like it came from a database | |
+
+### G — The boundaries
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| G1 | Simulate **yourself**, any domain, Standard | **Not allowed.** You are a System Administrator and hold no business entitlement | |
+| G2 | In Business Domains, assign your colleague as **owner** of a domain they have **no entitlement to**. Then simulate them on it | **Not allowed.** Owning a domain grants nothing | |
+| G3 | Open Roles & Access. Their role list is **unchanged** — being made an owner gave them no role | | |
+| G4 | Grant somebody **Manager**, entitle them to a domain, and give them **one** team scope. Simulate a record in a **different** team | **Not allowed.** A manager reaches the teams that were assigned, and no others | |
+
+### H — Disabled domains
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| H1 | Entitle your colleague to a **disabled** domain | Accepted, with a note that nobody reaches its information until it is enabled | |
+| H2 | Give it a scope and a level, then simulate it | **Not allowed** — *"This business domain is currently disabled."* | |
+| H3 | **Enable** the domain in Business Domains, then simulate again | **Allowed** — and you granted nothing new. The entitlement was kept | |
+| H4 | **Disable every domain** in Business Domains, then simulate anything | **Not allowed**, for every domain | |
+| H5 | Re-enable the domains you disabled | Access returns exactly as it was | |
+
+> **H4 is the P1-04 carried gate.** With no enabled domains, nobody sees
+> anything. It must never become *everybody sees everything*.
+
+### I — Revocation, and what does not come back
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| I1 | Revoke **one** of the two team scopes from D2 | Confirmed. The other is still Current, and access through it still works in the Simulator | |
+| I2 | Revoke the **remaining** scope | Confirmed: *"…This entitlement now has no active scope and grants no access."* | |
+| I3 | Look at the entitlement | It is **still Current**, and shows **No access — scope required** | |
+| I4 | Simulate that person again | **Not allowed** — the scope does not include the record | |
+| I5 | Revoke the whole **role** | Confirmed, with a warning that everything beneath it went too | |
+| I6 | Grant the **same role again** to the same person | The role is back — **with no entitlements at all.** Nothing came back with it | |
+| I7 | Set **Shows** to **Everything** | Both the old revoked period **and** the new one are listed | |
+
+> **I6 is the one to look at closely.** Re-granting a role must never quietly
+> restore access somebody had months ago.
+
+### J — The last administrator
+
+| # | Action | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| J1 | Open your own role assignment and select **Revoke this role** | **You are taken to Microsoft** first, because removing a System Administrator is privileged | |
+| J2 | Complete the Microsoft sign-in | **Refused:** *"This is the only active System Administrator. Add or retain another before removing this one."* | |
+| J3 | Confirm you are still an administrator | You are. Roles & Access still opens | |
+
+> **If a second System Administrator genuinely exists** — because your
+> organisation actually wants one — J1 will succeed for the other person and
+> then refuse for the survivor. **Do not create one just for this test.**
+
+### K — Look at it as a customer would
+
+| # | Check | PASS / FAIL |
+| --- | --- | --- |
+| K1 | Spelling, grammar and capitalisation on every screen | |
+| K2 | Nothing in ALL CAPS that should be a sentence | |
+| K3 | No codes, enum values, field names or route names anywhere a person reads | |
+| K4 | Every refusal says **what to do instead**, not just that it failed | |
+| K5 | Every successful save is **confirmed** — never silence | |
+| K6 | Switch to **dark theme** and walk the same screens | |
+| K7 | Narrow the window to phone width and walk them again | |
+| K8 | **Back** and the browser's back button both behave sensibly | |
+| K9 | Would you be comfortable showing these exact screens to a customer? | |
+
+---
+
+## 7. What cannot be tested here, and why
+
+**Stated rather than left out, and never inferred from a passing automated
+test.**
+
+| # | Not testable | Why | Where the evidence is instead |
+| --- | --- | --- | --- |
+| **1** | **That AI and Fabric get exactly the requesting person's access** | There is no AI surface and no business data in Phase 1. The **contract** exists; the integration is Phase 2/3 | `Architecture/AccessBoundaryTest` — the engine is usable outside HTTP, and nothing may load data first and filter after |
+| **2** | **Row-level filtering of real business records** | There are no business records yet. Scope is tested against the structural targets it resolves — teams, business units, own | `ScopeUnionTest` |
+| **3** | **Two people acting at the same instant** | Two people clicking simultaneously look identical to one person clicking twice | `AdministratorConcurrencyTest` against **real MySQL** in CI: the administrator set is genuinely locked, and the loser of a race gets the business refusal rather than a database error |
+| **4** | **The P1-02 SSO Re-check lock** | It needs a **genuine second System Administrator**, and one must not be manufactured to close a gate | **Carried forward, openly.** A fake privileged account would make the evidence worth less than leaving it open |
+| **5** | **That Microsoft required a particular credential** | SemantIQ can prove Microsoft reports a **fresh sign-in**. It cannot prove which factor was used unless your Entra policy guarantees it | Stated in `P1-05-DEPLOYMENT-NOTE.md` §5. **"MFA verified" is never claimed anywhere** |
+
+---
+
+## 8. Evidence to capture
+
+| # | |
+| --- | --- |
+| 1 | A screenshot of **A2** — your System Administrator role showing *"None — grants no access"* |
+| 2 | A screenshot of **C2** — an entitlement showing *No access — scope required* |
+| 3 | A screenshot of **D4** — the Domain / Organisation equivalence note |
+| 4 | A screenshot of **F2** showing the grant path, and of **F4** or **F5** showing a refusal |
+| 5 | A screenshot of **H4** — no enabled domains, and access refused |
+| 6 | A screenshot of **I6** — the re-granted role with no entitlements |
+| 7 | A screenshot of **J2** — the last-administrator refusal |
+| 8 | Anything under **K** that you would not show a customer |
+
+---
+
+## 9. Result
+
+**To be completed by the Product Owner.**
+
+| | |
+| --- | --- |
+| Tested by | |
+| Date | |
+| Build / merge SHA | |
+| Overall | **PASS / FAIL** |
+| Notes | |
