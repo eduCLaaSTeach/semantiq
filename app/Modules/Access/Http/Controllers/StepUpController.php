@@ -15,6 +15,7 @@ use App\Modules\Access\StepUp\StepUpService;
 use App\Modules\Access\Support\AccessViolation;
 use App\Modules\Access\Support\RoleCode;
 use App\Modules\Access\Support\Sensitivity;
+use App\Modules\Domains\Models\BusinessDomain;
 use App\Modules\Platform\Identity\AuthenticationFailed;
 use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Models\User;
@@ -175,8 +176,21 @@ final class StepUpController
     {
         return match ($pending->action) {
             StepUpAction::GrantSystemAdministrator,
-            StepUpAction::GrantOrganisationAdministrator,
-            StepUpAction::SelfGrant => $this->performGrant($pending, $actor),
+            StepUpAction::GrantOrganisationAdministrator => $this->performGrant($pending, $actor),
+
+            /*
+             * SELF-GRANT COVERS BOTH HALVES OF D-73 - granting yourself a role,
+             * and granting your own assignment a domain. One approved action,
+             * two stored shapes, told apart by which exact target was written
+             * down when the confirmation began.
+             *
+             * A row carrying neither shape is malformed and DENIES. Falling
+             * through to the role branch would hand a null role code to
+             * RoleCode::from.
+             */
+            StepUpAction::SelfGrant => $pending->role_assignment_id !== null
+                ? $this->performSelfEntitlementGrant($pending, $actor)
+                : $this->performGrant($pending, $actor),
 
             StepUpAction::RevokeSystemAdministrator => $this->performRevoke($pending, $actor),
 
@@ -186,6 +200,10 @@ final class StepUpController
 
     private function performGrant(PendingStepUp $pending, User $actor): RedirectResponse
     {
+        if ($pending->role_code === null || $pending->subject_user_id === null) {
+            throw AccessViolation::stepUpInvalid();
+        }
+
         $role = RoleCode::from((string) $pending->role_code);
         $subject = User::query()->findOrFail($pending->subject_user_id);
 
@@ -197,6 +215,51 @@ final class StepUpController
         );
 
         return $this->confirm('access.show', 'Role granted.', $assignment->id);
+    }
+
+    /**
+     * The self-granted domain entitlement, performed from the STORED target.
+     *
+     * Nothing is read from the request. The assignment and the domain are the
+     * two the administrator confirmed, found by their stored ids - so changing
+     * the URL, the form or the browser's history between the confirmation and
+     * the return substitutes nothing.
+     *
+     * AND THE AUTHORITY IS RE-EVALUATED HERE, not merely at the confirmation.
+     * The administrator has been away at Microsoft; the assignment may have
+     * been revoked, the tenancy may no longer match, and the entitlement may
+     * already exist. EntitlementService::grant re-checks the last three under
+     * its own locks; what only this method can re-check is that the action is
+     * still the SELF-grant, in the organisation, that was approved.
+     */
+    private function performSelfEntitlementGrant(PendingStepUp $pending, User $actor): RedirectResponse
+    {
+        if ($pending->business_domain_id === null) {
+            throw AccessViolation::stepUpInvalid();
+        }
+
+        $assignment = RoleAssignment::query()->findOrFail($pending->role_assignment_id);
+        $domain = BusinessDomain::query()->findOrFail($pending->business_domain_id);
+
+        // Still the same person's own assignment. If it is not, this is no
+        // longer the action that was confirmed.
+        if ($assignment->user_id !== $actor->getKey()) {
+            throw AccessViolation::stepUpInvalid();
+        }
+
+        // And still inside the organisation the confirmation was begun in.
+        if ($assignment->organisation_id !== null
+            && $assignment->organisation_id !== $pending->organisation_id) {
+            throw AccessViolation::stepUpInvalid();
+        }
+
+        $this->entitlements->grant($assignment, $domain, $actor);
+
+        return $this->confirm(
+            'access.show',
+            'Domain entitlement granted. Assign a scope to make it effective.',
+            $assignment->getKey(),
+        );
     }
 
     private function performRevoke(PendingStepUp $pending, User $actor): RedirectResponse

@@ -56,6 +56,7 @@ final class StepUpService
             'session_id' => $sessionId,
             'action' => $action,
             'subject_user_id' => $target['subject_user_id'] ?? null,
+            'role_assignment_id' => $target['role_assignment_id'] ?? null,
             'business_domain_id' => $target['business_domain_id'] ?? null,
             'domain_entitlement_id' => $target['domain_entitlement_id'] ?? null,
             'role_code' => $target['role_code'] ?? null,

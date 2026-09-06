@@ -143,6 +143,17 @@ export default function Record({ assignment, entitlements, domains, scopeTypes, 
                         A disabled domain can still be entitled. Nobody reaches its information
                         until it is enabled again, and the entitlement is kept meanwhile.
                     </p>
+                    {/*
+                      * Again the SERVER decides. This screen never compares the
+                      * person on the record with the person reading it.
+                      */}
+                    {assignment.requiresStepUpToGrantEntitlement ? (
+                        <p className="org-hint org-hint-plain">
+                            This role belongs to you. Adding a domain to your own access asks you to
+                            confirm your identity with Microsoft first, and nothing is granted until
+                            you do.
+                        </p>
+                    ) : null}
 
                     <button type="submit" className="org-action" disabled={entitlementForm.processing}>
                         {entitlementForm.processing ? 'Adding…' : 'Add entitlement'}

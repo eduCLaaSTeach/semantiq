@@ -50,6 +50,11 @@ return new class extends Migration
 
             // The exact target, read back on return. Never trusted from input.
             $table->unsignedBigInteger('subject_user_id')->nullable();
+            // A SELF-GRANT OF A DOMAIN ENTITLEMENT names the EXISTING role
+            // assignment it hangs from. Re-finding it by person and role on
+            // return would be a second resolution that could land on a
+            // different assignment than the one confirmed.
+            $table->unsignedBigInteger('role_assignment_id')->nullable();
             $table->unsignedBigInteger('business_domain_id')->nullable();
             $table->unsignedBigInteger('domain_entitlement_id')->nullable();
             $table->string('role_code', 40)->nullable();

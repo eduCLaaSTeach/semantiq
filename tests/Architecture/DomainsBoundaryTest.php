@@ -51,19 +51,25 @@ final class DomainsBoundaryTest extends TestCase
         'app/Shared/Navigation/ApprovedMenu.php',
 
         /*
-         * P1-05. The five points at which Roles & Access legitimately names a
+         * P1-05. The six points at which Roles & Access legitimately names a
          * domain, and no others.
          *
          * A DOMAIN STILL GRANTS NOTHING. What P1-05 added is the opposite: a
          * DISABLED domain DENIES, as a global gate outside every grant path.
          * That is a subtraction, and Guard B below is amended to assert exactly
          * that distinction rather than to exempt these files from it.
+         *
+         * StepUpController is the sixth, added by the Gate C correction: a
+         * self-granted entitlement is performed from the STORED domain id after
+         * re-authentication, so the step-up return has to name the domain it
+         * was confirmed for. It reads one; it decides nothing.
          */
         'app/Modules/Access/Engine/AccessEngine.php',
         'app/Modules/Access/Models/DomainEntitlement.php',
         'app/Modules/Access/Services/EntitlementService.php',
         'app/Modules/Access/Http/Controllers/AccessController.php',
         'app/Modules/Access/Http/Controllers/SimulatorController.php',
+        'app/Modules/Access/Http/Controllers/StepUpController.php',
     ];
 
     /**

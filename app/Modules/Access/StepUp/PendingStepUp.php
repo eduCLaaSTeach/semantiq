@@ -49,6 +49,7 @@ final class PendingStepUp extends Model
         'session_id',
         'action',
         'subject_user_id',
+        'role_assignment_id',
         'business_domain_id',
         'domain_entitlement_id',
         'role_code',

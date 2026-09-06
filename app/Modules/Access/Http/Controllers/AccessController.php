@@ -157,6 +157,10 @@ final class AccessController
                     RoleCatalogue::requiringStepUp(),
                     true,
                 ),
+                // Also decided here. The screen must not compare the person on
+                // this record with the person reading it - that is a decision,
+                // and decisions are not made in JavaScript.
+                'requiresStepUpToGrantEntitlement' => $assignment->user_id === $this->actor($request)->getKey(),
             ],
             'entitlements' => $entitlements->map(fn (DomainEntitlement $entitlement): array => $this->entitlementSummary($entitlement))->all(),
             'domains' => BusinessDomain::query()
@@ -268,6 +272,20 @@ final class AccessController
         return $this->confirm('access.show', 'Role revoked. Any entitlements beneath it were revoked with it.', $assignment->id);
     }
 
+    /**
+     * Grant a domain entitlement.
+     *
+     * A SELF-GRANT IS A SELF-GRANT WHETHER IT IS A ROLE OR AN ENTITLEMENT.
+     *
+     * D-73 says self-granting any role OR entitlement requires step-up, and the
+     * first version implemented only the role half - it called the service
+     * directly here, so an Access Administrator could widen their OWN reach
+     * into a business domain with no re-authentication at all. Adding a domain
+     * to your own assignment is the same escalation as granting yourself the
+     * role; it is simply the step after it.
+     *
+     * The same one of the five approved actions covers both. There is no sixth.
+     */
     public function grantEntitlement(Request $request, RoleAssignment $assignment): RedirectResponse
     {
         $this->refuseIfOutsideOrganisation($request, $assignment->organisation_id);
@@ -277,9 +295,38 @@ final class AccessController
         ]);
 
         $domain = BusinessDomain::query()->findOrFail($data['business_domain_id']);
+        $actor = $this->actor($request);
+
+        if ($assignment->user_id === $actor->getKey()) {
+            /*
+             * THE REFUSALS COME FIRST, BEFORE STEP-UP IS OFFERED - the N-B9
+             * lesson, applied here rather than learned again. Sending somebody
+             * to Microsoft and refusing them on the way back is a confirmation
+             * they can never complete.
+             *
+             * This is a PRE-FLIGHT, not the authority. EntitlementService::grant
+             * re-checks every one of these under its own locks when the action
+             * is actually performed, because the state can change while the
+             * administrator is away at Microsoft.
+             */
+            try {
+                $this->refuseIfEntitlementCannotBeGranted($assignment, $domain);
+            } catch (AccessViolation $violation) {
+                return $this->refuse($violation);
+            }
+
+            return $this->beginStepUp($request, StepUpAction::SelfGrant, [
+                // The EXACT target, stored server-side. Re-deriving the
+                // assignment from the person and the role on return would be a
+                // second resolution that could land somewhere else.
+                'role_assignment_id' => $assignment->getKey(),
+                'business_domain_id' => $domain->getKey(),
+                'subject_user_id' => $assignment->user_id,
+            ]);
+        }
 
         try {
-            $this->entitlements->grant($assignment, $domain, $this->actor($request));
+            $this->entitlements->grant($assignment, $domain, $actor);
         } catch (AccessViolation $violation) {
             return $this->refuse($violation);
         }
@@ -415,6 +462,37 @@ final class AccessController
 
         if (! in_array($role, $grantable, true)) {
             throw AccessViolation::roleNotGrantable($role);
+        }
+    }
+
+    /**
+     * The pre-flight for a self-granted entitlement.
+     *
+     * ONLY ABOUT WHEN THE REFUSAL HAPPENS, never about whether. Every condition
+     * here is re-tested by EntitlementService::grant under its own locks, which
+     * remains the single authority - this exists so that a request which is
+     * going to be refused is refused NOW, instead of after a Microsoft round
+     * trip the administrator cannot turn into anything.
+     */
+    private function refuseIfEntitlementCannotBeGranted(RoleAssignment $assignment, BusinessDomain $domain): void
+    {
+        if (! $assignment->isCurrent()) {
+            throw AccessViolation::roleNotHeld($assignment->role_code);
+        }
+
+        if ($assignment->organisation_id !== null
+            && $domain->organisation_id !== $assignment->organisation_id) {
+            throw AccessViolation::domainOutsideOrganisation();
+        }
+
+        $held = DomainEntitlement::query()
+            ->where('role_assignment_id', $assignment->getKey())
+            ->where('business_domain_id', $domain->getKey())
+            ->whereNull('ended_at')
+            ->exists();
+
+        if ($held) {
+            throw AccessViolation::entitlementAlreadyHeld();
         }
     }
 
