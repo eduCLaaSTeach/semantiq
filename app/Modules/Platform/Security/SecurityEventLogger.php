@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
 /**
+ * NOT final, so tests may substitute a recording subclass that still runs this
+ * validation - see Tests\Support\RecordingSecurityEventLogger and the note
+ * there about why Log::spy() could not be trusted for this.
+ *
  * The D-12 boundary: structured, redacted security events through the existing
  * logging boundary. No audit table - P1-08 owns durable storage and adopts
  * these events later.
@@ -17,7 +21,7 @@ use InvalidArgumentException;
  * is nowhere for it to go. A forbidden key is a hard failure, not a warning,
  * because a security logger that quietly drops a leak is worse than none.
  */
-final class SecurityEventLogger
+class SecurityEventLogger
 {
     public const BOOTSTRAP_GRANT_ISSUED = 'bootstrap.grant.issued';
 

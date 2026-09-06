@@ -276,10 +276,21 @@ final class UserLifecycleTest extends TestCase
                 .'to change.'
             );
 
-            // The DETERMINISTIC ORDER, which is what makes the boundary common
-            // rather than merely present. Two callers ordering differently
-            // deadlock exactly as the subject-first design did.
-            $this->assertStringContainsString("->orderBy('id')", $method[1]);
+            /*
+             * THE DETERMINISTIC ORDER, on BOTH steps.
+             *
+             * What makes the boundary COMMON rather than merely present: two
+             * callers ordering differently deadlock exactly as the subject-first
+             * design did. Counted rather than merely found, because a mutation
+             * removing the order from the ASSIGNMENT query alone survived
+             * against a single assertStringContainsString - the users query
+             * still had one.
+             */
+            $this->assertSame(
+                2,
+                substr_count($method[1], "->orderBy('id')"),
+                'The administrator set is not read in a deterministic order on both steps.'
+            );
 
             return;
         }

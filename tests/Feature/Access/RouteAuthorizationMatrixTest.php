@@ -6,12 +6,17 @@ namespace Tests\Feature\Access;
 
 use App\Modules\Access\Http\Middleware\RequireActionClass;
 use App\Modules\Access\Models\RoleAssignment;
+use App\Modules\Access\Services\RoleAssignmentService;
+use App\Modules\Access\StepUp\PendingStepUp;
+use App\Modules\Access\Support\AccessViolation;
 use App\Modules\Access\Support\ActionClass;
 use App\Modules\Access\Support\RoleCode;
 use App\Modules\Organisation\Models\Organisation;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
 use App\Modules\Platform\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Route;
 use Tests\Support\AccessFactory;
 use Tests\Support\OrganisationFactory;
@@ -187,7 +192,7 @@ final class RouteAuthorizationMatrixTest extends TestCase
 
         $this->access->assignment($actor, RoleCode::OrganisationAdministrator, $organisation);
 
-        $this->signedInAs($actor)
+        $response = $this->signedInAs($actor)
             ->post('/console/access/assignments', [
                 'user_id' => $target->id,
                 'role_code' => RoleCode::SystemAdministrator->value,
@@ -201,6 +206,125 @@ final class RouteAuthorizationMatrixTest extends TestCase
                 ->count(),
             'An Organisation Administrator granted the System Administrator role.'
         );
+
+        /*
+         * AND NO STEP-UP WAS EVEN OFFERED.
+         *
+         * The first version of this case asserted only the count, and a
+         * mutation that removed the escalation guard entirely SURVIVED - the
+         * request was diverted to step-up before it ever reached the service
+         * that holds the guard, so the assertion passed for a reason unrelated
+         * to what it claimed to check. Exactly the failure CLAUDE.md §2 names.
+         *
+         * A confirmation somebody can never complete is a trap, so the refusal
+         * has to come first, and this is what proves it does.
+         */
+        $this->assertSame(
+            0,
+            PendingStepUp::query()->count(),
+            'A step-up was offered for a role this actor may never be granted. They would '
+            .'re-authenticate with Microsoft and be refused afterwards.'
+        );
+
+        $response->assertSessionHasErrors('access');
+    }
+
+    /**
+     * ...and the SERVICE refuses independently, whatever the controller does.
+     *
+     * Two layers, tested separately, because the controller check is about WHEN
+     * the refusal happens and the service check is the refusal itself. A
+     * mutation to either must be caught.
+     */
+    public function test_the_service_refuses_an_ungrantable_role_on_its_own(): void
+    {
+        $organisation = $this->make->organisation();
+        $actor = $this->make->user($organisation);
+        $target = $this->make->user($organisation);
+
+        $this->access->assignment($actor, RoleCode::OrganisationAdministrator, $organisation);
+
+        try {
+            app(RoleAssignmentService::class)
+                ->assign($target, RoleCode::SystemAdministrator, null, $actor);
+
+            $this->fail('The service granted the System Administrator role to an Organisation Administrator\'s request.');
+        } catch (AccessViolation $violation) {
+            $this->assertSame('role_not_grantable', $violation->reason);
+        }
+
+        // And the half that makes it non-vacuous: a System Administrator CAN.
+        $admin = $this->make->user($organisation, administrator: true);
+
+        $granted = app(RoleAssignmentService::class)
+            ->assign($target, RoleCode::SystemAdministrator, null, $admin);
+
+        $this->assertTrue($granted->isCurrent());
+    }
+
+    /**
+     * N-E1, the behavioural half. AN UNRECOGNISED CLASS FAILS CLOSED.
+     *
+     * The matrix above proves every DELIVERED route names a valid class. This
+     * proves what happens to one that does not - a typo, or a class removed
+     * from the enum while a route still names it.
+     *
+     * A route is registered for the test rather than left to chance, because
+     * no delivered route has a bad class and a mutation making the middleware
+     * fall open therefore SURVIVED: nothing exercised the branch at all.
+     *
+     * Mutation: let an unrecognised class through.
+     */
+    public function test_a_route_naming_an_unrecognised_action_class_fails_closed(): void
+    {
+        $organisation = $this->make->organisation();
+        $admin = $this->make->user($organisation, administrator: true);
+
+        /*
+         * THE MIDDLEWARE DIRECTLY, rather than a route registered mid-test.
+         *
+         * A route added after the application has booted does not resolve in a
+         * test request, so that version asserted nothing. Calling the
+         * middleware is unambiguous: a request that reaches $next has been
+         * ALLOWED, and one that does not has been refused.
+         */
+        $request = Request::create('/console/anything');
+        $request->attributes->set('semantiq_user', $admin);
+
+        $reached = false;
+
+        $response = app(RequireActionClass::class)->handle(
+            $request,
+            function () use (&$reached): \Symfony\Component\HttpFoundation\Response {
+                $reached = true;
+
+                return new Response('reached');
+            },
+            'not_a_real_class',
+        );
+
+        $this->assertFalse(
+            $reached,
+            'A route naming an unrecognised action class was served. A typo must fail closed, not '
+            .'silently open a screen.'
+        );
+
+        $this->assertSame(302, $response->getStatusCode());
+
+        // And the half that makes it non-vacuous: a VALID class is served.
+        $reached = false;
+
+        app(RequireActionClass::class)->handle(
+            $request,
+            function () use (&$reached): \Symfony\Component\HttpFoundation\Response {
+                $reached = true;
+
+                return new Response('reached');
+            },
+            ActionClass::PlatformAdmin->value,
+        );
+
+        $this->assertTrue($reached, 'A System Administrator was refused a valid platform-admin route.');
     }
 
     /**

@@ -207,6 +207,24 @@ final class AccessController
         $subject = User::query()->findOrFail($data['user_id']);
         $actor = $this->actor($request);
 
+        /*
+         * THE ESCALATION CHECK COMES FIRST, BEFORE STEP-UP IS EVEN OFFERED.
+         *
+         * The first version branched to step-up first, so an Organisation
+         * Administrator asking for the System Administrator role was sent to
+         * Microsoft, re-authenticated, and only then refused - and, worse, a
+         * mutation removing the escalation guard SURVIVED, because the test
+         * never reached the service that holds it.
+         *
+         * Offering a confirmation somebody can never complete is a trap. The
+         * service still refuses independently; this is the honest ordering.
+         */
+        try {
+            $this->refuseIfNotGrantableBy($role, $actor);
+        } catch (AccessViolation $violation) {
+            return $this->refuse($violation);
+        }
+
         $stepUpAction = $this->stepUpActionForGrant($role, $subject, $actor);
 
         if ($stepUpAction !== null) {
@@ -373,6 +391,31 @@ final class AccessController
         }
 
         return $this->confirm('access.show', 'Sensitivity level set.', $assignment->id);
+    }
+
+    /**
+     * Whether the actor may grant this role at all.
+     *
+     * Asks the SAME catalogue the service asks - RoleCatalogue::grantableBy -
+     * rather than reimplementing the rule, so there is one answer and this is
+     * only about WHEN it is asked.
+     */
+    private function refuseIfNotGrantableBy(RoleCode $role, User $actor): void
+    {
+        $grantable = [];
+
+        foreach (RoleAssignment::query()
+            ->where('user_id', $actor->getKey())
+            ->whereNull('ended_at')
+            ->pluck('role_code') as $held) {
+            $actorRole = $held instanceof RoleCode ? $held : RoleCode::from((string) $held);
+
+            $grantable = array_merge($grantable, RoleCatalogue::grantableBy($actorRole));
+        }
+
+        if (! in_array($role, $grantable, true)) {
+            throw AccessViolation::roleNotGrantable($role);
+        }
     }
 
     /**

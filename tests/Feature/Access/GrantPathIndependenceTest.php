@@ -21,6 +21,7 @@ use App\Modules\Organisation\Models\Organisation;
 use App\Modules\Organisation\Models\Team;
 use App\Modules\Platform\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\Support\AccessFactory;
 use Tests\Support\OrganisationFactory;
 use Tests\TestCase;
@@ -150,6 +151,44 @@ final class GrantPathIndependenceTest extends TestCase
             $this->engine->decide($this->question())->allowed,
             'A revoked grant vetoed an active one. A revocation ends a path; it does not create a rule.'
         );
+
+        /*
+         * AND THE REVOKED ROWS ARE NOT EVALUATED AT ALL.
+         *
+         * Observed from the emitted SQL, because "the answer is still allow" is
+         * satisfied by an engine that reads revoked rows and happens to find
+         * them incomplete. What must be true is stronger: they never enter the
+         * evaluation, so they can never subtract from it.
+         *
+         * A mutation dropping the ended_at filter from the assignment query
+         * first SURVIVED against the assertion above alone - the revoked path's
+         * children were ended too, so no path completed and the answer was
+         * unchanged.
+         */
+        $statements = [];
+
+        DB::listen(function ($query) use (&$statements): void {
+            $statements[] = strtolower($query->sql);
+        });
+
+        $this->engine->decide($this->question());
+
+        $selects = array_values(array_filter(
+            $statements,
+            static fn (string $sql): bool => str_contains($sql, 'select')
+                && str_contains($sql, 'role_assignments')
+        ));
+
+        $this->assertNotEmpty($selects, 'The engine read no assignments, so this proves nothing.');
+
+        foreach ($selects as $sql) {
+            $this->assertStringContainsString(
+                'ended_at" is null',
+                $sql,
+                'The engine read role assignments without filtering to current ones, so a revoked '
+                .'row enters the evaluation and can subtract from it.'
+            );
+        }
     }
 
     /**

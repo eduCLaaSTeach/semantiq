@@ -201,15 +201,34 @@ final class StepUpTest extends TestCase
      */
     public function test_every_failing_freshness_shape_denies_and_consumes(): void
     {
+        /*
+         * THE THREE CONDITIONS, ISOLATED FROM EACH OTHER.
+         *
+         * "predates the request" was first written as now()->subHour(), which
+         * ALSO falls outside the tolerance - so a mutation removing the
+         * not-before-the-request check SURVIVED, caught by the other condition
+         * instead. It is now an auth_time that is comfortably WITHIN the
+         * tolerance and still older than the request, which only that one check
+         * can reject.
+         */
+        $withinTolerance = (int) (PendingStepUp::FRESHNESS_TOLERANCE_SECONDS / 2);
+
         $cases = [
-            'absent' => null,
-            'predates the request' => now()->subHour(),
-            'outside the tolerance' => now()->subSeconds(PendingStepUp::FRESHNESS_TOLERANCE_SECONDS + 60),
+            'absent' => [null, 0],
+            'predates the request' => [now()->subSeconds($withinTolerance), $withinTolerance - 30],
+            'outside the tolerance' => [now()->subSeconds(PendingStepUp::FRESHNESS_TOLERANCE_SECONDS + 60), 0],
         ];
 
-        foreach ($cases as $label => $authTime) {
+        foreach ($cases as $label => [$authTime, $requestedSecondsAgo]) {
             $reference = $this->begin();
             $pending = $this->stepUp->resolve($reference, $this->actor, 'session-a');
+
+            if ($requestedSecondsAgo > 0) {
+                // The step-up was requested AFTER the provider says the person
+                // authenticated - the shape a stale sign-in takes.
+                $pending->forceFill(['requested_at' => now()->subSeconds($requestedSecondsAgo)])->save();
+                $pending->refresh();
+            }
 
             try {
                 $this->stepUp->verifyFreshness($pending, $authTime, $this->actor);

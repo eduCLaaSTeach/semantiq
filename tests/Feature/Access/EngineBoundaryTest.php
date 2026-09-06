@@ -20,11 +20,13 @@ use App\Modules\Domains\Models\DomainStatus;
 use App\Modules\Organisation\Models\Organisation;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
+use App\Modules\Platform\Security\SecurityEventLogger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\Support\AccessFactory;
 use Tests\Support\OrganisationFactory;
+use Tests\Support\RecordingSecurityEventLogger;
 use Tests\TestCase;
 
 /**
@@ -337,12 +339,40 @@ final class EngineBoundaryTest extends TestCase
         $person = $this->make->user($this->organisation);
         $this->access->completePath($person, $this->finance);
 
+        /*
+         * N-EN3. THE OPERATIONAL SIGNAL, not only the reason code.
+         *
+         * A failing engine must not look like an ordinary lack of entitlement.
+         *
+         * A RECORDING LOGGER, NOT Log::spy(). Mockery reports
+         * shouldHaveReceived('info')->with(...) as `info(<Any Arguments>)` -
+         * the argument constraint is not applied - so an assertion written that
+         * way passes whenever ANY line was logged, which is true in every case
+         * the engine denies. It looked like it checked which event fired.
+         *
+         * The engine is a singleton, so it is rebuilt here AFTER the recording
+         * logger is bound; resolving it earlier would hand back the instance
+         * built at boot with the real one.
+         */
+        $events = new RecordingSecurityEventLogger;
+        $this->app->instance(SecurityEventLogger::class, $events);
+        $this->app->forgetInstance(AccessEngine::class);
+
+        $engine = $this->app->make(AccessEngine::class);
+
         Schema::drop('entitlement_scopes');
 
-        $decision = $this->engine->decide($this->businessQuestion($person));
+        $decision = $engine->decide($this->businessQuestion($person));
 
         $this->assertFalse($decision->allowed);
         $this->assertSame(DecisionReason::DeniedEngineFailure, $decision->reason);
+
+        $this->assertContains(
+            SecurityEventLogger::ACCESS_ENGINE_FAILED,
+            $events->recordedEvents(),
+            'An engine failure raised no operational signal, so a broken deployment would look '
+            .'exactly like one correctly refusing.'
+        );
     }
 
     /**
