@@ -95,7 +95,7 @@ jobs:
                 \"custom_total\"        => \App\Modules\Domains\Models\BusinessDomain::query()->where(\"kind\", \"custom\")->count(),
                 \"ownership_rows_total\" => \App\Modules\Domains\Models\DomainOwnership::query()->count(),
                 \"current_owners_total\" => \App\Modules\Domains\Models\DomainOwnership::query()->whereNull(\"ended_at\")->count(),
-                \"platform_roles_total\" => \App\Modules\Platform\Models\User::query()->whereNotNull(\"platform_role\")->count(),
+                \"administrators_total\" => \app(\App\Modules\Access\Services\AdministratorSetGuard::class)->effectiveCount(),
               ], JSON_PRETTY_PRINT);
             '")"
 
@@ -135,10 +135,19 @@ jobs:
               if d['status'] == 'enabled' and not d['has_current_owner']:
                   problems.append(f"Domain [{d['code']}] is ENABLED with nobody accountable for it.")
 
-          # And the P1-05 seam is still exactly where P1-04 left it: one column,
-          # and P1-04 has not started writing roles.
-          if data['platform_roles_total'] > 1:
-              problems.append('More than one user carries a platform role. P1-05 owns the role model.')
+          # THE P1-05 SEAM, ASKED THE WAY IT NOW EXISTS.
+          #
+          # This read used to count users.platform_role. P1-05 DROPS that column,
+          # so after that deployment the query is not merely stale - it throws an
+          # unknown-column error and takes this whole read-only report down with
+          # it, on the very day the report matters most. It now asks the same
+          # question of the authority that actually holds it.
+          #
+          # The floor, not the ceiling. P1-04 asserted "no more than one"; P1-05
+          # owns the role model and the invariant that survives is D-49a: there
+          # must never be NONE.
+          if data['administrators_total'] < 1:
+              problems.append('There is no active System Administrator. Nobody can administer the platform.')
 
           for p in problems:
               print(f'::error::{p}')

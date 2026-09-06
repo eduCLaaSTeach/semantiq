@@ -63,13 +63,21 @@ jobs:
           ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
 
       # Counts and a state word. No identity, no grant, no secret, no token.
+      # ASKED OF THE AUTHORITY THAT NOW HOLDS IT.
+      #
+      # This read used to call User::activeSystemAdministrators(), a scope over
+      # users.platform_role. P1-05 deleted the column AND the scope, so after
+      # that deployment this workflow did not merely go stale - it aborted, and
+      # it aborted on the one day the report mattered most. It now asks
+      # AdministratorSetGuard, which is the single definition the product itself
+      # uses, so the two can never drift apart again.
       - name: Report bootstrap state
         run: |
           set -euo pipefail
 
           out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
             "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
-              \$admins = \App\Modules\Platform\Models\User::query()->activeSystemAdministrators()->count();
+              \$admins = \app(\App\Modules\Access\Services\AdministratorSetGuard::class)->effectiveCount();
               \$state  = app(\App\Modules\Platform\Bootstrap\BootstrapState::class);
               echo json_encode([
                 \"bootstrap_state\"       => \$state->isConfigured() ? \"CONFIGURED\" : \"UNCONFIGURED\",
