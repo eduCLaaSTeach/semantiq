@@ -368,11 +368,26 @@ final class AccessController
             return $this->refuse(AccessViolation::scopeTargetRequired(ScopeType::Team));
         }
 
+        /*
+         * CAST IT. A BROWSER SENDS STRINGS.
+         *
+         * Laravel's `integer` rule VALIDATES; it does not convert. A real form
+         * post arrives as target_id = "2", assignScope declares ?int, the file
+         * is strict_types=1, and the request died with a TypeError - a 500 in
+         * front of the Product Owner on the first scope they tried to assign.
+         *
+         * Every test missed it because the test client passes the parameter
+         * array through as PHP values, so `['target_id' => 2]` arrives as an
+         * int and the boundary a browser actually crosses is never crossed.
+         * PlatformScopeTypeTest posts strings for exactly that reason.
+         */
+        $targetId = ($data['target_id'] ?? null) === null ? null : (int) $data['target_id'];
+
         try {
             $this->entitlements->assignScope(
                 $entitlement,
                 $scopeType,
-                $data['target_id'] ?? null,
+                $targetId,
                 $this->actor($request),
             );
         } catch (AccessViolation $violation) {

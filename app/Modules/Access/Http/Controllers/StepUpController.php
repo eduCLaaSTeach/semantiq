@@ -79,6 +79,24 @@ final class StepUpController
      * The reference is carried in the session for the return trip rather than
      * in the redirect, so it does not appear in the provider's logs or in a
      * browser history entry.
+     *
+     * AN ORDINARY REDIRECT DOES NOT LEAVE AN INERTIA PAGE. The confirmation
+     * card submits over XHR, and an XHR FOLLOWS a 302 itself: the browser
+     * fetched Microsoft's sign-in page in the background, Inertia discarded the
+     * response because it was not an Inertia payload, and the page simply sat
+     * there. No error, no navigation, nothing - which is exactly what the
+     * Product Owner reported, and what a browser trace confirmed: the request
+     * to login.microsoftonline.com was made and the top-level document never
+     * moved.
+     *
+     * Inertia::location is the answer to precisely this. It replies 409 with an
+     * X-Inertia-Location header, and the Inertia client performs a real
+     * top-level navigation instead of trying to render the response.
+     *
+     * NOTHING ABOUT D-73 IS RELAXED. The departure is still a POST, still CSRF
+     * protected, still refuses unless the reference resolves for this person in
+     * this session, and the reference is still stored server-side. Only the way
+     * the browser is told to leave has changed.
      */
     public function redirect(Request $request, string $reference): HttpResponse|RedirectResponse
     {
@@ -91,10 +109,16 @@ final class StepUpController
         $request->session()->put(self::SESSION_REFERENCE, $reference);
 
         try {
-            return $this->provider->beginStepUpAuthorization(route('auth.microsoft.step-up'));
+            $departure = $this->provider->beginStepUpAuthorization(route('auth.microsoft.step-up'));
         } catch (AuthenticationFailed) {
             return $this->refuseToIndex(AccessViolation::stepUpInvalid());
         }
+
+        // A non-Inertia caller - a plain form post, or a test - gets the
+        // ordinary redirect it can already follow.
+        return $request->header('X-Inertia')
+            ? Inertia::location($departure->getTargetUrl())
+            : $departure;
     }
 
     public const SESSION_REFERENCE = 'access.step_up.reference';
