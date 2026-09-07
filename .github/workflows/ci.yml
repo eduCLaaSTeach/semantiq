@@ -109,17 +109,40 @@ jobs:
           #
           # Rolled back and re-applied, so the database is left where the rest of
           # the job expects it.
-          php artisan migrate:rollback --force --no-interaction --step=1
+          # HOW FAR BACK IS "THE D-49 PAIR"? DERIVED, NEVER HARDCODED.
+          #
+          # This was --step=1 and --step=2. Those numbers were only correct
+          # while D-49 happened to be the last thing in the directory, and the
+          # platform-scope normalisation added afterwards silently turned the
+          # D-49 rollback proof into a rollback of something else - a check that
+          # still passed while proving nothing, which is the one thing
+          # CLAUDE.md §2 forbids.
+          #
+          # Migrations run in filename order, so counting the files from the
+          # D-49 data migration to the end gives the number of steps that
+          # actually unwinds it, whatever is added later.
+          D49_STEPS=$(ls database/migrations | sort \
+            | awk '/2026_09_06_000006_migrate_platform_role_to_assignments/{f=1} f{c++} END{print c+0}')
+
+          if [ "${D49_STEPS:-0}" -lt 2 ]; then
+            echo "::error::Could not locate the D-49 pair in database/migrations. The rollback proof below would unwind the wrong migrations."
+            exit 1
+          fi
+
+          echo "Rolling back ${D49_STEPS} migrations reaches the D-49 data migration."
+
+          php artisan migrate:rollback --force --no-interaction --step="$D49_STEPS"
           php artisan migrate --force --no-interaction
           php artisan migrate:status
 
           # N-M5. THE D-49 PAIR, AND THE ADMINISTRATOR WHO MUST SURVIVE IT.
           #
           # migrate -> rollback -> migrate must leave the administrator an
-          # administrator. Rolling back ONE migration only unwinds the column
-          # drop; the DATA migration's down() - the one that reconstructs
-          # users.platform_role from the current assignment state - needs TWO,
-          # and it is the half that can lose somebody.
+          # administrator. Unwinding the column drop alone is not enough; the
+          # DATA migration's down() - the one that reconstructs
+          # users.platform_role from the current assignment state - has to run,
+          # and it is the half that can lose somebody. D49_STEPS above is how
+          # far back that is, counted rather than assumed.
           #
           # A seeded administrator is created first, because a rollback with no
           # administrator to lose proves nothing at all.
@@ -138,7 +161,7 @@ jobs:
             ]);
           "
 
-          php artisan migrate:rollback --force --no-interaction --step=2
+          php artisan migrate:rollback --force --no-interaction --step="$D49_STEPS"
 
           # The column is back, and it names the administrator.
           restored=$(php artisan tinker --execute="
