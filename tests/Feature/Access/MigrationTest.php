@@ -43,6 +43,45 @@ final class MigrationTest extends TestCase
     }
 
     /**
+     * N-M15c. THE D-49 ROLLBACK PROOF IN CI MUST NOT COUNT STEPS BY HAND.
+     *
+     * That proof rolls back far enough to run the D-49 data migration's down().
+     * "Far enough" was written as --step=2, which was true only while D-49 was
+     * the last thing in the directory. The platform-scope normalisation added
+     * after it moved the target, and a hardcoded count would have gone on
+     * passing while unwinding the wrong migrations - a check reporting safety
+     * it was not providing.
+     *
+     * The workflow now counts the files. This makes sure nobody puts the magic
+     * number back.
+     *
+     * Mutation: replace the derivation with --step=2.
+     */
+    public function test_the_ci_rollback_proof_derives_how_far_back_the_d49_pair_is(): void
+    {
+        $workflow = (string) file_get_contents(base_path('.github/workflows/ci.yml'));
+
+        $this->assertMatchesRegularExpression(
+            '/D49_STEPS=\$\(ls database\/migrations/',
+            $workflow,
+            'ci.yml no longer derives how far back the D-49 pair is.'
+        );
+
+        preg_match_all('/migrate:rollback[^\n]*--step=([^\s"\n]+|"[^"\n]+")/', $workflow, $matches);
+
+        $this->assertNotEmpty($matches[1], 'No rollback step was found in ci.yml at all.');
+
+        foreach ($matches[1] as $argument) {
+            $this->assertStringContainsString(
+                'D49_STEPS',
+                $argument,
+                "ci.yml rolls back a hardcoded [{$argument}] migrations. Adding any migration after D-49 "
+                .'silently turns that proof into a rollback of something else.'
+            );
+        }
+    }
+
+    /**
      * N-M7. THE COLUMN AND THE ENUM ARE GONE.
      *
      * Not deprecated, not left readable - gone. A readable column is a SECOND
