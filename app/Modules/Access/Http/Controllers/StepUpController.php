@@ -114,11 +114,18 @@ final class StepUpController
             return $this->refuseToIndex(AccessViolation::stepUpInvalid());
         }
 
-        // A non-Inertia caller - a plain form post, or a test - gets the
-        // ordinary redirect it can already follow.
-        return $request->header('X-Inertia')
-            ? Inertia::location($departure->getTargetUrl())
-            : $departure;
+        /*
+         * Inertia::location HANDLES BOTH CALLERS ITSELF - 409 with
+         * X-Inertia-Location for an Inertia request, and the RedirectResponse
+         * returned untouched for anything else.
+         *
+         * The first version wrote that branch out by hand. It was redundant,
+         * and worse, unfalsifiable: a mutation collapsing it to
+         * Inertia::location() alone changed no observable behaviour and
+         * SURVIVED. A branch no test can distinguish is a branch that should
+         * not exist, so it does not.
+         */
+        return Inertia::location($departure);
     }
 
     public const SESSION_REFERENCE = 'access.step_up.reference';
