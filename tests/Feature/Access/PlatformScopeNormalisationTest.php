@@ -121,10 +121,23 @@ final class PlatformScopeNormalisationTest extends TestCase
 
         $before = DB::table('role_assignments')->where('id', $id)->first();
 
+        /*
+         * THE CLOCK HAS TO MOVE, or this case proves nothing.
+         *
+         * Written without it, the fixture and the migration both ran inside the
+         * same second, so updated_at compared equal either way - and a mutation
+         * removing the whereNotNull guard SURVIVED, because the row it rewrote
+         * was indistinguishable from the row it left alone. The assertion
+         * passed for a reason unrelated to what it claimed to check.
+         */
+        $this->travel(90)->seconds();
+
         $this->normalise();
         $this->normalise(); // ...and again.
 
         $after = DB::table('role_assignments')->where('id', $id)->first();
+
+        $this->travelBack();
 
         $this->assertEquals($before, $after, 'A row that was already correct was rewritten.');
     }
