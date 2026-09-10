@@ -81,54 +81,25 @@ jobs:
         run: |
           set -euo pipefail
 
-          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
-            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && \
-              echo '--- is the deployed code the fixed code? ---' && \
-              (grep -q 'A BROWSER SENDS STRINGS' app/Modules/Access/Http/Controllers/AccessController.php \
-                 && echo 'scope cast          : PRESENT' || echo 'scope cast          : MISSING') && \
-              (grep -q 'return Inertia::location' app/Modules/Access/Http/Controllers/StepUpController.php \
-                 && echo 'Inertia::location   : PRESENT' || echo 'Inertia::location   : MISSING') && \
-              echo '--- did any migration run? ---' && \
-              php artisan migrate:status --no-ansi | grep -c 'Ran' | sed 's/^/migrations ran: /' && \
-              php artisan migrate:status --no-ansi | grep -c 'Pending$' | sed 's/^/genuinely pending: /' && \
-              echo '--- exceptions in the log ---' && \
-              (grep -a 'production.ERROR' storage/logs/laravel.log 2>/dev/null | tail -1 | cut -c1-30 | sed 's/^/newest error: /' || echo 'newest error: none') && \
-              (grep -ac 'production.ERROR' storage/logs/laravel.log 2>/dev/null | sed 's/^/errors in log: /' || echo 'errors in log: 0')
+          remote() {
+            ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+              "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && $1"
+          }
 
-          echo "---- rendering /console/access/assignments/2 with a GET ----"
+          echo "--- is the deployed code the fixed code? ---"
+          remote "grep -c 'A BROWSER SENDS STRINGS' app/Modules/Access/Http/Controllers/AccessController.php" \
+            | sed 's/^/scope cast present: /'
+          remote "grep -c 'return Inertia::location' app/Modules/Access/Http/Controllers/StepUpController.php" \
+            | sed 's/^/Inertia location present: /'
 
-          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
-            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
-              \$before = \App\Modules\Access\Models\DomainEntitlement::query()->count()
-                . \"/\" . \App\Modules\Access\Models\EntitlementScope::query()->count()
-                . \"/\" . \App\Modules\Access\Models\EntitlementCeiling::query()->count()
-                . \"/\" . \App\Modules\Access\Models\RoleAssignment::query()->count()
-                . \"/\" . \App\Modules\Platform\Models\User::query()->count();
+          echo "--- migrations ---"
+          remote "php artisan migrate:status --no-ansi | grep -c Ran" | sed 's/^/ran: /'
+          remote "php artisan migrate:status --no-ansi | grep -c Pending || true" | sed 's/^/pending: /'
 
-              \$admin = \App\Modules\Access\Models\RoleAssignment::query()
-                ->where(\"role_code\", \"system_administrator\")->whereNull(\"ended_at\")->value(\"user_id\");
-
-              \$request = \Illuminate\Http\Request::create(\"/console/access/assignments/2\", \"GET\");
-              \$request->setLaravelSession(app(\"session.store\"));
-              \$request->session()->put(\App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent::SESSION_USER_ID, \$admin);
-              \$request->session()->put(\App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent::SESSION_AUTHENTICATED_AT, now()->toIso8601String());
-
-              \$response = app(\Illuminate\Contracts\Http\Kernel::class)->handle(\$request);
-
-              \$after = \App\Modules\Access\Models\DomainEntitlement::query()->count()
-                . \"/\" . \App\Modules\Access\Models\EntitlementScope::query()->count()
-                . \"/\" . \App\Modules\Access\Models\EntitlementCeiling::query()->count()
-                . \"/\" . \App\Modules\Access\Models\RoleAssignment::query()->count()
-                . \"/\" . \App\Modules\Platform\Models\User::query()->count();
-
-              echo json_encode([
-                \"assignment_2_status\" => \$response->getStatusCode(),
-                \"active_system_admins\" => app(\App\Modules\Access\Services\AdministratorSetGuard::class)->effectiveCount(),
-                \"counts_before\" => \$before,
-                \"counts_after\" => \$after,
-                \"unchanged\" => \$before === \$after,
-              ], JSON_PRETTY_PRINT);
-            '" | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[email redacted]/g'
+          echo "--- exceptions ---"
+          remote "grep -ac 'production.ERROR' storage/logs/laravel.log || true" | sed 's/^/error lines: /'
+          remote "grep -a 'production.ERROR' storage/logs/laravel.log | tail -1 | cut -c1-21 || true" \
+            | sed 's/^/newest error: /'
 
       # Codes, types, levels and counts. Nothing else leaves the server.
       - name: Report Roles & Access state
