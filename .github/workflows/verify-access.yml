@@ -90,9 +90,10 @@ jobs:
                  && echo 'Inertia::location   : PRESENT' || echo 'Inertia::location   : MISSING') && \
               echo '--- did any migration run? ---' && \
               php artisan migrate:status --no-ansi | grep -c 'Ran' | sed 's/^/migrations ran: /' && \
-              php artisan migrate:status --no-ansi | grep -ci 'Pending' | sed 's/^/pending: /' && \
+              php artisan migrate:status --no-ansi | grep -c 'Pending$' | sed 's/^/genuinely pending: /' && \
               echo '--- exceptions in the log ---' && \
-              (grep -ac 'production.ERROR' storage/logs/laravel.log 2>/dev/null | sed 's/^/errors in log: /' || echo 'errors in log: 0')"
+              (grep -a 'production.ERROR' storage/logs/laravel.log 2>/dev/null | tail -1 | cut -c1-30 | sed 's/^/newest error: /' || echo 'newest error: none') && \
+              (grep -ac 'production.ERROR' storage/logs/laravel.log 2>/dev/null | sed 's/^/errors in log: /' || echo 'errors in log: 0')
 
           echo "---- rendering /console/access/assignments/2 with a GET ----"
 
