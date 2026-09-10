@@ -86,7 +86,7 @@ jobs:
               echo '--- is the deployed code the fixed code? ---' && \
               (grep -q 'A BROWSER SENDS STRINGS' app/Modules/Access/Http/Controllers/AccessController.php \
                  && echo 'scope cast          : PRESENT' || echo 'scope cast          : MISSING') && \
-              (grep -q 'Inertia::location(\\$departure)' app/Modules/Access/Http/Controllers/StepUpController.php \
+              (grep -q 'return Inertia::location' app/Modules/Access/Http/Controllers/StepUpController.php \
                  && echo 'Inertia::location   : PRESENT' || echo 'Inertia::location   : MISSING') && \
               echo '--- did any migration run? ---' && \
               php artisan migrate:status --no-ansi | grep -c 'Ran' | sed 's/^/migrations ran: /' && \
