@@ -83,6 +83,33 @@ final class SimulatorDiscoverabilityTest extends TestCase
             $source,
             'The simulator entry point is not the established secondary action style.'
         );
+
+        /*
+         * AND IT IS ALWAYS THERE.
+         *
+         * Deleting the link fails the assertions above. HIDING it does not, and
+         * hiding is the likelier regression: somebody gates it behind a prop
+         * that is false in production, or marks it hidden, and the entry point
+         * is gone while every assertion above still passes. Both shapes are
+         * refused here.
+         *
+         * WHAT THIS STILL CANNOT DO. There is no JavaScript test runner in this
+         * project, so nothing in CI renders the DOM. That the control is
+         * genuinely visible, the same height as the primary action and beside
+         * it, is established by browser verification and recorded there - not
+         * by this file, and this file does not pretend otherwise.
+         */
+        $this->assertDoesNotMatchRegularExpression(
+            '/(\?|&&)\s*\(?\s*<a className="org-action org-action-quiet"/',
+            $source,
+            'The simulator entry point is rendered conditionally. It must always be there.'
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/<a className="org-action org-action-quiet"[^>]*\shidden/',
+            $source,
+            'The simulator entry point is marked hidden.'
+        );
     }
 
     /**
