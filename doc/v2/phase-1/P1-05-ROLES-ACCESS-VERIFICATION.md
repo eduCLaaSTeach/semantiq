@@ -7,7 +7,8 @@ claim as an observed production result, and nothing here is presented as one.
 | --- | --- |
 | PLAN merge SHA | `c313a39652681bc198045fa1c175e2e70964c9be` |
 | DESIGN merge SHA | `73f62bc5ffa3beab17975e8107698f48f4f20f1c` |
-| Status | **Gate C blocker corrected. NOT MERGED, NOT DEPLOYED** — awaiting final approval |
+| Status | **PRODUCT OWNER ACCEPTED — 15 September 2026** |
+| Acceptance | A to L all PASS. Deployed, tested by the Product Owner against real production data, and accepted |
 
 **One blocker was found at Gate C review and is fixed here.** Self-granting a
 **domain entitlement** did not require step-up: `AccessController::grantEntitlement`
@@ -56,6 +57,8 @@ skips**.
 | `PresentationTest` | 34 | Reason mapping total; incomplete entitlements; D-74 on screen |
 | `Architecture/AccessBoundaryTest` | 6 | One engine; the question's shape; no second model |
 | `AdministratorConcurrencyTest` | 2 | **MySQL only** — the set lock and the three races |
+| `SimulatorDiscoverabilityTest` | 7 | The Access Simulator is reachable from Roles & Access, and visibility is still not permission |
+| `ProductOwnerTestDefectsTest` | 7 | The two defects Product Owner testing found in production |
 | `SelfEntitlementStepUpTest` | 14 | **The Gate C correction.** D-73's entitlement half, end to end through the real routes |
 
 ---
@@ -238,3 +241,77 @@ Product Owner did.
 
 The fourteen new cases and thirteen new mutations do not fix that limitation.
 They fix this instance of it.
+
+---
+
+## 9. Product Owner acceptance — 15 September 2026
+
+**A to L: all PASS**, walked by the Product Owner against real production data.
+
+| Section | Result |
+| --- | :---: |
+| A Nothing is granted · B Grant a role · C Entitlement without scope | PASS |
+| D Scope and scopes adding together · E Sensitivity · F The Access Simulator | PASS |
+| G The boundaries · **H Disabled domains** · I Revocation | PASS |
+| J The last administrator · K Granting access to yourself · L Customer eye | PASS |
+
+**Production cleanup completed by the Product Owner:** the Finance test
+entitlement, the Manager test role, the Executive test role and the test System
+Administrator were all revoked. **Exactly one active System Administrator
+remains**, and no unintended test business access is left behind.
+
+### Three defects found by testing, not by this suite
+
+| | Found by | Root cause |
+| --- | --- | --- |
+| Self-granting a **domain entitlement** did not step up | Gate C review, reading D-73 as a sentence | The rule was half implemented. No mutation could find an **absent** guard |
+| `/console/access/assignments/2` returned **500** | Product Owner, at test D | Laravel's `integer` rule validates but does not convert; a browser's `"2"` reached a strict `?int` and raised a TypeError. **The test client passes PHP values, so no test ever crossed the boundary a browser crosses** |
+| **Continue to Microsoft did nothing** | Product Owner, at test B | An Inertia POST is an XHR, and an XHR follows a 302 itself. The browser fetched Microsoft in the background and the document never moved |
+
+**What the three share** is worth stating once: each was invisible to a suite
+that was otherwise thorough, because each lived at a boundary the suite does not
+cross — a rule read only in halves, a type conversion the test client performs
+for free, and a navigation only a real browser performs at all.
+
+### The final correction — the Access Simulator was undiscoverable
+
+The simulator was delivered, routed and engine-backed, and the Roles & Access
+index offered exactly one action: *Grant a role*. It could only be reached by
+typing its URL. **CLAUDE.md §4 names that case exactly** — *navigation that
+exists technically but the user cannot actually discover*.
+
+A secondary action now sits beside the primary one, using the `org-action-quiet`
+variant already established beside *Change owner* in Business Domains.
+
+**Discoverability only.** The route, `SimulatorController` and `AccessEngine`
+are untouched; the simulator still carries `ACCESS_ADMIN` and a business user is
+still refused. **Visibility is not permission**, and N-SIM4 holds both halves.
+
+**The browser found the one defect review would not have.** An `.org-action`
+rendered as an anchor inherited the global link underline and read as a link
+wearing a button's clothes. Fixed in the design system rather than on the one
+screen, and guarded so it cannot return silently.
+
+| Mutations for this correction | Result |
+| --- | :---: |
+| **M-SIM1a/b/c** the entry point is deleted · gated behind a false prop · marked hidden | Caught |
+| **M-SIM2** relabelled to something nobody would look for | Caught |
+| **M-SIM3** pointed at a route that does not exist | Caught |
+| **M-SIM4** promoted to a primary action, competing with *Grant a role* | Caught |
+| **M-SIM5a** the underline declaration is deleted | Caught |
+| **M-SIM6a** the simulator route leaves the `ACCESS_ADMIN` group | Caught |
+
+**Stated plainly: no test in CI renders the DOM.** This project has no
+JavaScript test runner, so that the control is genuinely visible, the same
+height as the primary action and beside it, rests on browser verification and is
+recorded there. The suite proves the markup is present, unconditional and not
+hidden — it does not prove a person can see it, and it does not pretend to.
+
+---
+
+## 10. Carried gates at acceptance
+
+| Gate | Status |
+| --- | --- |
+| **P1-04 — the disabled-domain gate** | **CLOSED.** Observed by the Product Owner at section H against real production data |
+| **P1-02 — provider-wide SSO Re-check** | **OPEN and CARRIED.** It needs a genuine second **permanent** System Administrator. The temporary test administrator created during acceptance does not count and has been revoked |
