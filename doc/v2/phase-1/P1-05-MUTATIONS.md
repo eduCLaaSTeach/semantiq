@@ -6,13 +6,20 @@ reports safety that does not exist.
 
 | | |
 | --- | --- |
-| Mutations run | **47** |
-| Caught | **47** |
+| Mutations run | **61** |
+| Caught | **61** |
 | Survived | **0** |
 
-Thirty-four for the EXECUTE build, and **thirteen more (M-SE1 to M-SE13) for the
-Gate C correction** that made self-granting a domain entitlement require
-step-up.
+Thirty-four for the EXECUTE build, thirteen (M-SE1 to M-SE13) for the Gate C
+self-grant correction, six (M-PO1 to M-PO7) for the two defects Product Owner
+testing found in production, and eight (M-SIM1 to M-SIM6) for the final
+discoverability correction.
+
+**Three of them survived a first run and none was a code defect being excused.**
+M-SE11 is caught by a different file; M-PO5 revealed a branch that duplicated
+framework behaviour and was deleted; M-SIM1 revealed a test that proved markup
+existed rather than that anybody could see it. Each is written up where it
+happened.
 
 Each mutation is the one **a person who misunderstood the rule would plausibly
 write** — not an arbitrary edit. Several are a single `&& false`, because the

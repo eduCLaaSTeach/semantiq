@@ -7,7 +7,8 @@ set up.
 | | |
 | --- | --- |
 | **1. Feature being tested** | **P1-05 — Roles & Access.** Who holds which role, which business domains that role may take part in, which records inside them, and how sensitive the information may be |
-| **2. Deployed build** | *Merge SHA to be recorded at deployment. Not yet deployed — this script is provided with the implementation pull request* |
+| **2. Deployed build** | Deployed and accepted. **PRODUCT OWNER ACCEPTED — 15 September 2026** |
+| **Result** | **A to L: all PASS.** P1-04 disabled-domain carried gate CLOSED at section H. P1-02 SSO Re-check remains open and carried |
 | **3. Where** | **Roles & Access** in the left-hand menu, under System Administration |
 
 ---

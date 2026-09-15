@@ -46,9 +46,35 @@ export default function Index({ assignments, filters, roles, candidates, anyAssi
             title="Role assignments"
             description="Every role somebody currently holds. Open one to give it access to a business domain."
             actions={
-                <button type="button" className="org-action" onClick={() => setGranting(!granting)}>
-                    {granting ? 'Cancel' : 'Grant a role'}
-                </button>
+                <>
+                    <button type="button" className="org-action" onClick={() => setGranting(!granting)}>
+                        {granting ? 'Cancel' : 'Grant a role'}
+                    </button>
+
+                    {/*
+                      * THE SIMULATOR WAS DELIVERED AND NOBODY COULD FIND IT.
+                      *
+                      * It has always existed at /console/access/simulator/run,
+                      * but the only action on this page was "Grant a role", and
+                      * the approved navigation deliberately gives Roles & Access
+                      * no tab strip and no child menu item. A capability that can
+                      * only be reached by typing the URL is, for a customer, a
+                      * capability that was not delivered.
+                      *
+                      * A SECONDARY ACTION, not a primary one: granting access is
+                      * what this screen is for, and checking access must not
+                      * compete with it. Same control, same quiet variant already
+                      * used beside "Change owner" in Business Domains.
+                      *
+                      * It is a LINK because it navigates. Route authorization is
+                      * unchanged - the simulator carries the same ACCESS_ADMIN
+                      * action class it always did, and this makes it visible
+                      * rather than permitted.
+                      */}
+                    <a className="org-action org-action-quiet" href="/console/access/simulator/run">
+                        Access Simulator
+                    </a>
+                </>
             }
         >
             {granting ? (
