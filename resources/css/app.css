@@ -1180,6 +1180,10 @@ button.shell-link:hover .icon { color: var(--accent); }
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  /* An action is sometimes an anchor, because some actions navigate. Without
+     this it inherits the underline from the global link rule and reads as a
+     link wearing a button's clothes - caught in the browser, not in review. */
+  text-decoration: none;
 }
 
 /* A primary action is sized to its label. Stretching it across the card reads
