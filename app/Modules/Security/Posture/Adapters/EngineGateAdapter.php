@@ -99,7 +99,26 @@ final class EngineGateAdapter implements SourceAdapter
             ActionClass::EvidenceRead,
         ));
 
-        if ($decision->allowed) {
+        return self::interpretInactiveDecision($decision->allowed, $decision->reason);
+    }
+
+    /**
+     * WHAT THE ENGINE'S ANSWER MEANS FOR PR-10. A pure function, deliberately.
+     *
+     * Split out so all three branches can be driven directly. Through the real
+     * engine only ONE of them is reachable: an inactive subject is refused by
+     * the inactive gate before any query runs, so no fixture can produce a
+     * refusal for a different reason. A mutation that stopped checking the
+     * reason therefore survived the whole suite - the test could not tell the
+     * difference, because the case it distinguishes cannot be built.
+     *
+     * Making it a pure function is not a testability trick: the interpretation
+     * is the part with the judgement in it, and "refused, but not by the gate I
+     * was asking about" is exactly the answer that must not be read as healthy.
+     */
+    public static function interpretInactiveDecision(bool $allowed, ?DecisionReason $reason): Evidence
+    {
+        if ($allowed) {
             return Evidence::state(
                 ControlCatalogue::INACTIVE_GATE,
                 PostureState::Critical,
@@ -108,12 +127,13 @@ final class EngineGateAdapter implements SourceAdapter
             );
         }
 
-        if ($decision->reason !== DecisionReason::DeniedInactiveUser) {
+        if ($reason !== DecisionReason::DeniedInactiveUser) {
             /*
              * Refused, but not BY THIS GATE. Something else denied first, so
              * this control has no evidence either way - Unverified, never
              * Healthy. Reporting Healthy here is how the gate could be deleted
-             * without the screen noticing.
+             * without the screen noticing: every request would still be
+             * refused, for a different reason, and the row would stay green.
              */
             return Evidence::unavailable(
                 ControlCatalogue::INACTIVE_GATE,

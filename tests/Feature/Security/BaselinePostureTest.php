@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Security;
 
+use App\Modules\Access\Http\Middleware\RequireActionClass;
+use App\Modules\Access\Support\DecisionReason;
+use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
 use App\Modules\Security\Catalogue\ControlCatalogue;
+use App\Modules\Security\Posture\Adapters\EngineGateAdapter;
+use App\Modules\Security\Posture\Adapters\StepUpAdapter;
 use App\Modules\Security\Posture\PostureEvaluator;
 use App\Modules\Security\Posture\PostureRow;
 use App\Modules\Security\Posture\PostureState;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\RouteCollection;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 /**
@@ -191,7 +198,7 @@ final class BaselinePostureTest extends TestCase
 
         // Rebuild the route collection WITHOUT the step-up return. Nothing is
         // written; the collection is replaced for this request only.
-        $kept = new \Illuminate\Routing\RouteCollection;
+        $kept = new RouteCollection;
 
         foreach ($router->getRoutes() as $route) {
             if ($route->getName() === 'auth.microsoft.step-up') {
@@ -203,7 +210,7 @@ final class BaselinePostureTest extends TestCase
 
         $router->setRoutes($kept);
 
-        $adapter = new \App\Modules\Security\Posture\Adapters\StepUpAdapter($router);
+        $adapter = new StepUpAdapter($router);
 
         $local = null;
 
@@ -220,6 +227,103 @@ final class BaselinePostureTest extends TestCase
             $local->state,
             'A missing step-up route is not reported as critical. Privileged changes would be '
             .'unconfirmable and the screen would not say so.',
+        );
+    }
+
+    /**
+     * N-SS13's UNREACHABLE BRANCHES, driven directly.
+     *
+     * Through the real engine an inactive subject is always refused BY the
+     * inactive gate, so a fixture cannot produce "refused for some other
+     * reason" - and a mutation that stopped checking the reason survived the
+     * entire suite until this test existed.
+     *
+     * "Denied" is satisfied by ANY denial at all, which is precisely the
+     * assertion CLAUDE.md §2 warns about: a test satisfied by any refusal
+     * reports a gate that may not exist.
+     */
+    public function test_a_refusal_from_a_different_check_is_not_read_as_the_gate_holding(): void
+    {
+        $healthy = EngineGateAdapter::interpretInactiveDecision(
+            false,
+            DecisionReason::DeniedInactiveUser,
+        );
+
+        $this->assertSame(PostureState::Healthy, $healthy->state);
+
+        foreach ([
+            DecisionReason::DeniedNoRole,
+            DecisionReason::DeniedEngineFailure,
+            DecisionReason::DeniedOrganisationMismatch,
+            null,
+        ] as $otherReason) {
+            $evidence = EngineGateAdapter::interpretInactiveDecision(
+                false,
+                $otherReason,
+            );
+
+            $this->assertSame(
+                PostureState::Unverified,
+                $evidence->state,
+                'A refusal that did not come from the inactive-account gate was read as the gate '
+                .'holding. The gate could be deleted and this row would stay green, because every '
+                .'request would still be refused - for a different reason.',
+            );
+        }
+
+        // And being ALLOWED through is critical, not merely unverified.
+        $allowed = EngineGateAdapter::interpretInactiveDecision(true, null);
+
+        $this->assertSame(PostureState::Critical, $allowed->state);
+    }
+
+    /**
+     * B-6 HAS A RED BRANCH, and it is reachable.
+     *
+     * A console route that declares no action class cannot be checked by the
+     * server. The mutation - stop counting uncovered routes - made the row
+     * permanently healthy and survived the whole suite, because every real
+     * route IS covered.
+     */
+    public function test_an_unclassified_console_route_makes_the_coverage_row_critical(): void
+    {
+        $this->assertSame(
+            PostureState::Healthy,
+            $this->row(ControlCatalogue::ROUTE_COVERAGE)->state,
+            'Coverage is not healthy to begin with, so the negative case below proves nothing.',
+        );
+
+        // A console route with no RequireActionClass at all.
+        Route::middleware(
+            EnsureSessionIsCurrent::class
+        )->get('console/unguarded-for-the-test', fn () => 'nothing')->name('security.test.unguarded');
+
+        $this->assertSame(
+            PostureState::Critical,
+            $this->row(ControlCatalogue::ROUTE_COVERAGE)->state,
+            'An administration screen that never says what authority it needs was counted as '
+            .'covered. The server cannot check it.',
+        );
+
+        $this->assertStringContainsString(
+            'does not say what authority it needs',
+            $this->row(ControlCatalogue::ROUTE_COVERAGE)->finding,
+        );
+    }
+
+    /** A route declaring an UNRECOGNISED class is not coverage either. */
+    public function test_a_route_declaring_an_unknown_action_class_is_not_counted_as_covered(): void
+    {
+        Route::middleware([
+            EnsureSessionIsCurrent::class,
+            RequireActionClass::class.':not_a_real_class',
+        ])->get('console/typo-for-the-test', fn () => 'nothing')->name('security.test.typo');
+
+        $this->assertSame(
+            PostureState::Critical,
+            $this->row(ControlCatalogue::ROUTE_COVERAGE)->state,
+            'A misconfigured class was counted as coverage. It fails closed at request time, so '
+            .'it is not coverage.',
         );
     }
 
