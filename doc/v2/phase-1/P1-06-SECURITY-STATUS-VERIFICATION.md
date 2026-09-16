@@ -82,8 +82,12 @@ path matching nothing exits 0) and fails on any skip.
 > depends on correlated subqueries resolving per domain — exactly the shape that
 > silently returns the wrong rows when an engine plans it differently.
 
-**Executed locally against SQLite only.** The MySQL run happens in CI; its
-result is reported with the CI run on the PR, and is **not** claimed here.
+**EXECUTED AND OBSERVED.** CI run
+[35067226635](https://github.com/eduCLaaSTeach/semantiq/actions/runs/35067226635)
+on head `5be93f6973b9176fafa2ccf028f7febc28aade9b`: **every step green**,
+including *Run the Security suite against MySQL*, with no skip. Formatting,
+the full SQLite suite, the MySQL migration run and the People, Domains, Access
+and Security MySQL suites all passed.
 
 ## 6. Browser verification — what was actually observed
 
@@ -175,7 +179,7 @@ gate. **It is offered to the Product Owner as a separate decision.**
 
 - **Nothing has been deployed.** Every observation above is from a local build.
 - **No production data was read or changed.**
-- The **MySQL** result is a CI result and is reported with the CI run, not here.
+- The **MySQL** result above is from CI run 35067226635, observed, not inferred.
 - **Visibility, discoverability, theme and responsive behaviour are human
   observations**, recorded as observed. No automated test in this project can
   make those claims.
