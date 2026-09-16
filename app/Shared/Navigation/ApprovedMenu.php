@@ -120,7 +120,12 @@ final class ApprovedMenu
             // P1-02. Delivered: five route-backed tabs, read-only, System
             // Administrator only. Every route re-authorises on its own.
             NavigationNode::leaf($area, 'Identity & SSO', 'i-fingerprint', 'identity.entra', 'identity.view'),
-            NavigationNode::locked($area, 'Security Status', 'i-shield', $policy),
+            // P1-06. Delivered: four read-only tabs. Every route is a GET, so
+            // nothing on these screens can switch a control off. Reaching them
+            // needs EvidenceRead, which System Administrator, Organisation
+            // Administrator and Auditor already hold; what each may VALUE is
+            // narrower and is decided in the projection, not here.
+            NavigationNode::leaf($area, 'Security Status', 'i-shield', 'security.baseline', 'security.view'),
             NavigationNode::locked($area, 'Access Reviews', 'i-clipboard-list', $policy),
             NavigationNode::locked($area, 'Audit', 'i-scroll', $policy),
             NavigationNode::locked($area, 'System Health', 'i-heart-pulse', $policy),

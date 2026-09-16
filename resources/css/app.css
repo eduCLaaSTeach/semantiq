@@ -2252,3 +2252,301 @@ button.shell-link:hover .icon { color: var(--accent); }
   width: auto;
   white-space: normal;
 }
+
+/* ---- P1-06 Security Status ----------------------------------------------- */
+
+/* NO NEW COLOUR TOKEN IS INTRODUCED BY P1-06. Every rule below reuses the
+   theme-aware badge tokens P1-02 and P1-04 already defined in BOTH themes, so
+   the "every theme token is defined in both themes" guard cannot be broken by
+   this unit and a reader is never asked to learn a second palette for the same
+   meanings. A raw semantic hex used as TEXT is what made the Active pill 1.15:1
+   on the dark card; nothing here repeats it. */
+
+.sec-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.sec-summary-caption {
+  margin: 0;
+  color: var(--text-muted);
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+/* Status is never colour alone: the business label is always present as text
+   and each state carries its own mark, so the screen is readable without
+   colour, by somebody who cannot distinguish two of them, and in both themes.
+   WCAG AA, 1.4.1 - the same rule the status pills already follow. */
+.sec-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sec-state-large {
+  font-size: 14px;
+  padding: 6px 14px;
+}
+
+.sec-state-mark {
+  font-weight: 700;
+}
+
+.sec-state-critical {
+  background: var(--badge-danger-bg);
+  color: var(--danger-fg);
+}
+
+.sec-state-attention {
+  background: var(--badge-attention-bg);
+  color: var(--badge-attention-fg);
+}
+
+/* NOT VERIFIED IS NEUTRAL - NEVER GREEN AND NEVER AMBER. Amber would make it a
+   fault; green would make it a claim. Neutral is the honest reading of "nobody
+   has looked", and it is deliberately the same treatment P1-02 gave its own
+   not-checked row so the two screens agree about what "unverified" looks like. */
+.sec-state-unverified {
+  background: var(--badge-neutral-bg);
+  color: var(--badge-neutral-fg);
+}
+
+/* Quieter still than unverified, and distinguishable from it without colour by
+   its dashed edge - the two must not look identical, because one means "nobody
+   looked" and the other means "this is not part of Release 1". */
+.sec-state-not_applicable {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--card-border-strong);
+}
+
+.sec-state-healthy {
+  background: var(--badge-success-bg);
+  color: var(--badge-success-fg);
+}
+
+.sec-rows,
+.sec-exceptions,
+.sec-domains,
+.sec-metrics,
+.sec-fields {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sec-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.sec-row {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--divider);
+}
+
+.sec-row:last-child {
+  border-bottom: 0;
+}
+
+.sec-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.sec-row-label {
+  font-weight: 600;
+}
+
+.sec-row-finding {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+}
+
+.sec-row-owner {
+  display: inline-block;
+  margin-top: var(--space-2);
+  font-size: 14px;
+}
+
+/* A WITHHELD ROW TAKES NO STATE INPUT AT ALL, so there is deliberately no
+   .sec-row-withheld variant per state - there is nothing to vary by. It is one
+   neutral treatment, identical whatever the underlying value is, because the
+   row's appearance is one of the channels through which that value could
+   otherwise be inferred. */
+.sec-withheld {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.sec-row-withheld .sec-row-label {
+  font-weight: 500;
+}
+
+.sec-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sec-metric {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+/* A count is a NUMBER, not a status. Tabular so several line up, and carrying
+   no semantic colour at all - colouring it would make it a finding, which is
+   exactly what an informational metric is not. */
+.sec-metric-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+  font-weight: 600;
+  min-width: 2.5ch;
+  text-align: right;
+  color: var(--text);
+}
+
+.sec-metric-label {
+  font-weight: 600;
+}
+
+.sec-metric-context {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.sec-domains {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sec-domain {
+  padding: var(--space-3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+
+.sec-domain-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.sec-domain-name {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.sec-exceptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sec-exception-kind {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  color: var(--text-muted);
+}
+
+.sec-empty,
+.sec-note {
+  color: var(--text-muted);
+  margin: var(--space-3) 0 0;
+}
+
+.sec-limitation {
+  padding: var(--space-3);
+  border: 1px solid var(--card-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-hover);
+  margin-bottom: var(--space-4);
+}
+
+.sec-event-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.sec-event-group h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--divider);
+}
+
+.sec-event-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.sec-event-group ul,
+.sec-fields {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.sec-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.sec-tab-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small screens. The summary stacks, the domain cards lose their inset, and
+   nothing overflows horizontally - checked in a real browser at 390px, not
+   inferred from the rule. */
+@media (max-width: 640px) {
+  .sec-summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sec-row-head,
+  .sec-domain-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sec-metric-count {
+    text-align: left;
+    min-width: 0;
+  }
+}
