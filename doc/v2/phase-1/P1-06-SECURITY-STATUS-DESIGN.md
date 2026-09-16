@@ -11,12 +11,13 @@ looked.**
 | PLAN | `doc/v2/phase-1/P1-06-SECURITY-STATUS-PLAN.md` — **Product Owner approved 16 September 2026**, merge `4d93228c1aa2a603f28db1564a6b6304c4b97ba8` |
 | Baseline | P1-05 **PRODUCT OWNER ACCEPTED**, merge `dde0b610bd694856ed86ab3f6657c3912140eaee` |
 | Menu | `System Administration → Security Status` — today a **locked** node in `ApprovedMenu` (`app/Shared/Navigation/ApprovedMenu.php:123`) |
-| Status | **DESIGN — awaiting Product Owner review.** No code, schema, migration, route or production change |
+| Status | **DESIGN — PRODUCT OWNER APPROVED, 16 September 2026.** D-82 and D-83 recorded in §17. EXECUTE authorised |
 
-> **Nothing in this document has been implemented.** It is the design to be
-> reviewed before EXECUTE begins. Every source fact below was read out of the
-> repository at `4d93228c1aa2a603f28db1564a6b6304c4b97ba8` and is cited by file
-> so a reviewer can check it rather than take it on trust.
+> **This document was approved before any of it was implemented.** Every source
+> fact below was read out of the repository at
+> `4d93228c1aa2a603f28db1564a6b6304c4b97ba8` and is cited by file, so a reviewer
+> can check it rather than take it on trust. The two questions §17 raised are
+> now **closed as D-82 and D-83**.
 
 ---
 
@@ -542,8 +543,10 @@ it, scope breadth, ceilings, incomplete grants — and the seventh, the
 accountable owner, is accountability *for* access.
 
 The alternative considered was a fifth tab. It was rejected because it would add
-a subscreen the PLAN did not approve. **If the Product Owner prefers a fifth
-tab, say so at review and this section moves; nothing else changes.**
+a subscreen the PLAN did not approve. **The Product Owner confirmed this at
+DESIGN review — D-82, §17. There is no fifth tab, and domain posture is a
+clearly separated headed section rather than rows mixed into the privileged
+list.**
 
 ### 7.2 Per-domain facets
 
@@ -641,9 +644,10 @@ the unresolved total**.
 > the contract must be right before the first real instance arrives rather than
 > retrofitted around it. But a reviewer should know that those two cases are
 > **fixture-only in Release 1**, and this document does not pretend otherwise.
-> If the Product Owner would rather see the two absent capabilities rendered as
-> genuine `not_applicable` rows, that is a small change to the catalogue and
-> nothing else.
+> **Decided at DESIGN review — D-83, §17.** No artificial `not_applicable` row
+> is rendered in Release 1. The state stays in the model and in the fixtures;
+> the two out-of-scope capabilities are stated as absent where that helps a
+> reader, and are not dressed up as controls.
 
 ---
 
@@ -1266,27 +1270,55 @@ The only edits outside the new module are:
     themes, with Security Status reached by navigating rather than by URL.
 14. Product Owner Test Script complete, with §14.3's list carried forward by
     name rather than inferred from a passing test.
+15. **D-82 held** — four subscreens, no fifth tab, domain posture a separated
+    section within Privileged Access Health.
+16. **D-83 held** — no artificial `not_applicable` row rendered; the state
+    exercised by fixtures only.
 
 ---
 
-## 17. Two questions this design raises for review
+## 17. The two DESIGN questions — DECIDED
 
-Neither reopens an approved decision. Both are consequences discovered while
-designing, and CLAUDE.md §4 says to raise them rather than decide them quietly.
+Both were raised at review as consequences discovered while designing, not as
+reopenings of an approved PLAN decision. **Both were decided by the Product
+Owner on 16 September 2026** and are binding on EXECUTE.
 
-1. **Where domain posture lives** (§7.1). This design makes it a section on
-   Privileged Access Health, to keep the four approved subscreens. A fifth tab
-   is the alternative, and is a one-line change if preferred.
-2. **Whether Release 1 renders any `not_applicable` row at all** (§8.4).
-   Following PLAN §3.4 strictly, it renders none — the two out-of-scope
-   capabilities are stated as absent rather than as controls, so `NotApplicable`
-   is fixture-only in this release. If the Product Owner would rather see them
-   as genuine rows, it is a catalogue change and nothing else.
+### D-82 — Domain posture location · **APPROVED**
 
-**Neither blocks EXECUTE.** If no answer is given, this document's stated choice
-stands.
+> **Domain posture stays a section within Privileged Access Health.**
+>
+> - **No fifth Security Status tab.**
+> - The four approved subscreens are preserved exactly: **Secure Baseline ·
+>   Privileged Access Health · Exceptions · Security Events**.
+> - Domain posture remains **clearly separated** within Privileged Access
+>   Health — its own headed section, not rows mixed into the privileged list.
+>
+> **Reason:** it is access and security posture, and the existing four-screen
+> structure is sufficient.
+
+This confirms the choice §7.1 made. The alternative — a fifth tab — is closed
+and must not be reintroduced.
+
+### D-83 — `not_applicable` rows in Release 1 · **APPROVED**
+
+> **Render no artificial `not_applicable` rows in Release 1.**
+>
+> - `NotApplicable` stays in the posture model **and in the automated test
+>   fixtures**, so the aggregation contract is correct before the first real
+>   instance arrives.
+> - **Do not manufacture UI rows solely to exercise the state.**
+> - Capabilities genuinely outside Release 1 may simply be **stated as absent**
+>   where that helps a reader, rather than dressed up as controls.
+>
+> **Reason:** the state contract needs to exist, but the product UI should
+> report real controls, not invented rows.
+
+This confirms the reading §8.4 set out. **N-SS3a and N-SS3c remain fixture-only
+in Release 1, and that is now a decision rather than an observation.** The
+Product Owner Test Script names them under §14.3 accordingly.
 
 ---
 
-**DESIGN complete. Nothing has been implemented. Awaiting Product Owner review
-before EXECUTE begins.**
+**DESIGN complete and PRODUCT OWNER APPROVED, 16 September 2026, with D-82 and
+D-83 recorded above. EXECUTE is authorised against this document and the merged
+PLAN.**
