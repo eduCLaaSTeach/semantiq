@@ -76,6 +76,7 @@ final class ConsoleNavigationTest extends TestCase
                 'Roles & Access' => '/console/access',
                 'Business Domains' => '/console/domains',
                 'Identity & SSO' => '/console/identity',
+                'Security Status' => '/console/security',
             ],
             $this->reachable($areas),
             'Something other than the five delivered capabilities is reachable from the sidebar. '
@@ -100,6 +101,7 @@ final class ConsoleNavigationTest extends TestCase
             'Roles & Access' => '/console/access',
             'Business Domains' => '/console/domains',
             'Identity & SSO' => '/console/identity',
+            'Security Status' => '/console/security',
         ], $reachable);
 
         // And those hrefs actually serve their screens, rather than merely
@@ -170,7 +172,12 @@ final class ConsoleNavigationTest extends TestCase
 
         $inert = 0;
 
-        $delivered = ['Organisation', 'Users & Groups', 'Roles & Access', 'Business Domains', 'Identity & SSO'];
+        // P1-06 delivered Security Status, so it is no longer a roadmap entry.
+        // Every OTHER entry must still carry no route at all.
+        $delivered = [
+            'Organisation', 'Users & Groups', 'Roles & Access', 'Business Domains',
+            'Identity & SSO', 'Security Status',
+        ];
 
         foreach ($this->flatten($areas) as $node) {
             if (in_array($node['label'], $delivered, true)) {

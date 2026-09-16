@@ -114,26 +114,81 @@ final class PostureEvaluator
      * Every adapter's evidence, keyed by control. One adapter failing must not
      * take the others with it, so each is caught individually.
      *
+     * TWO SOURCES THAT DISAGREE PRODUCE ATTENTION, NAMING BOTH. The first
+     * version of this method keyed straight into an array, so the last adapter
+     * silently overwrote the first - a silent preference, which is exactly what
+     * the fail-closed contract forbids. Two parts of the product that cannot
+     * agree about the same fact is a condition worth an administrator's
+     * attention WHICHEVER OF THEM IS RIGHT, and picking one quietly is how a
+     * screen reports a fact nobody verified.
+     *
+     * No two Release-1 adapters answer for the same control, and a test asserts
+     * that, so this path is unreachable today. It is implemented anyway because
+     * the alternative is a silent overwrite the moment somebody adds an
+     * overlapping adapter - and the failure would be invisible.
+     *
      * @return array<string, Evidence>
      */
     private function gather(): array
     {
-        $evidence = [];
+        /** @var array<string, list<Evidence>> $collected */
+        $collected = [];
 
         foreach ($this->adapters as $adapter) {
             try {
                 foreach ($adapter->evidence() as $item) {
-                    $evidence[$item->control] = $item;
+                    $collected[$item->control][] = $item;
                 }
             } catch (Throwable) {
                 // DELIBERATELY NOT $e->getMessage(). See the class docblock.
                 foreach ($adapter->answers() as $control) {
-                    $evidence[$control] ??= Evidence::unavailable($control);
+                    if (! isset($collected[$control])) {
+                        $collected[$control] = [Evidence::unavailable($control)];
+                    }
                 }
             }
         }
 
+        $evidence = [];
+
+        foreach ($collected as $control => $items) {
+            $evidence[$control] = $this->resolve($control, $items);
+        }
+
         return $evidence;
+    }
+
+    /**
+     * One control's answer from however many sources offered one.
+     *
+     * @param  list<Evidence>  $items
+     */
+    private function resolve(string $control, array $items): Evidence
+    {
+        if (count($items) === 1) {
+            return $items[0];
+        }
+
+        $states = array_values(array_unique(array_map(
+            static fn (Evidence $item): ?string => $item->state?->value,
+            $items,
+        )));
+
+        if (count($states) <= 1) {
+            // Agreement. Any of them will do.
+            return $items[0];
+        }
+
+        return Evidence::state(
+            $control,
+            PostureState::Attention,
+            'Two parts of the product disagree about this check: '
+            .implode(' ', array_map(
+                static fn (Evidence $item): string => rtrim($item->finding, '.').'.',
+                $items,
+            ))
+            .' Until they agree, this cannot be relied on either way.',
+        );
     }
 
     /**

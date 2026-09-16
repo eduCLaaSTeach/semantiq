@@ -7,6 +7,7 @@ namespace App\Modules\Security\Posture\Adapters;
 use App\Modules\Identity\Health\IdentityHealthCheck;
 use App\Modules\Identity\Health\IdentityHealthReport;
 use App\Modules\Security\Catalogue\ControlCatalogue;
+use App\Modules\Security\Posture\Aggregation;
 use App\Modules\Security\Posture\Evidence;
 use App\Modules\Security\Posture\PostureState;
 
@@ -93,18 +94,26 @@ final class IdentityAdapter implements SourceAdapter
             $findings[] = $byKey[$key]['finding'];
         }
 
-        // The worst row wins WITHIN one control, using the same applicable
-        // precedence as the aggregate - so a control made of several rows
-        // cannot report better than its weakest part.
-        foreach ([PostureState::Critical, PostureState::Attention, PostureState::Unverified] as $state) {
-            $index = array_search($state, $states, true);
+        /*
+         * The worst row wins WITHIN one control, THROUGH Aggregation.
+         *
+         * The first version of this method had its own copy of the precedence
+         * order - Critical, then Attention, then Unverified - which is a second
+         * implementation of the one rule this unit is built around, sitting in
+         * an adapter where nobody would look for it. It was found by the
+         * architecture guard rather than by review. A control made of several
+         * rows must not report better than its weakest part, and it must decide
+         * that the same way the aggregate does.
+         */
+        $worst = Aggregation::of($states);
 
-            if ($index !== false) {
-                return Evidence::state($control, $state, $findings[$index]);
-            }
-        }
+        $index = array_search($worst, $states, true);
 
-        return Evidence::state($control, PostureState::Healthy, $findings[0]);
+        return Evidence::state(
+            $control,
+            $worst,
+            $index === false ? $findings[0] : $findings[$index],
+        );
     }
 
     /**
