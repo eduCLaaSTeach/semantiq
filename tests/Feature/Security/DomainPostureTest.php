@@ -12,6 +12,8 @@ use App\Modules\Security\Posture\Adapters\DomainAdapter;
 use App\Modules\Security\Posture\DomainPosture;
 use App\Modules\Security\Posture\PostureEvaluator;
 use App\Modules\Security\Posture\PostureState;
+use App\Modules\Security\Projection\PostureProjection;
+use App\Modules\Security\Projection\Viewer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\AccessFactory;
 use Tests\Support\OrganisationFactory;
@@ -270,6 +272,86 @@ final class DomainPostureTest extends TestCase
 
         // What it DOES say is that this is a limit on a grant.
         $this->assertStringContainsString('grants', $text);
+    }
+
+    /**
+     * A DOMAIN CONDITION REACHES THE DEPLOYMENT AGGREGATE AND THE EXCEPTIONS
+     * LIST.
+     *
+     * Domain posture is posture. Leaving it out would let the badge read
+     * Healthy while the section below it showed a domain needing attention -
+     * an inconsistency a reader would notice immediately, and would be right to
+     * distrust. It would also keep "enabled with nobody accountable for it" out
+     * of Exceptions, which is exactly the kind of stored state that escaped a
+     * UI refusal and is worth surfacing.
+     *
+     * Mutation: compute the aggregate over the deployment rows only.
+     */
+    public function test_a_domain_condition_reaches_the_deployment_aggregate_and_the_exceptions(): void
+    {
+        $organisation = $this->make->organisation();
+
+        // Enabled, with nobody accountable for it - an Attention condition that
+        // exists ONLY at the domain level.
+        $this->access->domain($organisation, 'finance', 'Finance');
+
+        $projected = PostureProjection::for(
+            app(PostureEvaluator::class)->evaluate(),
+            Viewer::withPlatformValues(true),
+        );
+
+        $controls = array_map(
+            static fn ($row): string => $row->control,
+            $projected->exceptions(),
+        );
+
+        $ownerRows = array_values(array_filter(
+            $controls,
+            static fn (string $c): bool => str_starts_with($c, DomainAdapter::OWNER_MISSING.'#'),
+        ));
+
+        $this->assertNotSame(
+            [],
+            $ownerRows,
+            'A domain with nobody accountable for it never reaches the Exceptions list, so the '
+            .'badge and the domain section can disagree.',
+        );
+
+        // And the row NAMES the domain, or the entry is useless in a flat list.
+        foreach ($projected->exceptions() as $row) {
+            if (str_starts_with($row->control, DomainAdapter::OWNER_MISSING.'#')) {
+                $this->assertSame('Finance', $row->qualifier);
+            }
+        }
+
+        $this->assertContains(
+            $projected->aggregate(),
+            [PostureState::Critical, PostureState::Attention, PostureState::Unverified],
+            'The deployment aggregate ignores its domains.',
+        );
+    }
+
+    /** Each domain's rows carry a control id unique to that domain. */
+    public function test_two_domains_do_not_collide_on_control_identifiers(): void
+    {
+        $organisation = $this->make->organisation();
+        $this->access->domain($organisation, 'finance', 'Finance');
+        $this->access->domain($organisation, 'people', 'People');
+
+        $ids = [];
+
+        foreach (app(PostureEvaluator::class)->evaluate()->domains as $domain) {
+            foreach ($domain->rows as $row) {
+                $ids[] = $row->control;
+            }
+        }
+
+        $this->assertSame(
+            count($ids),
+            count(array_unique($ids)),
+            'Two domains share a control identifier, so one domain\'s row would replace the '
+            .'other\'s in any lookup keyed by control - cross-contamination through the back door.',
+        );
     }
 
     /** A domain with nothing granted reports healthy, not empty. */
