@@ -62,6 +62,26 @@ placed; the traceability table is in the DESIGN §13.1 and none is orphaned.
 > return from SemantIQ's own configuration is the failure **P1-05 hit in
 > production**, and the suite as first written did not catch it.
 
+## 3a. Gate C blocker — fixed
+
+**PR-3 and the per-domain privileged row counted an inactive administrator.** A
+preserved assignment on a deactivated account produced *"an administrator also
+holds business access"* about somebody the access engine refuses at the global
+gate. Fixed in both call sites; see `P1-06-MUTATIONS.md` §7a.
+
+**Observed live on the rendered screen**, cycling one privileged account through
+all three states while a System Administrator watched:
+
+| State | PR-3 | Finance domain | PR-5 (informational) |
+| --- | --- | --- | ---: |
+| Active | Needs attention | Needs attention | 0 |
+| **Deactivated** | **Healthy** | **Healthy** | **1** |
+| Reactivated | Needs attention | Needs attention | 0 |
+
+**Nothing was re-granted between the second and third rows.** The assignment and
+the entitlement are untouched throughout — the row reads the account's status,
+it does not end the grant.
+
 ## 4. Two defects the guards found in code already written
 
 | Defect | Found by |

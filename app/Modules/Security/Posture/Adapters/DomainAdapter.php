@@ -12,6 +12,7 @@ use App\Modules\Access\Support\RoleCode;
 use App\Modules\Access\Support\ScopeType;
 use App\Modules\Access\Support\Sensitivity;
 use App\Modules\Domains\Models\BusinessDomain;
+use App\Modules\Platform\Models\UserStatus;
 use App\Modules\Security\Catalogue\ControlCatalogue;
 use App\Modules\Security\Posture\Evidence;
 use App\Modules\Security\Posture\PostureState;
@@ -197,10 +198,27 @@ final class DomainAdapter implements SourceAdapter
             RoleCatalogue::requiringStepUp(),
         );
 
+        /*
+         * SAME RULE AS PR-3, and for the same reason - see
+         * GrantPathAdapter::privilegedHoldingBusinessData().
+         *
+         * A preserved assignment on a deactivated account must not turn THIS
+         * DOMAIN amber. AccessEngine denies an inactive user at the global
+         * gate, so their entitlement to this domain authorises nothing, and
+         * reporting it as an administrator holding access to the domain would
+         * be inventing risk from a legitimate state.
+         *
+         * The two call sites are kept in step deliberately: a domain reading
+         * amber while the deployment-wide row reads healthy - or the reverse -
+         * is the kind of disagreement that makes a reader distrust both.
+         */
         return DomainEntitlement::query()
             ->current()
             ->where('business_domain_id', $domainId)
-            ->whereHas('assignment', fn ($a) => $a->whereNull('ended_at')->whereIn('role_code', $privileged))
+            ->whereHas('assignment', fn ($a) => $a
+                ->whereNull('ended_at')
+                ->whereIn('role_code', $privileged)
+                ->whereHas('user', fn ($user) => $user->where('status', UserStatus::Active->value)))
             ->count();
     }
 

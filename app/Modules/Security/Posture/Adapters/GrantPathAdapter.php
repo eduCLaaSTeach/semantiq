@@ -88,10 +88,40 @@ final class GrantPathAdapter implements SourceAdapter
             RoleCatalogue::requiringStepUp(),
         );
 
+        /*
+         * THE ASSIGNMENT MUST BELONG TO SOMEBODY WHO IS STILL ACTIVE.
+         *
+         * Without the status filter this counted a PRESERVED assignment on a
+         * deactivated account and reported "an administrator also holds
+         * business access" about somebody who cannot reach anything at all:
+         * AccessEngine denies an inactive user at the GLOBAL GATE, before any
+         * role, entitlement, scope or ceiling is considered, so no grant of
+         * theirs can authorise a single row.
+         *
+         * That is inventing risk from a legitimate state - exactly the failure
+         * the posture-control/metric split exists to prevent, arriving through
+         * a posture control instead of a metric. P1-03 preserves relationships
+         * deliberately so access can be restored, and PR-5 is where a preserved
+         * assignment belongs: a COUNT, with the sentence explaining why it is
+         * harmless. PR-10 watches the gate that makes it harmless.
+         *
+         * "Effective" here means the same thing AdministratorSetGuard means by
+         * it - a current assignment held by an active user, BOTH filters - and
+         * the status is read through the assignment's own `user` relationship
+         * rather than re-implemented. No engine logic is duplicated: this asks
+         * who the assignment belongs to, not whether they may see anything.
+         *
+         * Nothing is ended, revoked or deleted. Reactivating the account makes
+         * the same assignment and the same entitlement count again immediately,
+         * with nothing re-granted.
+         */
         $count = DomainEntitlement::query()
             ->current()
             ->whereHas('assignment', function ($query) use ($privileged): void {
-                $query->whereNull('ended_at')->whereIn('role_code', $privileged);
+                $query
+                    ->whereNull('ended_at')
+                    ->whereIn('role_code', $privileged)
+                    ->whereHas('user', fn ($user) => $user->where('status', UserStatus::Active->value));
             })
             ->count();
 

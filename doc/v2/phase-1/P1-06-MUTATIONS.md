@@ -174,6 +174,43 @@ and that was **CAUGHT**.
 
 ---
 
+## 7a. GATE C BLOCKER — an inactive administrator counted as a privileged holder
+
+**Found at Gate C review, not by the suite.** PR-3 and the per-domain privileged
+row counted a **preserved assignment on a deactivated account**, and reported
+*"an administrator also holds business access"* about somebody who cannot reach
+a single row: `AccessEngine` denies an inactive user at the **global gate**,
+before any role, entitlement, scope or ceiling is considered.
+
+It is the posture-control/metric failure arriving through a posture control
+instead of a metric — **inventing risk from a legitimate state**. P1-03
+preserves relationships deliberately so access can be restored; a preserved
+assignment belongs in **PR-5**, a count with the sentence explaining why it is
+harmless, watched by **PR-10**.
+
+Fixed in both call sites by requiring the assignment's own `user` relationship
+to be active — the same "effective" definition `AdministratorSetGuard` already
+uses (current assignment **and** active account), read through the model rather
+than re-implemented. **No engine logic is duplicated:** the query asks who the
+assignment belongs to, not whether they may see anything.
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| **M-H1** | Remove the active-user condition from `GrantPathAdapter::privilegedHoldingBusinessData()` | **CAUGHT** — 3 tests |
+| **M-H2** | Remove it from `DomainAdapter::privilegedEntitlementCount()` | **CAUGHT** — 3 tests |
+| **M-H3** | Invert it — count only INACTIVE holders | **CAUGHT** — 3 tests |
+| **M-H4** | Read a field that is always true instead of the status | **CAUGHT** — 3 tests |
+
+> **M-H4 matters most.** It is the mutation that *looks* like the fix — a
+> `whereHas('user', …)` is present, so the shape is right — and it proves the
+> tests read the STATUS rather than merely the existence of the relationship.
+
+**Every case is tested in three states — active, inactive, and reactivated.**
+Testing only the first two would leave the reactivation path unproven, and that
+is the path that must work with **nothing re-granted**.
+
+---
+
 ## 8. Two defects the guards found in the implementation
 
 Not mutations: real problems in code already written, surfaced when the
