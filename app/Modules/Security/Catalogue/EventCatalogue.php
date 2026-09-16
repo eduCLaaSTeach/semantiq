@@ -45,7 +45,7 @@ final class EventCatalogue
     public const REDACTION_PROMISE =
         'A security event may only carry the fields listed here. There is no field for free text, '
         .'so a password, a token, a one-time code or a sign-in secret cannot be recorded even by '
-        .'mistake - there is nowhere in the record for one to go.';
+        .'mistake — there is nowhere in the record for one to go.';
 
     public const LIMITATION =
         'Searchable security history arrives with Audit. What you see here is what is being '

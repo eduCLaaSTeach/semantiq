@@ -32,14 +32,17 @@ export default function PostureRows({ rows, qualify = false }) {
                         <span className="sec-row-label">
                             {qualify && row.qualifier ? `${row.qualifier} — ${row.label}` : row.label}
                         </span>
-                        {row.withheld ? (
-                            <span className="sec-withheld">Managed by the platform administrator</span>
-                        ) : (
-                            <PostureBadge state={row.state} label={row.stateLabel} />
-                        )}
+                        {/*
+                          * A withheld row gets NO BADGE, because it has no state
+                          * to render one from. The sentence appears ONCE, as the
+                          * finding below - it was rendered here as well at first,
+                          * which put "Managed by the platform administrator"
+                          * twice on every withheld row.
+                          */}
+                        {row.withheld ? null : <PostureBadge state={row.state} label={row.stateLabel} />}
                     </div>
 
-                    <p className="sec-row-finding">{row.finding}</p>
+                    <p className={`sec-row-finding${row.withheld ? ' sec-withheld' : ''}`}>{row.finding}</p>
 
                     {/*
                       * Remediation is NAVIGATION, never an action. The link goes

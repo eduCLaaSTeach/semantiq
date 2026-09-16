@@ -2485,10 +2485,20 @@ button.shell-link:hover .icon { color: var(--accent); }
   margin-bottom: var(--space-4);
 }
 
+/* MULTI-COLUMN, NOT A GRID. A grid gives every cell in a row the height of the
+   tallest one, and "Organisation structure changes" has 22 entries against
+   three in "First-run setup" - which left a column of dead space taller than
+   most of the page. Columns flow, so the groups pack. break-inside keeps a
+   group from being split across a column boundary, which would separate a
+   heading from its list. */
 .sec-event-groups {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--space-4);
+  column-width: 240px;
+  column-gap: var(--space-4);
+}
+
+.sec-event-group {
+  break-inside: avoid;
+  margin-bottom: var(--space-4);
 }
 
 .sec-event-group h4 {
@@ -2537,6 +2547,15 @@ button.shell-link:hover .icon { color: var(--accent); }
   .sec-summary {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  /* FLEX-BASIS FOLLOWS THE MAIN AXIS. The caption carries flex: 1 1 320px so it
+     shares the row on a wide screen - but once the container becomes a COLUMN,
+     that 320px is a HEIGHT basis, and it left roughly 300px of dead space
+     between the summary and the tabs at 390px. Found by looking at the screen,
+     not by reading the rule. */
+  .sec-summary-caption {
+    flex: 0 1 auto;
   }
 
   .sec-row-head,

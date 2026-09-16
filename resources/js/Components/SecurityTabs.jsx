@@ -69,7 +69,7 @@ export default function SecurityTabs({ path, exceptionCount = 0 }) {
                               * platform row must never reach this number.
                               */}
                             {tab.href === '/console/security/exceptions' && exceptionCount > 0 ? (
-                                <span className="sec-tab-count"> ({exceptionCount})</span>
+                                <span className="sec-tab-count">{`\u00a0(${exceptionCount})`}</span>
                             ) : null}
                         </a>
                     </li>
