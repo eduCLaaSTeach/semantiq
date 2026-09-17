@@ -315,6 +315,46 @@ jobs:
           echo "${passed} Access tests passed against MySQL 8.4, the three administrator races included."
 
 
+      # P1-06 Security Status against MySQL.
+      #
+      # Posture is COMPUTED FROM AGGREGATE QUERIES - counts of entitlements,
+      # scopes, ceilings and assignments, several of them through whereHas and
+      # whereDoesntHave. SQLite and MySQL do not always agree about those, and a
+      # posture screen that counted differently on the two engines would report
+      # a different deployment depending on where it ran.
+      #
+      # The cross-contamination fixture in particular depends on correlated
+      # subqueries resolving per domain; it is exactly the shape that silently
+      # returns the wrong rows when an engine plans it differently.
+      - name: Run the Security suite against MySQL
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: semantiq_ci
+          DB_USERNAME: root
+          DB_PASSWORD: ci-root
+        run: |
+          set -eo pipefail
+
+          php artisan test tests/Feature/Security | tee security-mysql.log
+
+          # A PATH THAT MATCHES NOTHING EXITS 0, so the count is asserted.
+          passed=$(grep -oE '[0-9]+ passed' security-mysql.log | head -1 | grep -oE '[0-9]+' || echo 0)
+
+          if [ "${passed:-0}" -lt 40 ]; then
+            echo "::error::Only ${passed:-0} Security tests ran against MySQL. The suite is larger than that, so the path matched little or nothing."
+            exit 1
+          fi
+
+          if grep -qi 'skipped' security-mysql.log; then
+            echo "::error::A Security test skipped on MySQL. Nothing in this suite is engine-conditional, so a skip means it did not run."
+            exit 1
+          fi
+
+          echo "${passed} Security tests passed against MySQL 8.4."
+
+
       # deploy.yml stages files that live outside the application tree, so
       # nothing in the test suite touches them. Deleting one is invisible until a
       # deployment fails - which is what happened when the repository was cleaned

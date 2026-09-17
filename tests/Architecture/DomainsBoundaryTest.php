@@ -70,6 +70,22 @@ final class DomainsBoundaryTest extends TestCase
         'app/Modules/Access/Http/Controllers/AccessController.php',
         'app/Modules/Access/Http/Controllers/SimulatorController.php',
         'app/Modules/Access/Http/Controllers/StepUpController.php',
+
+        /*
+         * P1-06. ONE point, and it READS ONLY.
+         *
+         * DomainAdapter reports each domain's posture - enabled or disabled,
+         * whether somebody is accountable for it, and counts of what has been
+         * granted into it. It decides nothing, writes nothing, and adds no way
+         * for a domain to confer access: Guard B below still applies to it in
+         * full, so a domain remains something that grants nothing and a
+         * DISABLED one still only denies.
+         *
+         * It is one file rather than several deliberately - the whole of
+         * P1-06's dependency on Domains passes through it, so this line is the
+         * complete statement of that coupling.
+         */
+        'app/Modules/Security/Posture/Adapters/DomainAdapter.php',
     ];
 
     /**

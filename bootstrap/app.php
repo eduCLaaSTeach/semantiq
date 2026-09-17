@@ -8,6 +8,7 @@ use App\Modules\Organisation\Providers\OrganisationServiceProvider;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
 use App\Modules\Platform\Providers\PlatformServiceProvider;
 use App\Modules\Platform\Support\DeploymentLayout;
+use App\Modules\Security\Providers\SecurityServiceProvider;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -39,6 +40,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // P1-01. Registered after Platform because its navigation node points at
         // a route, and the registry refuses a node whose route does not resolve.
         OrganisationServiceProvider::class,
+
+        // P1-06. Wires the ONE posture evaluator to its adapters. It registers
+        // no navigation node of its own: Security Status is already in
+        // ApprovedMenu and simply stops being locked.
+        SecurityServiceProvider::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [

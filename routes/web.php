@@ -30,6 +30,10 @@ use App\Modules\Platform\Http\Controllers\ConsoleController;
 use App\Modules\Platform\Http\Controllers\EntryController;
 use App\Modules\Platform\Http\Controllers\FirstRun\BeginController;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
+use App\Modules\Security\Http\Controllers\BaselineController;
+use App\Modules\Security\Http\Controllers\ExceptionsController;
+use App\Modules\Security\Http\Controllers\PrivilegedAccessController;
+use App\Modules\Security\Http\Controllers\SecurityEventsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -369,6 +373,51 @@ Route::prefix('console')
                  */
                 Route::get('step-up/{reference}', [StepUpController::class, 'begin'])->name('step-up.begin');
                 Route::post('step-up/{reference}', [StepUpController::class, 'redirect'])->name('step-up.redirect');
+            });
+
+        /*
+         * P1-06 - Security Status. EVIDENCE_READ, and EVERY ROUTE IS A GET.
+         *
+         * FOUR ROUTES, FOUR GETS, AND NO OTHER VERB UNDER THIS PREFIX AT ALL.
+         * SecurityStatusArchitectureTest asserts that exact set, so a POST
+         * added later fails the build. That is how "a mandatory control cannot
+         * be switched off from these screens" is enforced STRUCTURALLY rather
+         * than asserted in prose: there is no route that could carry the
+         * switch, no acknowledgement, no dismissal and no override.
+         *
+         * REMEDIATION IS NAVIGATION. Every row's affordance is a link to the
+         * screen that OWNS the control - Identity & SSO, Roles & Access,
+         * Business Domains, Users & Groups - and that screen re-authorises on
+         * arrival through its own RequireActionClass. Visibility here is never
+         * permission there, which is the P1-05 lesson applied.
+         *
+         * EVIDENCE_READ, NOT A NEW CLASS. System Administrator, Organisation
+         * Administrator and Auditor already hold it, and it is exactly the
+         * right class: read the evidence, change nothing. No role is broadened.
+         * What an Organisation Administrator or Auditor may VALUE is narrower
+         * than what they may reach, and that is decided in the projection -
+         * platform rows are named but not valued (D-76).
+         *
+         * RequireOrganisation IS DELIBERATELY ABSENT. Every other console
+         * prefix carries it; this one must not. Posture on a deployment that
+         * has not been configured yet is exactly the day-one screen this unit
+         * exists to provide, and RequireOrganisation would redirect it to the
+         * Company Profile.
+         *
+         * D-82: FOUR SUBSCREENS. Domain posture is a separated section within
+         * Privileged Access Health, not a fifth tab.
+         *
+         * There is no dynamic segment anywhere below, so the collision P1-03
+         * correction 1 and P1-04 were written against cannot occur here.
+         */
+        Route::middleware(RequireActionClass::class.':'.ActionClass::EvidenceRead->value)
+            ->prefix('security')
+            ->name('security.')
+            ->group(function (): void {
+                Route::get('/', [BaselineController::class, 'show'])->name('baseline');
+                Route::get('privileged-access', [PrivilegedAccessController::class, 'show'])->name('privileged');
+                Route::get('exceptions', [ExceptionsController::class, 'show'])->name('exceptions');
+                Route::get('events', [SecurityEventsController::class, 'show'])->name('events');
             });
 
         Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)

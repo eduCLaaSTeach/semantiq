@@ -73,7 +73,8 @@ final class NoBusinessSchemaTest extends TestCase
      *
      * Identity joined the list when P1-02 delivered it, People when P1-03
      * delivered Users & Groups, Domains when P1-04 delivered Business Domains,
-     * Access when P1-05 delivered Roles & Access, and none of them before.
+     * Access when P1-05 delivered Roles & Access, Security when P1-06 delivered
+     * Security Status, and none of them before.
      */
     public function test_only_delivered_modules_exist(): void
     {
@@ -82,7 +83,7 @@ final class NoBusinessSchemaTest extends TestCase
         sort($modules);
 
         $this->assertSame(
-            ['Access', 'Domains', 'Identity', 'Organisation', 'People', 'Platform'],
+            ['Access', 'Domains', 'Identity', 'Organisation', 'People', 'Platform', 'Security'],
             $modules,
             'A module directory appeared for a unit that has not been delivered. '
             .'Directories are not pre-created to reserve them.'
