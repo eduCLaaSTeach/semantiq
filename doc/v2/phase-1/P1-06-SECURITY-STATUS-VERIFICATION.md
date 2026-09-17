@@ -202,7 +202,7 @@ post-merge CI run 256 green.
 
 **"Nothing to migrate."** P1-06 has no migration and none was invented.
 
-Verified against production **without signing in and without touching data**:
+Verified against production **without signing in and without changing anything**:
 
 | Check | Result |
 | --- | --- |
@@ -233,8 +233,18 @@ not claim it.
 
 ## 10. What is NOT claimed
 
-- **No production data was read or changed**, and no business record was created.
-- The authenticated production screens were **not** observed — see §9a.
+- **No production data was changed and no business record was created.
+  Production security/access state was inspected read-only through
+  `verify-access` run 9.**
+
+  The distinction matters and the first draft of this line blurred it. Production
+  state WAS read — the administrator count, entitlements, scopes, ceilings, users
+  and enabled domains in §9a all come from that inspection. What did not happen is
+  a change: nothing was written, nothing was created, and no test or business
+  record was added to make a screen say something.
+- **Nobody signed in through the authenticated production UI** during deployment
+  verification, so the four screens were not observed as an administrator sees
+  them — see §9a.
 - The **MySQL** result above is from CI run 35067226635, observed, not inferred.
 - **Visibility, discoverability, theme and responsive behaviour are human
   observations**, recorded as observed. No automated test in this project can
