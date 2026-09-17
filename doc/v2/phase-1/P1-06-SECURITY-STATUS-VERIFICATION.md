@@ -9,7 +9,7 @@ other.
 | Unit | **P1-06 — Security Status** |
 | PLAN | merge `4d93228c1aa2a603f28db1564a6b6304c4b97ba8` (D-75 – D-81) |
 | DESIGN | merge `0559315e632d04c071727bc5c8176a2dba475999` (D-82, D-83) |
-| Status | **EXECUTE complete — awaiting Gate C review. NOT MERGED. NOT DEPLOYED.** |
+| Status | **Gate C APPROVED 17 September 2026. Merged `a798ded381c197279522feffa8f70e7542391649`. Deployed. Gate D pending.** |
 
 ---
 
@@ -195,10 +195,56 @@ because changing it means changing an approved product decision that reaches
 every unit, which CLAUDE.md §4 says to raise rather than to fix under a quality
 gate. **It is offered to the Product Owner as a separate decision.**
 
+## 9a. Production deployment and verification — 17 September 2026
+
+Merged `a798ded381c197279522feffa8f70e7542391649`; deploy run 127 succeeded;
+post-merge CI run 256 green.
+
+**"Nothing to migrate."** P1-06 has no migration and none was invented.
+
+Verified against production **without signing in and without changing anything**:
+
+| Check | Result |
+| --- | --- |
+| All four routes exist | `302` to sign-in, not `404` — deployed and reachable |
+| Refusal leaks nothing | No posture wording on any unauthenticated response |
+| GET-only | `POST`/`PUT`/`PATCH`/`DELETE` all `405` on all four routes |
+| No reveal route | `/console/security/reveal` → `404` |
+| No 500 | Every probed path `200`, `302` or `404` |
+| Four tabs, no fifth | The deployed bundle carries exactly four `/console/security*` tab hrefs and no Domain Posture tab |
+| No raw event key shipped | No dotted identifier in the deployed bundle |
+| No secret shipped | No token, PEM or client-secret shape in the deployed bundle |
+| Events screen is not a history | *"This is not a history"* present in the deployed bundle |
+
+**Production posture, read-only** (`verify-access` run 9): **1 active System
+Administrator**, 0 current entitlements, 0 current scopes, 0 current ceilings, 0
+Restricted ceilings, 3 users, 3 enabled domains, `users.platform_role` absent.
+
+So PR-1 reports **Needs attention** (the sole-administrator condition), PR-3
+reports **Healthy** (no administrator holds a business entitlement), and **no
+second administrator was created**.
+
+### What could NOT be verified from here
+
+**Nobody signed in.** Sign-in is Microsoft Entra SSO, so the four screens were
+not rendered as the authenticated System Administrator in production. Section A
+of the Product Owner Test Script exists for exactly that, and this record does
+not claim it.
+
 ## 10. What is NOT claimed
 
-- **Nothing has been deployed.** Every observation above is from a local build.
-- **No production data was read or changed.**
+- **No production data was changed and no business record was created.
+  Production security/access state was inspected read-only through
+  `verify-access` run 9.**
+
+  The distinction matters and the first draft of this line blurred it. Production
+  state WAS read — the administrator count, entitlements, scopes, ceilings, users
+  and enabled domains in §9a all come from that inspection. What did not happen is
+  a change: nothing was written, nothing was created, and no test or business
+  record was added to make a screen say something.
+- **Nobody signed in through the authenticated production UI** during deployment
+  verification, so the four screens were not observed as an administrator sees
+  them — see §9a.
 - The **MySQL** result above is from CI run 35067226635, observed, not inferred.
 - **Visibility, discoverability, theme and responsive behaviour are human
   observations**, recorded as observed. No automated test in this project can
