@@ -22,10 +22,12 @@ it names is enforced on the screen that owns it, and every row links there.
 | --- | --- |
 | PLAN merge | `4d93228c1aa2a603f28db1564a6b6304c4b97ba8` |
 | DESIGN merge | `0559315e632d04c071727bc5c8176a2dba475999` |
-| Implementation | **to be completed at deployment** — the merge SHA goes here before you start |
+| Implementation merge | **`a798ded381c197279522feffa8f70e7542391649`** |
+| Approved head | `bd498a0148bc963a70ce50a08558afa61f5291af` (Gate C approved 17 September 2026) |
+| Deployed | **17 September 2026**, deploy run 127, to `https://semantiq.claas2saas.com` |
 
-> **Do not begin until the line above names the build you are looking at.** A
-> test script run against a different build proves nothing about this one.
+> **The build above is what is live.** A test script run against a different
+> build proves nothing about this one.
 
 ## 3. Preconditions
 
