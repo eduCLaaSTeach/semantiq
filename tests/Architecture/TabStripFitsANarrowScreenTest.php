@@ -176,7 +176,11 @@ final class TabStripFitsANarrowScreenTest extends TestCase
         $i = $open;
 
         while ($i < strlen($css) && $depth > 0) {
-            $depth += match ($css[$i]) { '{' => 1, '}' => -1, default => 0 };
+            $depth += match ($css[$i]) {
+                '{' => 1,
+                '}' => -1,
+                default => 0,
+            };
             $i++;
         }
 
