@@ -773,6 +773,57 @@ button.shell-link:hover .icon { color: var(--accent); }
   color: var(--text);
 }
 
+/*
+ * Narrow screens. The strip above scrolls ITSELF and hides its scrollbar, so a
+ * strip wider than the viewport clips silently: on Security Status at 390px the
+ * third tab was cut in half and the fourth sat entirely off-screen with no
+ * affordance of any kind. The page did not scroll sideways - which is exactly
+ * why the responsive check passed - and the defect was found by the Product
+ * Owner looking at a phone.
+ *
+ * So below 640px the strip WRAPS instead of scrolling. A wrapped row cannot
+ * keep the browser-tab shape, because a tab in the upper row would attach to
+ * nothing, so at this width the tabs become a fully rounded set sitting above
+ * the rule. The active state still carries on FILL, BORDER and WEIGHT together,
+ * never on colour alone, as the standard requires.
+ *
+ * Shared by all four Pattern B strips - Organisation, Users and groups,
+ * Identity & SSO and Security Status - because the clipping is a property of
+ * the strip, not of one feature's labels.
+ */
+@media (max-width: 640px) {
+  .org-tabs {
+    margin-top: 0;
+    overflow: visible;
+    padding-bottom: var(--space-2);
+  }
+
+  .org-tabs ul {
+    flex-wrap: wrap;
+    /* Releases the single-row minimum that forced the strip wider than the
+       viewport. Without this the list still refuses to wrap. */
+    min-width: 0;
+    gap: var(--space-2);
+  }
+
+  .org-tab {
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    /* No rule to sit against any more. */
+    transform: none;
+    /* A last-resort guard: a label longer than the viewport wraps inside its
+       pill rather than pushing the page into a horizontal scroll. */
+    white-space: normal;
+    padding: var(--space-1) var(--space-3);
+  }
+
+  .org-tab-active,
+  .org-tab-active:hover {
+    border-color: var(--card-border-strong);
+    font-weight: 700;
+  }
+}
+
 .org-section-head {
   display: flex;
   align-items: flex-start;

@@ -144,7 +144,8 @@ describes your **real** deployment.
 | # | What you do | What you should see | PASS / FAIL |
 | --- | --- | --- | :---: |
 | G1 | On each of the four tabs, use the light/dark switch in the top bar | Every status is readable in both themes. No text disappears into its background | ☐ |
-| G2 | Narrow the browser to roughly phone width, or open it on a phone | Everything remains readable, nothing is cut off, and the page does not scroll sideways | ☐ |
+| G2 | Narrow the browser to roughly phone width, or open it on a phone | The tab strip wraps onto several lines and **all four tab names read in full** — *Secure Baseline*, *Privileged Access Health*, *Exceptions (n)*, *Security Events*. None is cut off at the edge, none is missing, and the page does not scroll sideways | ☐ |
+| G2a | Still at phone width, tap or click **each** of the four tabs in turn | Every one of them opens its screen. No tab is present but unreachable | ☐ |
 | G3 | Move between tabs, then press the browser **Back** button | You return to the previous tab, and the page content changes with it | ☐ |
 | G4 | Look at the status words themselves | Each carries a word **and** a mark, so you are never relying on colour alone | ☐ |
 | G5 | Read every screen as a customer would | No developer terminology. No "adapter", "evaluator", "projection", "aggregate", "enum", "null" | ☐ |
@@ -152,7 +153,7 @@ describes your **real** deployment.
 
 ## 7. Visual and UX checks
 
-Covered by section G above. If any one of G1–G6 fails, please record it as a
+Covered by section G above. If any one of G1–G6 (including G2a) fails, please record it as a
 **FAIL with a screenshot** rather than a note — the four defects found during
 verification were all found by looking rather than by testing.
 

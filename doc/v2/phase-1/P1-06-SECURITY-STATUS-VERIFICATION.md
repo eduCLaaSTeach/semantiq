@@ -252,3 +252,145 @@ not claim it.
 - The states listed in the Product Owner Test Script §11 **cannot be observed on
   production** without creating false permanent history, and are carried forward
   by name rather than inferred from a passing test.
+
+## 11. Gate D, Section G — Product Owner testing, and the G2 correction
+
+### 11.1 What the Product Owner reported
+
+Sections A–F **PASS** in full. Section G:
+
+| Case | Result |
+| --- | --- |
+| G1 — readable in both themes | **PASS** |
+| G2 — phone width | **FAIL** |
+| G3 — browser Back | **PASS** |
+| G4 — a word *and* a mark, never colour alone | **PASS** |
+| G5 — no developer terminology | **PASS** |
+| G6 — no security score or percentage | **PASS** |
+
+The G2 report, in the Product Owner's words: at phone width the main content is
+readable, **but the Security Status tab strip is not fully responsive — the
+third tab is visibly clipped and the fourth tab is outside the visible
+viewport.**
+
+Gate D remains **OPEN**. P1-06 is **not** Product Owner accepted.
+
+### 11.2 Why §6 of this document did not catch it
+
+This is the failure CLAUDE.md §2 names: an assertion that passed for a reason
+unrelated to what it claimed to check.
+
+The responsive check in §6 asserted that the **page** did not scroll sideways —
+`document.documentElement.scrollWidth > clientWidth`. The shared Pattern B strip
+is built to guarantee exactly that and nothing more: it scrolls **itself**
+(`overflow-x: auto`, `.org-tabs ul { min-width: max-content }`) and then hides
+its scrollbar completely (`scrollbar-width: none`, `::-webkit-scrollbar { height: 0 }`).
+
+So the strip clipped its own content while the page reported no overflow at all.
+The check could not have failed on this defect. It reported a responsive safety
+the screen did not have.
+
+### 11.3 The defect, measured
+
+Re-measured at 390 × 844 on `/console/security`, this time on each **tab's own
+box** rather than on the page. Before the correction:
+
+| Tab | Horizontal extent | Inside the 390px viewport? | Clickable at its centre? |
+| --- | --- | --- | --- |
+| Secure Baseline | 80 – 231 | yes | yes |
+| Privileged Access Health | 233 – 448 | **no — clipped at the edge** | yes |
+| Exceptions (11) | 450 – 599 | **no — wholly off-screen** | **no** |
+| Security Events | 601 – 749 | **no — wholly off-screen** | **no** |
+
+That reproduces the Product Owner's observation independently.
+
+The same measurement found the strip was clipping on **two other features** that
+share it, and had been since they shipped:
+
+| Feature | Clipped at the edge | Wholly off-screen |
+| --- | --- | --- |
+| Organisation (6 tabs) | Business Units | Departments, Teams, Management Hierarchy |
+| Identity & SSO (5 tabs) | Other Identity Providers | Login Experience, SSO Health, Session Policy |
+| Users & groups (2 tabs) | none | none — it fits, which is why the pattern survived this long |
+
+On **every** one of those screens the page reported no horizontal overflow, so
+the §6 check would have passed on all of them too.
+
+The clipping is a property of the **strip**, not of Security Status's labels. It
+is fixed once, in the shared rule.
+
+### 11.4 The correction
+
+One bounded responsive rule in `resources/css/app.css`. Below 640px the strip
+**wraps** instead of scrolling:
+
+- `.org-tabs` releases its overflow and its negative top margin;
+- `.org-tabs ul` gains `flex-wrap: wrap` and drops `min-width: max-content` —
+  both are required, because wrapping declared alone can never take effect while
+  the list keeps a single-row minimum;
+- `.org-tab` becomes a fully rounded pill, because a wrapped tab has no rule to
+  attach to;
+- the active tab keeps **fill, border and weight** together, so it is still
+  never carried by colour alone.
+
+Nothing else changed. No posture calculation, adapter, route, authorisation
+rule, catalogue entry, schema, event, navigation rule or React component was
+touched, and the desktop strip is byte-for-byte the same design.
+
+### 11.5 Browser verification — what was actually observed
+
+Chromium at `/opt/pw-browsers/`, signed in as the System Administrator, both
+themes. Every assertion is made on the tab, not on the page: its own box, its
+own label, and a hit test at its own centre.
+
+| Requirement | Observed |
+| --- | --- |
+| All four tabs accessible and fully readable at 390px | Yes — four rows, each tab 44px tall, no label clipped inside its own box, every tab hit-tests to itself |
+| No page-level horizontal scroll | Yes — and the strip no longer scrolls itself either, so there is nothing hidden to scroll to |
+| Secure Baseline content readable at 390px | Yes — all 14 control rows, their states and their "Managed in …" links render and wrap. Swept every element on the page: **none** extends past either viewport edge |
+| All four Security Status screens at mobile width | Yes — Secure Baseline, Privileged Access Health, Exceptions, Security Events, light and dark |
+| Desktop light not regressed | Yes — 1440px, one row, 10px browser-tab radius, active tab still attached and breaking the strip's rule |
+| Desktop dark not regressed | Yes — same |
+| Browser Back still works | Yes — clicked forward through all four tabs, then Back three times, returning exactly along the trail |
+| No console errors | Yes — checked with the web fonts stubbed rather than aborted, so the harness could not manufacture its own errors |
+
+The three other strips were re-checked at 390px in the same run and are now free
+of the clipping recorded in §11.3.
+
+**Looked at, not only measured.** The wrapped strip was inspected at 3× on both
+themes. The four pills read as one set, every label is complete, the active tab
+is obviously the current one, and the rule still separates the strip from the
+content below it. Screenshots were captured during verification; they are
+evidence of the run, not committed artefacts.
+
+### 11.6 Regression guard and its mutations
+
+`tests/Architecture/TabStripFitsANarrowScreenTest.php`. It is a **source-text
+guard and it is not the evidence** — the evidence is §11.5. What it does is stop
+the three declarations that caused the clipping from coming back silently.
+
+| Mutation | Result |
+| --- | --- |
+| M-G2a — delete `flex-wrap: wrap` | **Caught** |
+| M-G2b — delete `min-width: 0` (leaving `max-content` to force one row) | **Caught** |
+| M-G2c — delete `overflow: visible` | **Caught** |
+| M-G2d — narrow the breakpoint to 320px, so a phone never receives the rule | **Caught** |
+| M-G2e — delete the active tab's `font-weight: 700` | **Caught** |
+| M-G2f — delete the active tab's `border-color` | **Caught** |
+| M-G2g — give the desktop tab a pill radius | **Caught** |
+| M-G2h — delete the whole narrow-width block | **Caught** |
+
+M-G2b and M-G2d are the two that matter: each leaves a rule that *looks* like a
+responsive fix and does nothing at all.
+
+The browser check itself was also mutated. With the correction reverted and the
+bundle rebuilt, it failed on the exact tabs listed in §11.3 — so it is not
+vacuous either, which its predecessor in §6 was.
+
+### 11.7 What is NOT claimed here
+
+- **This has not been observed on production.** It is verified locally in a real
+  browser. Production observation is the Product Owner's, after deployment.
+- **Sections A–F were not re-run by me.** They are the Product Owner's PASS, and
+  this correction touches no server-side behaviour that could change them.
+- **Gate D is not closed.** That is the Product Owner's decision, not mine.
