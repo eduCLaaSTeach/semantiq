@@ -183,10 +183,25 @@ failed — those are the security cases.
 
 | | |
 | --- | --- |
-| **Overall result** | ☐ PASS ☐ FAIL |
-| Tested by | |
-| Date | |
-| Build tested | |
+| **Overall result** | **PASS** |
+| Tested by | Product Owner |
+| Date | **18 September 2026** |
+| Build tested | `f282571f9dbb24cb1d49c8d8249d350c18b3763f` (G2 correction, deploy run 129) |
+
+**Every section PASS — A, B, C, D, E, F, and G1, G2, G2a, G3, G4, G5, G6.**
+No step failed. Section F, the security cases, passed in full.
+
+**P1-06 — Security Status — PRODUCT OWNER ACCEPTED, 18 September 2026.
+Gate D CLOSED. P1-06 CLOSED.**
+
+G2 failed on first testing and the mobile tab-clipping defect was corrected;
+G2 and G2a were then retested against the deployed correction and both passed.
+The defect is closed on the Product Owner's observation, not on a passing test.
+The full account is in `P1-06-SECURITY-STATUS-VERIFICATION.md` §0 and §11.
+
+The carried items in §11 are **unchanged** by this acceptance. In particular the
+**provider-wide sign-in re-check remains OPEN / CARRIED / UNVERIFIED**, and no
+second permanent System Administrator was manufactured to close it.
 
 ## 10. If something looks wrong
 
