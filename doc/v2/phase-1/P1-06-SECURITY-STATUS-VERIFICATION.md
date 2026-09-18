@@ -59,13 +59,20 @@ closed on observation, not on a passing test.**
 | **B-9b — Microsoft's acceptance of the fresh step-up return** | **Unchanged**, exactly as previously recorded: permanently `unverified` in Release 1, with no accepted runtime evidence source |
 | **P1-04 disabled-domain gate** | **CLOSED** (in P1-05). Unchanged |
 
-> **Raised, not fixed.** The carried-gate register in `PHASE-1-PLAN.md` §10
-> still names **P1-05** as the destination for the P1-02 Re-check gate. P1-05
-> and P1-06 are both closed and the gate is still open, so that row no longer
-> names a unit that can execute it. That register exists precisely so a carried
-> gate is not quietly lost, and it was not edited here because this acceptance
-> is scoped to the P1-06 documents. **It is offered to the Product Owner as a
-> separate decision about which later unit the gate should now name.**
+> **Raised here, decided and corrected.** At acceptance, the carried-gate
+> register in `PHASE-1-PLAN.md` §10 still named **P1-05** as the destination for
+> the P1-02 Re-check gate, although P1-05 and P1-06 were both closed and the
+> gate was still open — so no unit owned it. That was raised rather than fixed
+> under this acceptance, because the acceptance is scoped to the P1-06 documents.
+>
+> **The Product Owner decided it on 18 September 2026**, and `PHASE-1-PLAN.md`
+> §10 now carries that decision: the gate is reassigned from P1-05 to **Phase 1
+> orchestration**, to be executed at the earliest point a genuine second
+> **permanent** System Administrator exists in normal operation. **P1-07 does not
+> own it**, and it does not block P1-07 from starting. It is revisited before
+> final Phase 1 acceptance and **never silently marked PASS, CLOSED or Healthy**.
+>
+> Read `PHASE-1-PLAN.md` §10 for the authoritative status. This note is not it.
 
 ---
 

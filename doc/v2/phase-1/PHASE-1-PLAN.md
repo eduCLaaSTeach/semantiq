@@ -483,22 +483,63 @@ omission is recorded there rather than quietly corrected.
 ## 10. Carried verification gates
 
 A carried gate is a check that a unit's design requires but its delivered state
-cannot execute. It is recorded here so it is executed against the later unit
-rather than quietly lost.
+cannot execute. It is recorded here so it is executed later rather than quietly
+lost — normally against a named later unit, and where no unit can produce the
+prerequisite, against Phase 1 orchestration itself.
+
+**This register is only useful if it stays true.** A row that names a unit which
+has already shipped is stale, and a stale row is how a gate disappears. Every row
+below carries its current status and, where it has moved, the date it moved.
 
 | From | To | Gate | Why it could not run in the originating unit |
 | --- | --- | --- | --- |
 | **P1-01** *(ACCEPTED 2 Sep 2026)* | **P1-03** | Live multi-user management-cycle refusal, observed in production | **CLOSED 3 Sep 2026** — observed by the Product Owner against a genuine second user. Verbatim wording not retained |
 | **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-03** | A real non-administrator being refused at Identity & SSO | **CLOSED 3 Sep 2026** — `semantiq@educlaas.com`, a real user with no role, signed in and saw an empty System Administration area. No account was manufactured for it |
-| **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-05** | The provider-wide Re-check limit, observed with two administrators | **STILL OPEN.** Needs a second **privileged** account. **Do not create a fake privileged account to close it.** If P1-05 legitimately establishes another real System Administrator, the live observation is taken then; otherwise it stays open and says so. Automated evidence stands |
-| **P1-04** *(ACCEPTED 3 Sep 2026)* | **P1-05** | **A DISABLED DOMAIN CAN NEVER BROADEN ACCESS** | **OPEN, and mandatory.** P1-04 intentionally contains **no access engine**, so the failure is unreachable and untestable there. It becomes reachable the moment P1-05 builds effective access. See the five required cases below |
+| **P1-02** *(ACCEPTED 2 Sep 2026)* | **Phase 1 orchestration** — *reassigned 18 Sep 2026, see below* | The provider-wide Re-check limit, observed with two administrators | **OPEN / CARRIED / UNVERIFIED.** Needs a genuine second **permanent** System Administrator. **Do not create a fake privileged account to close it.** Automated evidence stands. It was carried to P1-05 and then to P1-06; both are now closed and the prerequisite still does not exist, so it belongs to no single unit |
+| **P1-04** *(ACCEPTED 3 Sep 2026)* | **P1-05** | **A DISABLED DOMAIN CAN NEVER BROADEN ACCESS** | **CLOSED 15 Sep 2026.** Observed by the Product Owner at section H of the P1-05 test script against real production data — `P1-05-ROLES-ACCESS-VERIFICATION.md` §10. P1-04 intentionally contained **no access engine**, so the failure was unreachable there and became reachable the moment P1-05 built effective access. All five cases below were run; they are kept as the historical required evidence |
 
 The first two were recorded in the P1-02 Product Owner test script §12 and were
 missing from this register — which is the exact way a carried gate gets quietly
 lost, and the reason this table exists. Added when P1-03 was delivered, and
 closed by it the next day.
 
-**TWO GATES ARE NOW OPEN, both against P1-05.**
+**ONE PHASE 1 CARRIED VERIFICATION GATE REMAINS OPEN: the P1-02 provider-wide
+SSO Re-check.** The other three are closed — P1-01→P1-03 and P1-02→P1-03 on
+3 September 2026, and P1-04→P1-05 on 15 September 2026.
+
+### The P1-02 gate — reassigned to Phase 1 orchestration, 18 September 2026
+
+It was carried to P1-05, and then stood open through P1-06. Both units are now
+closed and the prerequisite still does not exist, so naming a delivery unit that
+has already shipped is how this register goes stale — the precise failure it was
+created to prevent. **Product Owner decision, 18 September 2026:** the gate is
+no longer assigned to P1-05 or to any specific later delivery unit. It becomes a
+**Phase 1 orchestration carried gate**.
+
+**Execution rule.** Execute the provider-wide SSO Re-check at the earliest point
+that a genuine second **permanent** System Administrator exists in normal
+operation.
+
+**Do not**, to satisfy it:
+
+- create a temporary administrator;
+- promote somebody only for testing;
+- manufacture a privileged account;
+- make P1-07 responsible for producing the prerequisite.
+
+**P1-07 does not own this gate.** Nor does the gate block starting P1-07 merely
+because a genuine second permanent System Administrator does not yet exist.
+
+**Before final Phase 1 acceptance, revisit it:**
+
+| Situation | What happens |
+| --- | --- |
+| A genuine second permanent System Administrator exists | Execute the live provider-wide Re-check and record the **observed** evidence |
+| The prerequisite still does not exist | Keep it **OPEN / CARRIED / UNVERIFIED** and bring it to the Product Owner **explicitly** as part of Phase 1 final acceptance |
+
+**It is never silently marked PASS, CLOSED or Healthy.** Security Status reports
+it as *not verified*, which is the honest answer and is intended to stay that way
+until the observation is genuinely available.
 
 ### The P1-04 gate, stated as the cases it must run
 
@@ -507,7 +548,9 @@ concrete rather than theoretical: the natural implementation of "disabled" is *a
 filter that removes a domain from a set*, and a filter that is skipped when the
 set is empty turns **no domains enabled** into **allow everything.**
 
-P1-05 must run **all five**:
+P1-05 ran **all five**. They are kept here as the historical required evidence
+for a gate that is now closed — the reasoning is not deleted, because it is what
+makes the closure meaningful:
 
 | # | Case | Required outcome |
 | --- | --- | --- |
