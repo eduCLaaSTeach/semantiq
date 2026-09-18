@@ -394,3 +394,38 @@ vacuous either, which its predecessor in §6 was.
 - **Sections A–F were not re-run by me.** They are the Product Owner's PASS, and
   this correction touches no server-side behaviour that could change them.
 - **Gate D is not closed.** That is the Product Owner's decision, not mine.
+
+### 11.8 Deployment of the G2 correction — 18 September 2026
+
+Merged `f282571f9dbb24cb1d49c8d8249d350c18b3763f`; deploy run 129 succeeded;
+post-merge CI run 262 green.
+
+**"Nothing to migrate."** The correction is one CSS rule, one test file and two
+documents. No migration exists and none was invented.
+
+CI run 260 on the first push failed on `pint --test` alone — a one-line `match`
+in the guard's helper — and skipped every later step. Recorded because a skipped
+step is not a passing one. The formatting was fixed, all eight mutations were
+re-run against the formatted file and all eight were still caught, and run 261
+on that head was green before the merge.
+
+Verified against production **without signing in and without changing anything**:
+
+| Check | Result |
+| --- | --- |
+| The deployed stylesheet is the bundle that was verified | `build/assets/app-CnOf4vS7.css` is **byte-identical** to the local build the browser checks in §11.5 ran against |
+| The entry page serves that bundle | It references exactly `app-CnOf4vS7.css`, so what was measured is what is live |
+| The narrow-width rule is in it | `.org-tabs{…overflow:visible}`, `.org-tabs ul{…flex-wrap:wrap;min-width:0}`, `.org-tab{border-radius:var(--radius-pill);white-space:normal;transform:none}`, `.org-tab-active{border-color:…}` |
+| All four Security Status routes reachable | `302` to sign-in, not `404` and not `500` |
+| The three other strips' features reachable | Organisation, Identity & SSO and Users & groups all `302` |
+
+The minifier emits `@media (width<=640px)` rather than `max-width: 640px`. That
+is the CSS range syntax, and **all nine** media queries in this bundle already
+shipped that way — it is not something this correction introduced.
+
+### What could NOT be verified from here
+
+**Nobody signed in.** Sign-in is Microsoft Entra SSO, so the wrapped strip was
+not observed on production at phone width as the authenticated System
+Administrator. G2 and the new G2a in the Product Owner Test Script exist for
+exactly that, and this record does not claim it.

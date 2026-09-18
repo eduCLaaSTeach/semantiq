@@ -25,9 +25,16 @@ it names is enforced on the screen that owns it, and every row links there.
 | Implementation merge | **`a798ded381c197279522feffa8f70e7542391649`** |
 | Approved head | `bd498a0148bc963a70ce50a08558afa61f5291af` (Gate C approved 17 September 2026) |
 | Deployed | **17 September 2026**, deploy run 127, to `https://semantiq.claas2saas.com` |
+| G2 correction merge | **`f282571f9dbb24cb1d49c8d8249d350c18b3763f`** |
+| G2 correction deployed | **18 September 2026**, deploy run 129 |
 
 > **The build above is what is live.** A test script run against a different
 > build proves nothing about this one.
+>
+> The G2 correction is a responsive style rule only. It changes **no** posture
+> result, refusal or wording, so sections A–F are unaffected and need not be
+> re-run. Sections **G2 and G2a** are the ones this build is asking you to
+> re-test.
 
 ## 3. Preconditions
 
