@@ -9,7 +9,63 @@ other.
 | Unit | **P1-06 — Security Status** |
 | PLAN | merge `4d93228c1aa2a603f28db1564a6b6304c4b97ba8` (D-75 – D-81) |
 | DESIGN | merge `0559315e632d04c071727bc5c8176a2dba475999` (D-82, D-83) |
-| Status | **Gate C APPROVED 17 September 2026. Merged `a798ded381c197279522feffa8f70e7542391649`. Deployed. Gate D pending.** |
+| Implementation | merge `a798ded381c197279522feffa8f70e7542391649` (Gate C approved 17 September 2026), deploy run 127 |
+| G2 correction | merge `f282571f9dbb24cb1d49c8d8249d350c18b3763f`, deploy run 129, 18 September 2026 |
+| Deployment record | merge `cbc2161a423c397dfe23f8b207a960e241dacef6` (documentation only) |
+| **Status** | **P1-06 PRODUCT OWNER ACCEPTED — 18 September 2026. Gate D CLOSED. P1-06 CLOSED.** |
+
+---
+
+## 0. Acceptance
+
+**P1-06 — SECURITY STATUS — PRODUCT OWNER ACCEPTED, 18 September 2026.**
+
+**Gate D CLOSED. P1-06 CLOSED.**
+
+The Product Owner tested the deployed build and recorded a result for every
+case. Recorded on their confirmation, which is what acceptance is.
+
+| Section | Result |
+| --- | --- |
+| **A — Reaching the screens** | PASS |
+| **B — Secure Baseline** | PASS |
+| **C — Privileged Access Health** | PASS |
+| **D — Exceptions** | PASS |
+| **E — Security Events** | PASS |
+| **F — Negative, refusal and security cases** | PASS |
+| G1 — readable in both themes | PASS |
+| **G2 — phone width** | **PASS** — retested against the deployed correction |
+| **G2a — every mobile tab opens its screen** | **PASS** — all four confirmed |
+| G3 — browser Back | PASS |
+| G4 — a word *and* a mark, never colour alone | PASS |
+| G5 — no developer terminology | PASS |
+| G6 — no security score or percentage | PASS |
+
+### The mobile tab-clipping defect is closed
+
+G2 failed on first testing: at phone width the shared tab strip left one tab
+clipped at the screen edge and two wholly outside the viewport, with no
+affordance that they existed. The cause, the correction and the measurements are
+in §11. The Product Owner has now retested the deployed correction at mobile
+size and confirmed both that the responsive layout works and — separately, as
+G2a — that each of the four tabs opens the correct screen. **The defect is
+closed on observation, not on a passing test.**
+
+### What this acceptance does NOT close
+
+| Carried item | Status, unchanged |
+| --- | --- |
+| **P1-02 provider-wide SSO Re-check** | **OPEN / CARRIED / UNVERIFIED.** No genuine second permanent System Administrator has been manufactured, and none was created to close it |
+| **B-9b — Microsoft's acceptance of the fresh step-up return** | **Unchanged**, exactly as previously recorded: permanently `unverified` in Release 1, with no accepted runtime evidence source |
+| **P1-04 disabled-domain gate** | **CLOSED** (in P1-05). Unchanged |
+
+> **Raised, not fixed.** The carried-gate register in `PHASE-1-PLAN.md` §10
+> still names **P1-05** as the destination for the P1-02 Re-check gate. P1-05
+> and P1-06 are both closed and the gate is still open, so that row no longer
+> names a unit that can execute it. That register exists precisely so a carried
+> gate is not quietly lost, and it was not edited here because this acceptance
+> is scoped to the P1-06 documents. **It is offered to the Product Owner as a
+> separate decision about which later unit the gate should now name.**
 
 ---
 
