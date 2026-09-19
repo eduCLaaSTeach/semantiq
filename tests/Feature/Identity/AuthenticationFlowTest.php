@@ -288,7 +288,9 @@ final class AuthenticationFlowTest extends TestCase
                 'Identity & SSO' => '/console/identity',
                 'Security Status' => '/console/security',
                 'Access Reviews' => '/console/access-reviews',
+                'Audit' => '/console/audit',
                 'Access Reviews' => '/console/access-reviews',
+                'Audit' => '/console/audit',
             ],
             $reachable,
             'A System Administrator was offered a destination beyond Organisation. The role '

@@ -166,7 +166,9 @@ final class IdentityAccessBoundaryTest extends TestCase
                 'Identity & SSO' => '/console/identity',
                 'Security Status' => '/console/security',
                 'Access Reviews' => '/console/access-reviews',
+                'Audit' => '/console/audit',
                 'Access Reviews' => '/console/access-reviews',
+                'Audit' => '/console/audit',
             ],
             $reachable,
             'A business domain became reachable. Identity administration confers no business access.'

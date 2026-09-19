@@ -130,7 +130,14 @@ final class ApprovedMenu
             // REMOVE existing access - they never create, widen or repair it,
             // and confirming writes nothing to the access model at all.
             NavigationNode::leaf($area, 'Access Reviews', 'i-clipboard-list', 'access-reviews.privileged', 'access-reviews.view'),
-            NavigationNode::locked($area, 'Audit', 'i-scroll', $policy),
+            // P1-08. Delivered: four read-only tabs over durable evidence.
+            // Every route is a GET and no application path updates or deletes a
+            // row. D-19 IS UNCHANGED: this node already sits inside System
+            // Administration, which is shown to System Administrators only, so
+            // nothing outside Audit is widened. Auditor and Organisation
+            // Administrator route-level permissions are implemented and tested;
+            // reaching the screen through the sidebar stays carried.
+            NavigationNode::leaf($area, 'Audit', 'i-scroll', 'audit.user-access', 'audit.view'),
             NavigationNode::locked($area, 'System Health', 'i-heart-pulse', $policy),
         ];
     }

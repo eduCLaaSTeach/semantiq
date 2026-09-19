@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Security\Catalogue;
 
 use App\Modules\Platform\Security\SecurityEventLogger;
+use InvalidArgumentException;
 
 /**
  * Every declared security event, in business language.
@@ -47,9 +48,18 @@ final class EventCatalogue
         .'so a password, a token, a one-time code or a sign-in secret cannot be recorded even by '
         .'mistake — there is nowhere in the record for one to go.';
 
+    /**
+     * P1-08 REWROTE THIS, IT DID NOT REMOVE IT. D-106.
+     *
+     * This screen is still the CATALOGUE - what is recorded and how it is
+     * protected - and it still reads no log file and no audit table. What has
+     * changed is that "there is no history" stopped being true, so the sentence
+     * that said so would now be a lie by omission. It points at Audit instead.
+     */
     public const LIMITATION =
-        'Searchable security history arrives with Audit. What you see here is what is being '
-        .'recorded, not a record of what happened.';
+        'This is what is being recorded, not a record of what happened. Open Audit to see the '
+        .'events themselves — note that Audit begins on the day it was installed, so activity '
+        .'before then was never stored anywhere it can be searched.';
 
     /**
      * key => [category, label]. Every declared event appears exactly once.
@@ -149,6 +159,151 @@ final class EventCatalogue
         'access.engine.failed' => ['Access system conditions', 'Access decision could not be completed'],
     ];
 
+    /**
+     * PER-EVENT AUDIT SEMANTICS. The second facet of the SAME catalogue, not
+     * a second event list: the keys are the canonical ones and
+     * EventSemanticsCompletenessTest asserts this map and
+     * SecurityEventLogger::events() are the SAME SET, as an equality.
+     *
+     * READ EventSemantics FIRST. There is deliberately no default and no
+     * global convention, because the repository does not have one: user
+     * lifecycle puts the ADMINISTRATOR in user_id and role administration puts
+     * the SUBJECT there. They are inverses, so any single rule names the wrong
+     * person half the time - plausibly, and invisibly.
+     *
+     * @var array<string, array{0: AuditCategory, 1: ActorSource, 2: SubjectSource, 3: TargetSource, 4: OrganisationSource, 5: OutcomeClass, 6?: string}>
+     */
+    private const SEMANTICS = [
+        // ---- First-run setup. Platform-scoped: there is no organisation yet.
+        'bootstrap.grant.issued' => [AuditCategory::UserAccess, ActorSource::System, SubjectSource::ExternalSubject, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
+        'bootstrap.completed' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::UserId, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
+        'bootstrap.refused' => [AuditCategory::SecurityEvents, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::Refusal],
+
+        // ---- Sign-in. user_id is the person signing in - the ACTOR, not a
+        //      subject somebody else acted upon.
+        // The session is not in the database, so the invariant is kept by
+        // ORDER: evidence first, session second. StateChangeRecordedFirst.
+        'auth.login.succeeded' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::UserId, TargetSource::None, OrganisationSource::Context, OutcomeClass::StateChangeRecordedFirst],
+        // No SemantIQ account exists, which is the point of refusing. The
+        // directory subject is recorded and NO lookup is attempted.
+        'auth.login.refused.unknown_identity' => [AuditCategory::SecurityEvents, ActorSource::ExternalSubject, SubjectSource::ExternalSubject, TargetSource::None, OrganisationSource::None, OutcomeClass::Refusal],
+        'auth.login.refused.inactive' => [AuditCategory::SecurityEvents, ActorSource::UserId, SubjectSource::UserId, TargetSource::None, OrganisationSource::Context, OutcomeClass::Refusal],
+        'auth.login.refused.tenant' => [AuditCategory::SecurityEvents, ActorSource::ExternalSubject, SubjectSource::ExternalSubject, TargetSource::None, OrganisationSource::None, OutcomeClass::Refusal],
+        'auth.login.refused.protocol' => [AuditCategory::SecurityEvents, ActorSource::ExternalSubject, SubjectSource::ExternalSubject, TargetSource::None, OrganisationSource::None, OutcomeClass::Refusal],
+        'auth.logout' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::UserId, TargetSource::None, OrganisationSource::Context, OutcomeClass::BestEffort],
+        // PLATFORM-SCOPED, and stated rather than glossed: the middleware
+        // records this BEFORE it loads the user, so no organisation is
+        // available, and reordering P1-00's session checks to make one
+        // available is outside P1-08. System Administrator only.
+        'auth.session.expired' => [AuditCategory::SecurityEvents, ActorSource::UserId, SubjectSource::UserId, TargetSource::None, OrganisationSource::None, OutcomeClass::BestEffort],
+
+        // ---- Sign-in configuration. Platform, and the only Configuration
+        //      Changes category in Release 1.
+        'identity.health.checked' => [AuditCategory::ConfigurationChanges, ActorSource::UserId, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::BestEffort],
+        /*
+         * BEST EFFORT, and the reclassification is deliberate.
+         *
+         * The "state" it records is a CACHE note about whether Microsoft is
+         * reachable - IdentityHealthCheck writes it with Cache::put. Nothing in
+         * the database changes, nobody's access changes, and there is no
+         * transaction that could roll it back. Classing it StateChange demanded
+         * an atomic boundary that cannot exist, which is a guard asking for the
+         * impossible rather than a guard protecting anything.
+         */
+        'identity.health.state_changed' => [AuditCategory::ConfigurationChanges, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::BestEffort],
+
+        // ---- Organisation structure. user_id is the ADMINISTRATOR throughout.
+        'organisation.created' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::None, OrganisationSource::Context, OutcomeClass::StateChange],
+        'organisation.updated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::None, OrganisationSource::Context, OutcomeClass::StateChange],
+        'legal_entity.created' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'legal_entity.updated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'legal_entity.deactivated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_unit.created' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_unit.updated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_unit.deactivated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'department.created' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'department.updated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'department.deactivated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'department.moved' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'team.created' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'team.updated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'team.deactivated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'team.moved' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        // The member is related_id; the team is the target.
+        'team.member.added' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::RelatedId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'team.member.removed' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::RelatedId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        // entity_id IS the managed person here - target and subject coincide.
+        'management.relationship.set' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::EntityId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'management.relationship.cleared' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::EntityId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_unit.legal_entity.associated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_unit.legal_entity.dissociated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+
+        // ---- People and groups. user_id is the ADMINISTRATOR and entity_id is
+        //      the affected person - the exact inverse of P1-05 below.
+        'user.provisioned' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::EntityId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'user.provision.refused' => [AuditCategory::SecurityEvents, ActorSource::UserId, SubjectSource::None, TargetSource::None, OrganisationSource::Context, OutcomeClass::Refusal],
+        'user.activated' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::EntityId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'user.deactivated' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::EntityId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'user.organisation.assigned' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::EntityId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'group.created' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'group.updated' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'group.deactivated' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'group.activated' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        // The group is the target; the member added or removed is related_id.
+        'group.member.added' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::RelatedId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'group'],
+        'group.member.removed' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::RelatedId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'group'],
+
+        // ---- Business domains. user_id is the administrator; related_id the owner.
+        'business_domain.created' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_domain.updated' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_domain.enabled' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_domain.disabled' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_domain.owner.assigned' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::RelatedId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_domain.owner.cleared' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::RelatedId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+
+        // ---- Roles and access. THE INVERSE OF USER LIFECYCLE: user_id is the
+        //      SUBJECT whose access changed, related_id the administrator who
+        //      changed it. EntitlementService has used that convention since
+        //      P1-05 and P1-07 follows it; People does not.
+        'access.role.assigned' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'role_assignment'],
+        'access.role.revoked' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'role_assignment'],
+        'access.role.self_assigned' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'role_assignment'],
+        'access.entitlement.granted' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'domain_entitlement'],
+        'access.entitlement.revoked' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'domain_entitlement'],
+        'access.scope.assigned' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'entitlement_scope'],
+        'access.scope.revoked' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'entitlement_scope'],
+        'access.ceiling.set' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'entitlement_ceiling'],
+
+        // ---- Privileged confirmations. user_id is the person confirming.
+        'access.step_up.requested' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::UserId, TargetSource::None, OrganisationSource::Context, OutcomeClass::StateChange],
+        'access.step_up.completed' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'pending_step_up'],
+        'access.step_up.refused' => [AuditCategory::SecurityEvents, ActorSource::UserId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::Refusal, 'pending_step_up'],
+
+        // ---- Permanent deletions.
+        'legal_entity.purged' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_unit.purged' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'department.purged' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'team.purged' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'business_domain.purged' => [AuditCategory::AdminChanges, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'user.purged' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::EntityId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+        'group.purged' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange],
+
+        // ---- Access reviews. P1-05's convention: subject in user_id, reviewer
+        //      in related_id. The cycle carries no subject at all.
+        'access.review.cycle.started' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::None, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'access_review_cycle'],
+        'access.review.item.retained' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'access_review_item'],
+        'access.review.item.revoked' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'access_review_item'],
+        // Raised by the state of the reviewed access, not by a decision.
+        'access.review.item.superseded' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'access_review_item'],
+        'access.review.item.self_reviewed' => [AuditCategory::UserAccess, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::StateChange, 'access_review_item'],
+        'access.review.refused' => [AuditCategory::SecurityEvents, ActorSource::RelatedId, SubjectSource::UserId, TargetSource::EntityTypeAndId, OrganisationSource::Context, OutcomeClass::Refusal, 'access_review_item'],
+
+        // ---- Conditions the platform raised. No actor exists to record, and
+        //      none is invented.
+        'access.state.unrecognised' => [AuditCategory::SecurityEvents, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::Refusal],
+        'access.engine.failed' => [AuditCategory::SecurityEvents, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::Refusal],
+    ];
+
     /** The category order a reader sees. Fixed; never sorted by volume. */
     private const ORDER = [
         'First-run setup',
@@ -202,6 +357,34 @@ final class EventCatalogue
         }
 
         return $out;
+    }
+
+    /**
+     * How THIS event's context is read as evidence.
+     *
+     * Throws rather than defaulting. A default bucket is how an event nobody
+     * classified quietly becomes somebody else's actor, and the completeness
+     * test makes this branch unreachable by failing the build first.
+     */
+    public static function semanticsFor(string $event): EventSemantics
+    {
+        $row = self::SEMANTICS[$event] ?? throw new InvalidArgumentException(
+            "No audit semantics declared for security event [{$event}]."
+        );
+
+        return new EventSemantics($row[0], $row[1], $row[2], $row[3], $row[4], $row[5], $row[6] ?? null);
+    }
+
+    /** @return list<string> */
+    public static function semanticsKeys(): array
+    {
+        return array_keys(self::SEMANTICS);
+    }
+
+    /** @return list<AuditCategory> */
+    public static function auditCategories(): array
+    {
+        return AuditCategory::cases();
     }
 
     /** @return array<string, array{0: string, 1: string}> */

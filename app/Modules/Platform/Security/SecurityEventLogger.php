@@ -23,6 +23,13 @@ use InvalidArgumentException;
  */
 class SecurityEventLogger
 {
+    /**
+     * P1-08 persists through this seam. It is a REQUIRED dependency, not a
+     * nullable one: an optional recorder is a recorder somebody forgets to
+     * wire, and the failure mode is an audit trail that is quietly empty.
+     */
+    public function __construct(private readonly EvidenceRecorder $evidence) {}
+
     public const BOOTSTRAP_GRANT_ISSUED = 'bootstrap.grant.issued';
 
     public const BOOTSTRAP_COMPLETED = 'bootstrap.completed';
@@ -383,6 +390,17 @@ class SecurityEventLogger
             }
         }
 
+        /*
+         * DURABLE EVIDENCE FIRST, THEN THE LOG.
+         *
+         * D-111: a state change that cannot be evidenced must not complete, so
+         * this throws before anything downstream treats the operation as done.
+         * The recorder decides per event whether a failure is fatal - a refusal
+         * and a sign-out are not - and OutcomeClass is where that is declared.
+         */
+        $this->evidence->record($event, $context);
+
+        // Operator diagnostics. NOT evidence, and nothing reads it back.
         Log::info($event, $context + ['at' => now()->toIso8601String()]);
     }
 

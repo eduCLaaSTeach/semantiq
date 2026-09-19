@@ -81,6 +81,9 @@ final class EntitlementService
             $this->events->record(SecurityEventLogger::ENTITLEMENT_GRANTED, [
                 'user_id' => $lockedAssignment->user_id,
                 'related_id' => $actor->getKey(),
+                // P1-08: which organisation's evidence this is. Already a
+                // permitted key; no new vocabulary.
+                'organisation_id' => $lockedAssignment->organisation_id,
                 'role' => $lockedAssignment->role_code->value,
                 'domain_id' => $domain->getKey(),
                 'entity_id' => $entitlement->getKey(),
@@ -124,6 +127,7 @@ final class EntitlementService
             $this->events->record(SecurityEventLogger::ENTITLEMENT_REVOKED, [
                 'user_id' => $locked->assignment->user_id,
                 'related_id' => $actor->getKey(),
+                'organisation_id' => $locked->assignment->organisation_id,
                 'domain_id' => $locked->business_domain_id,
                 'entity_id' => $locked->getKey(),
                 'result' => 'revoked',
@@ -191,6 +195,7 @@ final class EntitlementService
             $this->events->record(SecurityEventLogger::SCOPE_ASSIGNED, [
                 'user_id' => $locked->assignment->user_id,
                 'related_id' => $actor->getKey(),
+                'organisation_id' => $locked->assignment->organisation_id,
                 'domain_id' => $locked->business_domain_id,
                 'scope' => $scopeType->value,
                 'entity_id' => $scope->getKey(),
@@ -232,6 +237,7 @@ final class EntitlementService
             $this->events->record(SecurityEventLogger::SCOPE_REVOKED, [
                 'user_id' => $entitlement->assignment->user_id,
                 'related_id' => $actor->getKey(),
+                'organisation_id' => $entitlement->assignment->organisation_id,
                 'domain_id' => $entitlement->business_domain_id,
                 'scope' => $locked->scope_type->value,
                 'entity_id' => $locked->getKey(),
@@ -289,6 +295,7 @@ final class EntitlementService
             $this->events->record(SecurityEventLogger::CEILING_SET, [
                 'user_id' => $locked->assignment->user_id,
                 'related_id' => $actor->getKey(),
+                'organisation_id' => $locked->assignment->organisation_id,
                 'domain_id' => $locked->business_domain_id,
                 'sensitivity' => $sensitivity->value,
                 'entity_id' => $ceiling->getKey(),

@@ -2777,3 +2777,104 @@ button.shell-link:hover .icon { color: var(--accent); }
     text-align: left;
   }
 }
+
+/* ---- P1-08 Audit ------------------------------------------------------- */
+
+/* D-109. The evidence start date is a statement the reader must not miss, so it
+   carries the attention edge rather than being quiet body text - and it is
+   NOT a refusal, so it never borrows the danger one. */
+.aud-start {
+  border: 1px solid var(--attention-edge);
+  border-left-width: 4px;
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--text);
+  padding: var(--space-3);
+  font-size: 13px;
+  margin: 0 0 var(--space-4);
+}
+
+.aud-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.aud-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 12px;
+  color: var(--text-muted);
+  /* So a filter can shrink instead of pushing the row past the edge - the
+     .rev-start-note regression, which the element-level sweep caught and the
+     page-level one did not.
+     max-width MATTERS AS MUCH AS min-width here, and only for the <select>:
+     a select sizes itself to its WIDEST OPTION, so "Sign-in refused — account
+     not recognised" pushed the Action filter four pixels past a 390px screen
+     while min-width: 0 sat there looking sufficient. Caught by the
+     element-level sweep; the page did not scroll sideways. */
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 10rem;
+}
+
+.aud-filters input,
+.aud-filters select {
+  min-width: 0;
+  max-width: 100%;
+  /* A long option must not widen the control it sits in. */
+  text-overflow: ellipsis;
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.aud-filter-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.aud-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.aud-row {
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  padding: var(--space-4);
+}
+
+.aud-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.aud-row-head h3 {
+  margin: 0;
+  font-size: 15px;
+  min-width: 0;
+}
+
+.aud-at {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}

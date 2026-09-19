@@ -12,6 +12,7 @@ use App\Modules\Domains\Support\BaselineDomains;
 use App\Modules\Organisation\Models\Organisation;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Security\SecurityEventLogger;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The seven baseline domains, materialised once an organisation exists - D-46.
@@ -59,46 +60,49 @@ final class BaselineDomainInitialiser
      */
     public function initialise(Organisation $organisation, ?User $actor = null): array
     {
-        $existing = BusinessDomain::query()
-            ->where('organisation_id', $organisation->getKey())
-            ->pluck('code')
-            ->all();
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($organisation, $actor): array {
+            $existing = BusinessDomain::query()
+                ->where('organisation_id', $organisation->getKey())
+                ->pluck('code')
+                ->all();
 
-        $created = [];
+            $created = [];
 
-        foreach (BaselineDomains::CATALOGUE as $code => $name) {
-            if (in_array($code, $existing, true)) {
-                // Already present. Nothing is written and NOTHING IS RECORDED -
-                // an event for something that did not happen is a false line in
-                // an audit trail.
-                continue;
+            foreach (BaselineDomains::CATALOGUE as $code => $name) {
+                if (in_array($code, $existing, true)) {
+                    // Already present. Nothing is written and NOTHING IS RECORDED -
+                    // an event for something that did not happen is a false line in
+                    // an audit trail.
+                    continue;
+                }
+
+                $domain = new BusinessDomain;
+
+                $domain->forceFill([
+                    'organisation_id' => $organisation->getKey(),
+                    'code' => $code,
+                    'name' => $name,
+                    'description' => null,
+                    'kind' => DomainKind::Baseline->value,
+                    'status' => DomainStatus::Disabled->value,
+                    'access_expectation' => AccessExpectation::Undecided->value,
+                ])->save();
+
+                $this->events->record(SecurityEventLogger::BUSINESS_DOMAIN_CREATED, [
+                    'entity_type' => 'business_domain',
+                    'entity_id' => $domain->getKey(),
+                    'organisation_id' => $organisation->getKey(),
+                    'user_id' => $actor?->getKey(),
+                    // Distinguishable from an administrator's own creation, which
+                    // is the only reason these two share an event name.
+                    'result' => 'initialised',
+                ]);
+
+                $created[] = $code;
             }
 
-            $domain = new BusinessDomain;
-
-            $domain->forceFill([
-                'organisation_id' => $organisation->getKey(),
-                'code' => $code,
-                'name' => $name,
-                'description' => null,
-                'kind' => DomainKind::Baseline->value,
-                'status' => DomainStatus::Disabled->value,
-                'access_expectation' => AccessExpectation::Undecided->value,
-            ])->save();
-
-            $this->events->record(SecurityEventLogger::BUSINESS_DOMAIN_CREATED, [
-                'entity_type' => 'business_domain',
-                'entity_id' => $domain->getKey(),
-                'organisation_id' => $organisation->getKey(),
-                'user_id' => $actor?->getKey(),
-                // Distinguishable from an administrator's own creation, which
-                // is the only reason these two share an event name.
-                'result' => 'initialised',
-            ]);
-
-            $created[] = $code;
-        }
-
-        return $created;
+            return $created;
+        });
     }
 }

@@ -105,22 +105,27 @@ final class ManagementService
 
     public function clearManager(User $subject, User $actor): void
     {
-        $ended = ManagementRelationship::query()
-            ->where('user_id', $subject->id)
-            ->whereNull('effective_to')
-            ->update(['effective_to' => now()->toDateString()]);
+        // D-111: the change and its evidence commit together, or neither does. setManager has always been
+        // inside one; clearing was not, and ending somebody's reporting line
+        // unevidenced is the half of the pair that matters more.
+        DB::transaction(function () use ($subject, $actor): void {
+            $ended = ManagementRelationship::query()
+                ->where('user_id', $subject->id)
+                ->whereNull('effective_to')
+                ->update(['effective_to' => now()->toDateString()]);
 
-        if ($ended === 0) {
-            throw StructureViolation::because('no_current_manager', 'This user has no current manager.');
-        }
+            if ($ended === 0) {
+                throw StructureViolation::because('no_current_manager', 'This user has no current manager.');
+            }
 
-        $this->events->record(SecurityEventLogger::MANAGEMENT_RELATIONSHIP_CLEARED, [
-            'user_id' => $actor->id,
-            'organisation_id' => $subject->organisation_id,
-            'entity_type' => 'users',
-            'entity_id' => $subject->id,
-            'result' => 'cleared',
-        ]);
+            $this->events->record(SecurityEventLogger::MANAGEMENT_RELATIONSHIP_CLEARED, [
+                'user_id' => $actor->id,
+                'organisation_id' => $subject->organisation_id,
+                'entity_type' => 'users',
+                'entity_id' => $subject->id,
+                'result' => 'cleared',
+            ]);
+        });
     }
 
     /**

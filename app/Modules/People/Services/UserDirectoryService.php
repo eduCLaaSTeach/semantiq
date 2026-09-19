@@ -70,6 +70,10 @@ final class UserDirectoryService
 
             if ($existing !== null) {
                 $this->events->record(SecurityEventLogger::USER_PROVISION_REFUSED, [
+                    // P1-08: a refusal with no actor names nobody. The key was
+                    // already permitted; only the omission was the defect.
+                    'user_id' => $actor->id,
+                    'organisation_id' => $organisation->id,
                     'result' => 'refused',
                     'reason' => 'duplicate_identity',
                 ]);
@@ -144,6 +148,7 @@ final class UserDirectoryService
 
             $this->events->record(SecurityEventLogger::USER_DEACTIVATED, [
                 'user_id' => $actor->id,
+                'organisation_id' => $user->organisation_id,
                 'entity_type' => 'user',
                 'entity_id' => $user->id,
                 'result' => 'deactivated',
@@ -156,16 +161,22 @@ final class UserDirectoryService
     /** Restores authentication eligibility. Rebuilds nothing, because nothing was removed. */
     public function reactivate(User $user, User $actor): User
     {
-        $user->forceFill(['status' => UserStatus::Active->value])->save();
+        // D-111: restoring somebody's ability to sign in and the record of it
+        // commit together. Deactivate has always been inside a transaction -
+        // through the administrator-set boundary - and this was not.
+        return DB::transaction(function () use ($user, $actor): User {
+            $user->forceFill(['status' => UserStatus::Active->value])->save();
 
-        $this->events->record(SecurityEventLogger::USER_ACTIVATED, [
-            'user_id' => $actor->id,
-            'entity_type' => 'user',
-            'entity_id' => $user->id,
-            'result' => 'activated',
-        ]);
+            $this->events->record(SecurityEventLogger::USER_ACTIVATED, [
+                'user_id' => $actor->id,
+                'organisation_id' => $user->organisation_id,
+                'entity_type' => 'user',
+                'entity_id' => $user->id,
+                'result' => 'activated',
+            ]);
 
-        return $user;
+            return $user;
+        });
     }
 
     /**
@@ -234,11 +245,15 @@ final class UserDirectoryService
             $this->refuseIfNotPurgeable($user, locking: true);
 
             $id = $user->id;
+            // Read BEFORE the delete: the row is gone by the time the event is
+            // recorded, and evidence of whose organisation it was must not be.
+            $organisationId = $user->organisation_id;
 
             $user->delete();
 
             $this->events->record(SecurityEventLogger::USER_PURGED, [
                 'user_id' => $actor->id,
+                'organisation_id' => $organisationId,
                 'entity_type' => 'user',
                 'entity_id' => $id,
             ]);

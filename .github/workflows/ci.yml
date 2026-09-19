@@ -387,6 +387,41 @@ jobs:
           echo "${passed} Reviews tests passed against MySQL 8.4."
 
 
+      - name: Run the Audit suite against MySQL
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: semantiq_ci
+          DB_USERNAME: root
+          DB_PASSWORD: ci-root
+        run: |
+          set -eo pipefail
+
+          # THE CHAIN-HEAD LOCK IS THE REASON THIS STEP EXISTS. SQLite has no
+          # SELECT ... FOR UPDATE, so the locking read compiles away and the
+          # mutation that removes it SURVIVES locally. Without the lock two
+          # writers read the same predecessor and the chain forks.
+          php artisan test tests/Feature/Audit | tee audit-mysql.log
+
+          passed=$(grep -oE '[0-9]+ passed' audit-mysql.log | head -1 | grep -oE '[0-9]+' || echo 0)
+
+          if [ "${passed:-0}" -lt 30 ]; then
+            echo "::error::Only ${passed:-0} Audit tests ran against MySQL. The suite is larger than that, so the path matched little or nothing."
+            exit 1
+          fi
+
+          # AND THE CHAIN RACE ACTUALLY RAN. It skips on SQLite and must not
+          # here - a skip in this step means the lock was never exercised on
+          # any engine at all.
+          if grep -qiE 'skipped|SQLite has no SELECT' audit-mysql.log; then
+            echo "::error::An Audit test skipped on MySQL. The chain-head race skips only on SQLite, so this step just failed to prove the lock exists."
+            exit 1
+          fi
+
+          echo "${passed} Audit tests passed against MySQL 8.4, the chain-head race included."
+
+
       # deploy.yml stages files that live outside the application tree, so
       # nothing in the test suite touches them. Deleting one is invisible until a
       # deployment fails - which is what happened when the repository was cleaned
@@ -395,7 +430,7 @@ jobs:
       - name: Check the files deploy.yml depends on
         run: |
           missing=0
-          for f in deployment/public_html.htaccess deployment/public_html.index.php deployment/rsync-protected-paths.txt deployment/ensure-app-key.sh deployment/ensure-session-lifetime.sh; do
+          for f in deployment/public_html.htaccess deployment/public_html.index.php deployment/rsync-protected-paths.txt deployment/ensure-app-key.sh deployment/ensure-session-lifetime.sh deployment/AUDIT-ROLLBACK.md; do
             if [ ! -f "$f" ]; then
               echo "::error file=$f::Required by .github/workflows/deploy.yml but missing"
               missing=1

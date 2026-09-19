@@ -47,42 +47,46 @@ final class StepUpService
      */
     public function begin(User $actor, string $sessionId, StepUpAction $action, array $target): string
     {
-        $reference = PendingStepUp::newReference();
-        $now = now();
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($actor, $sessionId, $action, $target): string {
+            $reference = PendingStepUp::newReference();
+            $now = now();
 
-        PendingStepUp::query()->create([
-            'reference_hash' => PendingStepUp::hashFor($reference),
-            'user_id' => $actor->getKey(),
-            'session_id' => $sessionId,
-            'action' => $action,
-            'subject_user_id' => $target['subject_user_id'] ?? null,
-            'role_assignment_id' => $target['role_assignment_id'] ?? null,
-            'business_domain_id' => $target['business_domain_id'] ?? null,
-            'domain_entitlement_id' => $target['domain_entitlement_id'] ?? null,
-            'role_code' => $target['role_code'] ?? null,
-            'sensitivity' => $target['sensitivity'] ?? null,
-            'organisation_id' => $target['organisation_id'] ?? null,
+            PendingStepUp::query()->create([
+                'reference_hash' => PendingStepUp::hashFor($reference),
+                'user_id' => $actor->getKey(),
+                'session_id' => $sessionId,
+                'action' => $action,
+                'subject_user_id' => $target['subject_user_id'] ?? null,
+                'role_assignment_id' => $target['role_assignment_id'] ?? null,
+                'business_domain_id' => $target['business_domain_id'] ?? null,
+                'domain_entitlement_id' => $target['domain_entitlement_id'] ?? null,
+                'role_code' => $target['role_code'] ?? null,
+                'sensitivity' => $target['sensitivity'] ?? null,
+                'organisation_id' => $target['organisation_id'] ?? null,
 
-            /*
-             * OPAQUE TO P1-05. A kind, an id and an exact intent, written down
-             * by the unit that began the confirmation and never interpreted
-             * here. Binding them at BEGIN is what stops a decision changing
-             * underneath a confirmation that is away at Microsoft.
-             */
-            'subject_type' => $target['subject_type'] ?? null,
-            'subject_id' => $target['subject_id'] ?? null,
-            'subject_intent' => $target['subject_intent'] ?? null,
-            'requested_at' => $now,
-            'expires_at' => $now->copy()->addMinutes(PendingStepUp::LIFETIME_MINUTES),
-        ]);
+                /*
+                 * OPAQUE TO P1-05. A kind, an id and an exact intent, written down
+                 * by the unit that began the confirmation and never interpreted
+                 * here. Binding them at BEGIN is what stops a decision changing
+                 * underneath a confirmation that is away at Microsoft.
+                 */
+                'subject_type' => $target['subject_type'] ?? null,
+                'subject_id' => $target['subject_id'] ?? null,
+                'subject_intent' => $target['subject_intent'] ?? null,
+                'requested_at' => $now,
+                'expires_at' => $now->copy()->addMinutes(PendingStepUp::LIFETIME_MINUTES),
+            ]);
 
-        $this->events->record(SecurityEventLogger::STEP_UP_REQUESTED, [
-            'user_id' => $actor->getKey(),
-            'reason' => $action->value,
-            'result' => 'requested',
-        ]);
+            $this->events->record(SecurityEventLogger::STEP_UP_REQUESTED, [
+                'user_id' => $actor->getKey(),
+                'organisation_id' => $target['organisation_id'] ?? null,
+                'reason' => $action->value,
+                'result' => 'requested',
+            ]);
 
-        return $reference;
+            return $reference;
+        });
     }
 
     /**
@@ -204,6 +208,7 @@ final class StepUpService
 
             $this->events->record(SecurityEventLogger::STEP_UP_COMPLETED, [
                 'user_id' => $actor->getKey(),
+                'organisation_id' => $pending->organisation_id,
                 'reason' => $pending->action->value,
                 'entity_id' => $pending->getKey(),
                 'result' => 'completed',
@@ -224,6 +229,7 @@ final class StepUpService
 
         $this->events->record(SecurityEventLogger::STEP_UP_REFUSED, [
             'user_id' => $actor->getKey(),
+            'organisation_id' => $pending?->organisation_id,
             'reason' => $outcome,
             'entity_id' => $pending->getKey(),
             'result' => 'refused',

@@ -12,6 +12,7 @@ use App\Modules\Platform\Identity\AuthenticationFailed;
 use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Identity\IdentityResolver;
 use App\Modules\Platform\Models\User;
+use App\Modules\Platform\Security\EvidenceNotRecorded;
 use App\Modules\Platform\Security\SecurityEventLogger;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -49,7 +50,17 @@ final class CallbackController
             return redirect()->route("auth.{$failure->state}");
         }
 
-        $this->issueSession($request, $user);
+        try {
+            $this->issueSession($request, $user);
+        } catch (EvidenceNotRecorded) {
+            /*
+             * D-111. The sign-in could not be evidenced, so it does not happen
+             * - and the person sees the ordinary "sign-in unavailable" screen
+             * rather than an exception. An unevidenced sign-in is a security
+             * failure; a stack trace on a login page is also one.
+             */
+            return redirect()->route('auth.'.AuthenticationFailed::STATE_UNAVAILABLE);
+        }
 
         return redirect()->route('console.home');
     }
@@ -71,6 +82,28 @@ final class CallbackController
      */
     private function issueSession(Request $request, User $user): void
     {
+        /*
+         * THE EVIDENCE IS WRITTEN FIRST, AND THAT ORDER IS THE POINT. D-111.
+         *
+         * Session state is not transactional. This method used to regenerate
+         * the session, write its keys and record the event LAST - so if the
+         * evidence could not be stored, somebody was signed in and unevidenced,
+         * and nothing downstream could tell. Recording first means a failure
+         * throws before any session exists: no session is issued, and the
+         * refusal is honest.
+         *
+         * Everything else about D-73 and session fixation is unchanged; only
+         * the order is.
+         */
+        $this->events->record(SecurityEventLogger::LOGIN_SUCCEEDED, [
+            'provider' => $user->provider,
+            'subject' => $user->external_subject,
+            'tenant' => $user->tenant_id,
+            'user_id' => $user->id,
+            'organisation_id' => $user->organisation_id,
+            'result' => 'succeeded',
+        ]);
+
         $request->session()->regenerate();
 
         $request->session()->put(EnsureSessionIsCurrent::SESSION_USER_ID, $user->id);
@@ -78,14 +111,6 @@ final class CallbackController
             EnsureSessionIsCurrent::SESSION_AUTHENTICATED_AT,
             now()->toIso8601String(),
         );
-
-        $this->events->record(SecurityEventLogger::LOGIN_SUCCEEDED, [
-            'provider' => $user->provider,
-            'subject' => $user->external_subject,
-            'tenant' => $user->tenant_id,
-            'user_id' => $user->id,
-            'result' => 'succeeded',
-        ]);
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Modules\Access\Http\Controllers\SimulatorController;
 use App\Modules\Access\Http\Controllers\StepUpController;
 use App\Modules\Access\Http\Middleware\RequireActionClass;
 use App\Modules\Access\Support\ActionClass;
+use App\Modules\Audit\Http\Controllers\AuditController;
 use App\Modules\Domains\Http\Controllers\DomainController;
 use App\Modules\Identity\Http\Controllers\EntraController;
 use App\Modules\Identity\Http\Controllers\HealthController;
@@ -465,6 +466,36 @@ Route::prefix('console')
             ->group(function (): void {
                 Route::post('cycles', [AccessReviewDecisionController::class, 'startCycle'])->name('cycles.start');
                 Route::post('items/{item}/decide', [AccessReviewDecisionController::class, 'decide'])->name('items.decide')->whereNumber('item');
+            });
+
+        /*
+         * P1-08 Audit. FOUR GETs AND NOTHING ELSE.
+         *
+         * There is deliberately no POST, PATCH, PUT or DELETE under this
+         * prefix, and AuditImmutabilityTest asserts the set as an EQUALITY - so
+         * a fifth verb fails the build rather than quietly becoming an edit
+         * path. That is D-97's "no application update or delete path", enforced
+         * rather than intended.
+         *
+         * EvidenceRead admits System Administrator, Organisation Administrator
+         * and Auditor to the ENDPOINT. Which ROWS and which FIELDS each may
+         * read is decided by AuditProjection - D-99 and D-100 - because the
+         * action class is not the projection, and conflating the two is what
+         * showed an Auditor an empty Security Status screen in P1-06.
+         *
+         * RequireOrganisation is present for the same reason as on Access
+         * Reviews: the System Administrator role is platform-scoped, so without
+         * it "the actor's assignment has no organisation" would quietly mean
+         * "every organisation".
+         */
+        Route::middleware([RequireActionClass::class.':'.ActionClass::EvidenceRead->value, RequireOrganisation::class])
+            ->prefix('audit')
+            ->name('audit.')
+            ->group(function (): void {
+                Route::get('/', [AuditController::class, 'userAccess'])->name('user-access');
+                Route::get('admin-changes', [AuditController::class, 'adminChanges'])->name('admin-changes');
+                Route::get('security-events', [AuditController::class, 'securityEvents'])->name('security-events');
+                Route::get('configuration', [AuditController::class, 'configuration'])->name('configuration');
             });
 
         Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)

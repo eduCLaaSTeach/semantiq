@@ -39,16 +39,19 @@ final class StructureService
     /** @param array<string, string|null> $attributes */
     public function createLegalEntity(Organisation $organisation, array $attributes, User $actor): LegalEntity
     {
-        $this->requireActiveOrganisation($organisation);
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($organisation, $attributes, $actor): LegalEntity {
+            $this->requireActiveOrganisation($organisation);
 
-        $entity = LegalEntity::query()->create($attributes + [
-            'organisation_id' => $organisation->id,
-            'status' => StructureStatus::Active,
-        ]);
+            $entity = LegalEntity::query()->create($attributes + [
+                'organisation_id' => $organisation->id,
+                'status' => StructureStatus::Active,
+            ]);
 
-        $this->record(SecurityEventLogger::LEGAL_ENTITY_CREATED, $entity, $actor, 'created');
+            $this->record(SecurityEventLogger::LEGAL_ENTITY_CREATED, $entity, $actor, 'created');
 
-        return $entity;
+            return $entity;
+        });
     }
 
     // -- Business units ----------------------------------------------------
@@ -56,16 +59,19 @@ final class StructureService
     /** @param array<string, string|null> $attributes */
     public function createBusinessUnit(Organisation $organisation, array $attributes, User $actor): BusinessUnit
     {
-        $this->requireActiveOrganisation($organisation);
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($organisation, $attributes, $actor): BusinessUnit {
+            $this->requireActiveOrganisation($organisation);
 
-        $unit = BusinessUnit::query()->create($attributes + [
-            'organisation_id' => $organisation->id,
-            'status' => StructureStatus::Active,
-        ]);
+            $unit = BusinessUnit::query()->create($attributes + [
+                'organisation_id' => $organisation->id,
+                'status' => StructureStatus::Active,
+            ]);
 
-        $this->record(SecurityEventLogger::BUSINESS_UNIT_CREATED, $unit, $actor, 'created');
+            $this->record(SecurityEventLogger::BUSINESS_UNIT_CREATED, $unit, $actor, 'created');
 
-        return $unit;
+            return $unit;
+        });
     }
 
     // -- Departments -------------------------------------------------------
@@ -73,17 +79,20 @@ final class StructureService
     /** @param array<string, string|null> $attributes */
     public function createDepartment(BusinessUnit $parent, array $attributes, User $actor): Department
     {
-        $this->requireActiveParent($parent, 'business_unit');
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($parent, $attributes, $actor): Department {
+            $this->requireActiveParent($parent, 'business_unit');
 
-        $department = Department::query()->create($attributes + [
-            'organisation_id' => $parent->organisation_id,
-            'business_unit_id' => $parent->id,
-            'status' => StructureStatus::Active,
-        ]);
+            $department = Department::query()->create($attributes + [
+                'organisation_id' => $parent->organisation_id,
+                'business_unit_id' => $parent->id,
+                'status' => StructureStatus::Active,
+            ]);
 
-        $this->record(SecurityEventLogger::DEPARTMENT_CREATED, $department, $actor, 'created');
+            $this->record(SecurityEventLogger::DEPARTMENT_CREATED, $department, $actor, 'created');
 
-        return $department;
+            return $department;
+        });
     }
 
     // -- Teams -------------------------------------------------------------
@@ -99,17 +108,20 @@ final class StructureService
      */
     public function createTeam(Department $parent, array $attributes, User $actor): Team
     {
-        $this->requireActiveParent($parent, 'department');
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($parent, $attributes, $actor): Team {
+            $this->requireActiveParent($parent, 'department');
 
-        $team = Team::query()->create($attributes + [
-            'organisation_id' => $parent->organisation_id,
-            'department_id' => $parent->id,
-            'status' => StructureStatus::Active,
-        ]);
+            $team = Team::query()->create($attributes + [
+                'organisation_id' => $parent->organisation_id,
+                'department_id' => $parent->id,
+                'status' => StructureStatus::Active,
+            ]);
 
-        $this->record(SecurityEventLogger::TEAM_CREATED, $team, $actor, 'created');
+            $this->record(SecurityEventLogger::TEAM_CREATED, $team, $actor, 'created');
 
-        return $team;
+            return $team;
+        });
     }
 
     // -- Moves -------------------------------------------------------------
@@ -138,15 +150,18 @@ final class StructureService
 
     public function moveTeam(Team $team, Department $target, User $actor): Team
     {
-        $this->requireSameOrganisation($team->organisation_id, $target->organisation_id);
-        $this->requireActiveParent($target, 'department');
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($team, $target, $actor): Team {
+            $this->requireSameOrganisation($team->organisation_id, $target->organisation_id);
+            $this->requireActiveParent($target, 'department');
 
-        $team->department_id = $target->id;
-        $team->save();
+            $team->department_id = $target->id;
+            $team->save();
 
-        $this->record(SecurityEventLogger::TEAM_MOVED, $team, $actor, 'moved');
+            $this->record(SecurityEventLogger::TEAM_MOVED, $team, $actor, 'moved');
 
-        return $team;
+            return $team;
+        });
     }
 
     // -- Lifecycle ---------------------------------------------------------
@@ -547,36 +562,42 @@ final class StructureService
      */
     public function associate(BusinessUnit $unit, LegalEntity $entity, User $actor): void
     {
-        $this->requireSameOrganisation($unit->organisation_id, $entity->organisation_id);
+        // D-111: the change and its evidence commit together, or neither does.
+        DB::transaction(function () use ($unit, $entity, $actor): void {
+            $this->requireSameOrganisation($unit->organisation_id, $entity->organisation_id);
 
-        $unit->legalEntities()->syncWithoutDetaching([$entity->id => [
-            'organisation_id' => $unit->organisation_id,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]]);
+            $unit->legalEntities()->syncWithoutDetaching([$entity->id => [
+                'organisation_id' => $unit->organisation_id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]]);
 
-        $this->events->record(SecurityEventLogger::BUSINESS_UNIT_LEGAL_ENTITY_ASSOCIATED, [
-            'user_id' => $actor->id,
-            'organisation_id' => $unit->organisation_id,
-            'entity_type' => 'business_unit',
-            'entity_id' => $unit->id,
-            'related_id' => $entity->id,
-            'result' => 'associated',
-        ]);
+            $this->events->record(SecurityEventLogger::BUSINESS_UNIT_LEGAL_ENTITY_ASSOCIATED, [
+                'user_id' => $actor->id,
+                'organisation_id' => $unit->organisation_id,
+                'entity_type' => 'business_unit',
+                'entity_id' => $unit->id,
+                'related_id' => $entity->id,
+                'result' => 'associated',
+            ]);
+        });
     }
 
     public function dissociate(BusinessUnit $unit, LegalEntity $entity, User $actor): void
     {
-        $unit->legalEntities()->detach($entity->id);
+        // D-111: the change and its evidence commit together, or neither does.
+        DB::transaction(function () use ($unit, $entity, $actor): void {
+            $unit->legalEntities()->detach($entity->id);
 
-        $this->events->record(SecurityEventLogger::BUSINESS_UNIT_LEGAL_ENTITY_DISSOCIATED, [
-            'user_id' => $actor->id,
-            'organisation_id' => $unit->organisation_id,
-            'entity_type' => 'business_unit',
-            'entity_id' => $unit->id,
-            'related_id' => $entity->id,
-            'result' => 'dissociated',
-        ]);
+            $this->events->record(SecurityEventLogger::BUSINESS_UNIT_LEGAL_ENTITY_DISSOCIATED, [
+                'user_id' => $actor->id,
+                'organisation_id' => $unit->organisation_id,
+                'entity_type' => 'business_unit',
+                'entity_id' => $unit->id,
+                'related_id' => $entity->id,
+                'result' => 'dissociated',
+            ]);
+        });
     }
 
     // -- Shared guards -----------------------------------------------------
@@ -611,13 +632,22 @@ final class StructureService
         }
     }
 
+    /**
+     * THE ONE PLACE EVERY ACTIVATION AND DEACTIVATION GOES THROUGH, so the
+     * D-111 boundary is taken once rather than on each of the six callers.
+     *
+     * It saved and then recorded with nothing around it, so a failed audit
+     * write would have raised after the business unit was already inactive.
+     */
     private function setStatus(Model $node, StructureStatus $status, string $event, User $actor): Model
     {
-        $node->forceFill(['status' => $status])->save();
+        return DB::transaction(function () use ($node, $status, $event, $actor): Model {
+            $node->forceFill(['status' => $status])->save();
 
-        $this->record($event, $node, $actor, $status->value);
+            $this->record($event, $node, $actor, $status->value);
 
-        return $node;
+            return $node;
+        });
     }
 
     private function record(string $event, Model $node, User $actor, string $result): void

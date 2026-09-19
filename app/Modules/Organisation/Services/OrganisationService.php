@@ -92,15 +92,24 @@ final class OrganisationService
             $this->requireSelectablePrimary($organisation, $attributes['primary_legal_entity_id']);
         }
 
-        $organisation->fill($attributes)->save();
+        /*
+         * THE CHANGE AND ITS EVIDENCE COMMIT TOGETHER, OR NEITHER DOES. D-111.
+         *
+         * This used to save and then record, with nothing around it - so a
+         * failed audit write would have raised AFTER the organisation had
+         * already been renamed, and nothing could have put it back.
+         */
+        return DB::transaction(function () use ($organisation, $attributes, $actor): Organisation {
+            $organisation->fill($attributes)->save();
 
-        $this->events->record(SecurityEventLogger::ORGANISATION_UPDATED, [
-            'user_id' => $actor->id,
-            'organisation_id' => $organisation->id,
-            'result' => 'updated',
-        ]);
+            $this->events->record(SecurityEventLogger::ORGANISATION_UPDATED, [
+                'user_id' => $actor->id,
+                'organisation_id' => $organisation->id,
+                'result' => 'updated',
+            ]);
 
-        return $organisation;
+            return $organisation;
+        });
     }
 
     /**
