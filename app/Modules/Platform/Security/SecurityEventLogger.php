@@ -234,6 +234,34 @@ class SecurityEventLogger
 
     public const STEP_UP_REFUSED = 'access.step_up.refused';
 
+    /*
+     * P1-07 Access Reviews. D-94.
+     *
+     * NO ALLOWED_KEYS EXPANSION. Every context these carry is already
+     * permitted: user_id is the SUBJECT, related_id the ACTOR - the convention
+     * EntitlementService already uses - plus entity_id, role, domain_id,
+     * sensitivity, reason and result.
+     *
+     * SELF-REVIEW EMITS ITS OWN KEY rather than the ordinary retained/revoked
+     * one with the same actor and subject. Distinguishable is the whole point:
+     * D-88 permits self-review only when nobody else could do it, and evidence
+     * that needs a join to spot it is evidence nobody spots.
+     *
+     * reason CARRIES A FIXED VOCABULARY, never a message. A reviewer's words
+     * never reach a security event - D-12, and the leak channel P1-06 refused.
+     */
+    public const REVIEW_CYCLE_STARTED = 'access.review.cycle.started';
+
+    public const REVIEW_ITEM_RETAINED = 'access.review.item.retained';
+
+    public const REVIEW_ITEM_REVOKED = 'access.review.item.revoked';
+
+    public const REVIEW_ITEM_SUPERSEDED = 'access.review.item.superseded';
+
+    public const REVIEW_ITEM_SELF_REVIEWED = 'access.review.item.self_reviewed';
+
+    public const REVIEW_REFUSED = 'access.review.refused';
+
     public const ACCESS_STATE_UNRECOGNISED = 'access.state.unrecognised';
 
     public const ACCESS_ENGINE_FAILED = 'access.engine.failed';
@@ -308,6 +336,12 @@ class SecurityEventLogger
         self::STEP_UP_REQUESTED,
         self::STEP_UP_COMPLETED,
         self::STEP_UP_REFUSED,
+        self::REVIEW_CYCLE_STARTED,
+        self::REVIEW_ITEM_RETAINED,
+        self::REVIEW_ITEM_REVOKED,
+        self::REVIEW_ITEM_SUPERSEDED,
+        self::REVIEW_ITEM_SELF_REVIEWED,
+        self::REVIEW_REFUSED,
         self::ACCESS_STATE_UNRECOGNISED,
         self::ACCESS_ENGINE_FAILED,
     ];

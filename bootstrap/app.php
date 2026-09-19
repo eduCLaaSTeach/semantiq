@@ -8,6 +8,7 @@ use App\Modules\Organisation\Providers\OrganisationServiceProvider;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
 use App\Modules\Platform\Providers\PlatformServiceProvider;
 use App\Modules\Platform\Support\DeploymentLayout;
+use App\Modules\Reviews\Providers\ReviewsServiceProvider;
 use App\Modules\Security\Providers\SecurityServiceProvider;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -45,6 +46,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // no navigation node of its own: Security Status is already in
         // ApprovedMenu and simply stops being locked.
         SecurityServiceProvider::class,
+
+        // P1-07. Registers the review step-up completion with P1-05's registry.
+        // Access names nothing from Reviews; the dependency runs one way only.
+        ReviewsServiceProvider::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [

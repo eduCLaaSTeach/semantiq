@@ -273,24 +273,50 @@ final class SecurityStatusArchitectureTest extends TestCase
     /**
      * N-SS31. THE EVENT VOCABULARY IS UNCHANGED BY THIS UNIT.
      *
-     * Counted against the numbers recorded in the DESIGN. A unit that added an
-     * event or a context key would be changing a P1-08-bound vocabulary for a
-     * reporting screen's convenience.
+     * A unit that added an event or a context key would be changing a
+     * P1-08-bound vocabulary for a reporting screen's convenience.
+     *
+     * THE FIRST HALF USED TO BE A TOTAL COUNT OF 71, which asserted something
+     * slightly different from what it claimed: it failed whenever ANY later
+     * unit declared an event, which is legitimate, rather than when P1-06
+     * declared one, which is not. P1-07 tripped it by adding six of its own.
+     * It now asserts what it always meant - that NO event is declared inside
+     * the Security module - so it is strictly harder to satisfy by accident
+     * and no longer needs editing every time another unit ships.
+     *
+     * Mutation: declare a `security.*` constant in SecurityEventLogger from
+     * inside this unit, or add a 16th ALLOWED_KEY.
      */
     public function test_this_unit_adds_no_event_and_no_context_key(): void
     {
-        $this->assertCount(
-            71,
+        $declaredHere = array_values(array_filter(
             SecurityEventLogger::events(),
-            'The declared event count has changed. P1-06 adds none.',
+            static fn (string $event): bool => str_starts_with($event, 'security.'),
+        ));
+
+        $this->assertSame(
+            [],
+            $declaredHere,
+            'P1-06 declared an event of its own. It reports; it does not create a vocabulary.',
         );
+
+        $sources = glob(__DIR__.'/../../app/Modules/Security/**/*.php', GLOB_BRACE) ?: [];
+
+        foreach ($sources as $source) {
+            $this->assertStringNotContainsString(
+                'public const ',
+                (string) preg_replace('/^(?!.*public const [A-Z_]+ = \'[a-z_.]+\';).*$/m', '', (string) file_get_contents($source)),
+                "[{$source}] declares an event-shaped constant inside the Security module.",
+            );
+        }
 
         $reflection = new \ReflectionClass(SecurityEventLogger::class);
 
         $this->assertCount(
             15,
             (array) $reflection->getConstant('ALLOWED_KEYS'),
-            'The permitted context key list has changed. P1-06 adds none.',
+            'The permitted context key list has changed. P1-06 adds none, and neither may a later unit '
+            .'without an explicit decision - P1-07 added six events and NO key.',
         );
     }
 

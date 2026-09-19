@@ -30,6 +30,8 @@ use App\Modules\Platform\Http\Controllers\ConsoleController;
 use App\Modules\Platform\Http\Controllers\EntryController;
 use App\Modules\Platform\Http\Controllers\FirstRun\BeginController;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
+use App\Modules\Reviews\Http\Controllers\AccessReviewDecisionController;
+use App\Modules\Reviews\Http\Controllers\AccessReviewsController;
 use App\Modules\Security\Http\Controllers\BaselineController;
 use App\Modules\Security\Http\Controllers\ExceptionsController;
 use App\Modules\Security\Http\Controllers\PrivilegedAccessController;
@@ -418,6 +420,51 @@ Route::prefix('console')
                 Route::get('privileged-access', [PrivilegedAccessController::class, 'show'])->name('privileged');
                 Route::get('exceptions', [ExceptionsController::class, 'show'])->name('exceptions');
                 Route::get('events', [SecurityEventsController::class, 'show'])->name('events');
+            });
+
+        /*
+         * P1-07 Access Reviews.
+         *
+         * READS AT EvidenceRead - System Administrator, Organisation
+         * Administrator and Auditor. Auditor decides nothing, and that falls
+         * out of the authority algorithm rather than being a special case:
+         * RoleCatalogue::grantableBy(Auditor) is empty.
+         *
+         * DECISIONS AT AccessAdmin, and the per-item authority is re-checked in
+         * the controller AND again inside the service's transaction. Neither is
+         * sufficient alone: the class admits you to the endpoint, the algorithm
+         * decides the row.
+         *
+         * READING IS NOT DECIDING. An Auditor holds EvidenceRead and so reads
+         * the evidence; grantableBy(Auditor) is empty, so they decide nothing.
+         * The listing shows them rows with no action, which is what read-only
+         * means - the first implementation filtered the listing by decision
+         * authority and showed them an empty screen.
+         *
+         * RequireOrganisation IS PRESENT on both groups. Reviews are about one
+         * organisation's access, and the System Administrator role is
+         * platform-scoped - so without it, "the actor's assignment has no
+         * organisation" would quietly mean "every organisation".
+         *
+         * B-1: no BUSINESS role holds an administration class, so a domain
+         * owner cannot pass either gate today. The owner basis is implemented
+         * and tested; reaching it through the UI waits on D-19.
+         */
+        Route::middleware([RequireActionClass::class.':'.ActionClass::EvidenceRead->value, RequireOrganisation::class])
+            ->prefix('access-reviews')
+            ->name('access-reviews.')
+            ->group(function (): void {
+                Route::get('/', [AccessReviewsController::class, 'privileged'])->name('privileged');
+                Route::get('domains', [AccessReviewsController::class, 'domains'])->name('domains');
+                Route::get('overdue', [AccessReviewsController::class, 'overdue'])->name('overdue');
+            });
+
+        Route::middleware([RequireActionClass::class.':'.ActionClass::AccessAdmin->value, RequireOrganisation::class])
+            ->prefix('access-reviews')
+            ->name('access-reviews.')
+            ->group(function (): void {
+                Route::post('cycles', [AccessReviewDecisionController::class, 'startCycle'])->name('cycles.start');
+                Route::post('items/{item}/decide', [AccessReviewDecisionController::class, 'decide'])->name('items.decide')->whereNumber('item');
             });
 
         Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)

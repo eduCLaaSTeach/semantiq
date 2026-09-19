@@ -126,7 +126,10 @@ final class ApprovedMenu
             // Administrator and Auditor already hold; what each may VALUE is
             // narrower and is decided in the projection, not here.
             NavigationNode::leaf($area, 'Security Status', 'i-shield', 'security.baseline', 'security.view'),
-            NavigationNode::locked($area, 'Access Reviews', 'i-clipboard-list', $policy),
+            // P1-07. Delivered: three route-backed tabs. Reviews CONFIRM or
+            // REMOVE existing access - they never create, widen or repair it,
+            // and confirming writes nothing to the access model at all.
+            NavigationNode::leaf($area, 'Access Reviews', 'i-clipboard-list', 'access-reviews.privileged', 'access-reviews.view'),
             NavigationNode::locked($area, 'Audit', 'i-scroll', $policy),
             NavigationNode::locked($area, 'System Health', 'i-heart-pulse', $policy),
         ];

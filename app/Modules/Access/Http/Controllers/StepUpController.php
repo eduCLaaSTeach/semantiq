@@ -11,6 +11,7 @@ use App\Modules\Access\Services\EntitlementService;
 use App\Modules\Access\Services\RoleAssignmentService;
 use App\Modules\Access\StepUp\PendingStepUp;
 use App\Modules\Access\StepUp\StepUpAction;
+use App\Modules\Access\StepUp\StepUpCompletionRegistry;
 use App\Modules\Access\StepUp\StepUpService;
 use App\Modules\Access\Support\AccessViolation;
 use App\Modules\Access\Support\RoleCode;
@@ -48,6 +49,7 @@ final class StepUpController
 
     public function __construct(
         private readonly StepUpService $stepUp,
+        private readonly StepUpCompletionRegistry $completions,
         private readonly IdentityProvider $provider,
         private readonly RoleAssignmentService $roles,
         private readonly EntitlementService $entitlements,
@@ -223,10 +225,44 @@ final class StepUpController
                 ? $this->performSelfEntitlementGrant($pending, $actor)
                 : $this->performGrant($pending, $actor),
 
-            StepUpAction::RevokeSystemAdministrator => $this->performRevoke($pending, $actor),
+            StepUpAction::RevokeSystemAdministrator,
+            StepUpAction::RevokeOrganisationAdministrator => $this->performRevoke($pending, $actor),
+
+            /*
+             * EVERYTHING ELSE BELONGS TO THE UNIT THAT BEGAN IT.
+             *
+             * This controller does not know what those actions mean and must
+             * not learn: importing another unit's models here reverses the
+             * boundary - later units consume P1-05, never the other way round.
+             * An action nobody claims is a malformed confirmation and refuses.
+             */
+            default => $this->performRegistered($pending, $actor),
 
             StepUpAction::GrantRestrictedSensitivity => $this->performCeiling($pending, $actor),
         };
+    }
+
+    /**
+     * Hand the confirmed action to whichever unit registered for it.
+     *
+     * Everything it needs is on the stored row, including the exact subject and
+     * the exact intent, so the unit can re-check that the thing it is about to
+     * act on is still the thing that was confirmed.
+     */
+    private function performRegistered(PendingStepUp $pending, User $actor): RedirectResponse
+    {
+        $completion = $this->completions->for($pending->action);
+
+        if ($completion === null) {
+            throw AccessViolation::stepUpInvalid();
+        }
+
+        $result = $completion->complete($pending, $actor);
+
+        // A completion that returns anything else has not produced a page for
+        // the person who is standing there, which is a bug in that unit rather
+        // than something to paper over here.
+        return $result instanceof RedirectResponse ? $result : throw AccessViolation::stepUpInvalid();
     }
 
     private function performGrant(PendingStepUp $pending, User $actor): RedirectResponse

@@ -72,6 +72,28 @@ final class DomainsBoundaryTest extends TestCase
         'app/Modules/Access/Http/Controllers/StepUpController.php',
 
         /*
+         * P1-07. TWO points, both READ-ONLY, and both about ACCOUNTABILITY
+         * rather than access.
+         *
+         * ReviewerAuthority reads business_domain_owners to establish who has
+         * standing to ATTEST to a grant in a domain. That is the one place the
+         * distinction B-1a rests on has to be made carefully: being an owner
+         * confers authority to review and NOTHING ELSE. It writes no ownership,
+         * creates no assignment and no entitlement, and Guard B below still
+         * applies to it in full - a domain still grants nothing, to its owner
+         * or to anybody.
+         *
+         * AccessReviewItem names the domain so a review row can say which
+         * business domain it is about. It reads one; it decides nothing.
+         *
+         * OwnershipGrantsNoAccessTest is the behavioural half of this: it
+         * reviews AS an owner and asserts the owner ends with no role and no
+         * entitlement.
+         */
+        'app/Modules/Reviews/Services/ReviewerAuthority.php',
+        'app/Modules/Reviews/Models/AccessReviewItem.php',
+
+        /*
          * P1-06. ONE point, and it READS ONLY.
          *
          * DomainAdapter reports each domain's posture - enabled or disabled,

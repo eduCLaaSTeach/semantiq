@@ -135,6 +135,15 @@ final class EventCatalogue
         'user.purged' => ['Permanent deletions', 'Person permanently deleted'],
         'group.purged' => ['Permanent deletions', 'Group permanently deleted'],
         'business_domain.purged' => ['Permanent deletions', 'Business domain permanently deleted'],
+        // ---- Access reviews — 6 -----------------------------------------
+        // P1-07. The business words a reader needs, not the identifiers. A
+        // self-review is named as one because it is the case that matters.
+        'access.review.cycle.started' => ['Access reviews', 'Review cycle started'],
+        'access.review.item.retained' => ['Access reviews', 'Access confirmed at review'],
+        'access.review.item.revoked' => ['Access reviews', 'Access removed at review'],
+        'access.review.item.superseded' => ['Access reviews', 'Review overtaken by a change to the access'],
+        'access.review.item.self_reviewed' => ['Access reviews', 'Access reviewed by the person who holds it'],
+        'access.review.refused' => ['Access reviews', 'Review decision refused'],
         // ---- Access system conditions — 2 -------------------------------
         'access.state.unrecognised' => ['Access system conditions', 'Access state could not be interpreted'],
         'access.engine.failed' => ['Access system conditions', 'Access decision could not be completed'],
@@ -150,6 +159,7 @@ final class EventCatalogue
         'Business domain changes',
         'Access changes',
         'Privileged confirmations',
+        'Access reviews',
         'Permanent deletions',
         'Access system conditions',
     ];

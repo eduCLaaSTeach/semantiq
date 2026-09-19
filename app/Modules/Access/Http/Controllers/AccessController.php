@@ -252,12 +252,34 @@ final class AccessController
         return $this->confirm('access.show', 'Role granted.', $assignment->id);
     }
 
+    /**
+     * The revoke action for each role that requires step-up.
+     *
+     * StepUpActionCoversRequiringStepUpTest asserts this map covers every role
+     * RoleCatalogue::requiringStepUp() names, so the two cannot drift.
+     *
+     * @var array<string, StepUpAction>
+     */
+    private const REVOKE_STEP_UP_ACTIONS = [
+        'system_administrator' => StepUpAction::RevokeSystemAdministrator,
+        'organisation_administrator' => StepUpAction::RevokeOrganisationAdministrator,
+    ];
+
     public function revokeRole(Request $request, RoleAssignment $assignment): RedirectResponse
     {
         $this->refuseIfOutsideOrganisation($request, $assignment->organisation_id);
 
-        if ($assignment->role_code === RoleCode::SystemAdministrator) {
-            return $this->beginStepUp($request, StepUpAction::RevokeSystemAdministrator, [
+        /*
+         * BOTH roles in RoleCatalogue::requiringStepUp() need a fresh sign-in
+         * to revoke, not only the first. The Organisation Administrator case
+         * was missing (P1-07 §12), so removing somebody holding AccessAdmin
+         * went through without one. Derived from the catalogue rather than
+         * listed, so a role added there later is covered here by construction.
+         */
+        $revokeAction = self::REVOKE_STEP_UP_ACTIONS[$assignment->role_code->value] ?? null;
+
+        if ($revokeAction !== null) {
+            return $this->beginStepUp($request, $revokeAction, [
                 'subject_user_id' => $assignment->user_id,
                 'role_code' => $assignment->role_code->value,
             ]);

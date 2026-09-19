@@ -355,6 +355,38 @@ jobs:
           echo "${passed} Security tests passed against MySQL 8.4."
 
 
+      - name: Run the Reviews suite against MySQL
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: semantiq_ci
+          DB_USERNAME: root
+          DB_PASSWORD: ci-root
+        run: |
+          set -eo pipefail
+
+          # P1-07's concurrency cases are the reason this step exists.
+          # lockForUpdate behaves differently on SQLite, where a single-threaded
+          # test cannot observe a lock that is not there - the mutation that
+          # removes it survives locally and is caught here.
+          php artisan test tests/Feature/Reviews | tee reviews-mysql.log
+
+          passed=$(grep -oE '[0-9]+ passed' reviews-mysql.log | head -1 | grep -oE '[0-9]+' || echo 0)
+
+          if [ "${passed:-0}" -lt 30 ]; then
+            echo "::error::Only ${passed:-0} Reviews tests ran against MySQL. The suite is larger than that, so the path matched little or nothing."
+            exit 1
+          fi
+
+          if grep -qi 'skipped' reviews-mysql.log; then
+            echo "::error::A Reviews test skipped on MySQL. Nothing in this suite is engine-conditional, so a skip means it did not run."
+            exit 1
+          fi
+
+          echo "${passed} Reviews tests passed against MySQL 8.4."
+
+
       # deploy.yml stages files that live outside the application tree, so
       # nothing in the test suite touches them. Deleting one is invisible until a
       # deployment fails - which is what happened when the repository was cleaned

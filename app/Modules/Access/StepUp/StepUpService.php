@@ -62,6 +62,16 @@ final class StepUpService
             'role_code' => $target['role_code'] ?? null,
             'sensitivity' => $target['sensitivity'] ?? null,
             'organisation_id' => $target['organisation_id'] ?? null,
+
+            /*
+             * OPAQUE TO P1-05. A kind, an id and an exact intent, written down
+             * by the unit that began the confirmation and never interpreted
+             * here. Binding them at BEGIN is what stops a decision changing
+             * underneath a confirmation that is away at Microsoft.
+             */
+            'subject_type' => $target['subject_type'] ?? null,
+            'subject_id' => $target['subject_id'] ?? null,
+            'subject_intent' => $target['subject_intent'] ?? null,
             'requested_at' => $now,
             'expires_at' => $now->copy()->addMinutes(PendingStepUp::LIFETIME_MINUTES),
         ]);
