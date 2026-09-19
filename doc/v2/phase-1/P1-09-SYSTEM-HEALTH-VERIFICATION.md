@@ -394,11 +394,43 @@ widths are consistent.
 
 ---
 
+## 5b. Production verification — after merge and deploy
+
+| | |
+| --- | --- |
+| Final head before merge | `43c1e9efbc208358702ba045b4e9f2b00634c0a4` — CI **run 312 success** |
+| Merge SHA | **`5b2e10a6cf4c7d844ceeb4a2e583d0c2a0682361`** (squash) |
+| Post-merge CI | **run 313 — success** |
+| Deploy | **run 147 — success**, all 32 steps |
+
+**Read-only. Nothing was broken on purpose and nothing was manufactured.**
+
+| Check | Observed in production |
+| --- | --- |
+| **Live SHA is the merge SHA** | The live bundle `app-CZrBS9Mq.js` is **byte-identical** to a build of `5b2e10a` — `sha256 ed145459…78a49aa` on both sides. Not "the deploy said success": the running JavaScript was hashed and compared |
+| **`/up` unchanged** | **200**, body `ok`, **2 bytes**, **no `Set-Cookie`** — still outside the session group, still the two-word deployment probe |
+| **`semantiq:health` unchanged** | Run over SSH during the deploy: **all six checks OK** — database, migrations, configuration, storage, assets **and identity** — then `Healthy.` The local-only projection did not replace the deployment verdict |
+| **Exactly one GET** | `GET\|HEAD console/system-health` and nothing else. **POST, PUT, PATCH and DELETE all return 405** against the live site |
+| **No sibling paths** | `/console/system-health/clear`, `/recheck`, `/restart` and `/system-health` all **404** |
+| **PlatformAdmin** | The deployed route table shows `RequireActionClass:platform_admin` behind `EnsureSessionIsCurrent` |
+| **Unauthenticated request** | **302** to the site root. The 370-byte body was swept for `Exception`, `Stack trace`, `vendor/`, `APP_KEY`, `SQLSTATE`, `PDO`, `mysql`, `localhost`, `/home/` and the internal route name — **none present** |
+| **No schema** | **`INFO Nothing to migrate.`** in the deploy log. The merge touched no migration file; 28 migrations before and after; none named for this unit |
+| **No new event key** | `SecurityEventLogger::EVENTS` is still **77** on the merged tree, and the logger names no system-health key. The architecture guard asserting this ran in CI run 313 **on the merge SHA** |
+| **No 500s** | Twelve routes swept unauthenticated — `/`, `/up` and ten console paths. **200, 200, and ten 302s. No 5xx anywhere** |
+| **The re-check endpoint still exists** | `GET /console/identity/health` → 302; `POST …/re-check` → 419 (CSRF, i.e. the route is present and protected) |
+
+**The smoke deliberately stops at the sign-in boundary.** Everything above is
+reachable without an account. Rendering the screen itself needs a System
+Administrator session, and that is Gate D's first check rather than something
+to simulate here.
+
+---
+
 ## 6. What is NOT verified, and why
 
 | Not verified | Why |
 | --- | --- |
-| **Anything in production** | This unit is **not merged and not deployed** |
+| **The rendered screen in production** | It needs a System Administrator session. The browser evidence in §5 is a local deployment with the same `SESSION_DRIVER=database` and `CACHE_STORE=file` shapes; the production screen is **Gate D's first check** |
 | **MySQL, locally** | No MySQL server in this environment. **CI now runs the System Health suite against MySQL 8.4 as a required step** — see below |
 | **A real Microsoft Entra outage** | Would mean breaking sign-in on purpose. The *Unavailable* and *Needs attention* states were rendered from stored P1-02 state, which is what the screen reads in production too |
 | **A real database, cache, session-store or filesystem outage in production** | Same. Every failure state is proven against a broken dependency in tests and rendered in a browser; none was induced on a running system |
