@@ -412,3 +412,108 @@ time.
 - **The empty-state sentences are browser evidence, not test evidence.** They are
   rendered by React; there is no server-side rendering and no JavaScript test
   runner, so a server-side assertion on the wording would be checking nothing.
+
+---
+
+## 15. Gate D — final correction: a refused review answers on the review screen
+
+**Gate D retest, one remaining defect.** On the Product Owner's own System
+Administrator review, *Remove this access* → Microsoft confirmation → they
+landed on **Roles & Access** reading the administrator-floor refusal, with no
+indication of what had become of the review they were doing.
+
+### 15.1 Why it happened
+
+`ReviewStepUpCompletion` caught only `ReviewViolation`. A P1-05 refusal — the
+administrator floor — propagated as an `AccessViolation`, so it was handled by
+P1-05's own `StepUpController::refuseToIndex()`, whose destination is
+`access.index`. That is the **right** destination for an action begun in Roles &
+Access and the wrong one for an action begun in Access Reviews.
+
+The destination was never the review's to begin with, so the correction is on
+**P1-07's side of the boundary**. P1-05's own refusal destination is unchanged,
+and a test asserts that directly.
+
+### 15.2 What the correction does
+
+| Requirement | How |
+| --- | --- |
+| Review item stays **Pending** | The state write in `ReviewDecisionService` happens *after* the revoke that threw, and the inner transaction rolls back to its savepoint. Not retained, not revoked, not superseded — **none of those happened** |
+| Step-up **consumed**, no replay | The refusal is **returned**, not rethrown, so the surrounding transaction commits the consumption. One confirmation authorises one attempt; a refused attempt was still the attempt |
+| Back to the **originating** screen | `originatingScreen()` routes on `$item->kind` — Privileged → `/console/access-reviews`, Domain → `/console/access-reviews/domains` |
+| The **business** refusal is shown | P1-05's own sentence, flashed as `refusal`. This unit does not paraphrase the administrator floor |
+| Evidence under the **existing** key | `ReviewDecisionService::refuse()`, `access.review.refused`, reason `sole_administrator`. **No new event key** |
+| System Administrator assignment untouched | The floor refused; nothing was ended |
+
+### 15.3 A SECOND DEFECT, FOUND ONLY BY OPENING THE SCREEN
+
+With the redirect corrected, the browser showed **a blank page**.
+
+`refusal` was **never among the shared Inertia props**. `ReviewPage` read
+`props.refusal`, found nothing, and rendered nothing — so *every* refusal the
+review screens have ever raised went to a page that said nothing at all. Roles &
+Access renders its refusals out of `errors`, which Inertia shares for us; Access
+Reviews flashes `refusal`, which nobody shared.
+
+**No automated test caught it, and the suite was green.**
+`assertSessionHas('refusal', …)` passes on a message that reaches the session
+and never reaches the screen — *the two are different claims.* This is
+CLAUDE.md §2 exactly: a test that passes for a reason unrelated to what it
+claims to check.
+
+Fixed by sharing `refusal` beside `confirmation`, and covered by a test that
+asserts the **prop the screen renders**, not the session key.
+
+While there, the review banners were brought onto the shared pattern every other
+feature uses — `role="alert"` / `role="status"`, the **Refused.** label, the
+confirmation suppressed when both are present. They were bare `<p>` elements, so
+a refusal was announced to nobody using a screen reader.
+
+### 15.4 Mutations — every guard broken deliberately
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| M-RD1 | Remove the `AccessViolation` catch (the shipped behaviour) | **KILLED** — redirect becomes `/console/access`, no refusal flashed, step-up left reusable (3 cases) |
+| M-RD2 | `originatingScreen()` returns the privileged route unconditionally | **KILLED** — the domain case fails |
+| M-RD3 | Drop the `refuse()` call | **KILLED** — the refusal leaves no evidence |
+| M-RD4 | Point `refuseToIndex()` at the review screen | **KILLED** — Roles & Access no longer answers on Roles & Access |
+| M-RD5 | Move the item's state write above the revoke call | **SURVIVED — recorded, not hidden.** The inner transaction rolls back either way, so the *transaction* is what holds the item Pending, not the ordering. Claiming otherwise would credit the case with a guarantee it does not provide |
+| M-RD6 | Mark the item decided before calling the decision service | **KILLED** (4 cases) |
+| M-RD7 | Close the item in the refusal handler — the "tidy it away" change | **KILLED** — the review would read as decided for access that is still there |
+| M-RD8 | `AdministratorSetGuard::refuseIfLast()` stops refusing | **KILLED** (6 cases) — the review path runs **through** the floor. P1-07 implements none of its own |
+| M-RD9 | Remove `refusal` from `HandleInertiaRequests::share()` | **KILLED** — and the session assertion still passes, which is the whole point of §15.3 |
+
+### 15.5 Browser verification — observed, not expected
+
+Local deployment, sole active System Administrator, their own privileged review.
+**Nothing was manufactured to produce the refusal**: no second administrator was
+created and none was deactivated. The deployment genuinely has one.
+
+**Microsoft's own leg is not exercisable locally** — there is no Entra
+configuration on the local deployment. Everything either side of it ran as
+production runs it: the reference the *browser* was issued was resolved by
+`StepUpService::resolve()` against the browser's own session, then executed
+through `consumeAndPerform()` and the registered completion.
+
+| Check | Observed |
+| --- | --- |
+| Row before the click | 1 row, *"Awaiting review"*, Role *System Administrator*, both decision buttons |
+| *Remove this access* | Departed to `/console/access/step-up/<reference>` |
+| Completion result | Target `**/console/access-reviews**`, refusal *"This is the only active System Administrator…"*, `consumed_at` set |
+| Banner on return | *"**Refused.** This is the only active System Administrator. Add or retain another before removing this one."*, `role="alert"`, danger edge, visible in **all four** viewport/theme combinations |
+| Review after the refusal | Still **1 row, "Awaiting review", both buttons** |
+| Success banner | Absent — a refusal and a confirmation never show together |
+| Horizontal clipping | **0 elements** cross either viewport edge at 1440px and 390px |
+| Console errors | None |
+| Implementation terms on screen | None — swept for `sole_administrator`, `AccessViolation`, `step_up`, `role_assignment`, `exception` |
+
+### 15.6 What is NOT claimed
+
+- **The Microsoft round trip was not exercised in a browser.** No Entra
+  configuration exists locally. That leg is exactly what the Product Owner's one
+  retest covers.
+- **The MySQL Reviews suite ran in CI, not locally.** No MySQL server is
+  available in this environment; the `Run the Reviews suite against MySQL` step
+  in `ci.yml` is the evidence.
+- **No production review cycle was created**, and the production observation
+  remains the Product Owner's to make.

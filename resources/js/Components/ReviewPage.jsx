@@ -41,8 +41,26 @@ export default function ReviewPage({
                     </p>
                 </header>
 
-                {props.confirmation ? <p className="org-confirmation">{props.confirmation}</p> : null}
-                {props.refusal ? <p className="org-refusal">{props.refusal}</p> : null}
+                {/*
+                  * THE SAME TWO BANNERS EVERY OTHER FEATURE RENDERS, in the
+                  * same markup: role="alert" for a refusal, role="status" for a
+                  * confirmation, and the confirmation suppressed when both are
+                  * present. These screens rendered bare paragraphs, so a
+                  * refusal was announced to nobody using a screen reader and
+                  * looked unlike the refusal on every neighbouring screen.
+                  */}
+                {props.refusal ? (
+                    <div className="org-refusal" role="alert">
+                        <strong>Refused.</strong> {props.refusal}
+                    </div>
+                ) : null}
+
+                {props.confirmation && !props.refusal ? (
+                    <div className="org-confirmation" role="status">
+                        <span className="org-confirmation-mark" aria-hidden="true">&#10003;</span>
+                        {props.confirmation}
+                    </div>
+                ) : null}
 
                 <ReviewTabs counts={counts} />
 

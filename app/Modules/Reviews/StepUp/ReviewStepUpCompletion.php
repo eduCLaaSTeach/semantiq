@@ -82,12 +82,59 @@ final class ReviewStepUpCompletion implements StepUpCompletion
             // reference is consumed either way - this runs inside the
             // transaction that consumed it - so nothing can be retried.
             throw AccessViolation::stepUpInvalid();
+        } catch (AccessViolation $violation) {
+            return $this->refused($item, $actor, $violation);
         }
 
-        return redirect()
-            ->route($item->kind === ReviewKind::Privileged ? 'access-reviews.privileged' : 'access-reviews.domains')
+        return $this->originatingScreen($item)
             ->with('confirmation', $decision === ReviewDecision::Retain
                 ? 'Access confirmed. Nothing about the access was changed.'
                 : 'Access removed. It ended at that moment.');
+    }
+
+    /**
+     * P1-05 REFUSED THE REMOVAL. The review is not decided, and the person is
+     * standing in Access Reviews.
+     *
+     * The Product Owner met this as the last-administrator floor: removing the
+     * only System Administrator from a review left them on ROLES & ACCESS,
+     * reading a refusal about a screen they had not been on, with no sign of
+     * what had become of the review. The destination was never the review's -
+     * it was P1-05's own refuseToIndex(), which is correct for an action begun
+     * in Roles & Access and wrong for one begun here, so the correction belongs
+     * on this side of the boundary and P1-05's own destination is untouched.
+     *
+     * FOUR FACTS, ALL OF THEM DELIBERATE:
+     *
+     *  - THE ACCESS IS UNCHANGED. decide() runs in its own transaction, so a
+     *    refusal from inside it rolls back to its savepoint. Nothing was ended.
+     *  - THE ITEM IS STILL PENDING. It is written only AFTER the revoke, which
+     *    is what threw - so there is nothing to undo and nothing to mark. It is
+     *    not retained, not revoked and not superseded: none of those happened.
+     *  - THE STEP-UP IS SPENT. RETURNING rather than throwing lets the
+     *    surrounding transaction commit the consumption. One confirmation
+     *    authorises one attempt, and a refused attempt was still the attempt -
+     *    rethrowing here would hand back a reusable reference, which is exactly
+     *    the "be helpful" change D-73 exists to refuse.
+     *  - THE REFUSAL IS P1-05'S OWN SENTENCE, shown on the review screen. This
+     *    unit does not paraphrase the administrator floor; a second wording of
+     *    a rule is a second rule.
+     */
+    private function refused(AccessReviewItem $item, User $actor, AccessViolation $violation): RedirectResponse
+    {
+        // The EXISTING review-refusal evidence, carrying P1-05's reason. No
+        // second event key: "which review was refused, and why" is one question
+        // and answering it from two keys is answering it from neither.
+        $this->decisions->refuse($item, $actor, $violation->reason);
+
+        return $this->originatingScreen($item)->with('refusal', $violation->getMessage());
+    }
+
+    /** The tab the confirmation was begun from - never Roles & Access. */
+    private function originatingScreen(AccessReviewItem $item): RedirectResponse
+    {
+        return redirect()->route(
+            $item->kind === ReviewKind::Privileged ? 'access-reviews.privileged' : 'access-reviews.domains'
+        );
     }
 }

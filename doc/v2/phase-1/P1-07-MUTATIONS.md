@@ -305,3 +305,18 @@ a different spelling. Found by **mutating the guard**, not by reading it.
 | **M-D3b** | `router.post(url, { decision: 'retain' })` — hardcode the decision | **CAUGHT** *(survived until the guard was strengthened)* |
 | **M-D3d** | Go back to `useForm({ decision: 'retain' })` | **CAUGHT** |
 | **M-D3e** | Send something other than the chosen decision | **CAUGHT** |
+
+---
+
+## Gate D final correction — the review-originated refusal
+
+Nine mutations, recorded in full in `P1-07-ACCESS-REVIEWS-VERIFICATION.md` §15.4
+(M-RD1 … M-RD9). **Eight killed, one survived and is recorded as surviving:**
+M-RD5 moves the review state write above the revoke call and changes nothing,
+because the inner transaction rolls back either way. The transaction holds the
+item Pending, not the ordering — and the case does not claim otherwise.
+
+**M-RD9 is the one worth reading.** Removing `refusal` from the shared Inertia
+props leaves `assertSessionHas('refusal', …)` passing and the screen blank. A
+message in the session and a message on the page are different claims, and only
+the second one is what the reviewer gets.

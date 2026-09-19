@@ -209,7 +209,20 @@ final class ReviewDecisionService
         $this->events->record($event, $context);
     }
 
-    private function refuse(AccessReviewItem $item, User $actor, string $reason): void
+    /**
+     * THE ONE REVIEW-REFUSAL EVIDENCE CHANNEL. One key, a reason that names
+     * which rule refused, and no second key for any new kind of refusal.
+     *
+     * Public because a refusal can also arrive from P1-05 - the administrator
+     * floor being the one the Product Owner meets - after the decision has
+     * left this service, and that refusal is still a refused review. Recording
+     * it under a key of its own would split the evidence for one question
+     * ("what was refused, and why?") across two places.
+     *
+     * @param  string  $reason  this service's own vocabulary, or the
+     *                          AccessViolation reason P1-05 refused with.
+     */
+    public function refuse(AccessReviewItem $item, User $actor, string $reason): void
     {
         $this->events->record(SecurityEventLogger::REVIEW_REFUSED, [
             'user_id' => $item->subject_user_id,
