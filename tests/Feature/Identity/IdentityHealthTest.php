@@ -498,6 +498,61 @@ final class IdentityHealthTest extends TestCase
             ->assertSessionHasErrors('identity');
     }
 
+    /**
+     * WHERE THE RE-CHECK PUTS YOU BACK, which nothing asserted before.
+     *
+     * The success branch used to be redirect()->route('identity.health') while
+     * the two refusal branches returned back(). From the SSO Health screen the
+     * two are the same URL, so no test noticed - and P1-09's System Health
+     * screen reuses this endpoint rather than adding a second probe, which
+     * would have moved an administrator to a different screen for pressing a
+     * button on the one they were reading.
+     *
+     * TWO TESTS, NOT ONE, AND A MUTATION FORCED THAT. The first version pressed
+     * twice in one case - once from each screen - clearing the per-administrator
+     * rate limiter in between. It passed against the hard redirect it was
+     * written to catch, because the SECOND press does not reach the success
+     * branch at all: EntraDiscovery holds a provider-wide probe lock, so
+     * `ran` is false and the controller returns back() from the refusal branch
+     * whatever the success branch says. The assertion was satisfied by a
+     * different line from the one it named.
+     *
+     * Each origin now gets its own case, and setUp() flushes the cache, so each
+     * one exercises the SUCCESS branch on a first press.
+     *
+     * Mutation: put redirect()->route('identity.health') back. The System
+     * Health case fails.
+     */
+    public function test_the_re_check_returns_to_the_sso_health_screen_it_was_pressed_from(): void
+    {
+        $this->entra->fakeEndpoints();
+
+        $admin = $this->make->user(administrator: true);
+
+        $this->actingAsUser($admin)
+            ->from('/console/identity/health')
+            ->post('/console/identity/health/re-check')
+            ->assertSessionHas('confirmation', 'Health re-checked.')
+            ->assertRedirect('/console/identity/health');
+    }
+
+    /** The case the mutation above is really about. */
+    public function test_the_re_check_returns_to_system_health_when_pressed_there(): void
+    {
+        $this->entra->fakeEndpoints();
+
+        $admin = $this->make->user(administrator: true);
+
+        $this->actingAsUser($admin)
+            ->from('/console/system-health')
+            ->post('/console/identity/health/re-check')
+            // The SUCCESS branch, asserted, so a refusal cannot satisfy this
+            // case by returning back() for its own reasons.
+            ->assertSessionHas('confirmation', 'Health re-checked.')
+            ->assertSessionHasNoErrors()
+            ->assertRedirect('/console/system-health');
+    }
+
     /** The refusal names no internal timer and counts no seconds down. */
     public function test_the_rate_limit_refusal_names_no_timer(): void
     {

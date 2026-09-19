@@ -37,9 +37,42 @@ use Throwable;
  * Merging them is how a screen whose purpose is to make outages visible reports
  * Healthy through one for up to a day.
  *
- * Rendering this NEVER touches the network by choice: it reads the cache and the
- * stored probe result. Only the explicit "Re-check now" probes, and only through
- * EntraDiscovery::probe(), which holds a provider-wide lock.
+ * WHICH OF THESE REACHES THE NETWORK - stated accurately, because it was not.
+ *
+ * This comment used to read "Rendering this NEVER touches the network by
+ * choice: it reads the cache and the stored probe result." THAT WAS FALSE, and
+ * it was false about the method four lines below it. P1-09 was designed
+ * against this sentence and inherited the error; the code, not the comment, is
+ * what found it.
+ *
+ *   report()        MAY REACH MICROSOFT. It calls trustAvailability(), which
+ *                   reads the cached metadata and keys first and, WHEN EITHER
+ *                   IS ABSENT, falls through to EntraDiscovery::metadata() and
+ *                   signingKeys(). Both are Cache::remember() around an
+ *                   outbound Http::get with a ten-second timeout. On a warm
+ *                   cache it contacts nobody; on a cold one - a fresh
+ *                   deployment, a cleared cache, or simply 24 hours of quiet,
+ *                   since the discovery cache lives for CACHE_HOURS - it makes
+ *                   two outbound calls. This is DELIBERATE and unchanged: a
+ *                   first look at the SSO Health screen on a healthy
+ *                   deployment should not report a fault just because nobody
+ *                   has signed in yet.
+ *
+ *   storedReport()  NEVER REACHES THE NETWORK, and not by choice - by
+ *                   construction. It does not reference EntraDiscovery at all,
+ *                   so no read-through exists for it to take. This is the
+ *                   projection P1-09 System Health renders, and System Health
+ *                   renders NOTHING ELSE from this class.
+ *
+ *   recheck()       is the EXPLICIT live probe, and the only thing here that
+ *                   sets out to contact Microsoft. It goes through
+ *                   EntraDiscovery::probe(), which holds a provider-wide lock,
+ *                   and it runs only when an administrator presses the button.
+ *
+ * The SSO Health screen renders report(). That is correct for a screen whose
+ * subject IS the identity provider and which offers a live re-check beside the
+ * result. It would not be correct for a general health page, which is why
+ * P1-09 has its own entry point rather than a second probe.
  */
 final class IdentityHealthCheck
 {
@@ -58,7 +91,17 @@ final class IdentityHealthCheck
     ) {}
 
     /**
-     * Evaluate everything, without contacting Microsoft.
+     * Evaluate everything. MAY CONTACT MICROSOFT - see the class comment.
+     *
+     * This said "without contacting Microsoft", which is true on a warm cache
+     * and false on a cold one: trustAvailability() below falls through to
+     * EntraDiscovery::metadata() and signingKeys() when either cached value is
+     * absent, and both are read-through HTTP.
+     *
+     * The BEHAVIOUR is unchanged and remains correct for the SSO Health
+     * screen, which is about the identity provider and offers a live re-check
+     * beside the result. A caller that must not reach the network wants
+     * storedReport() instead.
      */
     public function report(): IdentityHealthReport
     {
@@ -129,6 +172,107 @@ final class IdentityHealthCheck
     }
 
     /**
+     * P1-09. The STORED answer, for a reader that must not contact Microsoft.
+     *
+     * NO NETWORK PATH EXISTS IN THIS METHOD, and that is a stronger claim than
+     * "it does not normally make a request". It does not touch EntraDiscovery
+     * at all - not metadata(), not signingKeys(), not probe(), and not even the
+     * cached accessors - so there is no read-through to fall through to. It
+     * reads the two cache keys THIS CLASS already writes and reports what they
+     * say.
+     *
+     * WHY report() WOULD NOT DO, which is the defect this method was added for:
+     * report() calls trustAvailability(), and when either cached value is
+     * absent that method asks Microsoft. On a cold cache - a fresh deployment,
+     * a cleared cache, or 24 hours of quiet - rendering a health screen off
+     * report() makes two outbound HTTPS calls with a ten-second timeout each,
+     * to the dependency the person opening that screen is trying to diagnose.
+     *
+     * ABSENCE IS REPORTED AS ABSENCE, in both directions. There is no default
+     * arm that lands on HEALTHY, and equally no evaluation that would land on
+     * FAILED because nothing is cached - inventing an outage from "nobody
+     * looked" is the same defect as inventing health from it, and a false red
+     * on a working sign-in is the one this codebase already refuses elsewhere.
+     *
+     * A STATE WITHOUT A USABLE TIME IS NOT A RESULT, and that is a correction.
+     *
+     * The first version validated the state and took the instant on trust. So
+     * a cache entry of ['state' => 'healthy'] - no 'at' at all, or an 'at' that
+     * will not parse - rendered as:
+     *
+     *     Microsoft Entra ID     Available     (and no age beneath it)
+     *
+     * which reads as a measurement taken now. It is the exact failure this
+     * whole method exists to prevent, arriving through the other field: the
+     * screen's only defence against a stale cached answer is the age printed
+     * next to it, so an answer whose age is unknown must not be shown as an
+     * answer. D-114.
+     *
+     * Both halves are therefore required. Either one missing or malformed
+     * returns NOT_CHECKED, and the caller gets no age to render because there
+     * is none to invent.
+     */
+    public function storedReport(): StoredIdentityHealth
+    {
+        $stored = Cache::get(self::LAST_RESULT_KEY);
+        $probe = $this->lastProbe();
+        $probeAt = is_array($probe) ? ($probe['at'] ?? null) : null;
+
+        $state = is_array($stored) ? ($stored['state'] ?? null) : null;
+        $at = is_array($stored) ? ($stored['at'] ?? null) : null;
+
+        // An unrecognised value is not trustworthy, whatever it is. A cache
+        // entry written by an older release, or half-written, must not be
+        // rendered as a status; it is exactly as unknown as no entry at all.
+        $recognised = in_array($state, [
+            IdentityHealthReport::HEALTHY,
+            IdentityHealthReport::DEGRADED,
+            IdentityHealthReport::FAILED,
+        ], true);
+
+        $measuredAt = $this->parsedInstant($at);
+
+        if (! $recognised || $measuredAt === null) {
+            return new StoredIdentityHealth(
+                state: IdentityHealthReport::NOT_CHECKED,
+                checkedAt: null,
+                lastProbeAt: $this->parsedInstant($probeAt),
+            );
+        }
+
+        return new StoredIdentityHealth(
+            state: (string) $state,
+            checkedAt: $measuredAt,
+            lastProbeAt: $this->parsedInstant($probeAt),
+        );
+    }
+
+    /**
+     * The instant, or null - and PARSING is the test, not is_string().
+     *
+     * "recently", "", "0000-00-00", an array, an integer: each is a string or a
+     * value that looks stored, and none of them is a time. Carbon is asked to
+     * parse it here rather than at render, so a value that would have produced
+     * no age produces no RESULT instead.
+     *
+     * Still no network: Carbon parses a string.
+     */
+    private function parsedInstant(mixed $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            Carbon::parse($value);
+        } catch (Throwable) {
+            return null;
+        }
+
+        return $value;
+    }
+
+    /**
      * Collapsed for HealthInspector.
      *
      * Failed fails the deployment; Degraded does not. A return-address nuance,
@@ -183,9 +327,22 @@ final class IdentityHealthCheck
             return ['metadata' => $metadata, 'keys' => $keys];
         }
 
-        // Nothing cached. Ask - a first look on a healthy deployment should not
-        // report a fault just because nobody has signed in yet. A failure here
-        // is a real failure: EntraDiscovery caches no failed response.
+        /*
+         * NOTHING CACHED, SO ASK - AND THIS IS THE OUTBOUND CALL.
+         *
+         * metadata() and signingKeys() are Cache::remember() around an
+         * Http::get with a ten-second timeout, so this branch reaches
+         * Microsoft. It is deliberate: a first look on a healthy deployment
+         * should not report a fault just because nobody has signed in yet, and
+         * a failure here is a real failure, since EntraDiscovery caches no
+         * failed response.
+         *
+         * It is also the reason storedReport() exists. Every caller of
+         * report() inherits this branch, so a caller that must contact nobody
+         * cannot use report() at all - no amount of warm cache makes the path
+         * absent, and a guarantee that depends on cache state is not a
+         * guarantee.
+         */
         try {
             $metadata ??= $this->discovery->metadata();
             $keys ??= $this->discovery->signingKeys();

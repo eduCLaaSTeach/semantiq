@@ -289,8 +289,15 @@ final class AuthenticationFlowTest extends TestCase
                 'Security Status' => '/console/security',
                 'Access Reviews' => '/console/access-reviews',
                 'Audit' => '/console/audit',
-                'Access Reviews' => '/console/access-reviews',
-                'Audit' => '/console/audit',
+                // P1-09. System Administration, like the five above it:
+                // reading whether the machine is working grants no business
+                // access and names no business record.
+                'System Health' => '/console/system-health',
+                // AND THE DUPLICATES ARE GONE. P1-09 found this array
+                // repeating 'Access Reviews' and 'Audit' - the very defect the
+                // comment a few lines up describes, repeated. PHP collapses a
+                // duplicate key silently, so the second pair asserted nothing
+                // at all and the array was two entries shorter than it read.
             ],
             $reachable,
             'A System Administrator was offered a destination beyond Organisation. The role '

@@ -32,16 +32,55 @@ final class HealthInspector
         private readonly IdentityHealthCheck $identity,
     ) {}
 
+    /**
+     * The whole deployment verdict. /up and semantiq:health consume this, and
+     * it is unchanged: the same six checks, in the same order.
+     */
     public function inspect(): HealthReport
     {
         return new HealthReport([
+            ...$this->localChecks(),
+            'identity' => $this->identity(),
+        ]);
+    }
+
+    /**
+     * P1-09. The local dependencies alone - and therefore no network path.
+     *
+     * A PROJECTION, NOT A SECOND INSPECTOR. It calls the same five private
+     * methods inspect() calls, so a future change to how storage is checked
+     * reaches both callers because there is still exactly one implementation.
+     * Copying a check into the System Health module would give one deployment
+     * two authoritative answers to the same question, which is the duplication
+     * that unit exists to prevent.
+     *
+     * IDENTITY IS EXCLUDED FOR A CONCRETE REASON, not for tidiness. identity()
+     * calls IdentityHealthCheck::forInspector(), which calls report(), which
+     * calls trustAvailability(), which on a cold discovery cache asks
+     * Microsoft over the network. A screen that promised to contact nobody
+     * would have done exactly that through this path. System Health reads the
+     * stored identity answer instead, through
+     * IdentityHealthCheck::storedReport().
+     *
+     * So this report is NOT the /up verdict and must not be presented as one:
+     * sign-in can be down, /up can be 503, and every check in here can still
+     * be green. The screen names it accordingly.
+     */
+    public function inspectLocal(): HealthReport
+    {
+        return new HealthReport($this->localChecks());
+    }
+
+    /** @return array<string, array{ok: bool, detail: string}> */
+    private function localChecks(): array
+    {
+        return [
             'database' => $this->database(),
             'migrations' => $this->migrations(),
             'configuration' => $this->configuration(),
             'storage' => $this->storage(),
             'assets' => $this->assets(),
-            'identity' => $this->identity(),
-        ]);
+        ];
     }
 
     /** @return array{ok: bool, detail: string} */

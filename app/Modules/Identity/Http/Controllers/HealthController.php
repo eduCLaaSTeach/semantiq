@@ -91,6 +91,16 @@ final class HealthController
             ]);
         }
 
-        return redirect()->route('identity.health')->with('confirmation', 'Health re-checked.');
+        /*
+         * back(), NOT a hard redirect to identity.health.
+         *
+         * The two refusal branches above already return back(); this one used
+         * to name a destination. From the SSO Health screen the two are the
+         * same URL, so nothing changes there - but P1-09's System Health screen
+         * reuses this endpoint rather than adding a second probe, and a hard
+         * redirect would have silently moved an administrator to a different
+         * screen for pressing a button on the one they were reading.
+         */
+        return back()->with('confirmation', 'Health re-checked.');
     }
 }
