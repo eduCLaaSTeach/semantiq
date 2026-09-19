@@ -9,7 +9,7 @@
 | Areas | **Application · Integrations · Jobs · Connections · Service Health** |
 | Purpose | Operational visibility **without exposing business data** |
 | Exit | Platform support can identify operational failures safely |
-| Status | **AWAITING PRODUCT OWNER REVIEW** — D-112 to D-129 |
+| Status | **PLAN APPROVED. D-112 to D-129 ANSWERED** — 19 September 2026, §6 |
 
 ---
 
@@ -100,8 +100,8 @@ store and belongs on a health screen; the evidence itself does not.
 | --- | --- |
 | Session | `database` |
 | Cache | **`file`** — not Redis |
-| Queue | **`sync`** — every job runs inline, in the web request |
-| **Queue worker** | **NONE** |
+| Queue | **`sync`** — jobs execute **inline, in the web request, by design**. A configured choice, not a missing queue |
+| **Queue worker** | **NOT REQUIRED**, because of the line above |
 | **Scheduler** | **NONE.** `routes/console.php` contains only Laravel's stock `inspire` command, and `bootstrap/app.php` registers no `withSchedule` |
 | Redis | **NOT PRESENT** |
 | Mail | **NOT CONFIGURED** |
@@ -110,9 +110,13 @@ store and belongs on a health screen; the evidence itself does not.
 | Hosting | Shared cPanel, MySQL 8.4 |
 
 **This is the single most important thing in this plan.** A generic health
-dashboard would show Redis, a queue depth and a scheduler heartbeat. Three of
-those do not exist here, and rendering them green would be a lie about the
-deployment. See **D-121**.
+dashboard would show Redis, a queue depth and a scheduler heartbeat. None of
+those exists here, and rendering them green would be a lie about the
+deployment.
+
+**And the opposite mistake is just as bad.** `sync` is a deliberate
+architecture, not a gap: showing a missing worker as degraded would report a
+fault where the deployment is working exactly as intended. See **D-121**.
 
 ---
 
@@ -148,14 +152,22 @@ absent.
 | --- | --- | --- |
 | **Application** | Migrations outstanding · Configuration problems · Runtime directories writable · Build assets present | `HealthInspector` (existing) |
 | **Integrations** | **Microsoft Entra ID** — discovery reachable, configuration complete, last probe outcome and its age | `IdentityHealthCheck` (existing, P1-02) |
-| **Jobs** | Queue connection · Worker presence · Scheduler presence | Configuration + **honest absence**. See D-121 |
-| **Connections** | Database · Session store · Cache store · Filesystem | `HealthInspector::database()` plus **new, bounded** reads for the other three |
+| **Jobs** | Inline job execution · Queue worker · Scheduler | Configuration, read precisely. See D-121 |
+| **Connections** | Database · Session store · Cache store · Filesystem | `HealthInspector::database()` and `HealthInspector::storage()`, **both existing**, plus **two new bounded checks** — session store and cache store |
 | **Service Health** | The roll-up — the same verdict `/up` and `semantiq:health` give · Audit chain intact · Evidence start instant present | `HealthInspector::isHealthy()`, `AuditChainVerifier` |
 
-**Only three genuinely new checks** are proposed — session store, cache store
-and filesystem — and each is a **round trip**, not a config read: write a value,
-read it back, delete it. A check that reads `config('cache.default')` and
-reports Available is precisely the hard-coded success this unit must not ship.
+**Only TWO genuinely new checks** are proposed — **session store** and **cache
+store** — and each is a **round trip**, not a config read: write a value, read
+it back, delete it. A check that reads `config('cache.default')` and reports
+Available is precisely the hard-coded success this unit must not ship.
+
+**CORRECTED: there is no new filesystem check.** The first draft listed storage
+under Application *and* proposed a filesystem round trip under Connections,
+which is two authoritative answers to one operational fact — exactly the
+duplication this unit exists to avoid. **`HealthInspector::storage()` remains
+the one authoritative filesystem and storage check.** A single source may be
+**projected** into more than one area of a screen; it may not be
+**reimplemented** to appear there.
 
 ---
 
@@ -165,7 +177,7 @@ reports Available is precisely the hard-coded success this unit must not ship.
 | --- | --- |
 | **Health vs configuration/readiness** | Configuration says the keys are present; health says the round trip worked. `ConfigurationValidator` is the first; `select 1` is the second. Both are shown, separately |
 | **Internal vs external** | Database, cache, session, storage and assets are ours. **Entra is somebody else's**, and its failure is a different sentence and a different urgency |
-| **Not configured / not applicable vs failed** | `QUEUE_CONNECTION=sync` is **Not configured**, not Unavailable. Mail is **Not applicable** in Phase 1. Neither is a fault, and neither is Healthy |
+| **Not configured / not applicable vs failed** | `QUEUE_CONNECTION=sync` means jobs are **configured to run inline** — it is not an absence. The **worker** is **Not applicable**, because this architecture deliberately needs none. The **scheduler** is **Not configured**, because no scheduled workload exists yet. None is a fault, and none is a silent Available |
 | **Live check vs cached result** | P1-02 already probes live and remembers for 7 days. A cached answer must **say when it was taken**; an answer with no age is indistinguishable from a fresh one, which is how a stale green survives an outage |
 
 **Nothing is reported Healthy because no check exists.** Every status carries
@@ -193,28 +205,31 @@ is a real directory identifier and the Entra discovery URL contains it. See
 
 ---
 
-## 6. Product Owner decisions — **D-112 to D-129 — ALL OPEN**
+## 6. Product Owner decisions — **D-112 to D-129 — ALL ANSWERED**
 
-| # | Decision | Recommendation |
+**Approved 19 September 2026.** Where a ruling differs from the recommendation
+the plan offered, **the ruling is what DESIGN implements.**
+
+| # | Decision | **RULING** |
 | --- | --- | --- |
-| **D-112** | Status vocabulary | **Available · Degraded · Unavailable · Not configured · Not applicable**, plus **Not checked** for a check that could not run. Six, because five cannot express "we do not know". Fixed enum; no free text |
-| **D-113** | Which checks belong to each area | §3. Reuse `HealthInspector` and `IdentityHealthCheck` wholesale; **three new round-trip checks only** — session, cache, filesystem |
-| **D-114** | Live vs cached | **Application, Connections and Service Health are LIVE on render** — all are local and cheap. **Integrations is CACHED**, shown with its age, re-checked only on request, exactly as P1-02 already does |
-| **D-115** | Timeout for external dependencies | A short, fixed timeout on the Entra probe; a timeout renders **Degraded**, never Unavailable, because "we could not reach it in 3 seconds" and "it is down" are different claims |
-| **D-116** | Read-only? | **Yes, entirely.** GETs, plus **one POST** for a manual re-check that performs no remediation — the same shape as P1-02's re-check |
-| **D-117** | Who may access | **Open.** Recommendation: the screen at `EvidenceRead`; **operational detail at `PlatformAdmin`** — System Administrator only. An Auditor reading evidence is not the same as an operator reading infrastructure |
-| **D-118** | Which technical details may be shown | Status, the check's name in business words, a chosen sentence, and an age for a cached result. **No value read from configuration** |
-| **D-119** | Hostnames, tenant ids, connection strings | **Open, and the sharpest one.** Recommendation: **none of them, to anybody**. Not withheld-for-some — absent. A tenant id identifies the customer's directory, and a health screen is a poor reason to put one on a page |
-| **D-120** | Do connection checks expose metadata? | Recommendation: **state only**. No driver name, no version, no database name, no free disk figure. Each is a small fingerprinting gift |
-| **D-121** | Jobs with no scheduler or worker | **Open.** Reality: `QUEUE_CONNECTION=sync`, no worker, no scheduler. Recommendation: **Not configured**, with one plain sentence saying work runs inline. **Never Healthy, never Unavailable** |
-| **D-122** | Relationship to P1-02 Identity health | Recommendation: System Health **renders P1-02's check** and links to the Identity & SSO screen. It does not re-probe and does not re-interpret. Two screens disagreeing about one deployment is worse than one screen |
-| **D-123** | Relationship to P1-06 Security Status | Both remain. P1-06 answers *"configured securely?"*; P1-09 answers *"working?"*. Recommendation: **no shared rows** and no cross-rendering |
-| **D-124** | Relationship to P1-08 Audit | Recommendation: System Health shows that the **evidence store is working** — chain intact, start instant present. It shows **no evidence** and never becomes a second way to read the log |
-| **D-125** | Do health checks create Audit evidence? | **Open.** Recommendation: **a manual re-check does; rendering does not.** P1-02 already has `identity.health.checked`. Logging every page view would bury the events that matter — D-71's rule, and P1-08 inherits the noise |
-| **D-126** | Refresh / manual re-check | Recommendation: explicit button, no auto-refresh, no polling. A page that re-probes on a timer is a page somebody leaves open overnight |
-| **D-127** | Rate limiting | Recommendation: **reuse P1-02's** one-per-administrator-per-60-seconds on anything touching an external service. Local checks need none |
-| **D-128** | Production-safe degraded simulations for tests | Recommendation: break the **dependency**, never the check — the `EngineBoundaryTest` and `AuditFailClosedTest` precedent. **And never with DDL**: MySQL commits the open transaction implicitly, which cost four green-locally, red-on-MySQL cases in P1-08 |
-| **D-129** | What the Product Owner can verify in production | **Open, and it needs stating before DESIGN.** Realistically: that the screen exists, that every row carries a status and a sentence, that **Jobs says Not configured**, that Integrations shows a real last-probe age, and that no hostname, tenant id or trace appears. **Failure states are not observable without breaking production, and nothing will be broken to show them** |
+| **D-112** | Status vocabulary | **APPROVED — a fixed six-state enum:** Available · Degraded · Unavailable · Not configured · Not applicable · Not checked. **No arbitrary or free-text status values** |
+| **D-113** | Checks per area | **APPROVED WITH CORRECTION.** The five-area mapping stands, but the **existing filesystem and storage health is reused**. Only **session** and **cache** require genuinely new checks |
+| **D-114** | Live vs cached | **APPROVED.** Application, Connections and local Service Health checks run **live on render** — local and bounded. Entra uses **P1-02's stored result with its checked-at age**, and **opening System Health never contacts Entra** |
+| **D-115** | External timeout | **APPROVED.** The existing bounded timeout. A timeout or network uncertainty is **Degraded**, never a definitive claim that Microsoft is unavailable. A cached result **displays its age**. If no meaningful result was ever obtained: **Not checked**, not Available |
+| **D-116** | Read-only? | **APPROVED — operationally read-only.** GETs remediate nothing. The **only** POST is the existing manual *Check again* for Entra health. No restart, migration, cache clear, worker start or corrective operation |
+| **D-117** | Who may access | **APPROVED — SYSTEM ADMINISTRATOR ONLY in Phase 1.** The screen and the re-check use the existing **`PlatformAdmin`** action class, **not `EvidenceRead`**. This is infrastructure visibility, not audit-evidence access, so an Auditor and an Organisation Administrator are **not** admitted. **D-19 stays consistent and no sidebar widening is required** |
+| **D-118** | What a row may contain | **APPROVED.** Only: a business-readable check name, a status, a **fixed safe explanation**, and a last-checked age where relevant. **No raw configuration value and no raw exception** |
+| **D-119** | Infrastructure identifiers | **APPROVED — ABSENT, not hidden-for-some.** Hostnames, tenant ids, database names, usernames, connection strings and the like **do not appear in the UI at all** |
+| **D-120** | Connection metadata | **APPROVED — operational state only.** No driver, version or database name; no cache driver detail; no physical path; no filesystem capacity; no server hostname; no connection endpoint |
+| **D-121** | Jobs | **APPROVED WITH CORRECTED SEMANTICS.** Invent no queue or scheduler infrastructure. Production shows: **work executes inline under the `sync` queue model**; **queue worker → Not applicable**; **scheduler → Not configured**. A missing worker is **never** degraded or unavailable — this architecture deliberately requires none |
+| **D-122** | P1-02 Identity health | **APPROVED.** P1-09 **consumes P1-02 as the authoritative source**, and the manual Entra re-check **calls the existing P1-02 operation** rather than implementing a second probe |
+| **D-123** | P1-06 Security Status | **APPROVED — distinct.** Security Status answers *configured securely?*; System Health answers *operating?*. **No duplicate rows and no competing evaluation** |
+| **D-124** | P1-08 Audit | **APPROVED.** Service Health may show **chain intact / not intact** and the **evidence start fact**. It must **not** expose Audit event contents and must **not** become another Audit viewer |
+| **D-125** | Audit evidence from health checks | **APPROVED — NO NEW AUDIT NOISE.** Rendering System Health produces **no** event; running local checks produces **no** event. P1-02's manual re-check keeps emitting its existing `identity.health.checked` and state-change evidence. **No new `system.health.checked` key** |
+| **D-126** | Refresh | **APPROVED.** No auto-refresh, no polling, no background browser loop. Local values refresh on ordinary navigation or reload; Entra gets an explicit **Check again** control |
+| **D-127** | Rate limiting | **APPROVED.** Reuse P1-02's **one external re-check per administrator per 60 seconds**. Local checks need none |
+| **D-128** | Failure simulation in tests | **APPROVED.** Through dependency boundaries, fakes or safe substitutes. **No DDL**, no destructive database operation, no deliberate production outage — and the tests must prove the check **can genuinely fail**, not merely force the displayed status |
+| **D-129** | Production acceptance | **APPROVED — normal production behaviour only.** The Product Owner verifies: five areas render; statuses and explanations are understandable; the worker correctly says **Not applicable**; the scheduler says **Not configured**; Entra shows genuine existing health and checked age; **Check again** works and respects the rate limit; no hostname, tenant id, trace, path, credential or business payload appears; Service Health shows Audit integrity safely; responsive, light/dark and Back all work. **Nothing will be broken to demonstrate a failure state** — those stay Gate C automated evidence |
 
 ---
 
@@ -251,9 +266,9 @@ this class of gap.
 
 - **If System Health is expected to show queue depth, worker heartbeats or a
   Redis panel.** None exists. Showing them would mean inventing them.
-- **If "Healthy" is expected to mean everything is fine.** It means every
-  check that ran, passed. Jobs will read **Not configured** on day one and that
-  is the correct answer.
+- **If "Available" is expected to mean everything is fine.** It means every
+  check that ran, passed. On day one the **worker reads Not applicable** and the
+  **scheduler reads Not configured** — both correct, and neither a fault.
 - **If the Product Owner expects to see a failure state in production.**
   Nothing will be broken to demonstrate one (D-129).
 
@@ -277,7 +292,11 @@ this class of gap.
 
 ## 11. Status
 
-**PLAN ONLY — AWAITING PRODUCT OWNER REVIEW.**
-No DESIGN. No implementation. No schema. No deployment.
-D-112 to D-129 are open and none is assumed answered.
-**P1-10 is not started.**
+**PLAN APPROVED — 19 September 2026. D-112 to D-129 ANSWERED.**
+No implementation, no schema and no deployment were produced by this plan.
+**DESIGN is the next gate.**
+
+**`/up` and `semantiq:health` are unchanged and stay that way.**
+**P1-02 remains OPEN / CARRIED / UNVERIFIED. P1-07 and P1-08 carried items
+remain carried. D-19 is unchanged — System Health is System Administrator only,
+so nothing outside System Administration is widened. P1-10 is not started.**
