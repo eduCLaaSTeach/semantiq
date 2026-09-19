@@ -267,3 +267,27 @@ decided, nothing removed, nothing replayable.
 - **A second System Administrator has NOT been created** to make anything
   testable, and must not be.
 - **P1-02's provider-wide SSO re-check remains OPEN / CARRIED / UNVERIFIED.**
+
+
+---
+
+# RESULT — P1-07 ACCEPTED
+
+**Final Product Owner production retest: PASS.** 19 September 2026.
+
+| | |
+| --- | --- |
+| Build tested | merge `c92a0aad1123653876127d9ea792c10253937a8a`, deploy run **137** |
+| Addendum steps 1–8 | **PASS** |
+| Gate D | **CLOSED** |
+| P1-07 | **CLOSED** |
+
+Observed: the reviewer returned to **Access Reviews**, the refusal banner was
+visible, the review remained **Awaiting review**, the **System Administrator
+access remained in place**, and the current-cycle projection remained correct.
+
+**§11 of this script still stands in full.** Everything listed there remains
+**NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION DATA** and is carried forward.
+Nothing in it was closed by this acceptance, and nothing in it was inferred
+from a passing test. **P1-02's provider-wide SSO re-check remains OPEN /
+CARRIED / UNVERIFIED.**

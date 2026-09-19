@@ -9,7 +9,8 @@ other.
 | Unit | **P1-07 — Access Reviews** |
 | PLAN | merge `da79fd01947f0972f9d04f161e2c188d25b884d4` (D-84 – D-94) |
 | DESIGN | merge `a830488f36e0c8b9040a81cae7b458f991103134` (B-1 resolved as B-1a) |
-| Status | **GATE D RETEST PENDING.** Gate C approved and deployed 19 September 2026; **Gate D FAILED on three Product Owner production defects**, corrected and redeployed — §14 |
+| Final correction | merge `c92a0aad1123653876127d9ea792c10253937a8a`, deploy run **137** — §15 |
+| Status | **PRODUCT OWNER ACCEPTED. GATE D CLOSED. P1-07 CLOSED** — 19 September 2026, §16 |
 
 ---
 
@@ -517,3 +518,52 @@ through `consumeAndPerform()` and the registered completion.
   in `ci.yml` is the evidence.
 - **No production review cycle was created**, and the production observation
   remains the Product Owner's to make.
+
+---
+
+## 16. P1-07 ACCEPTED — Gate D closed
+
+**Product Owner final production retest: PASS.** 19 September 2026.
+
+| | |
+| --- | --- |
+| Final correction merge | `c92a0aad1123653876127d9ea792c10253937a8a` |
+| Deployment | `Deploy to cPanel (SSH)` run **137** — success |
+| Gate D | **CLOSED** |
+| P1-07 | **CLOSED** |
+
+### 16.1 What the Product Owner observed in production
+
+| Observation | Result |
+| --- | --- |
+| Returned to **Access Reviews**, not Roles & Access | **PASS** |
+| Refusal banner visible — *"This is the only active System Administrator. Add or retain another before removing this one."* | **PASS** |
+| Review remains **Awaiting review** | **PASS** |
+| System Administrator access **remains in place** | **PASS** |
+| Current-cycle projection remains correct | **PASS** |
+
+This is an **observed production result**, not a passing test presented as one.
+
+### 16.2 Carried forward — NOT closed by this acceptance
+
+Accepting P1-07 closes P1-07. It closes nothing else.
+
+| Carried item | State |
+| --- | --- |
+| **P1-02 provider-wide SSO Re-check** | **OPEN / CARRIED / UNVERIFIED.** A Phase 1 orchestration gate. P1-07 never owned it and did not touch it |
+| **P1-07 live-verification items that could not legitimately be manufactured** | **CARRIED**, unchanged, as listed in §11 of the Product Owner Test Script — removing access and seeing it disappear, two grants with one removed, somebody else reviewing your access, a domain owner reviewing, two reviewers deciding at once, and removing the last System Administrator successfully |
+
+Every one of those stays carried for the reason it was carried: exercising it
+would mean **manufacturing production access, a second administrator, or false
+organisational history**. None is an implementation defect, and none was closed
+by inference from a passing test.
+
+### 16.3 Where the evidence lives
+
+| Subject | Section |
+| --- | --- |
+| Gate C build, tests, mutations | §1 – §12 |
+| Deployment and production verification | §13 |
+| Gate D failure and the three corrections | §14 |
+| Gate D final correction, and the blank-screen defect it exposed | §15 |
+| Acceptance | this section |
