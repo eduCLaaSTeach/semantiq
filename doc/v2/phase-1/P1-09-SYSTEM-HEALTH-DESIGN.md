@@ -467,8 +467,13 @@ limited to one per administrator per 60 seconds, already recording
 Reusing it means **P1-09 adds no write path, no second probe, no second rate
 limiter and no new event** (D-116, D-122, D-125, D-127).
 
-`LifecycleCompletenessTest` asserts the System Health route set as an
-**equality**, so a second verb fails the build.
+**`SystemHealthHasNoWriteRoute` (§9) asserts that route set as an equality**,
+in the shape `SecurityStatusArchitectureTest` and `AuditImmutabilityTest`
+already use — brace-matched group body, comments stripped — so a second verb
+fails the build rather than quietly becoming a write path.
+`LifecycleCompletenessTest` is **not** the guard for this: it is P1-01's
+organisation-lifecycle test and knows nothing about this prefix. Naming the
+wrong test would have left the guarantee unguarded while reading as covered.
 
 ---
 
