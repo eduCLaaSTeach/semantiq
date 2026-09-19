@@ -233,3 +233,75 @@ Privileged Reviews screen shows **3 rows and 0 action buttons**.
 ## Corrections total
 
 **8 new mutations, 8 caught**, plus the 21 from the first submission re-run.
+
+---
+
+# Gate D corrections — three Product Owner production defects
+
+**7 mutations, 7 caught.**
+
+| # | Mutation | Guard | Result |
+| --- | --- | --- | --- |
+| **M-D1a** | Offer the start control on Domain Reviews too | `ReviewCycleProjectionTest`, `ReviewsConsumeAccessTest` | **CAUGHT** |
+| **M-D1b** | Remove the outstanding-reviews check | `ReviewCycleProjectionTest` | **CAUGHT** |
+| **M-D2a** | Drop the current-cycle filter from the listing | `ReviewCycleProjectionTest` | **CAUGHT** |
+| **M-D2b** | Drop it from the tab counts | `ReviewCycleProjectionTest` | **CAUGHT** |
+| **M-D3a** | Default an unrecognised decision to `retain` | `ReviewDecisionSubmissionTest` | **CAUGHT** |
+| **M-D3b** | Go back to a fixed `retain` in the client call | `ReviewsConsumeAccessTest` | **CAUGHT** |
+| **M-D3c** | Skip `stepUpActionFor` | `ReviewDecisionSubmissionTest` | **CAUGHT** |
+
+**M-D3a is the important one.** Defaulting an unrecognised decision to `retain`
+is *exactly* what the browser was doing, and the test now fails on it. A missing
+or unrecognised decision decides **nothing**: a default is still a decision
+nobody made.
+
+## Why a green suite missed Defect 3 entirely
+
+Every behavioural test posted to the server directly, where the decision is
+whatever the test chooses to send. **The defect lived entirely in the shape of
+the client call** — `post(url, { data: { decision } })` against an options type
+that excludes `data` — and this project has no JavaScript test runner to click
+the button.
+
+Two things now cover it, and neither pretends to be the other:
+
+1. **A shape guard** on `ReviewPage.jsx`: the decision must go through
+   `router.post`, never a `useForm` default, and no `useForm` submit may be
+   passed a `data` key. A source guard, and it says so.
+2. **The browser check reads the request bodies off the wire** —
+   `{"decision":"retain"}` and `{"decision":"revoke"}` — which is the only place
+   the two buttons can be proven different without a DOM test runner.
+
+## A regression caught by the element-level sweep, before merge
+
+The new sentence beside the start control sat in the shared
+`org-section-actions` slot, which is `flex: 0 0 auto`. A child that is a
+sentence rather than a button cannot shrink, so it pushed past the screen edge
+at 390px — while the **page** did not scroll sideways.
+
+Only the element-level check saw it. **That is the G2 lesson for the third
+time**, and it is why the browser harness sweeps every element rather than
+asking the page whether it overflows.
+
+## The shape guard was wrong twice, and both are recorded
+
+**It failed on correct code.** The guard read the whole of `ReviewPage.jsx`,
+including the comment that explains the defect — and that comment necessarily
+quotes the broken call, `useForm({ decision: 'retain' })`. So it matched its own
+prose. **A guard that cannot tell code from a note about code is worse than
+none**: the obvious way to make it pass is to delete the explanation, which is
+the one thing that has to survive. Comments are now stripped before matching.
+
+> I called that failure a concurrency artefact on first sight, because a
+> mutation run had been in flight. It was not. It reproduced in a clean
+> foreground run, and the cause was mine.
+
+**Then it passed on broken code.** Asserting only that `router.post` is used let
+a hardcoded `{ decision: 'retain' }` straight through — the original defect with
+a different spelling. Found by **mutating the guard**, not by reading it.
+
+| # | Mutation of the guarded file | Result |
+| --- | --- | --- |
+| **M-D3b** | `router.post(url, { decision: 'retain' })` — hardcode the decision | **CAUGHT** *(survived until the guard was strengthened)* |
+| **M-D3d** | Go back to `useForm({ decision: 'retain' })` | **CAUGHT** |
+| **M-D3e** | Send something other than the chosen decision | **CAUGHT** |

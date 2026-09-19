@@ -76,7 +76,9 @@ reporting, not a gap in the build.**
 | B2 | Click **Start a review cycle** | The page returns with a confirmation, and Privileged Reviews now lists the privileged access that exists today | ☐ |
 | B3 | Read each row | Person, role, due date, and **"You can review this as"** — each a business sentence, no identifiers | ☐ |
 | B4 | Compare with **Roles & Access** | Every privileged assignment that exists appears exactly once. Nothing has been invented | ☐ |
-| B5 | Click **Start a review cycle** again | **No row is duplicated.** Nothing is asked twice about one grant | ☐ |
+| B5 | Click **Start a review cycle** again while reviews are outstanding | Refused in business words: *"A review cycle is already in progress. Complete the outstanding reviews before starting another cycle."* | ☐ |
+| B6 | Look at **Domain Reviews** and **Overdue Reviews** | **Neither offers Start a review cycle.** One cycle covers both populations, and it is started from Privileged Reviews | ☐ |
+| B7 | Look at Privileged Reviews after a previous cycle has been completed | Only the **current** cycle's reviews are listed. Completed cycles are kept permanently but are not this screen's work | ☐ |
 
 ### C — Confirming access (the safe one)
 

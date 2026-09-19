@@ -227,6 +227,99 @@ final class ReviewsConsumeAccessTest extends TestCase
     }
 
     /**
+     * THE DECISION IS THE REQUEST BODY, NOT A FORM DEFAULT.
+     *
+     * GATE D DEFECT 3. The screen used useForm({ decision: 'retain' }) and then
+     * post(url, { data: { decision } }). Inertia types those submit options as
+     * Omit<VisitOptions, 'data'> - the key is EXCLUDED - so it was silently
+     * dropped and EVERY click sent `retain`. "Remove this access" quietly
+     * confirmed it.
+     *
+     * The guard is on the SHAPE because that is where the defect lived: the
+     * behavioural tests pass either way when the server is asked directly, and
+     * this project has no JavaScript test runner to click the button.
+     *
+     * Mutation: go back to useForm for the decision, or pass a `data` key to a
+     * useForm submit.
+     */
+    public function test_a_review_decision_is_never_submitted_from_a_form_default(): void
+    {
+        /*
+         * COMMENTS ARE STRIPPED FIRST.
+         *
+         * The screen carries a comment explaining the defect, and that comment
+         * necessarily quotes the broken call - so the guard matched its own
+         * prose and failed on correct code. A guard that cannot tell code from
+         * a note about code is worse than none: the obvious fix is to delete
+         * the explanation, which is the one thing that must survive.
+         */
+        $screen = (string) preg_replace(
+            ['#/\*.*?\*/#s', '#(^|\s)//[^\n]*#'],
+            '',
+            (string) file_get_contents(__DIR__.'/../../resources/js/Components/ReviewPage.jsx'),
+        );
+
+        $this->assertStringContainsString(
+            'router.post(',
+            $screen,
+            'The decision is no longer sent explicitly. A form default is how "remove" became "retain".'
+        );
+
+        /*
+         * AND IT SENDS THE VARIABLE, NOT A LITERAL.
+         *
+         * Asserting only that router.post is used let a hardcoded
+         * { decision: 'retain' } through - which is the original defect with a
+         * different spelling. Found by mutating the guard rather than by
+         * reading it.
+         */
+        $this->assertMatchesRegularExpression(
+            '/router\.post\(\s*`[^`]*decide`\s*,\s*\{\s*decision\s*\}/',
+            $screen,
+            'The decision sent is not the one the button chose.'
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            "/decision:\s*'(retain|revoke)'/",
+            $screen,
+            'A decision is hardcoded in the client call. Both buttons then send the same thing.'
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            "/useForm\(\{\s*decision/",
+            $screen,
+            'A review decision is initialised as a form default again.'
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/post\([^)]*\{\s*\n?\s*data:/',
+            $screen,
+            'A useForm submit is being passed a `data` key, which Inertia excludes and silently drops.'
+        );
+    }
+
+    /**
+     * ONE SCREEN OWNS THE START CONTROL.
+     *
+     * GATE D DEFECT 1. A cycle is one global cycle covering both populations,
+     * so offering it on three tabs offered the same action three times - and
+     * from the other two it returned the person to Privileged Reviews, which
+     * looked like a navigation bug.
+     *
+     * Mutation: pass offersStart on another screen.
+     */
+    public function test_only_the_privileged_screen_offers_to_start_a_cycle(): void
+    {
+        $controller = (string) file_get_contents(self::MODULE.'/Http/Controllers/AccessReviewsController.php');
+
+        $this->assertSame(
+            1,
+            substr_count($controller, 'offersStart: true'),
+            'More than one screen offers to start a review cycle. A cycle is one global cycle.'
+        );
+    }
+
+    /**
      * NOTHING MUTABLE CARRIES THE DECISION.
      *
      * Mutation: reintroduce a pending_decision column on the review item.

@@ -9,7 +9,7 @@ other.
 | Unit | **P1-07 — Access Reviews** |
 | PLAN | merge `da79fd01947f0972f9d04f161e2c188d25b884d4` (D-84 – D-94) |
 | DESIGN | merge `a830488f36e0c8b9040a81cae7b458f991103134` (B-1 resolved as B-1a) |
-| Status | **GATE C — implementation complete, not merged and not deployed** |
+| Status | **GATE D RETEST PENDING.** Gate C approved and deployed 19 September 2026; **Gate D FAILED on three Product Owner production defects**, corrected and redeployed — §14 |
 
 ---
 
@@ -320,3 +320,95 @@ any of it.
 
 **No review cycle exists on production**, deliberately. Starting one creates
 permanent records, and that is the Product Owner's decision at Gate D.
+
+---
+
+## 14. Gate D — three defects found by the Product Owner, and their correction
+
+**Gate D FAILED on the deployed build `c7069f7f87fe9d7aa7d89256c39ed3de9e30430f`.**
+The failed observation stays in this record; it is not erased by the fix.
+
+### 14.1 What the Product Owner saw on production
+
+| Screen | Observation |
+| --- | --- |
+| Privileged Reviews | Several historical System Administrator rows marked **Access confirmed**, mixed with one current row awaiting review |
+| Domain Reviews | *"No sensitive domain access is awaiting your review."* — **correct**, production has no qualifying access. But **Start a review cycle was shown here** |
+| Overdue Reviews | *"Nothing is overdue."* — **correct**. But **Start a review cycle was shown here too**, and clicking it from either tab returned them to Privileged Reviews |
+| Remove this access | Clicked on their own System Administrator review. **No Microsoft fresh-sign-in appeared. The button appeared to do nothing.** |
+
+### 14.2 The root cause, and why one defect produced two symptoms
+
+**Defect 3 caused Defect 2's clutter.**
+
+The screen submitted with `useForm({ decision: 'retain' })` and then
+`post(url, { data: { decision } })`. Inertia types those submit options as
+`Omit<VisitOptions, 'data'>` — **the `data` key is excluded** — so it was
+silently dropped and **every click sent `retain`**.
+
+So "Remove this access" quietly *confirmed* the access. That is why the button
+looked inert, and why the screen accumulated rows marked *Access confirmed*: each
+cycle's "removal" was a confirmation.
+
+> **A green suite did not catch this.** Every behavioural test posted to the
+> server directly, where the decision is whatever the test sends. The defect
+> lived entirely in the shape of the client call, and this project has no
+> JavaScript test runner to click a button. **The browser check now reads the
+> request bodies off the wire.**
+
+### 14.3 The three corrections
+
+| Defect | Correction |
+| --- | --- |
+| **1 — the cycle control** | `Start a review cycle` is offered on **Privileged Reviews only**, with the sentence *"Starts one review cycle covering privileged and sensitive domain access."* A second overlapping cycle is refused with *"A review cycle is already in progress. Complete the outstanding reviews before starting another cycle."* — previously it silently created an **empty** cycle, which is safe and baffling |
+| **2 — historical clutter** | The three screens project the **current/latest cycle** only. **Nothing is deleted**: every historical row stays exactly where it is, permanently, and P1-08 owns the experience for reading it |
+| **3 — the decision** | `router.post(url, { decision })`. The decision is the request body, never a form default a click hopes to override |
+
+### 14.4 Evidence
+
+| | |
+| --- | --- |
+| New tests | `ReviewCycleProjectionTest` (6), `ReviewDecisionSubmissionTest` (4) |
+| New architecture guards | the decision is never a form default; exactly one screen offers to start a cycle |
+| Mutations | **7 targeted, 7 caught** — M-D1a/b, M-D2a/b, M-D3a/b/c |
+
+**M-D3a is the one that matters**: defaulting an unrecognised decision to
+`retain` is precisely what the browser was doing, and the test now fails on it.
+A missing or unrecognised decision **decides nothing** — a default is still a
+decision nobody made.
+
+### 14.5 Browser verification of the correction
+
+Run against **the Product Owner's exact data shape**: one completed cycle and one
+current cycle, both containing a review of the same access.
+
+| Requirement | Observed |
+| --- | --- |
+| Start control on Privileged Reviews only | `start=1` on Privileged, **`start=0`** on Domain and Overdue, in all four viewport/theme combinations |
+| Wording beside the control | Present |
+| Only the current cycle shown | Row counts match the current cycle exactly; the completed cycle contributes **nothing** |
+| Confirm sends `retain` | Read **off the wire**: `{"decision":"retain"}` |
+| Remove sends `revoke` | Read **off the wire**: `{"decision":"revoke"}` |
+| Remove enters the step-up flow | Landed on `/console/access/step-up/<reference>` — **the flow the Product Owner never saw** |
+| Empty states unchanged | *"Nothing is overdue."* still rendered |
+| No horizontal clipping | **0 elements** cross either viewport edge |
+| Browser Back | Returns exactly along the trail |
+| No developer terminology | Swept; none present |
+
+**One regression was caught by that sweep and fixed before merge.** The new
+explanatory sentence sat in the shared `org-section-actions` slot, which is
+`flex: 0 0 auto` — so a child that is a sentence rather than a button could not
+shrink and pushed past the screen edge at 390px. The **page** did not scroll
+sideways, so only the element-level check saw it. That is the G2 lesson a third
+time.
+
+### 14.6 What is NOT claimed
+
+- **The last-administrator refusal was not exercised on production.** The
+  automated test walks the whole journey — click, step-up bound to that exact
+  item and decision, then the administrator floor refusing — but **no second
+  System Administrator was manufactured**, so the Product Owner's own retest
+  stops at the Microsoft confirmation.
+- **The empty-state sentences are browser evidence, not test evidence.** They are
+  rendered by React; there is no server-side rendering and no JavaScript test
+  runner, so a server-side assertion on the wording would be checking nothing.
