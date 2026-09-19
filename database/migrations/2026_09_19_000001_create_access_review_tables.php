@@ -45,6 +45,13 @@ return new class extends Migration
         Schema::create('access_review_items', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('access_review_cycle_id');
+            // Denormalised from the cycle so every listing, count and authority
+            // query is organisation-scoped WITHOUT a join. A review raised in
+            // one organisation must never appear in another's screen, and the
+            // System Administrator role is platform-scoped, so "the actor's
+            // assignment has no organisation" cannot be allowed to mean "every
+            // organisation".
+            $table->unsignedBigInteger('organisation_id')->nullable();
             $table->string('kind', 16);
             $table->unsignedBigInteger('subject_user_id');
 
@@ -65,11 +72,6 @@ return new class extends Migration
             $table->json('composition')->nullable();
             $table->string('composition_fingerprint', 64);
 
-            // The decision the reviewer chose, held only while a step-up
-            // confirmation is in flight. It lives HERE so that nothing about a
-            // P1-07 decision is written into a P1-05 table.
-            $table->string('pending_decision', 16)->nullable();
-
             // Write-once decision columns.
             $table->dateTime('decided_at')->nullable();
             $table->unsignedBigInteger('decided_by_user_id')->nullable();
@@ -84,6 +86,7 @@ return new class extends Migration
             $table->index('subject_user_id', 'review_items_subject_idx');
             $table->index('business_domain_id', 'review_items_domain_idx');
             $table->index(['kind', 'state'], 'review_items_kind_state_idx');
+            $table->index(['organisation_id', 'state'], 'review_items_org_state_idx');
 
             /*
              * IDEMPOTENT GENERATION. MySQL permits many NULLs in a unique
@@ -105,6 +108,8 @@ return new class extends Migration
                 ->references('id')->on('business_domains')->restrictOnDelete();
             $table->foreign('decided_by_user_id', 'review_items_decider_fk')
                 ->references('id')->on('users')->restrictOnDelete();
+            $table->foreign('organisation_id', 'review_items_org_fk')
+                ->references('id')->on('organisations')->restrictOnDelete();
         });
     }
 

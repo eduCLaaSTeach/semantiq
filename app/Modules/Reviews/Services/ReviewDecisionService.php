@@ -88,7 +88,6 @@ final class ReviewDecisionService
 
             $locked->forceFill([
                 'state' => $decision->resultingState(),
-                'pending_decision' => null,
                 'decided_at' => now(),
                 'decided_by_user_id' => $actor->getKey(),
                 'decision_basis' => $basis,
@@ -141,7 +140,6 @@ final class ReviewDecisionService
     {
         $item->forceFill([
             'state' => ReviewState::Superseded,
-            'pending_decision' => null,
             'superseded_reason' => $reason,
             'decided_at' => now(),
         ])->save();

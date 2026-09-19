@@ -212,3 +212,54 @@ Asked honestly of every screen, at both widths and in both themes:
 present-tense question with a past-tense record, and another carried P1-05's
 internal caveat about a reserved future partition onto a business screen.
 Neither would have failed a test.
+
+---
+
+## 12. Gate C corrections — the four blockers
+
+The first Gate C submission was rejected with four implementation blockers. All
+four are closed; the mutations are in `P1-07-MUTATIONS.md`.
+
+| # | Blocker | How it is closed |
+| --- | --- | --- |
+| **1** | A step-up could execute stale or misdirected intent | `subject_type`, `subject_id`, `subject_intent` are bound into the confirmation at *begin*. The mutable `pending_decision` is gone, and the completion **addresses the item by id** rather than searching for one |
+| **2** | `Access → Reviews` reverse dependency | `StepUpCompletion` + `StepUpCompletionRegistry` in P1-05. **Zero references to `Modules\Reviews` anywhere in `app/Modules/Access`**, asserted by a guard |
+| **3** | Missing `RequireOrganisation`, organisation-blind queries | Middleware on both groups; `organisation_id` on the item; cycle starts from the **resolved** organisation; generation, listing, counts and authority all scoped, with the platform-scoped role handled deliberately |
+| **4** | Auditor saw nothing | Visibility separated from decision authority. Auditor reads evidence, `decidable` is false, no action path exists |
+
+### 12.1 The one schema decision raised
+
+**`pending_step_ups` gains three generic columns.** Binding a confirmation to an
+exact intent means storing that intent somewhere the confirmation owns, and
+anything the review screen owns is mutable while the reviewer is away at
+Microsoft.
+
+They are **deliberately generic**: P1-05 stores an opaque kind, an id and an
+intent string and never interprets any of them. That is what lets P1-07 bind its
+own object without P1-05 depending on P1-07, and what will let a later unit do
+the same without another migration.
+
+**P1-07 still owns exactly two tables.** This is a P1-05 table gaining three
+nullable columns, raised here as the DESIGN's §10 required.
+
+### 12.2 Re-run after the corrections
+
+| | Result |
+| --- | --- |
+| Full suite | **833 tests, 829 passed, 4 pre-existing skips**, 72,939 assertions |
+| `tests/Feature/Reviews` | 47 passed |
+| `tests/Architecture` | passed, including 4 new guards |
+| Pint | passed |
+| Mutations | **8 new, 8 caught**; the original 21 re-run and still caught |
+| Browser | **12 combinations, 0 failures**, plus the Auditor observed with **3 rows and 0 action buttons** |
+
+### 12.3 What is still not claimed
+
+- **The step-up round trip is not automated.** M-RD1 — the controller's dispatch
+  to the registry — is held by a source guard only, because driving it needs a
+  real Microsoft return. P1-05 recorded the same limitation and verified it in a
+  browser.
+- **The Auditor cannot reach the screen from the menu.** `sidebar: false` was
+  observed: D-19 shows the sidebar to System Administrators only. **Unchanged by
+  this unit**, and the same limitation P1-06 raised. It does not affect
+  authorisation, which is route-level.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Reviews\Services;
 
 use App\Modules\Access\Models\RoleAssignment;
+use App\Modules\Access\Support\ActionClass;
 use App\Modules\Access\Support\RoleCatalogue;
 use App\Modules\Access\Support\RoleCode;
 use App\Modules\Domains\Models\DomainOwnership;
@@ -51,6 +52,12 @@ final class ReviewerAuthority
     public function basisFor(User $actor, AccessReviewItem $item): ?DecisionBasis
     {
         if (! $actor->isActive()) {
+            return null;
+        }
+
+        // An actor from another organisation decides nothing here, whatever
+        // role they hold there.
+        if ($actor->organisation_id !== $item->organisation_id) {
             return null;
         }
 
@@ -131,8 +138,12 @@ final class ReviewerAuthority
     /** @return Builder<User> */
     public function otherEligibleReviewers(AccessReviewItem $item): Builder
     {
+        // WITHIN THE SAME ORGANISATION. A privileged person elsewhere is not an
+        // eligible reviewer here, and counting them would wrongly refuse a
+        // legitimate self-review as "somebody else could do it".
         $query = User::query()
             ->where('status', 'active')
+            ->where('organisation_id', $item->organisation_id)
             ->where('id', '!=', $item->subject_user_id);
 
         if ($item->kind === ReviewKind::Privileged) {
@@ -163,15 +174,28 @@ final class ReviewerAuthority
     }
 
     /**
-     * Narrow a listing to the items this actor may act on.
+     * Narrow a listing to the review evidence this actor may SEE.
      *
-     * The permitted set is computed FIRST; every screen filter is a view over
-     * it and can never widen it.
+     * VISIBILITY IS NOT DECISION AUTHORITY, and conflating them was a real
+     * defect: the first implementation filtered the listing by who may DECIDE,
+     * so an Auditor - whose whole role is reading evidence - saw an empty
+     * screen on every tab. `grantableBy(Auditor)` is empty by design, which is
+     * exactly right for deciding and exactly wrong for reading.
+     *
+     * So: holders of an administration class see the review evidence of their
+     * OWN organisation, and a domain owner sees their own domains' items.
+     * Whether any given row can be acted on is answered separately, by
+     * basisFor(), and the screen renders that as `decidable`.
      *
      * @param  Builder<AccessReviewItem>  $query
      */
-    public function scopeVisible(Builder $query, User $actor): void
+    public function scopeVisible(Builder $query, User $actor, ?int $organisationId): void
     {
+        // ALWAYS organisation-scoped, including for a platform-scoped System
+        // Administrator. "No organisation on the assignment" must never widen
+        // into "every organisation".
+        $query->where('organisation_id', $organisationId);
+
         if (! $actor->isActive()) {
             $query->whereRaw('1 = 0');
 
@@ -180,41 +204,20 @@ final class ReviewerAuthority
 
         $roles = $this->currentRolesOf($actor);
 
-        $reviewableRoles = [];
-        foreach ($roles as $role) {
-            foreach (RoleCatalogue::grantableBy($role) as $grantable) {
-                $reviewableRoles[$grantable->value] = true;
-            }
+        $readsEvidence = array_filter(
+            $roles,
+            static fn (RoleCode $role): bool => RoleCatalogue::permits($role, ActionClass::EvidenceRead),
+        ) !== [];
+
+        if ($readsEvidence) {
+            return;
         }
 
-        $isSystemAdministrator = in_array(RoleCode::SystemAdministrator, $roles, true);
-
-        $query->where(function (Builder $outer) use ($actor, $reviewableRoles, $isSystemAdministrator): void {
-            $outer->where(function (Builder $privileged) use ($reviewableRoles): void {
-                $privileged->where('kind', ReviewKind::Privileged->value);
-
-                if ($reviewableRoles === []) {
-                    $privileged->whereRaw('1 = 0');
-
-                    return;
-                }
-
-                $privileged->whereIn('role_code', array_keys($reviewableRoles));
-            });
-
-            $outer->orWhere(function (Builder $domain) use ($actor, $isSystemAdministrator): void {
-                $domain->where('kind', ReviewKind::Domain->value);
-
-                if ($isSystemAdministrator) {
-                    return;
-                }
-
-                $domain->whereIn('business_domain_id', DomainOwnership::query()
-                    ->select('business_domain_id')
-                    ->where('user_id', $actor->getKey())
-                    ->whereNull('ended_at'));
-            });
-        });
+        // Not an evidence reader: a domain owner sees only their own domains.
+        $query->whereIn('business_domain_id', DomainOwnership::query()
+            ->select('business_domain_id')
+            ->where('user_id', $actor->getKey())
+            ->whereNull('ended_at'));
     }
 
     /** @return list<RoleCode> */

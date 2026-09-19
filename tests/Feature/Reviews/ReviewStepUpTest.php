@@ -225,7 +225,7 @@ final class ReviewStepUpTest extends TestCase
     private function createItem(array $attributes): AccessReviewItem
     {
         $cycle = AccessReviewCycle::query()->create([
-            'organisation_id' => null,
+            'organisation_id' => User::query()->findOrFail($attributes['subject_user_id'])->organisation_id,
             'started_at' => now(),
             'due_at' => now()->addDays(30),
             'started_by_user_id' => $attributes['subject_user_id'],
@@ -236,6 +236,7 @@ final class ReviewStepUpTest extends TestCase
 
         return AccessReviewItem::query()->create($attributes + [
             'access_review_cycle_id' => $cycle->id,
+            'organisation_id' => $cycle->organisation_id,
             'state' => 'pending',
             'due_at' => $cycle->due_at,
             'composition' => $composition,

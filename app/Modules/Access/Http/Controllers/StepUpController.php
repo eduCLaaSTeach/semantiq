@@ -11,6 +11,7 @@ use App\Modules\Access\Services\EntitlementService;
 use App\Modules\Access\Services\RoleAssignmentService;
 use App\Modules\Access\StepUp\PendingStepUp;
 use App\Modules\Access\StepUp\StepUpAction;
+use App\Modules\Access\StepUp\StepUpCompletionRegistry;
 use App\Modules\Access\StepUp\StepUpService;
 use App\Modules\Access\Support\AccessViolation;
 use App\Modules\Access\Support\RoleCode;
@@ -19,12 +20,6 @@ use App\Modules\Domains\Models\BusinessDomain;
 use App\Modules\Platform\Identity\AuthenticationFailed;
 use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Models\User;
-use App\Modules\Reviews\Models\AccessReviewItem;
-use App\Modules\Reviews\Services\ReviewDecisionService;
-use App\Modules\Reviews\Support\ReviewDecision;
-use App\Modules\Reviews\Support\ReviewKind;
-use App\Modules\Reviews\Support\ReviewState;
-use App\Modules\Reviews\Support\ReviewViolation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -54,7 +49,7 @@ final class StepUpController
 
     public function __construct(
         private readonly StepUpService $stepUp,
-        private readonly ReviewDecisionService $reviews,
+        private readonly StepUpCompletionRegistry $completions,
         private readonly IdentityProvider $provider,
         private readonly RoleAssignmentService $roles,
         private readonly EntitlementService $entitlements,
@@ -234,61 +229,40 @@ final class StepUpController
             StepUpAction::RevokeOrganisationAdministrator => $this->performRevoke($pending, $actor),
 
             /*
-             * P1-07. The review decision is performed by the unit that owns it,
-             * from the stored target, and it marks the item as well as changing
-             * the access. Routing these into performRevoke would revoke the
-             * access and leave the review pending forever.
+             * EVERYTHING ELSE BELONGS TO THE UNIT THAT BEGAN IT.
+             *
+             * This controller does not know what those actions mean and must
+             * not learn: importing another unit's models here reverses the
+             * boundary - later units consume P1-05, never the other way round.
+             * An action nobody claims is a malformed confirmation and refuses.
              */
-            StepUpAction::ReviewRevokePrivileged,
-            StepUpAction::RevokeRestrictedEntitlement,
-            StepUpAction::SelfReview => $this->performReviewDecision($pending, $actor),
+            default => $this->performRegistered($pending, $actor),
 
             StepUpAction::GrantRestrictedSensitivity => $this->performCeiling($pending, $actor),
         };
     }
 
     /**
-     * P1-07. The review decision, performed from the STORED target.
+     * Hand the confirmed action to whichever unit registered for it.
      *
-     * The item is found by the reviewed object's id rather than carried in the
-     * pending row, because generation guarantees at most one PENDING item per
-     * object - so no column was added to a P1-05 table for a P1-07 concern.
-     *
-     * The decision itself was written on the item before the redirect and is
-     * re-read here; nothing comes from the request, which came back through
-     * the browser.
+     * Everything it needs is on the stored row, including the exact subject and
+     * the exact intent, so the unit can re-check that the thing it is about to
+     * act on is still the thing that was confirmed.
      */
-    private function performReviewDecision(PendingStepUp $pending, User $actor): RedirectResponse
+    private function performRegistered(PendingStepUp $pending, User $actor): RedirectResponse
     {
-        $item = AccessReviewItem::query()
-            ->where('state', ReviewState::Pending->value)
-            ->when(
-                $pending->role_assignment_id !== null,
-                fn ($q) => $q->where('role_assignment_id', $pending->role_assignment_id),
-                fn ($q) => $q->where('domain_entitlement_id', $pending->domain_entitlement_id),
-            )
-            ->first();
+        $completion = $this->completions->for($pending->action);
 
-        if ($item === null || $item->pending_decision === null) {
+        if ($completion === null) {
             throw AccessViolation::stepUpInvalid();
         }
 
-        $decision = $item->pending_decision;
+        $result = $completion->complete($pending, $actor);
 
-        try {
-            $this->reviews->decide($item, $decision, $actor);
-        } catch (ReviewViolation) {
-            // The confirmation was genuine; the item moved underneath it. The
-            // reference is consumed either way - this method runs inside the
-            // transaction that consumed it.
-            throw AccessViolation::stepUpInvalid();
-        }
-
-        return redirect()
-            ->route($item->kind === ReviewKind::Privileged ? 'access-reviews.privileged' : 'access-reviews.domains')
-            ->with('confirmation', $decision === ReviewDecision::Retain
-                ? 'Access confirmed. Nothing about the access was changed.'
-                : 'Access removed. It ended at that moment.');
+        // A completion that returns anything else has not produced a page for
+        // the person who is standing there, which is a bug in that unit rather
+        // than something to paper over here.
+        return $result instanceof RedirectResponse ? $result : throw AccessViolation::stepUpInvalid();
     }
 
     private function performGrant(PendingStepUp $pending, User $actor): RedirectResponse

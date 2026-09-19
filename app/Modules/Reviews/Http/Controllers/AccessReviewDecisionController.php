@@ -15,6 +15,7 @@ use App\Modules\Reviews\Models\AccessReviewItem;
 use App\Modules\Reviews\Services\ReviewCycleGenerator;
 use App\Modules\Reviews\Services\ReviewDecisionService;
 use App\Modules\Reviews\Services\ReviewerAuthority;
+use App\Modules\Reviews\StepUp\ReviewStepUpCompletion;
 use App\Modules\Reviews\Support\DecisionBasis;
 use App\Modules\Reviews\Support\ReviewDecision;
 use App\Modules\Reviews\Support\ReviewKind;
@@ -57,7 +58,15 @@ final class AccessReviewDecisionController
         $days = (int) $request->input('due_in_days', 30);
         $days = max(1, min($days, 365));
 
-        $this->generator->start($actor, now()->addDays($days), $actor->organisation_id);
+        /*
+         * THE RESOLVED ORGANISATION, not the actor's own column. A System
+         * Administrator's role assignment is platform-scoped, and reading the
+         * organisation off the person rather than off the request is how a
+         * cycle quietly generates for the wrong one - or for all of them.
+         */
+        $organisation = $request->attributes->get('semantiq_organisation');
+
+        $this->generator->start($actor, now()->addDays($days), $organisation?->id);
 
         return redirect()
             ->route('access-reviews.privileged')
@@ -107,12 +116,17 @@ final class AccessReviewDecisionController
 
         if ($action !== null) {
             /*
-             * The chosen decision is written on the ITEM before the redirect,
-             * so nothing about a P1-07 decision is stored in a P1-05 table. It
-             * is cleared on any outcome.
+             * THE EXACT ITEM AND THE EXACT DECISION ARE BOUND HERE, into the
+             * confirmation itself.
+             *
+             * The first implementation held the decision in a mutable column on
+             * the item and let the callback find the item again by the access
+             * object it was about. A second tab could then change the decision
+             * while the confirmation was away, and a terminal item with a later
+             * pending review for the same access could hand the confirmation to
+             * the wrong review entirely. Nothing about either is reachable once
+             * both halves live on the pending row, which nobody can edit.
              */
-            $item->forceFill(['pending_decision' => $decision])->save();
-
             $reference = $this->stepUp->begin(
                 $actor,
                 $request->session()->getId(),
@@ -123,7 +137,10 @@ final class AccessReviewDecisionController
                     'domain_entitlement_id' => $item->domain_entitlement_id,
                     'business_domain_id' => $item->business_domain_id,
                     'role_code' => $item->role_code?->value,
-                    'organisation_id' => $actor->organisation_id,
+                    'organisation_id' => $item->organisation_id,
+                    'subject_type' => ReviewStepUpCompletion::SUBJECT_TYPE,
+                    'subject_id' => $item->getKey(),
+                    'subject_intent' => $decision->value,
                 ],
             );
 

@@ -136,6 +136,130 @@ final class ReviewsConsumeAccessTest extends TestCase
         );
     }
 
+    /**
+     * THE DEPENDENCY RUNS ONE WAY. P1-07 consumes P1-05; P1-05 names nothing
+     * from P1-07.
+     *
+     * GATE C BLOCKER 2. The first implementation had P1-05's StepUpController
+     * importing P1-07's models and services. A later unit would have added a
+     * second import, and an accepted unit would slowly have become a
+     * switchboard for every unit that came after it.
+     *
+     * Mutation: import any App\Modules\Reviews class into app/Modules/Access.
+     */
+    public function test_the_access_module_never_names_the_reviews_module(): void
+    {
+        $offenders = [];
+        $base = realpath(__DIR__.'/../../app/Modules/Access');
+
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($base)) as $file) {
+            if (! $file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            if (str_contains((string) file_get_contents($file->getPathname()), 'Modules\\Reviews')) {
+                $offenders[] = str_replace($base.'/', '', $file->getPathname());
+            }
+        }
+
+        sort($offenders);
+
+        $this->assertSame(
+            [],
+            $offenders,
+            'P1-05 names P1-07. The approved boundary is that later units consume Access, never the '
+            .'reverse - the step-up completion registry exists so a unit can register itself.'
+        );
+    }
+
+    /**
+     * ONE STEP-UP BINDS TO ONE EXACT SUBJECT AND ONE EXACT INTENT.
+     *
+     * GATE C BLOCKER 1. The completion must address the item by the id stored
+     * on the confirmation, never search for one by the access object - a
+     * terminal item with a later pending review for the same access would
+     * otherwise hand the confirmation to a review nobody saw.
+     *
+     * Mutation: look the item up by role_assignment_id or domain_entitlement_id.
+     */
+    public function test_the_review_completion_addresses_its_item_by_the_stored_id(): void
+    {
+        $code = (string) file_get_contents(self::MODULE.'/StepUp/ReviewStepUpCompletion.php');
+
+        $this->assertStringContainsString('find($pending->subject_id)', $code);
+        $this->assertStringContainsString('$pending->subject_intent', $code);
+
+        foreach (['role_assignment_id', 'domain_entitlement_id', 'ReviewState::Pending'] as $searchShape) {
+            $this->assertStringNotContainsString(
+                $searchShape,
+                $code,
+                'The completion searches for an item instead of addressing the one that was confirmed.'
+            );
+        }
+    }
+
+    /**
+     * THE CONTROLLER DISPATCHES UNCLAIMED ACTIONS TO THE REGISTRY.
+     *
+     * RECORDED HONESTLY: this is a SOURCE guard, and it is here because the
+     * mutation that replaces the dispatch with a refusal SURVIVES the
+     * behavioural suite. The binding tests exercise the completion directly;
+     * the one line that joins the controller to it can only be driven through a
+     * real Microsoft round trip, which this project cannot automate - the same
+     * limitation P1-05 recorded for step-up, verified in a browser instead.
+     *
+     * Mutation: replace the default arm with a refusal.
+     */
+    public function test_the_step_up_controller_dispatches_to_the_registry(): void
+    {
+        $code = (string) file_get_contents(__DIR__.'/../../app/Modules/Access/Http/Controllers/StepUpController.php');
+
+        $this->assertStringContainsString(
+            'default => $this->performRegistered($pending, $actor),',
+            $code,
+            'Actions P1-05 does not own no longer reach the unit that registered for them.'
+        );
+
+        $this->assertStringContainsString(
+            '$completion = $this->completions->for($pending->action);',
+            $code,
+        );
+    }
+
+    /**
+     * NOTHING MUTABLE CARRIES THE DECISION.
+     *
+     * Mutation: reintroduce a pending_decision column on the review item.
+     */
+    public function test_no_review_column_holds_a_decision_in_flight(): void
+    {
+        foreach ($this->sources() as $path => $code) {
+            $this->assertStringNotContainsString(
+                'pending_decision',
+                $code,
+                "[{$path}] holds a decision on the item while a confirmation is away. A second tab can "
+                .'then change what the returning confirmation performs.'
+            );
+        }
+    }
+
+    /**
+     * EVERY REVIEW QUERY IS ORGANISATION-SCOPED.
+     *
+     * GATE C BLOCKER 3. The System Administrator role is platform-scoped, so
+     * "the actor's assignment has no organisation" must never widen into "every
+     * organisation".
+     *
+     * Mutation: drop the organisation filter from scopeVisible() or basisFor().
+     */
+    public function test_visibility_and_authority_are_organisation_scoped(): void
+    {
+        $code = (string) file_get_contents(self::MODULE.'/Services/ReviewerAuthority.php');
+
+        $this->assertStringContainsString("\$query->where('organisation_id', \$organisationId);", $code);
+        $this->assertStringContainsString('$actor->organisation_id !== $item->organisation_id', $code);
+    }
+
     /** @return array<string, string> path relative to the module => contents */
     private function sources(): array
     {

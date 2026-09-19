@@ -10,7 +10,6 @@ use App\Modules\Access\Support\RoleCode;
 use App\Modules\Domains\Models\BusinessDomain;
 use App\Modules\Platform\Models\User;
 use App\Modules\Reviews\Support\DecisionBasis;
-use App\Modules\Reviews\Support\ReviewDecision;
 use App\Modules\Reviews\Support\ReviewKind;
 use App\Modules\Reviews\Support\ReviewState;
 use App\Modules\Reviews\Support\SupersededReason;
@@ -36,6 +35,7 @@ final class AccessReviewItem extends Model
 {
     protected $fillable = [
         'access_review_cycle_id',
+        'organisation_id',
         'kind',
         'subject_user_id',
         'role_assignment_id',
@@ -46,7 +46,6 @@ final class AccessReviewItem extends Model
         'due_at',
         'composition',
         'composition_fingerprint',
-        'pending_decision',
         'decided_at',
         'decided_by_user_id',
         'decision_basis',
@@ -62,7 +61,6 @@ final class AccessReviewItem extends Model
             'role_code' => RoleCode::class,
             'decision_basis' => DecisionBasis::class,
             'superseded_reason' => SupersededReason::class,
-            'pending_decision' => ReviewDecision::class,
             'due_at' => 'datetime',
             'decided_at' => 'datetime',
             'composition' => 'array',
@@ -125,6 +123,20 @@ final class AccessReviewItem extends Model
         return $this->state === ReviewState::Pending
             && $this->due_at !== null
             && $this->due_at->lt(now());
+    }
+
+    /**
+     * Only the items raised inside this organisation.
+     *
+     * NEVER OMITTED BECAUSE THE ACTOR IS PLATFORM-SCOPED. A System
+     * Administrator's assignment carries no organisation_id, and treating that
+     * as "all of them" is how one customer's reviews reach another's screen.
+     *
+     * @param  Builder<AccessReviewItem>  $query
+     */
+    public function scopeForOrganisation(Builder $query, ?int $organisationId): void
+    {
+        $query->where('organisation_id', $organisationId);
     }
 
     /** The invariant, checkable rather than asserted. */

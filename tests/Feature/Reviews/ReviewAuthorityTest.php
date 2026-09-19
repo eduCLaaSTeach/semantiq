@@ -13,6 +13,7 @@ use App\Modules\Domains\Models\DomainOwnership;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
 use App\Modules\Platform\Models\User;
 use App\Modules\Reviews\Models\AccessReviewItem;
+use App\Modules\Reviews\Services\ReviewCycleGenerator;
 use App\Modules\Reviews\Services\ReviewDecisionService;
 use App\Modules\Reviews\Services\ReviewerAuthority;
 use App\Modules\Reviews\Support\DecisionBasis;
@@ -189,12 +190,20 @@ final class ReviewAuthorityTest extends TestCase
     }
 
     /**
-     * N-R1 and N-R23. A listing shows only what the viewer may act on, and the
-     * tab counts are the viewer's own rather than deployment totals.
+     * N-R1 and N-R23. READING IS NOT DECIDING.
      *
-     * Mutation: drop scopeVisible() from the controller.
+     * An evidence reader sees the review evidence of their own organisation;
+     * whether they may act on a given row is a separate question, answered per
+     * row as `decidable`. An Organisation Administrator therefore SEES a System
+     * Administrator's review and cannot decide it.
+     *
+     * The first implementation filtered the listing by decision authority, so
+     * an Auditor - whose entire role is reading evidence - got an empty screen.
+     *
+     * Mutation: make `decidable` true for every visible row, or drop
+     * scopeVisible() from the controller.
      */
-    public function test_a_listing_and_its_counts_are_scoped_to_the_viewer(): void
+    public function test_a_listing_shows_evidence_but_marks_what_cannot_be_decided(): void
     {
         $organisation = $this->make->organisation();
         $starter = $this->make->user($organisation, administrator: true);
@@ -214,8 +223,105 @@ final class ReviewAuthorityTest extends TestCase
 
         $props = $response->viewData('page')['props'];
 
+        // Visible as evidence...
+        $this->assertCount(1, $props['items']['data']);
+        $this->assertSame(1, $props['counts']['privileged']);
+
+        // ...and NOT actionable.
+        $this->assertFalse($props['items']['data'][0]['decidable']);
+        $this->assertNull($props['items']['data'][0]['basis']);
+    }
+
+    /**
+     * BLOCKER 4. An Auditor reads the evidence and decides nothing.
+     *
+     * grantableBy(Auditor) is empty, which is exactly right for deciding and
+     * exactly wrong for reading. Both halves are asserted here because the
+     * defect was that one was used for the other.
+     *
+     * Mutation: filter the listing by decision authority again.
+     */
+    public function test_an_auditor_sees_review_evidence_and_can_decide_nothing(): void
+    {
+        $organisation = $this->make->organisation();
+        $starter = $this->make->user($organisation, administrator: true);
+        $auditor = $this->make->user($organisation);
+        $this->access->assignment($auditor, RoleCode::Auditor, $organisation);
+
+        $subject = $this->make->user($organisation);
+        $this->reviews->privilegedItem(
+            $this->reviews->cycle($starter),
+            $this->access->assignment($subject, RoleCode::Auditor, $organisation),
+        );
+
+        $props = $this->signedInAs($auditor)->get('/console/access-reviews')->viewData('page')['props'];
+
+        $this->assertCount(1, $props['items']['data'], 'An Auditor saw no review evidence at all.');
+        $this->assertFalse($props['items']['data'][0]['decidable']);
+        $this->assertSame(1, $props['counts']['privileged']);
+    }
+
+    /**
+     * BLOCKER 3. Reviews never cross an organisation boundary - not in the
+     * listing, not in the counts, and not in the decision.
+     *
+     * The System Administrator role is PLATFORM-SCOPED, so its assignment
+     * carries no organisation_id. Reading that as "every organisation" is how
+     * one customer's access reaches another's screen.
+     *
+     * Mutation: drop the organisation filter from scopeVisible(), or from
+     * basisFor().
+     */
+    public function test_reviews_never_cross_an_organisation_boundary(): void
+    {
+        $ours = $this->make->organisation('Ours');
+        $theirs = $this->make->organisation('Theirs');
+
+        $ourAdmin = $this->make->user($ours, administrator: true);
+        $theirAdmin = $this->make->user($theirs, administrator: true);
+
+        $theirSubject = $this->make->user($theirs);
+        $theirItem = $this->reviews->privilegedItem(
+            $this->reviews->cycle($theirAdmin),
+            $this->access->assignment($theirSubject, RoleCode::Auditor, $theirs),
+        );
+
+        // Not visible.
+        $props = $this->signedInAs($ourAdmin)->get('/console/access-reviews')->viewData('page')['props'];
+        $this->assertSame([], $props['items']['data'], "Another organisation's reviews were listed.");
         $this->assertSame(0, $props['counts']['privileged']);
-        $this->assertSame([], $props['items']['data']);
+
+        // Not decidable, even though this actor is a System Administrator.
+        $this->assertNull($this->authority->basisFor($ourAdmin, $theirItem));
+
+        $this->signedInAs($ourAdmin)
+            ->post("/console/access-reviews/items/{$theirItem->id}/decide", ['decision' => 'revoke']);
+
+        $this->assertSame('pending', $theirItem->fresh()->state->value);
+    }
+
+    /**
+     * BLOCKER 3. A cycle generates for the request's organisation only.
+     *
+     * Mutation: generate from the actor's own organisation_id column, or drop
+     * the organisation filter from generation.
+     */
+    public function test_a_cycle_generates_only_for_its_own_organisation(): void
+    {
+        $ours = $this->make->organisation('Ours');
+        $theirs = $this->make->organisation('Theirs');
+
+        $ourAdmin = $this->make->user($ours, administrator: true);
+        $theirSubject = $this->make->user($theirs);
+        $this->access->assignment($theirSubject, RoleCode::Auditor, $theirs);
+
+        app(ReviewCycleGenerator::class)
+            ->start($ourAdmin, now()->addDays(30), $ours->id);
+
+        $this->assertFalse(
+            AccessReviewItem::query()->where('subject_user_id', $theirSubject->id)->exists(),
+            "A cycle pulled another organisation's access into its population."
+        );
     }
 
     /**

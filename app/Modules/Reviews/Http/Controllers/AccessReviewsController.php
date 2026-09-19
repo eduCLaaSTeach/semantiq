@@ -58,8 +58,9 @@ final class AccessReviewsController
     private function payload(Request $request, ?ReviewKind $kind, bool $overdueOnly = false): array
     {
         $actor = $this->actor($request);
+        $organisationId = $this->organisationId($request);
 
-        $items = $this->visible($actor)
+        $items = $this->visible($actor, $organisationId)
             ->when($kind !== null, fn (Builder $q) => $q->where('kind', $kind->value))
             ->when($overdueOnly, fn (Builder $q) => $q->overdue())
             ->when(
@@ -78,7 +79,7 @@ final class AccessReviewsController
             ->withQueryString();
 
         return [
-            'counts' => $this->counts($actor),
+            'counts' => $this->counts($actor, $organisationId),
             'items' => [
                 'data' => array_map(fn (AccessReviewItem $item): array => $this->row($item, $actor), $items->items()),
                 'currentPage' => $items->currentPage(),
@@ -90,26 +91,26 @@ final class AccessReviewsController
                 'q' => $request->query('q'),
             ],
             'canStartCycle' => $this->canStartCycle($actor),
-            'openCycle' => $this->openCycleSummary(),
+            'openCycle' => $this->openCycleSummary($actor, $organisationId),
         ];
     }
 
     /** @return Builder<AccessReviewItem> */
-    private function visible(User $actor): Builder
+    private function visible(User $actor, ?int $organisationId): Builder
     {
         $query = AccessReviewItem::query();
-        $this->authority->scopeVisible($query, $actor);
+        $this->authority->scopeVisible($query, $actor, $organisationId);
 
         return $query;
     }
 
     /** @return array<string, int> */
-    private function counts(User $actor): array
+    private function counts(User $actor, ?int $organisationId): array
     {
         return [
-            'privileged' => (clone $this->visible($actor))->where('kind', ReviewKind::Privileged->value)->pending()->count(),
-            'domains' => (clone $this->visible($actor))->where('kind', ReviewKind::Domain->value)->pending()->count(),
-            'overdue' => (clone $this->visible($actor))->overdue()->count(),
+            'privileged' => $this->visible($actor, $organisationId)->where('kind', ReviewKind::Privileged->value)->pending()->count(),
+            'domains' => $this->visible($actor, $organisationId)->where('kind', ReviewKind::Domain->value)->pending()->count(),
+            'overdue' => $this->visible($actor, $organisationId)->overdue()->count(),
         ];
     }
 
@@ -201,11 +202,23 @@ final class AccessReviewsController
     }
 
     /** @return array<string, mixed>|null */
-    private function openCycleSummary(): ?array
+    private function openCycleSummary(User $actor, ?int $organisationId): ?array
     {
-        $open = AccessReviewItem::query()->pending()->min('due_at');
+        $open = $this->visible($actor, $organisationId)->pending()->min('due_at');
 
         return $open === null ? null : ['nextDue' => (string) $open];
+    }
+
+    /**
+     * The organisation this request is about.
+     *
+     * RequireOrganisation resolves it, so it is always present on these routes.
+     */
+    private function organisationId(Request $request): ?int
+    {
+        $organisation = $request->attributes->get('semantiq_organisation');
+
+        return $organisation?->id;
     }
 
     private function actor(Request $request): User

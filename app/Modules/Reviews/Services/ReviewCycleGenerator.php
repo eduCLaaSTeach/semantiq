@@ -49,7 +49,7 @@ final class ReviewCycleGenerator
                 'started_by_user_id' => $actor->getKey(),
             ]);
 
-            $generated = $this->generatePrivileged($cycle) + $this->generateDomain($cycle);
+            $generated = $this->generatePrivileged($cycle, $organisationId) + $this->generateDomain($cycle, $organisationId);
 
             $this->events->record(SecurityEventLogger::REVIEW_CYCLE_STARTED, [
                 'entity_id' => $cycle->getKey(),
@@ -66,14 +66,29 @@ final class ReviewCycleGenerator
      * D-85. Every current assignment whose role permits at least one
      * administration class, held by an active person.
      */
-    private function generatePrivileged(AccessReviewCycle $cycle): int
+    private function generatePrivileged(AccessReviewCycle $cycle, ?int $organisationId): int
     {
         $roles = $this->privilegedRoleCodes();
 
+        /*
+         * SCOPED TO THIS ORGANISATION, AND THE PLATFORM ROLE HANDLED
+         * DELIBERATELY.
+         *
+         * The System Administrator role is platform-scoped, so its assignment
+         * carries no organisation_id. Leaving the filter off entirely - the
+         * obvious reading of "it has no organisation" - would pull every other
+         * customer's privileged access into this cycle. So an assignment
+         * qualifies when it belongs to this organisation, OR when it is
+         * platform-scoped AND the PERSON holding it belongs to this
+         * organisation. The subject is what ties it back.
+         */
         $assignments = RoleAssignment::query()
             ->whereNull('ended_at')
             ->whereIn('role_code', $roles)
-            ->whereHas('user', fn ($q) => $q->where('status', 'active'))
+            ->whereHas('user', fn ($q) => $q->where('status', 'active')->where('organisation_id', $organisationId))
+            ->where(fn ($q) => $q
+                ->where('organisation_id', $organisationId)
+                ->orWhereNull('organisation_id'))
             ->get();
 
         $count = 0;
@@ -91,6 +106,7 @@ final class ReviewCycleGenerator
 
             $count += $this->insert([
                 'access_review_cycle_id' => $cycle->getKey(),
+                'organisation_id' => $organisationId,
                 'kind' => ReviewKind::Privileged->value,
                 'subject_user_id' => $assignment->user_id,
                 'role_assignment_id' => $assignment->getKey(),
@@ -115,7 +131,7 @@ final class ReviewCycleGenerator
      * whole-domain scope is a legitimate, deliberate grant that carries no
      * posture state, and periodic review is exactly what it is for.
      */
-    private function generateDomain(AccessReviewCycle $cycle): int
+    private function generateDomain(AccessReviewCycle $cycle, ?int $organisationId): int
     {
         $broadScopes = array_values(array_map(
             static fn (ScopeType $t): string => $t->value,
@@ -134,7 +150,11 @@ final class ReviewCycleGenerator
             ->whereNull('ended_at')
             ->whereHas('assignment', fn ($q) => $q
                 ->whereNull('ended_at')
-                ->whereHas('user', fn ($u) => $u->where('status', 'active')))
+                ->whereHas('user', fn ($u) => $u
+                    ->where('status', 'active')
+                    ->where('organisation_id', $organisationId)))
+            // And the domain itself belongs to this organisation.
+            ->whereHas('domain', fn ($d) => $d->where('organisation_id', $organisationId))
             ->where(function ($q) use ($sensitive, $broadScopes): void {
                 $q
                     ->whereHas('ceilings', fn ($c) => $c
@@ -158,6 +178,7 @@ final class ReviewCycleGenerator
 
             $count += $this->insert([
                 'access_review_cycle_id' => $cycle->getKey(),
+                'organisation_id' => $organisationId,
                 'kind' => ReviewKind::Domain->value,
                 'subject_user_id' => $entitlement->assignment?->user_id,
                 'role_assignment_id' => null,

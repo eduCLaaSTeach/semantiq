@@ -435,11 +435,22 @@ Route::prefix('console')
          * sufficient alone: the class admits you to the endpoint, the algorithm
          * decides the row.
          *
+         * READING IS NOT DECIDING. An Auditor holds EvidenceRead and so reads
+         * the evidence; grantableBy(Auditor) is empty, so they decide nothing.
+         * The listing shows them rows with no action, which is what read-only
+         * means - the first implementation filtered the listing by decision
+         * authority and showed them an empty screen.
+         *
+         * RequireOrganisation IS PRESENT on both groups. Reviews are about one
+         * organisation's access, and the System Administrator role is
+         * platform-scoped - so without it, "the actor's assignment has no
+         * organisation" would quietly mean "every organisation".
+         *
          * B-1: no BUSINESS role holds an administration class, so a domain
          * owner cannot pass either gate today. The owner basis is implemented
          * and tested; reaching it through the UI waits on D-19.
          */
-        Route::middleware(RequireActionClass::class.':'.ActionClass::EvidenceRead->value)
+        Route::middleware([RequireActionClass::class.':'.ActionClass::EvidenceRead->value, RequireOrganisation::class])
             ->prefix('access-reviews')
             ->name('access-reviews.')
             ->group(function (): void {
@@ -448,7 +459,7 @@ Route::prefix('console')
                 Route::get('overdue', [AccessReviewsController::class, 'overdue'])->name('overdue');
             });
 
-        Route::middleware(RequireActionClass::class.':'.ActionClass::AccessAdmin->value)
+        Route::middleware([RequireActionClass::class.':'.ActionClass::AccessAdmin->value, RequireOrganisation::class])
             ->prefix('access-reviews')
             ->name('access-reviews.')
             ->group(function (): void {

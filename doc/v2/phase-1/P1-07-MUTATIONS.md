@@ -124,3 +124,112 @@ Both on rendered screens, both invisible to a green suite.
 | --- | --- |
 | **"You can review this as: Reviewed by the person who holds the access"** | `DecisionBasis::label()` was reused for a present-tense question. It is the sentence for a *decided* row. Split into `label()` and `prospectiveLabel()` — two different sentences the screen genuinely needs |
 | **"Every record in this domain… Today this is the same as Domain."** | P1-05's scope description ends with implementation context about a reserved future partition. True, and meaningless to somebody deciding whether a person should still reach Finance. The screen now renders the **first sentence only** |
+
+---
+
+# Gate C corrections — four blockers
+
+The Product Owner rejected the first Gate C submission with four implementation
+blockers. Each is closed below, with the mutation that proves it.
+
+## Blocker 1 — one step-up must bind to one exact item and one exact decision
+
+The first implementation held the chosen decision in a **mutable column on the
+review item** and, on return from Microsoft, found the item again by the id of
+the **access object** it was about. Two real failures followed:
+
+- a second tab could change the decision while the first confirmation was away,
+  so the returning step-up executed an intent nobody confirmed;
+- if the reviewed item became terminal while a **later** review existed for the
+  same access object, the callback attached itself to the later one —
+  authorising a decision on a review the person never saw.
+
+**Closed** by binding both halves into the confirmation itself: `subject_type`,
+`subject_id` and `subject_intent` on `pending_step_ups`, written at *begin* and
+editable by nobody. `pending_decision` is gone.
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| **M-RS1** | Search for the item by `role_assignment_id` / `domain_entitlement_id` + pending state again | **CAUGHT** |
+| **M-RS2** | Stop storing `subject_intent` | **CAUGHT** |
+| **M-RS3** | Stop storing `subject_id` | **CAUGHT** |
+
+`ReviewStepUpBindingTest` covers all four required negatives: two step-ups on one
+item; retain changed to revoke while the first is away; the confirmed item
+terminal with a later pending review for the same access; and a
+cancelled/expired confirmation.
+
+> **One test premise was wrong first time and is recorded rather than quietly
+> fixed.** The divergence cases originally used an ordinary *retain*, which
+> correctly requires no confirmation — so there was no pending row to diverge
+> from. They now use a **self-review**, where D-92 requires step-up either way.
+
+## Blocker 2 — the reverse module dependency
+
+`Access\StepUpController` imported P1-07's models and services, reversing the
+approved boundary. A later unit would have added a second import and an accepted
+unit would have become a switchboard.
+
+**Closed** with the smallest generic mechanism: `StepUpCompletion` and
+`StepUpCompletionRegistry` in P1-05. The controller knows only that some actions
+are not its own. P1-07 registers itself in its own service provider.
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| **M-RD1** | Replace the registry dispatch with a refusal | **CAUGHT** — by a **source guard**, see below |
+| — | Import any `App\Modules\Reviews` class into `app/Modules/Access` | **CAUGHT** |
+
+> **M-RD1 is recorded honestly.** It survives the behavioural suite: the binding
+> tests drive the completion directly, and the single line joining the
+> controller to it can only be exercised through a real Microsoft round trip,
+> which this project cannot automate — the same limitation P1-05 recorded for
+> step-up and verified in a browser instead. A source guard holds the line; **it
+> is not the evidence**, and saying otherwise would be the kind of claim this
+> record exists to prevent.
+
+## Blocker 3 — the organisation boundary
+
+`RequireOrganisation` was missing from both route groups, and every query was
+organisation-blind. **The System Administrator role is platform-scoped**, so
+"the actor's assignment has no organisation" would quietly have meant "every
+organisation".
+
+**Closed**: `RequireOrganisation` on both groups; `organisation_id` denormalised
+onto the item so listings, counts and authority are scoped without a join; the
+cycle starts from the **resolved** organisation rather than the actor's own
+column; and privileged generation qualifies an assignment when it belongs to
+this organisation **or** is platform-scoped *and the person holding it belongs
+to this organisation*.
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| **M-R1a** | Drop the organisation filter from `scopeVisible()` | **CAUGHT** |
+| **M-R1b** | Drop the organisation check from `basisFor()` | **CAUGHT** |
+| **M-R1c** | Drop the organisation filter from generation | **CAUGHT** |
+
+## Blocker 4 — Auditor read-only
+
+`scopeVisible()` filtered by **decision authority**, so an Auditor — whose entire
+role is reading evidence — saw an empty screen on every tab.
+`grantableBy(Auditor)` is empty, which is exactly right for deciding and exactly
+wrong for reading.
+
+**Closed** by separating the two: holders of an administration class see their
+own organisation's review evidence; a domain owner sees their own domains'; and
+whether any given row can be acted on is answered per row as `decidable`.
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| **M-R4a** | Filter the listing by decision authority again | **CAUGHT** |
+
+**Observed in the browser**, not only asserted: signed in as the Auditor, the
+Privileged Reviews screen shows **3 rows and 0 action buttons**.
+
+> **N-R1 changed meaning and is recorded, not silently replaced.** It used to
+> assert an Organisation Administrator saw *no* System Administrator review. It
+> now asserts they **see it and cannot decide it** — reading evidence is what
+> `EvidenceRead` means, and the decision authority is unchanged.
+
+## Corrections total
+
+**8 new mutations, 8 caught**, plus the 21 from the first submission re-run.
