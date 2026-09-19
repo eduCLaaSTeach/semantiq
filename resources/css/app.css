@@ -2878,3 +2878,145 @@ button.shell-link:hover .icon { color: var(--accent); }
   font-size: 12px;
   white-space: nowrap;
 }
+
+/* ---------------------------------------------------------------------------
+   P1-09 System Health.
+
+   Its own `sys-` names, on the SAME tokens the rest of the console uses. The
+   rows are not posture rows - a posture row carries a remediation link and a
+   withheld treatment, and neither applies here - so reusing `.sec-row` would
+   have meant one class answering to two screens with different rules. The
+   TOKENS are shared, which is what keeps the two screens looking like one
+   product.
+   --------------------------------------------------------------------------- */
+
+.sys-areas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sys-area {
+  padding: var(--space-3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+
+.sys-area-head {
+  margin-bottom: var(--space-3);
+}
+
+.sys-area-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.sys-area-description {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.sys-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sys-row {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--card-border);
+}
+
+.sys-row:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+/* WRAPS, and that is the small-screen behaviour rather than a second layout.
+   At 390px the badge drops under the name instead of squeezing it to two
+   characters; justify-content keeps it right-aligned when there is room. */
+.sys-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.sys-row-name {
+  font-weight: 600;
+}
+
+.sys-row-explanation {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* The age of a STORED answer. Quieter than the explanation, because it
+   qualifies the status rather than stating it - but always present on the one
+   row that is not live, so a stored result cannot read as a live one. */
+.sys-row-age {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.sys-note {
+  color: var(--text-muted);
+  margin: var(--space-3) 0 0;
+}
+
+.sys-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sys-status-mark {
+  font-weight: 700;
+}
+
+.sys-status-available {
+  background: var(--badge-success-bg);
+  color: var(--badge-success-fg);
+}
+
+.sys-status-degraded {
+  background: var(--badge-attention-bg);
+  color: var(--badge-attention-fg);
+}
+
+.sys-status-unavailable {
+  background: var(--badge-danger-bg);
+  color: var(--danger-fg);
+}
+
+/* THE THREE NEUTRALS. None is green and none is amber: green would be a claim
+   nobody measured and amber would report a fault where there is none. They are
+   distinguishable from each other WITHOUT COLOUR - "Not checked" is filled and
+   carries "?", the other two are dashed and carry "–" - because one means
+   nobody looked and the others mean there is nothing to look at. */
+.sys-status-not_checked {
+  background: var(--badge-neutral-bg);
+  color: var(--badge-neutral-fg);
+}
+
+.sys-status-not_applicable,
+.sys-status-not_configured {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--card-border-strong);
+}

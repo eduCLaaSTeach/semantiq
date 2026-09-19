@@ -129,6 +129,63 @@ final class IdentityHealthCheck
     }
 
     /**
+     * P1-09. The STORED answer, for a reader that must not contact Microsoft.
+     *
+     * NO NETWORK PATH EXISTS IN THIS METHOD, and that is a stronger claim than
+     * "it does not normally make a request". It does not touch EntraDiscovery
+     * at all - not metadata(), not signingKeys(), not probe(), and not even the
+     * cached accessors - so there is no read-through to fall through to. It
+     * reads the two cache keys THIS CLASS already writes and reports what they
+     * say.
+     *
+     * WHY report() WOULD NOT DO, which is the defect this method was added for:
+     * report() calls trustAvailability(), and when either cached value is
+     * absent that method asks Microsoft. On a cold cache - a fresh deployment,
+     * a cleared cache, or 24 hours of quiet - rendering a health screen off
+     * report() makes two outbound HTTPS calls with a ten-second timeout each,
+     * to the dependency the person opening that screen is trying to diagnose.
+     *
+     * ABSENCE IS REPORTED AS ABSENCE, in both directions. There is no default
+     * arm that lands on HEALTHY, and equally no evaluation that would land on
+     * FAILED because nothing is cached - inventing an outage from "nobody
+     * looked" is the same defect as inventing health from it, and a false red
+     * on a working sign-in is the one this codebase already refuses elsewhere.
+     */
+    public function storedReport(): StoredIdentityHealth
+    {
+        $stored = Cache::get(self::LAST_RESULT_KEY);
+        $probe = $this->lastProbe();
+        $probeAt = is_array($probe) ? ($probe['at'] ?? null) : null;
+
+        $state = is_array($stored) ? ($stored['state'] ?? null) : null;
+
+        // An unrecognised value is not trustworthy, whatever it is. A cache
+        // entry written by an older release, or half-written, must not be
+        // rendered as a status; it is exactly as unknown as no entry at all.
+        $trustworthy = in_array($state, [
+            IdentityHealthReport::HEALTHY,
+            IdentityHealthReport::DEGRADED,
+            IdentityHealthReport::FAILED,
+        ], true);
+
+        if (! $trustworthy) {
+            return new StoredIdentityHealth(
+                state: IdentityHealthReport::NOT_CHECKED,
+                checkedAt: null,
+                lastProbeAt: is_string($probeAt) ? $probeAt : null,
+            );
+        }
+
+        $at = $stored['at'] ?? null;
+
+        return new StoredIdentityHealth(
+            state: (string) $state,
+            checkedAt: is_string($at) ? $at : null,
+            lastProbeAt: is_string($probeAt) ? $probeAt : null,
+        );
+    }
+
+    /**
      * Collapsed for HealthInspector.
      *
      * Failed fails the deployment; Degraded does not. A return-address nuance,

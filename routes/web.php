@@ -37,6 +37,7 @@ use App\Modules\Security\Http\Controllers\BaselineController;
 use App\Modules\Security\Http\Controllers\ExceptionsController;
 use App\Modules\Security\Http\Controllers\PrivilegedAccessController;
 use App\Modules\Security\Http\Controllers\SecurityEventsController;
+use App\Modules\SystemHealth\Http\Controllers\SystemHealthController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -496,6 +497,37 @@ Route::prefix('console')
                 Route::get('admin-changes', [AuditController::class, 'adminChanges'])->name('admin-changes');
                 Route::get('security-events', [AuditController::class, 'securityEvents'])->name('security-events');
                 Route::get('configuration', [AuditController::class, 'configuration'])->name('configuration');
+            });
+
+        /*
+         * P1-09 System Health. ONE GET, AND NO OTHER VERB AT ALL.
+         *
+         * SystemHealthArchitectureTest asserts this set as an EQUALITY, so a
+         * POST added later fails the build. That is how "this page cannot
+         * change anything" is enforced structurally rather than intended:
+         * there is no route that could carry a restart, a cache clear, an
+         * acknowledgement or a dismissal.
+         *
+         * PlatformAdmin, NOT EvidenceRead, and the difference is the point.
+         * Evidence access and infrastructure access are different authorities:
+         * an Auditor reads what happened; an operator reads whether the
+         * machine is working. Placing this behind EvidenceRead would hand an
+         * Auditor and an Organisation Administrator a view of the deployment's
+         * infrastructure that nobody decided to give them. D-117.
+         *
+         * RequireOrganisation IS DELIBERATELY ABSENT, for the same reason it is
+         * absent from Security Status: infrastructure health is not one
+         * organisation's fact, and a deployment whose organisation is not
+         * configured yet is exactly when somebody needs this screen.
+         *
+         * The Check sign-in now control posts to identity.health.recheck in the
+         * group below. P1-09 adds no write path of its own.
+         */
+        Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)
+            ->prefix('system-health')
+            ->name('system-health.')
+            ->group(function (): void {
+                Route::get('/', [SystemHealthController::class, 'show'])->name('show');
             });
 
         Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)

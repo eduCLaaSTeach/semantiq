@@ -138,7 +138,14 @@ final class ApprovedMenu
             // Administrator route-level permissions are implemented and tested;
             // reaching the screen through the sidebar stays carried.
             NavigationNode::leaf($area, 'Audit', 'i-scroll', 'audit.user-access', 'audit.view'),
-            NavigationNode::locked($area, 'System Health', 'i-heart-pulse', $policy),
+            // P1-09. Delivered: one read-only screen, ONE GET and no other
+            // verb, so nothing on it can restart, clear or re-run anything.
+            // PlatformAdmin, not EvidenceRead: infrastructure visibility is a
+            // different authority from audit-evidence access. D-19 IS
+            // UNCHANGED - this node already sits inside System Administration,
+            // which is shown to System Administrators only, so nothing is
+            // widened.
+            NavigationNode::leaf($area, 'System Health', 'i-heart-pulse', 'system-health.show', 'system-health.view'),
         ];
     }
 }
