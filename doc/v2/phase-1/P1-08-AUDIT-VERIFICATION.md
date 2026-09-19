@@ -350,3 +350,117 @@ what a reader learns to skip.
 - **An Auditor still cannot reach the screen** (D-19, carried). The route-level
   permission is implemented and tested; the sidebar is unchanged and **no
   account was created** to make it observable.
+
+---
+
+## 10. Deployment and production verification
+
+| | |
+| --- | --- |
+| Implementation merge | `68c5c6f9f72f0ce93eaa12787e58e80c51b88c90` (PR #117) |
+| Verification workflow merge | `ddd12478336823f9ef81362c060c7cafd031c325` (PR #118) |
+| Post-merge CI | run **294 SUCCESS** |
+| Deployment | `Deploy to cPanel (SSH)` run **141 SUCCESS** — `migrate --force`, as always |
+| Production verification | `Verify P1-08 Audit state (read-only)` run **1 SUCCESS** |
+
+### 10.1 Schema, observed on production
+
+| Check | Observed |
+| --- | --- |
+| `audit_events` exists | **yes** |
+| `audit_chain_head` exists | **yes** |
+| Chain-head rows | **exactly 1**, at id 1, sequence 0 |
+| Genesis hash | **64 characters** — a sha256 digest |
+| Evidence start instant | **populated** |
+| `ip_address` column | **absent** |
+| `user_agent` column | **absent** |
+| Undeclared columns | **none** — asserted in both directions, so an extra column and a missing one each fail |
+| Pre-existing tables altered | **none**. `users`, `role_assignments`, `domain_entitlements`, `access_review_items`, `pending_step_ups`, `organisations` and `business_domains` all unchanged |
+| Chain verification | **intact**, over 0 rows |
+
+### 10.2 Route surface, read from the DEPLOYED route table
+
+```
+GET console/audit
+GET console/audit/admin-changes
+GET console/audit/configuration
+GET console/audit/security-events
+```
+
+Four GETs and nothing else, each behind `EnsureSessionIsCurrent`,
+`RequireActionClass:evidence_read` and `RequireOrganisation`. Read with
+`route:list` **on the server**, because what matters is what is served rather
+than what the repository says.
+
+**Every write verb answers 405** on production: `POST`, `PUT`, `PATCH` and
+`DELETE` against `/console/audit` are Method Not Allowed. No write path exists
+to reach.
+
+### 10.3 Unauthenticated behaviour
+
+All four Audit routes redirect an unauthenticated visitor to the sign-in page,
+**identically to every other console route**, and the returned page contains
+**none** of `audit_events`, `row_hash`, `chain_head`, `occurred_at`,
+`Evidence begins` or `User Access`. The refusal is not an oracle for whether
+there is evidence behind it.
+
+**No 500s anywhere.** `/`, `/up` and all four tabs answered cleanly.
+
+### 10.4 Evidence count immediately after deployment: ZERO
+
+**0 rows, and that is correct.** D-109: evidence begins when the storage does,
+nothing was backfilled, and no event has been emitted on production since the
+migration ran. **Nothing was manufactured to change that number.**
+
+### 10.5 What was NOT verified on production, and why
+
+- **The signed-in screens.** Reaching them needs a Microsoft sign-in, which
+  only the Product Owner can perform. Their rendered state is the 16-screen
+  local pass (§8) plus Gate D.
+- **Chromium could not be pointed at production.** The session's egress proxy
+  re-terminates TLS and the browser does not read its CA bundle; disabling
+  certificate verification to get a screenshot is not an acceptable trade. The
+  production HTTP checks above were made over HTTPS **with** that bundle, and
+  the browser evidence stays local and honest about being local.
+
+---
+
+## 11. Gate D — the Product Owner script
+
+**Eight checks, normal production activity only.** Nothing here asks for a
+failure to be induced, an account to be created, or data to be invented.
+
+### Before you start
+
+**Audit is permanent.** There is no delete, no archive and no export. Anything
+you do while testing is recorded for good, under your name — and a refused
+action is recorded exactly because it was refused.
+
+**The log is empty right now.** Evidence begins at the moment shown on the
+screen, and nothing before it was ever stored anywhere searchable. **An empty
+first tab is correct**, not a fault — check 3 is what puts the first row in it.
+
+| # | Check | Expected | PASS / FAIL |
+| --- | --- | --- | --- |
+| 1 | Open **System Administration → Audit** | Four tabs: **User Access, Admin Changes, Security Events, Configuration Changes**. No warning banner | |
+| 2 | Read the line above the list | *"Evidence begins \<date, time\>. Activity before that time was not recorded and is not available here."* — on **every** tab | |
+| 3 | **Sign out and sign back in normally.** Return to **Audit → User Access** | An entry reading **Signed in**, naming **you**, with today's date and time | |
+| 4 | Read that entry closely | **Who**, **Outcome** and the time read as plain English. No codes, no identifiers, no field names, nothing you would have to ask a developer about | |
+| 5 | Choose an **Action** from the dropdown and press **Apply**; then set **From** to tomorrow and **Apply**; then **Clear** | The list narrows, then shows *"Nothing here matches what you are looking for."*, then returns in full. Every dropdown option reads as business English | |
+| 6 | Look across **all four** tabs | **No dotted keys** (`auth.login.succeeded`), **no row numbers** (`#12`), **no directory identifiers**, no secrets. Anything technical is either absent or plainly labelled as withheld | |
+| 7 | Narrow the window to phone width, switch **light** and **dark**, then press browser **Back** | Nothing cut off or past the edge; both themes look deliberate; Back returns along the trail | |
+| 8 | Open **Security Status → Security Events** | Still the **catalogue** — what is recorded and how it is protected — now pointing at Audit for what happened. **Not** a second copy of the history | |
+
+### Not in this script, and carried as automated evidence
+
+**Database failure, chain corruption, concurrency, failed sign-in accounts and
+additional privileged users are not to be induced.** Each would mean breaking
+production on purpose or manufacturing access that should not exist.
+
+| Carried | Automated evidence |
+| --- | --- |
+| Fail-closed behaviour | `AuditFailClosedTest`, `AuditRollbackTest` — 15 cases |
+| The tamper warning | `AuditChainTest` — altered, removed, end-removed and forged |
+| Concurrent writes | `AuditChainConcurrencyTest`, **MySQL in CI** |
+| An Auditor or Organisation Administrator reading Audit | `AuditRoutesTest`, `AuditVisibilityTest`. **D-19 carried** — the sidebar is unchanged and no account was created |
+| Evidence older than the deployment | Does not exist. D-109 |
