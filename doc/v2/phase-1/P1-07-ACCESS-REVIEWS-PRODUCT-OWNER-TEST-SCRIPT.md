@@ -21,8 +21,8 @@ widens or repairs access.
 | --- | --- |
 | PLAN merge | `da79fd01947f0972f9d04f161e2c188d25b884d4` |
 | DESIGN merge | `a830488f36e0c8b9040a81cae7b458f991103134` |
-| Implementation merge | *to be filled after merge* |
-| Deployed | *to be filled after deployment* |
+| Implementation merge | **`c7069f7f87fe9d7aa7d89256c39ed3de9e30430f`** |
+| Deployed | **19 September 2026**, to `https://semantiq.claas2saas.com` |
 
 > **The build above is what is live.** A test script run against a different
 > build proves nothing about this one.

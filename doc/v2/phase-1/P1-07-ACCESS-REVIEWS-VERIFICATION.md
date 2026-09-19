@@ -263,3 +263,60 @@ nullable columns, raised here as the DESIGN's §10 required.
   observed: D-19 shows the sidebar to System Administrators only. **Unchanged by
   this unit**, and the same limitation P1-06 raised. It does not affect
   authorisation, which is route-level.
+
+---
+
+## 13. Production deployment and verification — 19 September 2026
+
+Merged **`c7069f7f87fe9d7aa7d89256c39ed3de9e30430f`**; **deploy run 135
+succeeded**; post-merge CI recorded below.
+
+**The migration ran as part of the deployment** (`php artisan migrate --force`
+over SSH, `deploy.yml:461`). Two new tables and three nullable columns on an
+existing one; no data migration.
+
+### Verified against production without signing in and without changing anything
+
+Read through `verify-access` run 10 — **manual dispatch, read-only, every
+statement from a `SELECT`**, and it reports codes, types and counts only, never
+a name or an email.
+
+| Check | Result |
+| --- | --- |
+| **Two P1-07 tables exist** | `access_review_cycles` **true**, `access_review_items` **true** |
+| **Three generic step-up columns exist** | `subject_type`, `subject_id`, `subject_intent` — **all true** |
+| **The mutable decision column is gone** | `access_review_items.pending_decision` **absent** — asserted, not assumed |
+| **No access row was changed by the migration** | 1 active System Administrator, **0** current entitlements, **0** current scopes, **0** current ceilings, 3 users, 3 enabled domains — **identical to the state recorded in `P1-06-SECURITY-STATUS-VERIFICATION.md` §9a** |
+| **No review cycle was created** | `review_cycles_total` **0**, `review_items_total` **0**. Starting one is the Product Owner's, at Gate D |
+| `users.platform_role` still absent | true — the D-49 position is unchanged |
+
+### Verified over HTTP, unauthenticated
+
+| Check | Result |
+| --- | --- |
+| All three review routes reachable | `302` to sign-in — deployed, not `404`, not `500` |
+| Every other console route unchanged | Security Status, Security Events, Roles & Access, Identity & SSO, Business Domains, Users & Groups — all `302` |
+| GET-only on the read routes | `POST`/`PUT`/`PATCH`/`DELETE` on `/console/access-reviews` → **405** |
+| The decide endpoint refuses anonymously | **419**, never a `500` and never an action |
+| The refusal discloses nothing | No review, role or access wording anywhere in the unauthenticated response |
+| The deployed bundle is the verified one | `build/assets/app-ire3WRv1.css` and `app-u3xEMmnP.js` are **byte-for-byte the local build the browser checks ran against** |
+| Three tabs shipped, no raw key | *Privileged Reviews*, *Domain Reviews*, *Overdue Reviews* present; **zero** `access.review.*` identifiers in the client bundle |
+
+### One observation worth recording
+
+`verify-access` warns that **9 step-up confirmations are open** (14 total). These
+pre-date P1-07 — leftovers from earlier acceptance testing whose five-minute
+lifetime has long expired. `StepUpService::resolve()` refuses an expired row, so
+nothing is reachable through them. **Not a defect, and not introduced here**,
+but it is in the record rather than left for somebody to find.
+
+### What could NOT be verified from here
+
+**Nobody signed in.** Sign-in is Microsoft Entra SSO, so the three screens were
+not rendered as the authenticated System Administrator on production, the
+sidebar node was not clicked, and no decision was taken. Sections A–G of the
+Product Owner Test Script exist for exactly that, and this record does not claim
+any of it.
+
+**No review cycle exists on production**, deliberately. Starting one creates
+permanent records, and that is the Product Owner's decision at Gate D.
