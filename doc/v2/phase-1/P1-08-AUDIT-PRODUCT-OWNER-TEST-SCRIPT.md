@@ -152,3 +152,33 @@ evidence. **None is an implementation defect.**
 - **P1-02's provider-wide SSO re-check remains OPEN / CARRIED / UNVERIFIED**,
   and is untouched by this unit.
 - **Everything P1-07 carried remains carried.**
+
+
+---
+
+# RESULT — P1-08 ACCEPTED
+
+**Product Owner Gate D: 8 of 8 PASS.** 19 September 2026, on production.
+
+| | |
+| --- | --- |
+| Build tested | merge `68c5c6f9f72f0ce93eaa12787e58e80c51b88c90`, deploy run **141** |
+| Gate D checks 1–8 | **PASS** |
+| Gate D | **CLOSED** |
+| P1-08 | **CLOSED** |
+
+Observed: Audit reachable from System Administration with all four tabs; the
+evidence-start statement present; a **real** *Signed in* entry produced by an
+ordinary sign-out and sign-in, naming the Product Owner, with a
+business-readable outcome and time; filters working; and **no raw event key or
+database row id anywhere on screen**.
+
+**§11 of this script still stands in full.** Everything listed there remains
+**NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION DATA** and is carried forward:
+fail-closed behaviour, the tamper warning, concurrency, an Auditor or
+Organisation Administrator reading Audit, and evidence older than the
+deployment. Nothing in it was closed by this acceptance and nothing was
+inferred from a passing test.
+
+**P1-02's provider-wide SSO re-check remains OPEN / CARRIED / UNVERIFIED.**
+**P1-07's carried items remain carried. D-19 is unchanged.**
