@@ -4,12 +4,12 @@
 
 | | |
 | --- | --- |
-| Unit | **P1-08 — Audit** (delivery order 10, the last Phase 1 unit) |
+| Unit | **P1-08 — Audit** (delivery order 10). **P1-09 System Health and P1-10 Administration Home still follow** — P1-08 is not the last Phase 1 unit |
 | Menu | System Administration → **Audit** — currently a **locked** node in `ApprovedMenu` |
 | Categories | **User Access · Admin Changes · Security Events · Configuration Changes** |
 | Purpose | Searchable, tamper-resistant evidence **appropriate to the viewer** |
 | Exit | Core Phase 1 security and administrative activity is **evidenced** |
-| Status | **AWAITING PRODUCT OWNER REVIEW** — D-95 to D-111 |
+| Status | **PLAN APPROVED. D-95 to D-111 ANSWERED** — 19 September 2026, §6 |
 
 ---
 
@@ -45,9 +45,10 @@ these events later."*
 | Events are **complete** | **FALSE** — rotation, and nothing guarantees a write |
 | P1-06 Security Events shows **history** | **FALSE.** It shows the **catalogue** — what is recorded and how it is protected. `SecurityEventsController` reads **no file**, and `N-SS28` asserts it |
 
-**Consequence the Product Owner must accept or overrule:** Audit can only
-evidence activity **from the moment P1-08's storage exists**. Everything before
-that is in rotating log files. See **D-109**.
+**RULED (D-109).** Audit evidences activity **from the moment P1-08's storage
+exists**, and does not backfill. The Audit screen **must state the actual
+evidence start date and time** so nobody mistakes it for complete earlier
+history.
 
 ---
 
@@ -82,7 +83,7 @@ that is in rotating log files. See **D-109**.
 
 - A second event logger, a second access model, a second review evidence store.
 - **P1-09 System Health.**
-- Export in any form, unless the Product Owner requires it (**D-110**).
+- **Export in any form (D-110 — ruled out of Release 1).**
 - Business-record audit payloads — *what* a record said is never audit content.
 - Secrets, tokens, passwords, PKCE verifiers, bootstrap grants. The existing
   `ALLOWED_KEYS` guard already makes these unrepresentable, and it stays.
@@ -143,8 +144,10 @@ added later is categorised by construction.
 | **Security Events** | Sign-in refusals; step-up refusals; review refusals; engine and state failures |
 | **Configuration Changes** | Sign-in configuration (identity health) |
 
-**Open question inside D-98:** a sign-in *refusal* is both User Access and
-Security Events. One row, one category, or one row visible under two?
+**RULED (D-98):** **exactly one canonical category per occurrence.** A
+successful sign-in is **User Access**; a sign-in **refusal** is **Security
+Events**. One occurrence is never duplicated into two categories — a count that
+depends on which tab you are standing on is not evidence.
 
 ### 4.5 Viewer permissions — **D-99**
 
@@ -152,17 +155,18 @@ Security Events. One row, one category, or one row visible under two?
 Administrator and Auditor. Reaching the screen is therefore **not** the decision
 — what each may **value** is, exactly as P1-06's projection already establishes.
 
-Recommendation as a starting position:
+**RULED (D-99):**
 
 | Viewer | Sees |
 | --- | --- |
-| **System Administrator** | Their organisation's evidence, all four categories |
-| **Organisation Administrator** | Their organisation's evidence; **not** platform-scoped events |
-| **Auditor** | **Read-only**, their organisation, all four categories, **no administration action of any kind** |
+| **System Administrator** | Authorised organisation evidence **plus platform and no-organisation evidence** |
+| **Organisation Administrator** | **Own organisation only** |
+| **Auditor** | **Read-only, own organisation only.** No administration action of any kind |
 
-**The problem to decide:** many events carry **no `organisation_id`** — first-run
-setup, every login refusal, engine failures. Under strict organisation scoping
-they would be invisible to everyone. Three options in D-99.
+This answers the problem the plan raised: many events carry **no
+`organisation_id`** — first-run setup, every login refusal, engine failures.
+They are **System Administrator only**, so they are neither invisible to
+everyone nor visible to the wrong viewer.
 
 **D-19 still applies:** the sidebar is shown to System Administrators only, so
 an Auditor cannot currently *reach* any console screen. This is the **same
@@ -174,12 +178,18 @@ silently closed by P1-08.
 Today **no network detail is captured at all** — `ip_address` and `user_agent`
 are not in `ALLOWED_KEYS`. So there are two separate questions:
 
-- **D-101 — should Audit capture them?** Capturing an IP address is capturing
-  new personal data that this product does not hold today. Not capturing it is
-  also a defensible Phase 1 position.
-- **D-100 — if captured, who may read them?** Recommendation: **withheld by
-  default**, System Administrator only, using P1-06's existing *withheld row*
-  pattern — the field is visibly withheld rather than silently absent.
+- **D-101 — should Audit capture them? ANSWERED: NO.** The `sessions` table
+  already holds both, as §2 records. What Audit would add is **durable
+  evidence**: *Audit does not currently persist those values as durable
+  evidence*, and Phase 1 will not start. Copying session storage into permanent
+  audit history would introduce **indefinite network and personal-data
+  retention** — which, with D-105's no-purge ruling, means forever.
+- **D-100 — field-level protection. ANSWERED.** Sensitive technical identity
+  fields are **independently projected and redacted**. An Organisation
+  Administrator and an Auditor never receive platform-sensitive identifiers, and
+  **secrets are never stored** — the existing `ALLOWED_KEYS` guard already makes
+  that unrepresentable. Where a field is withheld it is **visibly withheld**,
+  using P1-06's existing *withheld row* pattern, rather than silently absent.
 
 ### 4.7 Search, filter, pagination — **D-102**
 
@@ -245,17 +255,31 @@ see this one". P1-07's directory-enumeration finding is the precedent: the test
 asserts the two responses are **identical**, not that a particular status code
 was returned.
 
-### 4.14 The write path and its failure mode — **D-110**, **D-111**
+### 4.14 The write path and its failure mode — **D-111**
 
-- **D-110 — where the durable write happens.** Recommendation: inside
-  `SecurityEventLogger::record()`, in the same call, not through a queued
-  listener. There are no queue workers on cPanel, and evidence that depends on a
-  worker nobody runs is evidence that does not exist.
-- **D-111 — what happens when the audit write fails.** Two honest answers, and
-  the Product Owner must choose: *fail the operation* (strongest evidence,
-  a full database is an outage) or *complete the operation and record the gap*
-  (available, and the gap is itself visible). **Silently swallowing it is not an
-  option** — that is an audit trail that lies by omission.
+**Where the durable write happens is part of D-95 and D-96**, not a decision of
+its own: the persistence sits **behind `SecurityEventLogger::record()`**, in the
+same synchronous call, never through a queued listener. There are no queue
+workers on cPanel, and evidence that depends on a worker nobody runs is evidence
+that does not exist. **D-110 is Export and nothing else.**
+
+**D-111 — what happens when the audit write fails. ANSWERED: FAIL CLOSED.**
+
+An audited security or administrative operation must **not silently complete
+without evidence**.
+
+| Situation | Behaviour |
+| --- | --- |
+| A state-changing security or admin action cannot be evidenced | **The action fails** |
+| A successful authentication cannot be evidenced | **It is not treated as successfully completed** |
+| An **already-refused** authentication cannot be evidenced | **It remains refused.** Failing closed never turns a refusal into anything else |
+| Operational diagnostics | `Log::critical` **may** be used as a fallback for operators, and is **not accepted as audit evidence** |
+
+**This is the hardest thing in the unit and DESIGN owns it.** DESIGN must define
+the transaction and ordering boundaries so that the product never reports a
+failure **after** an irreversible business or security change has already
+committed. An audit trail that lies by omission and a screen that lies about
+what happened are the same defect in two places.
 
 ---
 
@@ -279,27 +303,30 @@ was returned.
 
 ---
 
-## 6. Product Owner decisions — **D-95 to D-111 — ALL OPEN**
+## 6. Product Owner decisions — **D-95 to D-111 — ALL ANSWERED**
 
-| # | Decision | Recommendation |
+**Approved 19 September 2026.** Where a ruling differs from the recommendation
+the plan offered, the **ruling** is what DESIGN implements.
+
+| # | Decision | **RULING** |
 | --- | --- | --- |
-| **D-95** | Canonical audit source and model | `SecurityEventLogger` stays the one emit boundary; persistence added behind it |
-| **D-96** | Is existing storage sufficient? | **No.** One dedicated append-only `audit_events` table |
-| **D-97** | Tamper resistance | No update/delete path + per-row hash chain + honest statement of what it cannot prevent |
-| **D-98** | Category mapping | Derived from `EventCatalogue`. **Open:** does a sign-in refusal appear under one category or two? |
-| **D-99** | Viewer permissions | Organisation-scoped for all three roles. **Open:** who sees events that carry no organisation? |
-| **D-100** | Field-level protection | Network detail withheld by default, System Administrator only, visibly withheld |
-| **D-101** | Capture network detail at all? | **Open.** Capturing IP and user agent is new personal data this product does not hold today |
-| **D-102** | Search model | Server-side; category, event, actor, subject, outcome, date range. **No free-text search** |
-| **D-103** | Actor for failed/anonymous attempts | `actor_type` of person / external subject / system. **Never a fabricated user id** |
-| **D-104** | Actor, action, target, outcome, timestamp | All five as first-class columns; server timestamp only |
-| **D-105** | Retention | **None in Phase 1.** No purge path |
-| **D-106** | Audit vs P1-06 Security Events | Both remain; P1-06 keeps the catalogue, Audit owns occurrences |
-| **D-107** | Audit vs P1-07 review evidence | Audit shows the **events**; the review tables stay P1-07's |
-| **D-108** | Refusal behaviour | Identical response whether or not the record exists |
-| **D-109** | Backfill of pre-P1-08 history | **Do not backfill.** Partial history presented as complete is worse than an honest start date, and P1-06 already refused to parse log files |
-| **D-110** | Export | **Not in Release 1** unless the Product Owner requires it. Nothing in the authority requires one |
-| **D-111** | Audit write failure | **Open.** Fail the operation, or complete it and record the gap. Silence is not an option |
+| **D-95** | Canonical audit source and model | **APPROVED.** `SecurityEventLogger` remains the **single** emit boundary. Durable persistence sits behind it, synchronously. **No second logger** |
+| **D-96** | Is existing storage sufficient? | **APPROVED — no.** One dedicated **append-only `audit_events`** table |
+| **D-97** | Tamper resistance | **APPROVED.** No application update or delete path, **plus** hash-chain tamper detection, **plus** an explicit statement that hosting and database operators **cannot be technically prevented** from deleting rows |
+| **D-98** | Category mapping | **APPROVED.** Exactly **one canonical category per occurrence**, derived from `EventCatalogue`. Successful sign-in → **User Access**. Sign-in refusal → **Security Events**. **One occurrence is never duplicated into two categories** |
+| **D-99** | Viewer permissions | **APPROVED.** System Administrator: authorised organisation evidence **plus** platform / no-organisation evidence. Organisation Administrator: **own organisation only**. Auditor: **read-only, own organisation only**. Platform and no-organisation events are **System Administrator only** |
+| **D-100** | Field-level protection | **APPROVED.** Sensitive technical identity fields are **independently projected and redacted**. Organisation Administrator and Auditor **never** receive platform-sensitive identifiers. **Secrets are never stored** |
+| **D-101** | Capture network detail at all? | **APPROVED — DO NOT.** IP address and user agent are **not persisted into Audit in Phase 1**. Existing session storage is **not copied** into permanent audit history. Audit does not currently persist those values as durable evidence, and Phase 1 will not begin — avoiding indefinite network and personal-data retention |
+| **D-102** | Search model | **APPROVED.** Server-side filtering by category, event, actor, subject, outcome and date range, with pagination. **No free-text context search** |
+| **D-103** | Actor for failed/anonymous attempts | **APPROVED.** `actor_type` of **person / external subject / system**. **Never fabricate a SemantIQ user** for an unknown or failed sign-in actor |
+| **D-104** | Actor, action, target, outcome, timestamp | **APPROVED.** All five are **first-class durable fields**; the timestamp is the **server's** |
+| **D-105** | Retention | **APPROVED.** **No application purge or retention job in Phase 1** |
+| **D-106** | Audit vs P1-06 Security Events | **APPROVED.** P1-06 remains the **catalogue**; P1-08 owns **actual occurrences**. P1-06 may point users to Audit but **does not become a history** |
+| **D-107** | Audit vs P1-07 review evidence | **APPROVED.** Audit consumes P1-07's **emitted events only**. It does **not** re-read or reinterpret the review tables |
+| **D-108** | Refusal behaviour | **APPROVED.** An unauthorised viewer's response for an existing and a non-existent record must be **indistinguishable**, leaking **no counts and no category existence** |
+| **D-109** | Backfill of pre-P1-08 history | **APPROVED — no backfill** from rotating log files. The Audit screen **must state the actual evidence start date and time**, so nobody mistakes it for complete earlier history |
+| **D-110** | Export | **APPROVED — no Audit export in Release 1.** D-110 is Export and nothing else |
+| **D-111** | Audit write failure | **APPROVED — FAIL CLOSED.** §4.14 carries the four cases. `Log::critical` is operational diagnostics, **never** audit evidence. DESIGN owns the transaction and ordering boundaries |
 
 ---
 
@@ -309,26 +336,29 @@ was returned.
 | --- | --- |
 | **P1-02 provider-wide SSO Re-check** | **OPEN / CARRIED / UNVERIFIED.** P1-08 does not own it, does not close it, and is not blocked by it |
 | **P1-07 live-verification items** | **CARRIED**, unchanged |
-| **D-19 — sidebar shown to System Administrators only** | **CARRIED.** An Auditor cannot reach any console screen today. P1-08 must not close this silently, and must not close it by widening the sidebar as a side effect |
+| **D-19 — sidebar shown to System Administrators only** | **CARRIED, and D-19 is NOT changed by P1-08.** Auditor and Organisation Administrator **route-level** evidence permissions may be implemented and tested; the System-Administrator-only **sidebar** limitation stays carried unless separately authorised. **The System Administration navigation is not widened as a side effect of Audit** |
 
 ---
 
-## 8. What would make this plan wrong
+## 8. What would have made this plan wrong — now settled
 
-- **If the Product Owner expects Audit to show history from before it ships.**
-  It cannot, honestly (§1, D-109). This is the single most likely mismatch.
-- **If "immutable" is expected to mean an operator cannot delete rows.** It
-  cannot mean that on this hosting; it means alteration is **detectable**
-  (D-97).
-- **If Auditor is expected to use this screen at acceptance.** D-19 prevents it,
-  and no account will be manufactured to make it observable.
+| Risk | Settled by |
+| --- | --- |
+| Expecting Audit to show history from before it ships | **D-109.** It cannot, honestly, and the screen must say so |
+| Expecting "immutable" to mean an operator cannot delete rows | **D-97.** On this hosting it means alteration is **detectable**, and the plan says that plainly rather than implying more |
+| Expecting an Auditor to use this screen at acceptance | **D-19, carried.** Route-level permissions are implemented and tested; the sidebar is not widened, and **no account is manufactured** to make it observable |
+
+**The one that remains live is D-111.** Failing closed is correct and it is the
+hardest thing to implement correctly: the product must never report a failure
+**after** an irreversible change has committed. DESIGN owns that ordering.
 
 ---
 
 ## 9. Exit criteria
 
 1. Every Phase 1 security and administrative event is **durably recorded**.
-2. Audit is reachable, searchable and correct across the four categories.
+2. Audit is reachable, searchable and correct across the four categories, and
+   **states its evidence start date** (D-109).
 3. Restricted fields are unavailable to unauthorised viewers, **observed on the
    rendered screen**, not inferred.
 4. No second logger, no second access model, no duplicate review evidence.
@@ -340,6 +370,11 @@ was returned.
 
 ## 10. Status
 
-**PLAN ONLY — AWAITING PRODUCT OWNER REVIEW.**
-No DESIGN. No implementation. No schema. No deployment.
-D-95 to D-111 are open and none is assumed answered.
+**PLAN APPROVED — 19 September 2026. D-95 to D-111 ANSWERED.**
+No implementation, no schema and no deployment were produced by this plan.
+**DESIGN is the next gate**, and it owns the D-111 ordering boundaries.
+
+**P1-08 is not the last Phase 1 unit** — P1-09 System Health and P1-10
+Administration Home follow, and neither is started.
+**P1-02 remains OPEN / CARRIED / UNVERIFIED.** **P1-07's carried items remain
+carried.** **D-19 is unchanged.**
