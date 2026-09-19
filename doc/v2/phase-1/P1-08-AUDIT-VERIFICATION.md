@@ -9,7 +9,8 @@ other.
 | Unit | **P1-08 — Audit** |
 | PLAN | merge `c5580c697e0718793e786ce45b623c3d220b50d9` (D-95 – D-111 answered) |
 | DESIGN | merge `43d5addf5788c056a6a3c62ccbfdb8de5dc93ebd` (three corrections) |
-| Status | **GATE C — AWAITING PRODUCT OWNER REVIEW.** Not merged, not deployed |
+| Implementation | merge `68c5c6f9f72f0ce93eaa12787e58e80c51b88c90`, deploy run **141** |
+| Status | **PRODUCT OWNER ACCEPTED. GATE D CLOSED. P1-08 CLOSED** — 19 September 2026, §12 |
 
 ---
 
@@ -464,3 +465,50 @@ production on purpose or manufacturing access that should not exist.
 | Concurrent writes | `AuditChainConcurrencyTest`, **MySQL in CI** |
 | An Auditor or Organisation Administrator reading Audit | `AuditRoutesTest`, `AuditVisibilityTest`. **D-19 carried** — the sidebar is unchanged and no account was created |
 | Evidence older than the deployment | Does not exist. D-109 |
+
+
+---
+
+## 12. P1-08 ACCEPTED — Gate D closed
+
+**Product Owner Gate D: 8 of 8 PASS.** 19 September 2026, on production.
+
+| | |
+| --- | --- |
+| Implementation merge | `68c5c6f9f72f0ce93eaa12787e58e80c51b88c90` |
+| Deployment | `Deploy to cPanel (SSH)` run **141** — success |
+| Production verification | `Verify P1-08 Audit state (read-only)` run **1** — success |
+| Gate D | **CLOSED** |
+| P1-08 | **CLOSED** |
+
+### 12.1 What the Product Owner observed in production
+
+| # | Check | Result |
+| --- | --- | --- |
+| 1 | **System Administration → Audit**, four tabs | **PASS** |
+| 2 | Evidence-start statement | **PASS** |
+| 3 | A real **Signed in** entry after an ordinary sign-out and sign-in | **PASS** |
+| 4 | Correct actor, business-readable outcome and time | **PASS** |
+| 5 | Filters | **PASS** |
+| 6 | No raw event key, no database row id, no directory internals, no secrets | **PASS** |
+| 7 | Phone width, light and dark, browser Back | **PASS** |
+| 8 | P1-06 Security Events still the catalogue, not a duplicate history | **PASS** |
+
+**These are observed production results.** Check 3 in particular is the one
+that could not be inferred from anything automated: the first real row in the
+log was put there by ordinary use, by the Product Owner, and read back on the
+screen under their own name.
+
+### 12.2 Carried forward — NOT closed by this acceptance
+
+Accepting P1-08 closes P1-08. It closes nothing else.
+
+| Carried item | State |
+| --- | --- |
+| **P1-02 provider-wide SSO Re-check** | **OPEN / CARRIED / UNVERIFIED.** A Phase 1 orchestration gate. P1-08 never owned it and did not touch it |
+| **P1-07 live-verification items** | **CARRIED**, unchanged |
+| **D-19 — sidebar shown to System Administrators only** | **CARRIED.** Auditor and Organisation Administrator route-level evidence permissions are implemented and tested; the sidebar limitation stands, and **no account was created** to make it observable |
+| **P1-08's own §11 items** | **CARRIED** — fail-closed behaviour, the tamper warning, concurrency and a second privileged reader. Each would have required breaking production on purpose or manufacturing access that should not exist |
+
+**P1-09 System Health and P1-10 Administration Home still follow.** P1-08 was
+never the last Phase 1 unit.
