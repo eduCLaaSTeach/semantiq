@@ -422,6 +422,50 @@ jobs:
           echo "${passed} Audit tests passed against MySQL 8.4, the chain-head race included."
 
 
+      # P1-09 System Health against MySQL, AND THIS STEP IS NOT OPTIONAL.
+      #
+      # The session round trip opens a TRANSACTION and always rolls it back,
+      # inside the transaction RefreshDatabase already holds - so it runs on a
+      # SAVEPOINT, and savepoint behaviour is exactly where SQLite and MySQL
+      # have already diverged once in this project. P1-08 shipped four cases
+      # that were green on SQLite and red on MySQL for precisely that reason,
+      # and the fix there was to keep DDL out of the transaction. This step is
+      # what proves the fix holds on the engine production runs.
+      #
+      # It also covers the one check that writes: if the INSERT, the keyed
+      # SELECT or the rollback behaves differently on MySQL, a health screen
+      # would start leaving synthetic rows in the real sessions table on every
+      # render - on the one screen whose entire job is to be trustworthy.
+      - name: Run the System Health suite against MySQL
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: semantiq_ci
+          DB_USERNAME: root
+          DB_PASSWORD: ci-root
+        run: |
+          set -eo pipefail
+
+          php artisan test tests/Feature/SystemHealth | tee system-health-mysql.log
+
+          passed=$(grep -oE '[0-9]+ passed' system-health-mysql.log | head -1 | grep -oE '[0-9]+' || echo 0)
+
+          if [ "${passed:-0}" -lt 50 ]; then
+            echo "::error::Only ${passed:-0} System Health tests ran against MySQL. The suite is larger than that, so the path matched little or nothing."
+            exit 1
+          fi
+
+          # NOTHING IS ENGINE-CONDITIONAL IN THIS SUITE, so a skip means a case
+          # did not run rather than that it did not apply.
+          if grep -qiE 'skipped' system-health-mysql.log; then
+            echo "::error::A System Health test skipped on MySQL. Nothing in this suite is engine-conditional, so a skip means it did not run."
+            exit 1
+          fi
+
+          echo "${passed} System Health tests passed against MySQL 8.4, the session round trip included."
+
+
       # deploy.yml stages files that live outside the application tree, so
       # nothing in the test suite touches them. Deleting one is invisible until a
       # deployment fails - which is what happened when the repository was cleaned

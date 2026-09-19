@@ -216,11 +216,29 @@ widths are consistent.
 | Not verified | Why |
 | --- | --- |
 | **Anything in production** | This unit is **not merged and not deployed** |
-| **MySQL** | No MySQL server in this environment. The suite runs on MySQL **in CI**, and this unit's session round trip is deliberately DML-only for exactly that reason |
+| **MySQL, locally** | No MySQL server in this environment. **CI now runs the System Health suite against MySQL 8.4 as a required step** — see below |
 | **A real Microsoft Entra outage** | Would mean breaking sign-in on purpose. The *Unavailable* and *Needs attention* states were rendered from stored P1-02 state, which is what the screen reads in production too |
 | **A real database, cache, session-store or filesystem outage in production** | Same. Every failure state is proven against a broken dependency in tests and rendered in a browser; none was induced on a running system |
 | **The network boundary in a browser, as a person could see it** | *"No outbound call was made while that page rendered"* is not visible on a screen. Its evidence is the boundary tests and the request recorder, and the Product Owner test script says so rather than implying they confirmed it |
 | **A second privileged reader** | Would mean creating a second permanent System Administrator |
+
+### 6.1 A gap in CI, found by reading the green run
+
+**The MySQL job ran People, Domains, Access, Security, Reviews and Audit — and
+not System Health.** So the one check in this unit that opens a transaction and
+writes a row was proven on SQLite only, on a green build.
+
+That is the shape of the P1-08 failure exactly: four cases green on SQLite and
+red on MySQL, because the two engines disagree about what a transaction does.
+This unit's round trip runs on a **savepoint** — it is inside the transaction
+`RefreshDatabase` already holds — and savepoint behaviour is precisely where
+they have already diverged once here.
+
+**A required `Run the System Health suite against MySQL` step was added**, with
+the same floor-count and no-skip guards the other suites carry, so a path that
+matches nothing fails the build rather than reporting zero tests as success.
+
+---
 
 **P1-02's provider-wide SSO re-check remains OPEN / CARRIED / UNVERIFIED.**
 **P1-07 and P1-08 carried items remain carried. D-19 unchanged. P1-10 not
