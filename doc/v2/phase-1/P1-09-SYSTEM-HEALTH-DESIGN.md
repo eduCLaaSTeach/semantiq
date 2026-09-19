@@ -462,10 +462,24 @@ Administration, so **D-19 needs no change and nothing is widened**.
 
 The *Check again* control posts to **P1-02's existing endpoint**,
 `identity.health.recheck` — already behind `PlatformAdmin`, already rate
-limited to one per administrator per 60 seconds, already recording
-`identity.health.checked` and its state change, and already returning `back()`.
-Reusing it means **P1-09 adds no write path, no second probe, no second rate
-limiter and no new event** (D-116, D-122, D-125, D-127).
+limited to one per administrator per 60 seconds, and already recording
+`identity.health.checked` and its state change. Reusing it means **P1-09 adds
+no write path, no second probe, no second rate limiter and no new event**
+(D-116, D-122, D-125, D-127).
+
+**One line of P1-02 changes, and it is raised here rather than done quietly.**
+That endpoint's two refusal branches already return `back()`, but its success
+branch returns `redirect()->route('identity.health')` — a hard destination. An
+administrator pressing *Check again* on System Health would therefore be
+**silently moved to a different screen**, which is the kind of thing §4 of
+CLAUDE.md exists to catch. The success branch becomes `back()`, matching the
+two branches beside it.
+
+**P1-02's own screen is unaffected.** Its form posts from
+`/console/identity/health`, so `back()` resolves to exactly the URL the hard
+redirect named. The flash and the errors are unchanged, and no existing test
+asserted the destination — only the flash — so this is verified by adding the
+assertion that was missing rather than by editing one that existed.
 
 **`SystemHealthHasNoWriteRoute` (§9) asserts that route set as an equality**,
 in the shape `SecurityStatusArchitectureTest` and `AuditImmutabilityTest`
