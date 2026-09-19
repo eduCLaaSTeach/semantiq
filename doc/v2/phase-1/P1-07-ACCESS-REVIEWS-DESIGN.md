@@ -5,20 +5,20 @@
 | Unit | **P1-07 — Access Reviews** |
 | PLAN | **PRODUCT OWNER APPROVED 19 September 2026**, D-84 – D-94 answered |
 | Baseline | `main` at the PLAN merge; live application `f282571f9dbb24cb1d49c8d8249d350c18b3763f` |
-| Status | **DESIGN — awaiting Product Owner approval. Nothing is implemented.** |
+| Status | **DESIGN — PRODUCT OWNER APPROVED, 19 September 2026.** B-1 resolved as **B-1a**. EXECUTE authorised on merge |
 
 **This document says what engineering builds.** It does not restate the PLAN;
 where the PLAN already settled something it is cited (`PLAN §5x`) rather than
 repeated. It assumes D-84 – D-94 as approved.
 
-> **One genuine blocker requires a Product Owner answer before EXECUTE: B-1,
-> §3.4.** Everything else below is specification.
+> **B-1 (§3.4) is RESOLVED as B-1a**, Product Owner, 19 September 2026.
+> Everything below is approved specification.
 
 ---
 
 ## 1. What is built
 
-Three read-and-decide screens under one unlocked menu node, three new tables, one
+Three read-and-decide screens under one unlocked menu node, **two** new tables, one
 authority algorithm, one generation service, one decision service, six event
 keys, and **one bounded corrective prerequisite in P1-05** (§12).
 
@@ -30,7 +30,7 @@ untouched.
 
 ## 2. Data model
 
-### 2.1 Three tables
+### 2.1 Two tables
 
 **`access_review_cycles`**
 
@@ -168,45 +168,36 @@ When it is empty and the actor decides their own item: `decision_basis = 'self'`
 `self_review = true`, step-up required (§6), and a **distinguishable** event
 (§8). The screen labels it.
 
-### 3.4 **B-1 — BLOCKER. Domain owners cannot reach the screen, and strict fallback creates undecidable items**
+### 3.4 B-1 — **RESOLVED as B-1a**, 19 September 2026
 
-Two accepted rules collide with D-87, and neither can be resolved inside P1-07.
+Two accepted rules put D-87's original *"System Administrator fallback only where
+no owner exists"* out of reach, and neither can be changed inside P1-07:
 
-**(i) No business role passes any route gate.** `RoleCatalogue::MATRIX` gives
-Executive, Domain Owner, Manager and Business User **only** `BusinessData`. Every
-console route uses `RequireActionClass` with an administration class. A domain
-owner is typically a business user, so **no existing gate admits them.** Adding
-an action class would change P1-05's catalogue, which this DESIGN is forbidden
-to do.
+1. **No business role passes any route gate.** `RoleCatalogue::MATRIX` gives
+   Executive, Domain Owner, Manager and Business User **only** `BusinessData`,
+   and every console route uses `RequireActionClass` with an administration
+   class. A domain owner is typically a business user.
+2. **D-19 hides the sidebar** from everybody but System Administrators.
 
-**(ii) D-19 hides the sidebar from everybody but System Administrators.** Even if
-authorised, a domain owner could not discover the screen — the limitation already
-raised in `P1-06-SECURITY-STATUS-VERIFICATION.md` §9.
+Implementing the fallback strictly would have left every item in an *owned*
+domain permanently undecidable — the stuck-item failure D-88 was approved to
+avoid.
 
-**The consequence of implementing D-87's "fallback" strictly:** a domain that
-*has* an owner would produce items only that owner may decide — and that owner
-cannot reach the screen. **Those items would be permanently undecidable**, which
-is exactly the stuck-item failure D-88 was approved to avoid.
+#### The approved rule (B-1a — this amends D-87)
 
-**Recommendation — B-1a:** relax *fallback* to **preference**. A System
-Administrator is eligible for **every** domain item; the current domain owner is
-the **preferred** reviewer, shown as such on the row, and takes the
-`domain_owner` basis when they decide. No item is ever undecidable, owner
-accountability is preserved and visible, and D-87's security rule is unchanged.
-**§3.2 is written this way**, and reverts to strict fallback in one line if the
-Product Owner prefers B-1b.
-
-| Option | Consequence |
+| | |
 | --- | --- |
-| **B-1a — SA always eligible, owner preferred** *(recommended)* | No undecidable items. Owner accountability recorded via `decision_basis` |
-| B-1b — strict fallback as worded | Items in owned domains are undecidable in this deployment until D-19 changes |
-| B-1c — new action class for reviewers | **Changes P1-05's catalogue. Out of scope for this DESIGN** |
+| **System Administrator** | **Eligible to review every Domain Review item** — not only where no owner exists |
+| **Current domain owner** | Remains the **preferred and accountable** reviewer, shown as such on the row |
+| **`decision_basis`** | `domain_owner` when an owner legitimately performs the review; `system_administrator` otherwise |
+| **Domain ownership** | Still grants **zero** business-data access — N-R22 |
+| **D-19 and the action-class catalogue** | **Unchanged by this unit.** No new action class, no navigation redesign |
 
-Either way, the **domain-owner basis is implemented and unit-tested**, and is
-**not reachable through the UI in Release 1**. That is recorded as a P1-07
-carried gate (§13), not claimed as delivered.
+§3.2 implements exactly this. No item is ever undecidable, and owner
+accountability is preserved and recorded rather than assumed.
 
----
+**Domain-owner live review remains a carried P1-07 verification item** until a
+legitimate owner can actually reach the review surface (§13).
 
 ## 4. Population generation
 
@@ -608,7 +599,7 @@ any of these observable.**
 
 | Gate | Prerequisite |
 | --- | --- |
-| **Domain-owner review observed live** | A domain owner who can reach the screen — needs B-1 and D-19 |
+| **Domain-owner review observed live** | A legitimate domain owner who can actually reach the review surface. The remaining limitation is the **D-19 boundary**, not B-1 — B-1 is resolved (§3.4) |
 | **Reviewer separation of duties observed live** | A genuine second privileged person in normal operation |
 
 Both are **P1-07** gates. **Neither is the P1-02 provider-wide SSO Re-check**,
@@ -638,9 +629,11 @@ untouched by this unit.
 
 ## 15. Status
 
-**DESIGN — awaiting Product Owner approval.**
+**DESIGN — PRODUCT OWNER APPROVED, 19 September 2026.**
 
-Nothing implemented. No schema, no migration, no route, controller, service or UI
-code. No production or deployment change. **P1-02 untouched.**
+**B-1 resolved as B-1a** (§3.4), amending D-87: System Administrator is eligible
+for every Domain Review item; the current domain owner remains the preferred and
+accountable reviewer. **No open blockers.**
 
-**One blocker needs an answer: B-1 (§3.4)** — B-1a recommended.
+**EXECUTE is authorised on merge of this document.** D-19 and the P1-05 action
+class catalogue are **not** changed by this unit, and **P1-02 remains untouched**.
