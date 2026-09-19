@@ -8,6 +8,7 @@ use App\Modules\Access\Support\ScopeType;
 use App\Modules\Access\Support\Sensitivity;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
 use App\Modules\Platform\Models\User;
+use App\Modules\Reviews\Models\AccessReviewCycle;
 use App\Modules\Reviews\Models\AccessReviewItem;
 use App\Modules\Reviews\Services\ReviewerAuthority;
 use App\Modules\Reviews\Support\ReviewKind;
@@ -41,7 +42,11 @@ final class AccessReviewsController
 
     public function privileged(Request $request): Response
     {
-        return Inertia::render('Reviews/Privileged', $this->payload($request, ReviewKind::Privileged));
+        // THE ONLY SCREEN THAT OWNS THE START CONTROL. A cycle is one global
+        // cycle covering both populations, so offering it on three tabs was
+        // offering the same action three times - and from the other two it
+        // returned the person here, which looked like a navigation bug.
+        return Inertia::render('Reviews/Privileged', $this->payload($request, ReviewKind::Privileged, offersStart: true));
     }
 
     public function domains(Request $request): Response
@@ -55,12 +60,25 @@ final class AccessReviewsController
     }
 
     /** @return array<string, mixed> */
-    private function payload(Request $request, ?ReviewKind $kind, bool $overdueOnly = false): array
+    private function payload(Request $request, ?ReviewKind $kind, bool $overdueOnly = false, bool $offersStart = false): array
     {
         $actor = $this->actor($request);
         $organisationId = $this->organisationId($request);
 
+        /*
+         * THE CURRENT CYCLE ONLY. P1-07 IS THE OPERATIONAL SCREEN, NOT THE
+         * HISTORY BROWSER.
+         *
+         * Every completed cycle used to appear alongside the live one, so a
+         * screen whose whole job is "what still needs deciding" filled up with
+         * rows already decided. Previous cycles are NOT deleted - they stay
+         * exactly where they are, permanently - they simply are not this
+         * screen's work. P1-08 owns the history experience.
+         */
+        $currentCycleId = $this->currentCycleId($organisationId);
+
         $items = $this->visible($actor, $organisationId)
+            ->where('access_review_cycle_id', $currentCycleId)
             ->when($kind !== null, fn (Builder $q) => $q->where('kind', $kind->value))
             ->when($overdueOnly, fn (Builder $q) => $q->overdue())
             ->when(
@@ -90,7 +108,8 @@ final class AccessReviewsController
                 'state' => $request->query('state'),
                 'q' => $request->query('q'),
             ],
-            'canStartCycle' => $this->canStartCycle($actor),
+            'canStartCycle' => $offersStart && $this->canStartCycle($actor),
+            'cycleInProgress' => $this->cycleInProgress($organisationId),
             'openCycle' => $this->openCycleSummary($actor, $organisationId),
         ];
     }
@@ -104,14 +123,58 @@ final class AccessReviewsController
         return $query;
     }
 
-    /** @return array<string, int> */
+    /**
+     * The counts are the CURRENT cycle's, for this viewer. A count that
+     * included finished cycles would disagree with the list beneath it.
+     *
+     * @return array<string, int>
+     */
     private function counts(User $actor, ?int $organisationId): array
     {
+        $cycleId = $this->currentCycleId($organisationId);
+
+        $scoped = fn (): Builder => $this->visible($actor, $organisationId)
+            ->where('access_review_cycle_id', $cycleId);
+
         return [
-            'privileged' => $this->visible($actor, $organisationId)->where('kind', ReviewKind::Privileged->value)->pending()->count(),
-            'domains' => $this->visible($actor, $organisationId)->where('kind', ReviewKind::Domain->value)->pending()->count(),
-            'overdue' => $this->visible($actor, $organisationId)->overdue()->count(),
+            'privileged' => $scoped()->where('kind', ReviewKind::Privileged->value)->pending()->count(),
+            'domains' => $scoped()->where('kind', ReviewKind::Domain->value)->pending()->count(),
+            'overdue' => $scoped()->overdue()->count(),
         ];
+    }
+
+    /**
+     * The latest cycle raised for this organisation, or null if there is none.
+     *
+     * "Latest" rather than "open": a finished cycle is still the current state
+     * of review until somebody starts another, and its decided rows are what
+     * the screen should show - "Access confirmed", not an empty screen that
+     * looks as though nothing ever happened.
+     */
+    private function currentCycleId(?int $organisationId): ?int
+    {
+        $id = AccessReviewCycle::query()
+            ->where('organisation_id', $organisationId)
+            ->orderByDesc('id')
+            ->value('id');
+
+        return $id === null ? null : (int) $id;
+    }
+
+    /**
+     * Is there outstanding work in the current cycle?
+     *
+     * Used to refuse a second overlapping cycle, so one grant is never the
+     * subject of two open questions at once.
+     */
+    private function cycleInProgress(?int $organisationId): bool
+    {
+        $cycleId = $this->currentCycleId($organisationId);
+
+        return $cycleId !== null && AccessReviewItem::query()
+            ->where('access_review_cycle_id', $cycleId)
+            ->pending()
+            ->exists();
     }
 
     /** @return array<string, mixed> */

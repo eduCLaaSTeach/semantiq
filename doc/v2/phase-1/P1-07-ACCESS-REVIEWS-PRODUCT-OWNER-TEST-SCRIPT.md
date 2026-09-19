@@ -21,8 +21,8 @@ widens or repairs access.
 | --- | --- |
 | PLAN merge | `da79fd01947f0972f9d04f161e2c188d25b884d4` |
 | DESIGN merge | `a830488f36e0c8b9040a81cae7b458f991103134` |
-| Implementation merge | *to be filled after merge* |
-| Deployed | *to be filled after deployment* |
+| Implementation merge | **`c7069f7f87fe9d7aa7d89256c39ed3de9e30430f`** |
+| Deployed | **19 September 2026**, to `https://semantiq.claas2saas.com` |
 
 > **The build above is what is live.** A test script run against a different
 > build proves nothing about this one.
@@ -76,7 +76,9 @@ reporting, not a gap in the build.**
 | B2 | Click **Start a review cycle** | The page returns with a confirmation, and Privileged Reviews now lists the privileged access that exists today | ☐ |
 | B3 | Read each row | Person, role, due date, and **"You can review this as"** — each a business sentence, no identifiers | ☐ |
 | B4 | Compare with **Roles & Access** | Every privileged assignment that exists appears exactly once. Nothing has been invented | ☐ |
-| B5 | Click **Start a review cycle** again | **No row is duplicated.** Nothing is asked twice about one grant | ☐ |
+| B5 | Click **Start a review cycle** again while reviews are outstanding | Refused in business words: *"A review cycle is already in progress. Complete the outstanding reviews before starting another cycle."* | ☐ |
+| B6 | Look at **Domain Reviews** and **Overdue Reviews** | **Neither offers Start a review cycle.** One cycle covers both populations, and it is started from Privileged Reviews | ☐ |
+| B7 | Look at Privileged Reviews after a previous cycle has been completed | Only the **current** cycle's reviews are listed. Completed cycles are kept permanently but are not this screen's work | ☐ |
 
 ### C — Confirming access (the safe one)
 

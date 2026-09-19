@@ -9,7 +9,7 @@ other.
 | Unit | **P1-07 — Access Reviews** |
 | PLAN | merge `da79fd01947f0972f9d04f161e2c188d25b884d4` (D-84 – D-94) |
 | DESIGN | merge `a830488f36e0c8b9040a81cae7b458f991103134` (B-1 resolved as B-1a) |
-| Status | **GATE C — implementation complete, not merged and not deployed** |
+| Status | **GATE D RETEST PENDING.** Gate C approved and deployed 19 September 2026; **Gate D FAILED on three Product Owner production defects**, corrected and redeployed — §14 |
 
 ---
 
@@ -263,3 +263,152 @@ nullable columns, raised here as the DESIGN's §10 required.
   observed: D-19 shows the sidebar to System Administrators only. **Unchanged by
   this unit**, and the same limitation P1-06 raised. It does not affect
   authorisation, which is route-level.
+
+---
+
+## 13. Production deployment and verification — 19 September 2026
+
+Merged **`c7069f7f87fe9d7aa7d89256c39ed3de9e30430f`**; **deploy run 135
+succeeded**; post-merge CI recorded below.
+
+**The migration ran as part of the deployment** (`php artisan migrate --force`
+over SSH, `deploy.yml:461`). Two new tables and three nullable columns on an
+existing one; no data migration.
+
+### Verified against production without signing in and without changing anything
+
+Read through `verify-access` run 10 — **manual dispatch, read-only, every
+statement from a `SELECT`**, and it reports codes, types and counts only, never
+a name or an email.
+
+| Check | Result |
+| --- | --- |
+| **Two P1-07 tables exist** | `access_review_cycles` **true**, `access_review_items` **true** |
+| **Three generic step-up columns exist** | `subject_type`, `subject_id`, `subject_intent` — **all true** |
+| **The mutable decision column is gone** | `access_review_items.pending_decision` **absent** — asserted, not assumed |
+| **No access row was changed by the migration** | 1 active System Administrator, **0** current entitlements, **0** current scopes, **0** current ceilings, 3 users, 3 enabled domains — **identical to the state recorded in `P1-06-SECURITY-STATUS-VERIFICATION.md` §9a** |
+| **No review cycle was created** | `review_cycles_total` **0**, `review_items_total` **0**. Starting one is the Product Owner's, at Gate D |
+| `users.platform_role` still absent | true — the D-49 position is unchanged |
+
+### Verified over HTTP, unauthenticated
+
+| Check | Result |
+| --- | --- |
+| All three review routes reachable | `302` to sign-in — deployed, not `404`, not `500` |
+| Every other console route unchanged | Security Status, Security Events, Roles & Access, Identity & SSO, Business Domains, Users & Groups — all `302` |
+| GET-only on the read routes | `POST`/`PUT`/`PATCH`/`DELETE` on `/console/access-reviews` → **405** |
+| The decide endpoint refuses anonymously | **419**, never a `500` and never an action |
+| The refusal discloses nothing | No review, role or access wording anywhere in the unauthenticated response |
+| The deployed bundle is the verified one | `build/assets/app-ire3WRv1.css` and `app-u3xEMmnP.js` are **byte-for-byte the local build the browser checks ran against** |
+| Three tabs shipped, no raw key | *Privileged Reviews*, *Domain Reviews*, *Overdue Reviews* present; **zero** `access.review.*` identifiers in the client bundle |
+
+### One observation worth recording
+
+`verify-access` warns that **9 step-up confirmations are open** (14 total). These
+pre-date P1-07 — leftovers from earlier acceptance testing whose five-minute
+lifetime has long expired. `StepUpService::resolve()` refuses an expired row, so
+nothing is reachable through them. **Not a defect, and not introduced here**,
+but it is in the record rather than left for somebody to find.
+
+### What could NOT be verified from here
+
+**Nobody signed in.** Sign-in is Microsoft Entra SSO, so the three screens were
+not rendered as the authenticated System Administrator on production, the
+sidebar node was not clicked, and no decision was taken. Sections A–G of the
+Product Owner Test Script exist for exactly that, and this record does not claim
+any of it.
+
+**No review cycle exists on production**, deliberately. Starting one creates
+permanent records, and that is the Product Owner's decision at Gate D.
+
+---
+
+## 14. Gate D — three defects found by the Product Owner, and their correction
+
+**Gate D FAILED on the deployed build `c7069f7f87fe9d7aa7d89256c39ed3de9e30430f`.**
+The failed observation stays in this record; it is not erased by the fix.
+
+### 14.1 What the Product Owner saw on production
+
+| Screen | Observation |
+| --- | --- |
+| Privileged Reviews | Several historical System Administrator rows marked **Access confirmed**, mixed with one current row awaiting review |
+| Domain Reviews | *"No sensitive domain access is awaiting your review."* — **correct**, production has no qualifying access. But **Start a review cycle was shown here** |
+| Overdue Reviews | *"Nothing is overdue."* — **correct**. But **Start a review cycle was shown here too**, and clicking it from either tab returned them to Privileged Reviews |
+| Remove this access | Clicked on their own System Administrator review. **No Microsoft fresh-sign-in appeared. The button appeared to do nothing.** |
+
+### 14.2 The root cause, and why one defect produced two symptoms
+
+**Defect 3 caused Defect 2's clutter.**
+
+The screen submitted with `useForm({ decision: 'retain' })` and then
+`post(url, { data: { decision } })`. Inertia types those submit options as
+`Omit<VisitOptions, 'data'>` — **the `data` key is excluded** — so it was
+silently dropped and **every click sent `retain`**.
+
+So "Remove this access" quietly *confirmed* the access. That is why the button
+looked inert, and why the screen accumulated rows marked *Access confirmed*: each
+cycle's "removal" was a confirmation.
+
+> **A green suite did not catch this.** Every behavioural test posted to the
+> server directly, where the decision is whatever the test sends. The defect
+> lived entirely in the shape of the client call, and this project has no
+> JavaScript test runner to click a button. **The browser check now reads the
+> request bodies off the wire.**
+
+### 14.3 The three corrections
+
+| Defect | Correction |
+| --- | --- |
+| **1 — the cycle control** | `Start a review cycle` is offered on **Privileged Reviews only**, with the sentence *"Starts one review cycle covering privileged and sensitive domain access."* A second overlapping cycle is refused with *"A review cycle is already in progress. Complete the outstanding reviews before starting another cycle."* — previously it silently created an **empty** cycle, which is safe and baffling |
+| **2 — historical clutter** | The three screens project the **current/latest cycle** only. **Nothing is deleted**: every historical row stays exactly where it is, permanently, and P1-08 owns the experience for reading it |
+| **3 — the decision** | `router.post(url, { decision })`. The decision is the request body, never a form default a click hopes to override |
+
+### 14.4 Evidence
+
+| | |
+| --- | --- |
+| New tests | `ReviewCycleProjectionTest` (6), `ReviewDecisionSubmissionTest` (4) |
+| New architecture guards | the decision is never a form default; exactly one screen offers to start a cycle |
+| Mutations | **7 targeted, 7 caught** — M-D1a/b, M-D2a/b, M-D3a/b/c |
+
+**M-D3a is the one that matters**: defaulting an unrecognised decision to
+`retain` is precisely what the browser was doing, and the test now fails on it.
+A missing or unrecognised decision **decides nothing** — a default is still a
+decision nobody made.
+
+### 14.5 Browser verification of the correction
+
+Run against **the Product Owner's exact data shape**: one completed cycle and one
+current cycle, both containing a review of the same access.
+
+| Requirement | Observed |
+| --- | --- |
+| Start control on Privileged Reviews only | `start=1` on Privileged, **`start=0`** on Domain and Overdue, in all four viewport/theme combinations |
+| Wording beside the control | Present |
+| Only the current cycle shown | Row counts match the current cycle exactly; the completed cycle contributes **nothing** |
+| Confirm sends `retain` | Read **off the wire**: `{"decision":"retain"}` |
+| Remove sends `revoke` | Read **off the wire**: `{"decision":"revoke"}` |
+| Remove enters the step-up flow | Landed on `/console/access/step-up/<reference>` — **the flow the Product Owner never saw** |
+| Empty states unchanged | *"Nothing is overdue."* still rendered |
+| No horizontal clipping | **0 elements** cross either viewport edge |
+| Browser Back | Returns exactly along the trail |
+| No developer terminology | Swept; none present |
+
+**One regression was caught by that sweep and fixed before merge.** The new
+explanatory sentence sat in the shared `org-section-actions` slot, which is
+`flex: 0 0 auto` — so a child that is a sentence rather than a button could not
+shrink and pushed past the screen edge at 390px. The **page** did not scroll
+sideways, so only the element-level check saw it. That is the G2 lesson a third
+time.
+
+### 14.6 What is NOT claimed
+
+- **The last-administrator refusal was not exercised on production.** The
+  automated test walks the whole journey — click, step-up bound to that exact
+  item and decision, then the administrator floor refusing — but **no second
+  System Administrator was manufactured**, so the Product Owner's own retest
+  stops at the Microsoft confirmation.
+- **The empty-state sentences are browser evidence, not test evidence.** They are
+  rendered by React; there is no server-side rendering and no JavaScript test
+  runner, so a server-side assertion on the wording would be checking nothing.

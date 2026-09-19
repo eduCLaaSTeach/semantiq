@@ -11,6 +11,7 @@ use App\Modules\Access\Support\RoleCode;
 use App\Modules\Access\Support\Sensitivity;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
 use App\Modules\Platform\Models\User;
+use App\Modules\Reviews\Models\AccessReviewCycle;
 use App\Modules\Reviews\Models\AccessReviewItem;
 use App\Modules\Reviews\Services\ReviewCycleGenerator;
 use App\Modules\Reviews\Services\ReviewDecisionService;
@@ -55,6 +56,24 @@ final class AccessReviewDecisionController
             return $this->refuse(ReviewViolation::notPermitted());
         }
 
+        $organisationId = $request->attributes->get('semantiq_organisation')?->id;
+
+        /*
+         * ONE OPEN CYCLE AT A TIME.
+         *
+         * Generation already refuses to raise a second item for a grant that
+         * has one pending, so an accidental second cycle produced an EMPTY
+         * cycle rather than duplicates - which is safe and completely
+         * baffling: the button appears to do nothing. Refusing it here says
+         * why, in business words, instead.
+         */
+        if ($this->hasOutstandingReviews($organisationId)) {
+            return back()->with(
+                'refusal',
+                'A review cycle is already in progress. Complete the outstanding reviews before starting another cycle.'
+            );
+        }
+
         $days = (int) $request->input('due_in_days', 30);
         $days = max(1, min($days, 365));
 
@@ -64,9 +83,7 @@ final class AccessReviewDecisionController
          * organisation off the person rather than off the request is how a
          * cycle quietly generates for the wrong one - or for all of them.
          */
-        $organisation = $request->attributes->get('semantiq_organisation');
-
-        $this->generator->start($actor, now()->addDays($days), $organisation?->id);
+        $this->generator->start($actor, now()->addDays($days), $organisationId);
 
         return redirect()
             ->route('access-reviews.privileged')
@@ -193,6 +210,20 @@ final class AccessReviewDecisionController
         return $ceiling === Sensitivity::Restricted->value
             ? StepUpAction::RevokeRestrictedEntitlement
             : null;
+    }
+
+    /** Is any item in the latest cycle still awaiting a decision? */
+    private function hasOutstandingReviews(?int $organisationId): bool
+    {
+        $cycleId = AccessReviewCycle::query()
+            ->where('organisation_id', $organisationId)
+            ->orderByDesc('id')
+            ->value('id');
+
+        return $cycleId !== null && AccessReviewItem::query()
+            ->where('access_review_cycle_id', $cycleId)
+            ->pending()
+            ->exists();
     }
 
     private function isSystemAdministrator(User $actor): bool

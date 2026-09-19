@@ -1,4 +1,5 @@
-import { useForm, usePage } from '@inertiajs/react'
+import { useState } from 'react'
+import { router, useForm, usePage } from '@inertiajs/react'
 import AppShell from '../Layouts/AppShell'
 import ReviewTabs from './ReviewTabs'
 
@@ -8,7 +9,24 @@ import ReviewTabs from './ReviewTabs'
  * The confirmation and refusal banners are rendered here so all three screens
  * say the same thing the same way, and so a refusal is never a raw exception.
  */
-export default function ReviewPage({ productAreas, counts, canStartCycle, title, description, children }) {
+/**
+ * A REVIEW CYCLE IS ONE GLOBAL CYCLE covering privileged AND sensitive domain
+ * access - not one cycle per tab. So the control that starts one belongs to a
+ * single screen, and `canStartCycle` is only ever true on Privileged Reviews.
+ *
+ * It was shown on all three, and starting it from Domain Reviews or Overdue
+ * Reviews returned the person to Privileged Reviews - which looked like a
+ * navigation bug and was really the screen offering an action it did not own.
+ */
+export default function ReviewPage({
+    productAreas,
+    counts,
+    canStartCycle,
+    cycleInProgress,
+    title,
+    description,
+    children,
+}) {
     const { props } = usePage()
     const { post, processing } = useForm({ due_in_days: 30 })
 
@@ -34,15 +52,20 @@ export default function ReviewPage({ productAreas, counts, canStartCycle, title,
                         {description ? <p className="org-description">{description}</p> : null}
                     </div>
                     {canStartCycle ? (
-                        <div className="org-section-actions">
+                        <div className="org-section-actions rev-start">
                             <button
                                 type="button"
                                 className="org-action"
-                                disabled={processing}
+                                disabled={processing || cycleInProgress}
                                 onClick={() => post('/console/access-reviews/cycles', { preserveScroll: true })}
                             >
                                 Start a review cycle
                             </button>
+                            <p className="rev-start-note">
+                                {cycleInProgress
+                                    ? 'A review cycle is already in progress. Complete the outstanding reviews before starting another cycle.'
+                                    : 'Starts one review cycle covering privileged and sensitive domain access.'}
+                            </p>
                         </div>
                     ) : null}
                 </div>
@@ -75,13 +98,30 @@ export function ReviewList({ items, emptyMessage }) {
 }
 
 function ReviewRow({ item }) {
-    const { post, processing } = useForm({ decision: 'retain' })
+    const [processing, setProcessing] = useState(false)
 
+    /*
+     * THE DECISION IS THE REQUEST BODY, not a form default that a click hopes
+     * to override.
+     *
+     * This used to be useForm({ decision: 'retain' }) submitted with
+     * post(url, { data: { decision } }). Inertia types the form's submit
+     * options as Omit<VisitOptions, 'data'> - the `data` key is EXCLUDED - so
+     * it was silently dropped and EVERY click sent `retain`. "Remove this
+     * access" quietly confirmed the access instead, which is why it looked
+     * like the button did nothing and why the screen filled with rows marked
+     * "Access confirmed".
+     *
+     * router.post sends exactly what it is given, so the two buttons cannot
+     * send the same thing.
+     */
     const decide = (decision) => {
-        post(`/console/access-reviews/items/${item.id}/decide`, {
-            data: { decision },
-            preserveScroll: true,
-        })
+        setProcessing(true)
+        router.post(
+            `/console/access-reviews/items/${item.id}/decide`,
+            { decision },
+            { preserveScroll: true, onFinish: () => setProcessing(false) },
+        )
     }
 
     return (
