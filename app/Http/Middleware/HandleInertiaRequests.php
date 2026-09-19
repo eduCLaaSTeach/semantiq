@@ -47,6 +47,23 @@ final class HandleInertiaRequests extends Middleware
             // complete a write, which is what makes it a confirmation rather
             // than a banner that lives on the page.
             'confirmation' => fn (): ?string => $request->session()->get('confirmation'),
+
+            /*
+             * AND THE REFUSAL, for the same one render.
+             *
+             * Roles & Access renders its refusals out of `errors`, which Inertia
+             * shares for us. Access Reviews flashes `refusal` instead - a
+             * refused review is not a rejected form field - and that key was
+             * never shared, so ReviewPage read `props.refusal` and always found
+             * nothing. Every refusal the review screens have ever raised went to
+             * a blank page.
+             *
+             * NO AUTOMATED TEST CAUGHT IT. assertSessionHas('refusal') passes on
+             * a message that reaches the session and never reaches the screen;
+             * the two are different claims. It was found by opening the screen,
+             * which is what CLAUDE.md §5 exists for.
+             */
+            'refusal' => fn (): ?string => $request->session()->get('refusal'),
         ];
     }
 }

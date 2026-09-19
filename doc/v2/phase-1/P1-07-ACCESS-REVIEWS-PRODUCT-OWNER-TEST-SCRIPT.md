@@ -187,3 +187,83 @@ an implementation defect.**
 - **Whether Microsoft asks for a second factor is your Entra policy**, not
   something SemantIQ can claim. SemantIQ requires a **fresh sign-in**; what
   happens at Microsoft is configured there.
+
+---
+
+# ADDENDUM — Gate D final correction: ONE RETEST
+
+## A1. Feature or task being tested
+
+The last-administrator refusal, reached **from Access Reviews**. Previously it
+returned you to **Roles & Access**; it must now return you to **Access Reviews**
+and show the refusal there.
+
+## A2. Deployed build / merge SHA
+
+Recorded in `P1-07-ACCESS-REVIEWS-VERIFICATION.md` §15 and in the reply that
+accompanied this addendum.
+
+## A3. Preconditions
+
+- You are signed in as the **System Administrator**.
+- A review cycle is in progress and **your own System Administrator access** is
+  listed on **Privileged Reviews** as *Awaiting review*.
+- You are still the **only** active System Administrator. If a second one has
+  since been added, this refusal will not occur and the retest does not apply —
+  say so rather than removing anybody.
+
+## A4. Test data required
+
+**None.** Nothing is created and nothing is entered.
+
+## A5. ⚠️ WARNING — permanence
+
+**This step is expected to be REFUSED, and it changes nothing.** Your System
+Administrator role is not removed, the review stays *Awaiting review*, and no
+permanent record of a decision is written.
+
+The one thing it **does** consume is the Microsoft confirmation itself. That is
+deliberate: one confirmation authorises one attempt. If you want to try again
+you will be asked to confirm with Microsoft again.
+
+## A6–A7. Numbered steps, and what must happen
+
+| # | Step | Expected result | PASS / FAIL |
+| --- | --- | --- | --- |
+| 1 | Open **Access Reviews → Privileged Reviews** | Your own **System Administrator** review is listed, marked *Awaiting review*, with **Confirm this access** and **Remove this access** | |
+| 2 | Click **Remove this access** | You are taken to the confirmation card, which names the action before sending you anywhere | |
+| 3 | Continue, and complete the **Microsoft** sign-in | Microsoft asks you to sign in freshly | |
+| 4 | Observe where you land | **Access Reviews → Privileged Reviews.** **NOT** Roles & Access | |
+| 5 | Read the banner | **Refused.** *This is the only active System Administrator. Add or retain another before removing this one.* | |
+| 6 | Look at your review row | Still **Awaiting review**, with **both** buttons still offered | |
+| 7 | Open **Roles & Access** | Your **System Administrator** role is **still there**, unchanged | |
+| 8 | Press the browser **Back** button | You are not returned into a half-finished confirmation. Starting again asks you to confirm with Microsoft again — the spent confirmation cannot be reused | |
+
+## A8. Negative, refusal and security cases
+
+Step 4 **is** the refusal case. Steps 6, 7 and 8 are the security cases: nothing
+decided, nothing removed, nothing replayable.
+
+## A9. Visual and UX checks
+
+| # | Check | PASS / FAIL |
+| --- | --- | --- |
+| V1 | The refusal reads as a refusal — red left edge, **Refused.** label, plain business English | |
+| V2 | No success message appears beside it | |
+| V3 | The sentence is complete and not cut off, on your normal window **and** on a narrow window | |
+| V4 | No technical words on screen — no codes, no identifiers, no error text | |
+
+## A10. Evidence to capture
+
+1. The screen you land on after Microsoft, **including the address bar**.
+2. The refusal banner.
+3. The review row, still *Awaiting review*.
+4. **Roles & Access**, showing your role still present.
+
+## A11. Anything that cannot currently be tested, and why
+
+- **Everything in §11 of the main script still stands.** Nothing in this
+  correction makes any of it observable.
+- **A second System Administrator has NOT been created** to make anything
+  testable, and must not be.
+- **P1-02's provider-wide SSO re-check remains OPEN / CARRIED / UNVERIFIED.**
