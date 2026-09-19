@@ -10,7 +10,7 @@ exists to be argued with before any code is written.
 | Subscreens | Privileged Reviews, Domain Reviews, Overdue Reviews |
 | Baseline | `main` at `3c53dcda9c3e10e479b6a77b1172463db4846b91` |
 | Live application | `f282571f9dbb24cb1d49c8d8249d350c18b3763f` |
-| Status | **PLAN — awaiting Product Owner approval. No DESIGN, no implementation, no deployment.** |
+| Status | **PLAN — PRODUCT OWNER APPROVED, 19 September 2026.** D-84 to D-94 answered in §6. DESIGN authorised; no implementation or deployment |
 
 > **Every source fact below was read out of the repository at
 > `3c53dcd` and is cited by file and line**, so a reviewer can check it rather
@@ -714,7 +714,7 @@ it is an oversight in an accepted unit, §9's conflict rule applies.
 | Revoke an Auditor assignment | No | No existing step-up requirement to inherit |
 | Revoke a domain entitlement whose ceiling is **Restricted** | **Yes** | Granting Restricted requires step-up; removing it changes Restricted access |
 | Revoke an ordinary domain entitlement | No | Consistent with P1-05 |
-| **Retain** privileged access | **Open** | Writes nothing, so nothing to protect — but it is an attestation that platform privilege continues. Genuinely arguable |
+| **Retain** privileged access | **No** | **Settled by D-92: ordinary retain does not require step-up unless it is self-review.** It writes nothing to the access model, so there is nothing to protect |
 | Self-review (§5E) | **Yes** | Mirrors D-65's `self_grant` |
 
 #### What this plan will not do
@@ -1044,15 +1044,32 @@ recorded separately. It is **not** the P1-02 provider-wide SSO Re-check (§7).
 
 ---
 
-## 6. Product Owner decisions — D-84 to D-94
+## 6. Product Owner decisions — D-84 to D-94 — **ALL ANSWERED**
 
-Eleven decisions. They are **derived from the repository**, not invented to fill
-a list: each one is a place where the accepted model genuinely admits more than
-one defensible answer, and each one blocks something real.
+**Product Owner approval, 19 September 2026. All eleven are decided; none remains
+open.** Each is recorded below with its question, the alternatives considered and
+the consequence, because the reasoning is what makes the decision reviewable
+later — but the answer is now settled, and DESIGN proceeds on it.
+
+| # | Subject | **Decided** |
+| --- | --- | --- |
+| D-84 | Reviewable object | **Domain Review = domain entitlement. Privileged Review = role assignment** |
+| D-85 | Auditor in the privileged population | **Included** |
+| D-86 | Domain-review population | **Confidential/Restricted ceiling OR whole-domain coverage** |
+| D-87 | Reviewer authority | **Derived from `grantableBy()`; current domain owners review domain access; System Administrator fallback where no owner exists** |
+| D-88 | Self-review | **Only when no other eligible reviewer exists; step-up + clearly distinguishable evidence** |
+| D-89 | Cadence | **Deliberately started cycles; recurring scheduler deferred** |
+| D-90 | Overdue behaviour | **Visibility only. NO automatic revocation** |
+| D-91 | Revoke level | **Privileged ends the role assignment; Domain ends the entitlement. A review does not trim scope or ceiling** |
+| D-92 | Step-up | **Approved with clarification — see D-92 below** |
+| D-93 | Superseded strictness | **Strict: snapshot + live re-read; changed composition supersedes** |
+| D-94 | Event keys | **Six proposed keys; NO `ALLOWED_KEYS` expansion** |
 
 ---
 
 ### D-84 — What is the reviewable object?
+
+> **APPROVED — Product Owner, 19 September 2026.** Domain Review reviews the **domain entitlement**; Privileged Review reviews the **role assignment**.
 
 | | |
 | --- | --- |
@@ -1066,6 +1083,8 @@ one defensible answer, and each one blocks something real.
 
 ### D-85 — Does the privileged population include Auditor?
 
+> **APPROVED — Product Owner, 19 September 2026.** **Auditor is included** in the privileged review population.
+
 | | |
 | --- | --- |
 | **Question** | Privileged Reviews cover roles holding an administration class. Auditor holds only `EvidenceRead`. In or out? |
@@ -1077,6 +1096,8 @@ one defensible answer, and each one blocks something real.
 ---
 
 ### D-86 — What is the Domain Review population?
+
+> **APPROVED — Product Owner, 19 September 2026.** Review entitlements whose ceiling is **Confidential or Restricted**, **or** which have **whole-domain coverage**.
 
 | | |
 | --- | --- |
@@ -1091,6 +1112,8 @@ one defensible answer, and each one blocks something real.
 
 ### D-87 — Who may review whom?
 
+> **APPROVED — Product Owner, 19 September 2026.** Reviewer authority **derives from `grantableBy()`**. **Current domain owners** review domain access. **System Administrator is the fallback** where no owner exists.
+
 | | |
 | --- | --- |
 | **Question** | Reviewer authority per subscreen |
@@ -1103,6 +1126,8 @@ one defensible answer, and each one blocks something real.
 ---
 
 ### D-88 — Self-review and separation of duties
+
+> **APPROVED — Product Owner, 19 September 2026.** **Self-review only when no other eligible reviewer exists**, with step-up and clearly distinguishable evidence.
 
 | | |
 | --- | --- |
@@ -1117,6 +1142,8 @@ one defensible answer, and each one blocks something real.
 
 ### D-89 — Cadence for Release 1
 
+> **APPROVED — Product Owner, 19 September 2026.** **Deliberately started cycles in Release 1.** The recurring scheduler is deferred.
+
 | | |
 | --- | --- |
 | **Question** | Are review cycles started deliberately, or generated on a recurring schedule? |
@@ -1128,6 +1155,8 @@ one defensible answer, and each one blocks something real.
 ---
 
 ### D-90 — What does overdue *do*?
+
+> **APPROVED — Product Owner, 19 September 2026.** **Overdue is visibility only. There is NO automatic revocation.**
 
 | | |
 | --- | --- |
@@ -1142,6 +1171,8 @@ one defensible answer, and each one blocks something real.
 
 ### D-91 — What level does a revoke act on?
 
+> **APPROVED — Product Owner, 19 September 2026.** **Privileged revoke ends the role assignment. Domain revoke ends the entitlement.** A review does **not** trim scope or ceiling.
+
 | | |
 | --- | --- |
 | **Question** | Does a review revoke the assignment, the entitlement, a scope, or a ceiling? |
@@ -1154,19 +1185,23 @@ one defensible answer, and each one blocks something real.
 
 ### D-92 — Which review decisions require step-up?
 
+> **APPROVED — Product Owner, 19 September 2026.** Approved **with clarification** — see the clarified table below.
+
 | | |
 | --- | --- |
 | **Question** | Retaining or revoking privileged access — is it a D-73 privileged action? |
-| **Recommended** | **Step-up for: revoking System Administrator (already required by P1-05), revoking Organisation Administrator, revoking a Restricted-ceiling entitlement, and any self-review.** Retain: **open — genuinely arguable** |
+| **DECIDED** | Step-up is required for **revoking System Administrator**, **revoking Organisation Administrator**, **revoking a Restricted entitlement**, and **any self-review decision**. **Ordinary retain does not require step-up unless it is self-review.** **No claim of Microsoft MFA** |
 | **Alternatives** | (b) step-up on every privileged decision including retain; (c) step-up on revoke only |
 | **Consequence** | **`StepUpAction::RevokeSystemAdministrator` already exists.** If a review's revoke calls the service without the controller enforcing step-up the way Roles & Access does, **the review screen becomes a step-up bypass for the most privileged action in the product.** That is this unit's central security risk, and it arrives from correct-looking re-use, not from new code. For retain: it writes nothing, so there is nothing to protect — but it *is* an attestation that platform privilege continues |
 | **Blocks** | Both controllers, and **N-R19**, the case to build first |
-| **Open finding** | **There is no `revoke_organisation_administrator` action**, although `requiringStepUp()` includes the role. Whether that is a deliberate P1-05 asymmetry or an oversight must be established at DESIGN and **reported, not quietly patched** (§9) |
+| **Ruled** | **The missing `revoke_organisation_administrator` is a real P1-05 implementation inconsistency requiring correction — not a new policy choice.** Product Owner ruling, 19 September 2026. See §9 |
 | **Constraint** | No weaker confirmation may be substituted. **No claim of Microsoft MFA.** B-9b stays `unverified` |
 
 ---
 
 ### D-93 — How strictly is "still exactly what was reviewed" defined?
+
+> **APPROVED — Product Owner, 19 September 2026.** **Strict: snapshot + live re-read.** A changed composition supersedes the review.
 
 | | |
 | --- | --- |
@@ -1180,6 +1215,8 @@ one defensible answer, and each one blocks something real.
 ---
 
 ### D-94 — The review security-event keys
+
+> **APPROVED — Product Owner, 19 September 2026.** The **six proposed event keys**, with **no `ALLOWED_KEYS` expansion**.
 
 | | |
 | --- | --- |
@@ -1245,19 +1282,28 @@ is a **P1-07** gate, recorded separately, and it is **not** the P1-02 gate.
 
 ---
 
-## 9. Source-of-truth conflicts
-
-**One item is flagged for resolution at DESIGN rather than corrected here.**
+## 9. Source-of-truth conflict — RULED, and a bounded corrective prerequisite
 
 > **`StepUpAction` has no `revoke_organisation_administrator`**, although
-> `RoleCatalogue::requiringStepUp()` includes Organisation Administrator and
-> `grant_organisation_administrator` exists.
+> `RoleCatalogue::requiringStepUp()` returns System Administrator **and**
+> Organisation Administrator, and `grant_organisation_administrator` exists.
 
-It may be a deliberate P1-05 asymmetry — or an oversight in an accepted unit.
-**This plan does not decide and does not patch it.** DESIGN reads P1-05's
-controller, establishes which it is, and **reports it**. If it turns out to be a
-defect in an accepted unit, it is raised as its own corrective item, not folded
-into P1-07's diff.
+**Product Owner ruling, 19 September 2026: this is a real P1-05 implementation
+inconsistency requiring correction, not a new policy choice.**
+
+The accepted catalogue already says granting *or revoking* either role requires
+step-up. The enum simply lacks the revoke case. The policy was decided in P1-05;
+only the implementation is short of it.
+
+It is therefore a **bounded corrective prerequisite of P1-07**, because P1-07's
+Privileged Reviews cannot enforce D-92 without it.
+
+| | |
+| --- | --- |
+| **Not done at PLAN** | Nothing is patched here |
+| **DESIGN must** | Document the bounded correction, and specify its exact enforcement and tests |
+| **DESIGN must NOT** | Redesign P1-05. The role model, the catalogue, the services, the engine and the access schema are untouched |
+| **Implementation** | **Nothing until DESIGN is approved** |
 
 No other conflict was found. Everything else in §2 is consistent across the
 migrations, services, engine, catalogue and the accepted P1-05 and P1-06
@@ -1301,20 +1347,20 @@ Not authorised. Recorded so DESIGN has a shape to argue with.
 
 ---
 
-## 12. What would make this plan wrong
+## 12. What would have made this plan wrong — now settled
 
-Stated plainly, because a plan that cannot be wrong has not said anything.
+Kept, because the reasoning is what makes the decisions reviewable later.
 
-- **If D-86 goes to "every entitlement"**, §5Q's volume approach and the test
-  script's expectations both change materially.
-- **If D-90 goes to automatic revocation**, P1-07 becomes a unit that changes
-  production access without a person, and needs infrastructure this deployment
-  does not have — a substantially different unit.
-- **If D-84 goes to the engine grant path**, the item model, all three screens
-  and N-R6 change shape.
-- **If the Product Owner wants reviewer comments**, §5N's "no free text" holds
-  for *events*, but the comments become P1-07 domain data with their own
-  exposure rules — a real addition, not a field.
+| Risk stated at PLAN | Outcome |
+| --- | --- |
+| D-86 going to "every entitlement" would change §5Q's volume approach and the test script's expectations | **Did not happen** — the recommended population was approved |
+| D-90 going to automatic revocation would make P1-07 change production access without a person, needing infrastructure this deployment does not have | **Did not happen** — overdue is visibility only |
+| D-84 going to the engine grant path would reshape the item model, all three screens and N-R6 | **Did not happen** — the entitlement is the object |
+
+**One thing remains genuinely open and is not a decision this plan can take:** if
+reviewer comments are ever wanted, §5N's "no free text" holds for *events*, but
+the comments become P1-07 domain data with their own exposure rules — a real
+addition, raised separately rather than slipped in as a field.
 
 ---
 
@@ -1344,10 +1390,14 @@ the decision is recorded, and retaining access provably changes nothing.
 
 ## 14. Status
 
-**PLAN — awaiting Product Owner approval.**
+**PLAN — PRODUCT OWNER APPROVED, 19 September 2026. DESIGN authorised.**
 
-No DESIGN. No implementation. No schema. No migration. No route, controller,
-service or UI code. No production or deployment change.
+**D-84 to D-94 are all answered** (§6), with D-92's clarification recorded and
+the §9 step-up inconsistency ruled a bounded corrective prerequisite.
 
-**D-84 to D-94 require answers before DESIGN begins.** D-90 is the one that
-changes real effective access and should not be settled by silence.
+DESIGN proceeds in `P1-07-ACCESS-REVIEWS-DESIGN.md`. **No implementation, no
+schema, no migration, no route, controller, service or UI code, and no
+production or deployment change is authorised by this approval.**
+
+**P1-02 provider-wide SSO Re-check remains OPEN / CARRIED / UNVERIFIED** under
+Phase 1 orchestration, untouched.
