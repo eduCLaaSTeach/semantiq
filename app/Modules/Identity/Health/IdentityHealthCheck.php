@@ -37,9 +37,42 @@ use Throwable;
  * Merging them is how a screen whose purpose is to make outages visible reports
  * Healthy through one for up to a day.
  *
- * Rendering this NEVER touches the network by choice: it reads the cache and the
- * stored probe result. Only the explicit "Re-check now" probes, and only through
- * EntraDiscovery::probe(), which holds a provider-wide lock.
+ * WHICH OF THESE REACHES THE NETWORK - stated accurately, because it was not.
+ *
+ * This comment used to read "Rendering this NEVER touches the network by
+ * choice: it reads the cache and the stored probe result." THAT WAS FALSE, and
+ * it was false about the method four lines below it. P1-09 was designed
+ * against this sentence and inherited the error; the code, not the comment, is
+ * what found it.
+ *
+ *   report()        MAY REACH MICROSOFT. It calls trustAvailability(), which
+ *                   reads the cached metadata and keys first and, WHEN EITHER
+ *                   IS ABSENT, falls through to EntraDiscovery::metadata() and
+ *                   signingKeys(). Both are Cache::remember() around an
+ *                   outbound Http::get with a ten-second timeout. On a warm
+ *                   cache it contacts nobody; on a cold one - a fresh
+ *                   deployment, a cleared cache, or simply 24 hours of quiet,
+ *                   since the discovery cache lives for CACHE_HOURS - it makes
+ *                   two outbound calls. This is DELIBERATE and unchanged: a
+ *                   first look at the SSO Health screen on a healthy
+ *                   deployment should not report a fault just because nobody
+ *                   has signed in yet.
+ *
+ *   storedReport()  NEVER REACHES THE NETWORK, and not by choice - by
+ *                   construction. It does not reference EntraDiscovery at all,
+ *                   so no read-through exists for it to take. This is the
+ *                   projection P1-09 System Health renders, and System Health
+ *                   renders NOTHING ELSE from this class.
+ *
+ *   recheck()       is the EXPLICIT live probe, and the only thing here that
+ *                   sets out to contact Microsoft. It goes through
+ *                   EntraDiscovery::probe(), which holds a provider-wide lock,
+ *                   and it runs only when an administrator presses the button.
+ *
+ * The SSO Health screen renders report(). That is correct for a screen whose
+ * subject IS the identity provider and which offers a live re-check beside the
+ * result. It would not be correct for a general health page, which is why
+ * P1-09 has its own entry point rather than a second probe.
  */
 final class IdentityHealthCheck
 {
@@ -58,7 +91,17 @@ final class IdentityHealthCheck
     ) {}
 
     /**
-     * Evaluate everything, without contacting Microsoft.
+     * Evaluate everything. MAY CONTACT MICROSOFT - see the class comment.
+     *
+     * This said "without contacting Microsoft", which is true on a warm cache
+     * and false on a cold one: trustAvailability() below falls through to
+     * EntraDiscovery::metadata() and signingKeys() when either cached value is
+     * absent, and both are read-through HTTP.
+     *
+     * The BEHAVIOUR is unchanged and remains correct for the SSO Health
+     * screen, which is about the identity provider and offers a live re-check
+     * beside the result. A caller that must not reach the network wants
+     * storedReport() instead.
      */
     public function report(): IdentityHealthReport
     {
@@ -284,9 +327,22 @@ final class IdentityHealthCheck
             return ['metadata' => $metadata, 'keys' => $keys];
         }
 
-        // Nothing cached. Ask - a first look on a healthy deployment should not
-        // report a fault just because nobody has signed in yet. A failure here
-        // is a real failure: EntraDiscovery caches no failed response.
+        /*
+         * NOTHING CACHED, SO ASK - AND THIS IS THE OUTBOUND CALL.
+         *
+         * metadata() and signingKeys() are Cache::remember() around an
+         * Http::get with a ten-second timeout, so this branch reaches
+         * Microsoft. It is deliberate: a first look on a healthy deployment
+         * should not report a fault just because nobody has signed in yet, and
+         * a failure here is a real failure, since EntraDiscovery caches no
+         * failed response.
+         *
+         * It is also the reason storedReport() exists. Every caller of
+         * report() inherits this branch, so a caller that must contact nobody
+         * cannot use report() at all - no amount of warm cache makes the path
+         * absent, and a guarantee that depends on cache state is not a
+         * guarantee.
+         */
         try {
             $metadata ??= $this->discovery->metadata();
             $keys ??= $this->discovery->signingKeys();

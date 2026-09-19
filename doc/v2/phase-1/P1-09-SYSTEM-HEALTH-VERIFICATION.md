@@ -10,9 +10,10 @@ observed in this environment. Where something was not observed, it says so.
 | DESIGN | merge `7f6e129` — three Product Owner corrections applied |
 | Schema | **NONE.** No table, no column, no migration |
 | Suite | **997 tests, 991 passed, 6 skipped** (all six pre-existing), 75,232 assertions |
-| Mutations | **51 run, 51 killed.** Six survived first — `P1-09-MUTATIONS.md` §1 |
-| Gate C review | Three further corrections applied — §1b |
-| Status | **AWAITING PRODUCT OWNER GATE C APPROVAL** |
+| Mutations | **54 run, 54 killed.** Six survived first — `P1-09-MUTATIONS.md` §1 |
+| Gate C review | Three corrections — §1b |
+| Gate C approval | Two authority/documentation corrections — §1c |
+| Status | **GATE C APPROVED. Merged and deployed; awaiting Gate D** |
 
 ---
 
@@ -192,6 +193,73 @@ fourteen are asserted as an equality.
 
 ---
 
+## 1c. Two corrections at Gate C approval
+
+Neither touches runtime behaviour. Both are authority and documentation
+corrections the Product Owner approved without a further checkpoint.
+
+### Correction D — the five area headings had drifted from approved scope
+
+The Phase 1 authority names the areas **Application, Integrations, Jobs,
+Connections, Service Health**. The implementation had renamed two:
+
+| Approved | Shipped | Why it drifted |
+| --- | --- | --- |
+| **Integrations** | *Sign-in* | Microsoft Entra ID is the only integration this deployment has, so the heading was made to describe the one row under it |
+| **Jobs** | *Tasks and timetables* | The area was first called *Background work* and held a row of the same name; the browser sweep caught the duplication and the fix renamed the area |
+
+**Both renames had a defensible local reason, and neither reason was this
+unit's to act on.** A heading in approved scope is a decision already taken.
+*Sign-in* also describes today's contents rather than the category: the
+heading names what the area is FOR — outside services — and sign-in happens to
+be the only one so far. Improving an approved name is a change to the product,
+not a polish fix.
+
+The authority's own headings are restored exactly, and the improvements moved
+to where they belong — the descriptions beneath:
+
+- **Integrations** — *"Outside services SemantIQ depends on. Today that is how
+  people sign in."*
+- **Jobs** — *"How longer tasks and timetabled work are handled here."*
+
+**"Jobs" also resolves the original collision**, which is worth recording: it
+is not any row's name, so the area/row duplication cannot recur, and nothing
+had to be renamed to achieve it. The guard that caught it still holds.
+
+| Evidence | Result |
+| --- | --- |
+| A dedicated guard asserts the five names **as an ordered equality**, separately from the row shape | Passes; a rename fails with a message naming the drift rather than as a large array diff |
+| Row shape, statuses, count and health logic | **Unchanged.** Still 14 rows, still 9 + 2 + 3 |
+| *Local service health* sentence | Now points at **Integrations**, the area it actually refers to |
+| Browser | The five headings render in order at 1440px and 390px, light and dark |
+
+### Correction E — P1-02's comments stated a guarantee its code disproves
+
+`IdentityHealthCheck` still said *"Rendering this NEVER touches the network by
+choice"*, and `report()` said *"Evaluate everything, without contacting
+Microsoft."*
+
+**Both are false**, and false about a method four lines below. `report()` calls
+`trustAvailability()`, which falls through to `EntraDiscovery::metadata()` and
+`signingKeys()` — read-through `Cache::remember()` around an `Http::get` — when
+either cached value is absent. **P1-09 was designed against that sentence and
+inherited the error.** The comment outlived the code it described, and a
+comment that outlives its code is how the next unit inherits the same defect.
+
+The comments now state, accurately:
+
+| Method | Reaches the network? |
+| --- | --- |
+| `report()` | **May.** Warm cache: nobody. Cold cache: two outbound calls, ten-second timeout each. Deliberate, and correct for the SSO Health screen, whose subject *is* the provider and which offers a live re-check beside the result |
+| `storedReport()` | **Never** — by construction, not by choice. It does not reference `EntraDiscovery` at all, so no read-through exists to take. **System Health renders this and nothing else from the class** |
+| `recheck()` | The **explicit** live probe, through `EntraDiscovery::probe()` and its provider-wide lock, only when an administrator presses the button |
+
+**P1-02 runtime behaviour is unchanged, and that is proven rather than
+asserted.** The file's PHP token stream — comments and whitespace removed — is
+**byte-identical before and after**, across 1,923 tokens.
+
+---
+
 ## 2. What this unit does NOT do
 
 - **`/up` is untouched.** Still outside the web middleware group, still exempt
@@ -309,8 +377,10 @@ journey and Back.
    contained a row *Background work*, so the same words appeared twice, three
    lines apart, meaning the heading and one of the things under it. The UI
    standard forbids naming a group after its cluster; this is the same mistake
-   one level down. The area is now **Tasks and timetables**, and a test asserts
-   no area shares a name with its own rows.
+   one level down. The area was renamed **Tasks and timetables** — which, as
+   §1c records, was itself drift from approved scope. It is now **Jobs**, the
+   Phase 1 authority's own heading, which resolves the collision without
+   renaming anything. A test asserts no area shares a name with its own rows.
 
 ### 5.2 The polish gate
 

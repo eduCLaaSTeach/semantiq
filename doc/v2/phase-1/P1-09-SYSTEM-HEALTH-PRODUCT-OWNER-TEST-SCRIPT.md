@@ -51,13 +51,13 @@ no button on it that changes the system.
 | # | What you do | What you should see | PASS / FAIL |
 | --- | --- | --- | --- |
 | **1** | From any console screen, open the sidebar, find **System Administration**, and look for **System Health**. Click it | The entry is there, is not greyed out, does **not** say "Soon", and takes you to a page headed **System Health**. It should be highlighted as the page you are on | ☐ PASS ☐ FAIL |
-| **2** | Read the five headings down the page | **Application**, **Sign-in**, **Tasks and timetables**, **Connections**, **Service health** — each with a plain-English line under it saying what it covers | ☐ PASS ☐ FAIL |
+| **2** | Read the five headings down the page | Exactly **Application**, **Integrations**, **Jobs**, **Connections**, **Service Health** — in that order, each with a plain-English line under it saying what it covers | ☐ PASS ☐ FAIL |
 | **3** | Read every row: the name on the left, the status on the right, the sentence underneath | **Every row makes sense without a developer.** No dotted key like `session.driver`, no file path, no server name, no database name, no version number, no error text, no raw numbers | ☐ PASS ☐ FAIL |
-| **4** | Look at **Tasks and timetables** | **Background work — Available.** **Background service — Not applicable.** **Scheduled tasks — Not configured.** All three read as ordinary statements about how this deployment is set up, **not as faults**. Neither of the last two should look like a warning | ☐ PASS ☐ FAIL |
-| **5** | Look at the **Sign-in** area | Either a genuine state with an age under it — *"Last checked 3 hours ago"* — or an honest **Not checked** saying sign-in has not been checked on this release yet. **It must not simply say Available with no age.** Opening this page deliberately does not contact Microsoft, so what you see is the last real answer | ☐ PASS ☐ FAIL |
+| **4** | Look at **Jobs** | **Background work — Available.** **Background service — Not applicable.** **Scheduled tasks — Not configured.** All three read as ordinary statements about how this deployment is set up, **not as faults**. Neither of the last two should look like a warning | ☐ PASS ☐ FAIL |
+| **5** | Look at the **Integrations** area | Either a genuine state with an age under it — *"Last checked 3 hours ago"* — or an honest **Not checked** saying sign-in has not been checked on this release yet. **It must not simply say Available with no age.** Opening this page deliberately does not contact Microsoft, so what you see is the last real answer | ☐ PASS ☐ FAIL |
 | **6** | Press **Check sign-in now**. *(Skip if you would rather not add the Audit entry described in §5.)* | Sign-in is checked, a green confirmation says **"Health re-checked."**, and **you stay on the System Health page** — you are not moved to another screen. The Sign-in row updates and its age becomes recent | ☐ PASS ☐ FAIL ☐ SKIPPED |
 | **7** | Press **Check sign-in now** again straight away | A polite refusal: **"Health was checked moments ago. Try again shortly."** No countdown, no timer, no error page. This is the existing protection that stops repeated checks reaching Microsoft | ☐ PASS ☐ FAIL |
-| **8** | Look at **Service health**, then narrow your browser window (or use a phone), then switch between light and dark, then press **Back** | **Local service health** reads as *this application's own checks*, and says sign-in is reported separately — **not** as a verdict on Microsoft. Nothing runs off the edge of the screen at any width, both themes are readable, and **Back** returns you where you came from | ☐ PASS ☐ FAIL |
+| **8** | Look at **Service Health**, then narrow your browser window (or use a phone), then switch between light and dark, then press **Back** | **Local service health** reads as *this application's own checks*, and says sign-in is reported separately under **Integrations** — **not** as a verdict on Microsoft. Nothing runs off the edge of the screen at any width, both themes are readable, and **Back** returns you where you came from | ☐ PASS ☐ FAIL |
 
 ## 8. Negative, refusal and security cases
 
@@ -83,8 +83,8 @@ Covered inside checks 3, 4, 5 and 8. In particular:
   green successes;
 - **no row should ever say Available without something having been checked.**
   If you see Available, a check ran;
-- the sign-in row is the **only** row with an age, because it is the only one
-  that is not measured as the page loads.
+- the Microsoft Entra ID row under **Integrations** is the **only** row with an
+  age, because it is the only one that is not measured as the page loads.
 
 ## 10. Evidence to capture
 

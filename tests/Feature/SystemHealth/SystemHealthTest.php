@@ -560,6 +560,35 @@ final class SystemHealthTest extends TestCase
     }
 
     /**
+     * THE FIVE AREA HEADINGS ARE THE PHASE 1 AUTHORITY'S, EXACTLY.
+     *
+     * Application, Integrations, Jobs, Connections, Service Health - in that
+     * order, with that spelling and that capitalisation.
+     *
+     * This guard exists because the headings DID drift. "Integrations" became
+     * "Sign-in" and "Jobs" became "Tasks and timetables", each for a defensible
+     * local reason - Microsoft Entra ID is the only integration today, and an
+     * area called "Background work" collided with a row of the same name - and
+     * neither reason is this unit's to act on. A heading in the approved scope
+     * is a decision already taken; improving it is a change to the product,
+     * not a polish fix, and it belongs in a separate conversation.
+     *
+     * Asserted separately from the row shape so a rename fails with a message
+     * that says what happened rather than as a large array diff.
+     *
+     * Mutation: rename any area. Both directions - a "better" name and a typo.
+     */
+    public function test_the_five_area_headings_are_the_authoritative_ones(): void
+    {
+        $this->assertSame(
+            ['Application', 'Integrations', 'Jobs', 'Connections', 'Service Health'],
+            array_map(fn ($area): string => $area->name, $this->report()->areas()),
+            'A System Health area heading is not the Phase 1 authority\'s. These five names are '
+            .'approved scope, not presentation, and this unit does not get to improve them.'
+        );
+    }
+
+    /**
      * NO AREA IS NAMED AFTER A ROW INSIDE IT.
      *
      * Found by looking at the rendered screen, not by a test: the area was
@@ -567,6 +596,10 @@ final class SystemHealthTest extends TestCase
      * so the same words appeared twice, three lines apart, meaning the heading
      * and one of the things under it. The UI standard forbids naming a group
      * after its cluster; this is the same mistake one level down.
+     *
+     * The first fix renamed the AREA, which drifted from approved scope. The
+     * authority's own heading - "Jobs" - resolves both: it is not any row's
+     * name, so this guard still holds, and nothing was renamed to make it.
      */
     public function test_no_area_shares_its_name_with_a_row(): void
     {
@@ -748,10 +781,10 @@ final class SystemHealthTest extends TestCase
 
         $this->assertSame([
             'Application' => ['Database structure', 'Required settings', 'Screens and styling'],
-            'Sign-in' => ['Microsoft Entra ID'],
-            'Tasks and timetables' => ['Background work', 'Background service', 'Scheduled tasks'],
+            'Integrations' => ['Microsoft Entra ID'],
+            'Jobs' => ['Background work', 'Background service', 'Scheduled tasks'],
             'Connections' => ['Database', 'Staying signed in', 'Temporary storage', 'File storage'],
-            'Service health' => ['Local service health', 'Record integrity', 'Record keeping'],
+            'Service Health' => ['Local service health', 'Record integrity', 'Record keeping'],
         ], $shape);
     }
 

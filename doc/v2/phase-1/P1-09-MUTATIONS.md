@@ -4,7 +4,7 @@
 CLAUDE.md §2: a test that cannot fail is worse than no test, because it reports
 safety that does not exist.
 
-**51 mutations. 51 killed — but six survived first, and those six are the
+**54 mutations. 54 killed — but six survived first, and those six are the
 useful part of this document.** A mutation that dies immediately confirms a
 guard that was already sound. A mutation that survives has found a test
 measuring something other than what it claims to.
@@ -82,7 +82,7 @@ have been prose.
 | M-17 | Never forget the probe key | **KILLED** | `…namespaced_and_forgotten` |
 | M-18 | Write a constant | **KILLED** | `…different_value` |
 
-### Tasks and timetables — the three easiest statuses to fake
+### Jobs — the three easiest statuses to fake
 
 | # | Mutation | Verdict | Killed by |
 | --- | --- | --- | --- |
@@ -156,6 +156,26 @@ Unique keys remove the race rather than guarding it.
 understood the rule as *"do not invent an age"* rather than *"a state without a
 time is not a result"* — the state still renders as Available, and the age is
 simply missing, which is the original defect wearing a tidier implementation.
+
+### Correction D — the area headings, at Gate C approval
+
+Not a defect the mutations found — the Product Owner did, by comparing the
+screen against Phase 1 authority. These three prove the new guard is real.
+
+| # | Mutation | Verdict | Killed by |
+| --- | --- | --- | --- |
+| D-M1 | "Improve" `Integrations` back to `Sign-in` | **KILLED** | the heading equality and the row shape |
+| D-M2 | Rename `Jobs` to `Tasks and timetables` | **KILLED** | both |
+| D-M3 | `Service Health` loses its capital H | **KILLED** | both |
+
+**D-M3 is the one worth keeping.** A capitalisation slip is invisible in review
+and is exactly how an approved name erodes — one letter at a time, each change
+too small to argue about.
+
+**No mutation is offered for correction E**, and that is deliberate: it changed
+comments only. Its proof is not a mutation but a token comparison — the file's
+PHP token stream with comments and whitespace removed is byte-identical before
+and after, across 1,923 tokens. A mutation of a comment tests nothing.
 
 ---
 

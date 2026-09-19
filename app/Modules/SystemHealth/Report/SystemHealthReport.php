@@ -77,23 +77,37 @@ final class SystemHealthReport
                 ],
             ),
 
+            /*
+             * "Integrations" IS THE PHASE 1 AUTHORITY'S HEADING, and it is not
+             * this unit's to improve.
+             *
+             * It was renamed to "Sign-in" because Microsoft Entra ID is the
+             * only integration this deployment has, so the heading described
+             * the one row under it. That reads better and is presentation
+             * drift from approved scope: the heading names the CATEGORY, and
+             * the category is external services - sign-in happens to be the
+             * only one today. The description carries the plain-English
+             * explanation instead, which is where the improvement belongs.
+             */
             new SystemHealthArea(
-                name: 'Sign-in',
-                description: 'Whether people can sign in with their work account.',
+                name: 'Integrations',
+                description: 'Outside services SemantIQ depends on. Today that is how people sign in.',
                 rows: [$this->microsoft()],
             ),
 
             /*
-             * "Tasks and timetables", NOT "Background work", and the browser
-             * sweep is why. The area was called Background work and its first
-             * row is called Background work, so the screen printed the same
-             * words twice, three lines apart, meaning two different things -
-             * the heading and one of the things under it. The UI standard
-             * forbids naming a group after its cluster for exactly this
-             * reason, and it reads the same way one level down.
+             * "Jobs" IS THE PHASE 1 AUTHORITY'S HEADING.
+             *
+             * The browser sweep found the area named "Background work" holding
+             * a row named "Background work" - the same words twice, three
+             * lines apart, meaning the heading and one of the things under it.
+             * The fix at the time was to rename the AREA, which also drifted
+             * from approved scope. The authority's own heading resolves both:
+             * "Jobs" is not any row's name, so the duplication cannot recur,
+             * and the approved wording is restored rather than improved.
              */
             new SystemHealthArea(
-                name: 'Tasks and timetables',
+                name: 'Jobs',
                 description: 'How longer tasks and timetabled work are handled here.',
                 rows: $this->jobs->rows(),
             ),
@@ -114,7 +128,7 @@ final class SystemHealthReport
             ),
 
             new SystemHealthArea(
-                name: 'Service health',
+                name: 'Service Health',
                 description: 'The overall picture, and whether the record of what happened is sound.',
                 rows: [
                     $this->localServiceHealth($local),
@@ -227,7 +241,7 @@ final class SystemHealthReport
      * identity would have contacted Microsoft. So sign-in can be down, /up can
      * be returning 503, and every check behind this row can still be green -
      * which is why it is called Local service health and why its sentence
-     * points at the Sign-in area rather than implying it covers it.
+     * points at the Integrations area rather than implying it covers it.
      *
      * @param  array<string, array{ok: bool, detail: string}>  $local
      */
@@ -238,7 +252,7 @@ final class SystemHealthReport
                 return new HealthRow(
                     name: 'Local service health',
                     status: HealthStatus::Unavailable,
-                    explanation: 'At least one of this application\'s own checks failed. The rows above show which. Signing in is reported separately, under Sign-in.',
+                    explanation: 'At least one of this application\'s own checks failed. The rows above show which. Signing in is reported separately, under Integrations.',
                 );
             }
         }
@@ -246,7 +260,7 @@ final class SystemHealthReport
         return new HealthRow(
             name: 'Local service health',
             status: HealthStatus::Available,
-            explanation: 'Every one of this application\'s own checks passed. Signing in is reported separately, under Sign-in.',
+            explanation: 'Every one of this application\'s own checks passed. Signing in is reported separately, under Integrations.',
         );
     }
 
