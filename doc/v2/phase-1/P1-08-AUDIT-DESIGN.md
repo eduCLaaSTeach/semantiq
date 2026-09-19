@@ -47,7 +47,8 @@
 | `target_id` | bigint, null | From `entity_id` |
 | `outcome` | varchar(24), null | From `result` |
 | `reason` | varchar(64), null | Fixed vocabulary only. **Never a message** |
-| `role` \| `domain_id` \| `scope` \| `sensitivity` | as today | The remaining permitted context keys, as first-class columns |
+| `role` \| `domain_id` \| `scope` \| `sensitivity` | as today | Permitted context keys, as first-class columns |
+| `context_expires_at` | datetime, null | The permitted `expires_at` key — today only `bootstrap.grant.issued`, whose TTL is exactly the security fact worth keeping. **Corrected:** the first draft claimed every permitted key was persisted and then omitted this one |
 | `previous_hash` | char(64) | The chain (§2) |
 | `row_hash` | char(64) | The chain |
 
@@ -91,7 +92,8 @@ row_hash = sha256( previous_hash | sequence | occurred_at(ISO-8601, µs) |
                    event | category | actor_type | actor_user_id |
                    actor_subject | actor_tenant | actor_provider |
                    organisation_id | subject_user_id | target_type | target_id |
-                   outcome | reason | role | domain_id | scope | sensitivity )
+                   outcome | reason | role | domain_id | scope | sensitivity |
+                   context_expires_at )
 ```
 
 Every persisted field, in a **fixed declared order**, with `\x1f` between fields
@@ -115,6 +117,12 @@ A chain has a predecessor, so it has a serialisation point.
 - Two concurrent audited writes therefore **serialise on one row**. That is a
   real throughput cost and it is accepted: this is administration traffic, and a
   chain that skips the lock is a chain that forks.
+
+**RULED: accepted for Phase 1.** One global chain-head lock suits the current
+administrative and security event volume, and the design is **not** to be
+reworked pre-emptively for throughput. **Recorded as a future scaling
+consideration:** if Audit later carries high-volume events, the chain is what to
+revisit, not the lock.
 
 **`LOCK IN SHARE MODE` is not used**, and `sequence` is not derived from
 `MAX(sequence)+1`: both permit two writers to read the same predecessor.
@@ -164,13 +172,51 @@ evidence.
 
 | Caller shape | Handling |
 | --- | --- |
-| Already inside `DB::transaction` — every P1-01/03/04/05/07 write | The insert **joins that transaction**. A failed insert rolls the change back with it. **No ordering hazard exists**, and this is most of the surface |
+| A **successful** state change inside `DB::transaction` — every P1-01/03/04/05/07 write | The insert **joins that transaction**. A failed insert rolls the change back with it. **No ordering hazard exists**, and this is most of the surface |
+| A **refusal** raised from inside a transaction that is about to roll back | **Written on a separate connection-level transaction that commits independently** — see §3.3 |
 | Not in a transaction | `record()` opens one for the insert alone |
 | **Sign-in success** | **This is the one true hazard.** `CallbackController::issueSession()` today regenerates the session, writes the session keys, **then** records. Session state is not transactional, so a failed insert would leave somebody signed in and unevidenced. **The order is inverted:** persist `auth.login.succeeded` first, and only then regenerate and populate the session. If persistence fails, **no session is issued** and the person is sent to a refusal state |
 | **Sign-in refusal** | The refusal **stands**. Failing closed can make a success fail; it must never turn a refusal into anything else. Persistence failure is `Log::critical` only |
-| **Logout, session expiry** | Best effort, `Log::critical` on failure. Refusing to let somebody sign out because the evidence store is full is a worse outcome than the gap, and the session is already gone |
+| **Logout, session expiry** | **RULED best effort.** `Log::critical` on failure, and that operational log is **not** audit evidence. Sign-out is never prevented and an expired session is never resurrected because durable storage is unavailable. Successful sign-in and state-changing security/admin operations **remain fail-closed** |
 
-### 3.3 The failure itself
+### 3.3 Refusals — evidence that must SURVIVE the rollback
+
+A success and a refusal need **opposite** transaction behaviour, and conflating
+them loses evidence.
+
+- A **success** must be rolled back if it cannot be evidenced. That is D-111.
+- A **refusal** is already not happening. Its evidence must **not** be written
+  into the transaction that is about to roll back — `ReviewDecisionService`
+  records `access.review.refused` and then throws, `UserDirectoryService`
+  records `user.provision.refused` and then throws, `StepUpService` records
+  `access.step_up.refused` and then throws. In every one of those the enclosing
+  transaction unwinds, and an insert that joined it would **vanish with the
+  refusal it was recording**. A refusal that leaves no trace is precisely the
+  attempt somebody wanted hidden.
+
+So the catalogue's declared **outcome class** decides the write mode:
+
+| Outcome class | Write mode | On persistence failure |
+| --- | --- | --- |
+| **Success / state change** | Joins the caller's transaction | **The change rolls back.** D-111 |
+| **Refusal / denial** | Written on a **separate transaction that commits immediately**, independent of the caller's | **The action stays refused**, and `Log::critical` records the operational gap |
+
+**Four properties, asserted directly:**
+
+1. A privileged refusal **remains refused**.
+2. Refusal evidence that persisted **survives** the domain transaction's
+   rollback.
+3. If refusal-evidence persistence itself fails, the action is **still
+   refused**, and `Log::critical` records the gap.
+4. **No refusal can become a success.** The refusal path never returns a value
+   and never swallows the throw; the audit write sits beside it and cannot
+   alter it.
+
+**D-111 is not weakened.** It governs whether a *success* may complete
+unevidenced — the answer stays no. It never said a refusal should be erased for
+lack of a place to put it.
+
+### 3.4 The failure itself
 
 A persistence failure raises `AuditViolation` (the same shape as every other
 module's violation), so an administration screen renders a **sentence**, never
@@ -206,23 +252,79 @@ fails the build rather than landing in a default bucket.
 
 ---
 
-## 5. Actor resolution
+## 5. Actor resolution — PER EVENT, never a global convention
+
+### 5.1 The correction
+
+The first draft of this design claimed `user_id` is **always** the subject and
+`related_id` **always** the actor. **That is false, and the repository proves
+it:**
+
+| Event | `user_id` is | Actor comes from |
+| --- | --- | --- |
+| `auth.login.succeeded` | the person signing in | `user_id` |
+| `user.provisioned`, `user.deactivated`, `user.purged` | the **administrator** | `user_id`; the affected person is `entity_id` |
+| `organisation.created` | the **creator** | `user_id` |
+| `group.member.added` | the **administrator** | `user_id`; the added person is `related_id` |
+| `business_domain.owner.assigned` | the **administrator** | `user_id`; the owner is `related_id` |
+| `access.role.assigned` | the **subject** | `related_id` |
+| `access.review.item.revoked` | the **subject** | `related_id` |
+| `auth.login.refused.unknown_identity` | **absent** | the directory `subject` |
+| `access.engine.failed` | **absent** | nothing — `system` |
+
+A single rule applied across those would misattribute roughly half the estate,
+plausibly and invisibly. **There is no global convention and this design does
+not invent one.**
+
+### 5.2 Declared semantics, in the canonical catalogue
+
+`EventCatalogue` — the **existing** list, not a second one — is extended so each
+of the 77 keys declares four sources:
+
+| Declaration | Values |
+| --- | --- |
+| **Actor source** | `UserId` \| `RelatedId` \| `ExternalSubject` \| `System` |
+| **Subject source** | `UserId` \| `RelatedId` \| `EntityId` \| `ExternalSubject` \| `None` |
+| **Target source** | `EntityTypeAndId` \| `None` |
+| **Organisation source** | `Context` \| `None` (platform-scoped) |
+
+`AuditSemantics` is a value object holding the four; `EventCatalogue::semanticsFor()`
+returns it. **A key with no declared semantics fails the build** — the
+completeness test asserts the declared set and the semantics map are the **same
+set**, as an equality, so adding an event without deciding its audit meaning is
+not possible.
+
+Because the declarations live beside the labels the catalogue already holds,
+there is no second event list to drift.
+
+### 5.3 Actor type
 
 | `actor_type` | When | Fields |
 | --- | --- | --- |
-| `person` | A signed-in SemantIQ user acted | `actor_user_id`. `actor_subject` only where the event already carries it |
-| `external_subject` | A **refused** sign-in — there is no SemantIQ user, which is the point of refusing | `actor_subject`, `actor_tenant`, `actor_provider`. `actor_user_id` **NULL** |
-| `system` | No human actor — scheduled health checks, engine failures | All actor identity fields NULL |
+| `person` | The declared actor source resolves to a SemantIQ user id | `actor_user_id` |
+| `external_subject` | The declared source is `ExternalSubject` — a refused sign-in has no SemantIQ user, which is the point of refusing it | `actor_subject`, `actor_tenant`, `actor_provider`; `actor_user_id` **NULL** |
+| `system` | The declared source is `System` — engine failures, unattended checks | All actor identity fields NULL |
 
 **`actor_user_id` is never populated for `external_subject`**, and no lookup is
-attempted to "resolve" one. An unknown actor rendered as somebody's name is
-evidence that lies, and a resolution that guesses is how it happens.
+attempted to "resolve" one. **Never guess an actor.** An unknown actor rendered
+as somebody's name is evidence that lies, and a lookup that guesses is how it
+happens.
 
-**The convention that is easiest to get backwards, stated once:** in
-`SecurityEventLogger` context, `user_id` is the **subject** and `related_id` is
-the **actor**. The mapper inverts nothing; test **A5** exists specifically
-because an implementer reading `user_id` as "the actor" would produce a
-plausible, completely wrong audit trail.
+### 5.4 A5 — the test this correction exists for
+
+**A5 asserts the recorded actor against a known truth in all five areas**, not
+one:
+
+| Area | Case |
+| --- | --- |
+| **Login** | `auth.login.succeeded` — actor is the person signing in |
+| **User lifecycle** | `user.deactivated` — actor is the **administrator**, subject is the person deactivated |
+| **Organisation administration** | `organisation.created` / `team.moved` — actor is the administrator |
+| **Role and access administration** | `access.role.assigned` — actor is `related_id`, subject is `user_id` — **the inverse of user lifecycle** |
+| **Access reviews** | `access.review.item.revoked` — actor is the reviewer, subject is the person reviewed |
+
+A test covering only one area would pass under any single global convention,
+which is exactly how the first draft's error survived review of the design.
 
 ---
 
@@ -350,7 +452,7 @@ searchable note field is precisely the leak channel P1-06 refused.
 | **A2** | Each of the four sign-in refusals is evidenced with **no fabricated actor** | Resolve `actor_user_id` by subject lookup |
 | **A3** | Role assigned / revoked / entitlement granted evidenced with actor, target, outcome | Drop the target columns |
 | **A4** | A denied **privileged** action is evidenced; an **ordinary business denial is NOT** (D-71) | Log every denial — volume buries what matters |
-| **A5** | **Actor is the person who acted**, never the subject | Swap `user_id` and `related_id` in the mapper |
+| **A5** | **Actor is the person who acted**, in **all five** areas — login, user lifecycle, organisation administration, role/access administration, access reviews (§5.4) | Apply ANY single global convention. User lifecycle and role administration are inverses, so no one rule satisfies both |
 | **A6** | Restricted fields **absent from the rendered payload** for OrgAdmin and Auditor | Return them as `null` instead of absent — *this is the case most likely to pass vacuously, and it is asserted on the payload, never on the session* |
 | **A7** | No application path updates or deletes a row | Add a `DELETE` route |
 | **A8** | An altered row and a **deleted** row both break the chain and are **reported** | Verify only `row_hash` — a deletion then passes |
@@ -362,6 +464,10 @@ searchable note field is precisely the leak channel P1-06 refused.
 | **A14** | `organisation_id IS NULL` rows are **System Administrator only** | Drop the `IS NULL` branch, or omit the `WHERE` |
 | **A15** | A forbidden context key still **throws** and reaches neither log nor table | Relax the guard |
 | **A16** | **No `ip_address` or `user_agent` column exists** (D-101) | Add one |
+| **A19** | **Refusal evidence survives the domain rollback** — the refused review, the refused provisioning and the refused step-up each leave a row after their transaction unwinds | Let the refusal insert join the caller's transaction |
+| **A20** | A refusal whose **own** persistence fails is **still refused** | Let the failure propagate as a success |
+| **A21** | Every declared event has **declared audit semantics**; the two sets are equal | Add an event with no semantics, or a `default =>` fallback |
+| **A22** | `context_expires_at` is persisted and **hashed** — `bootstrap.grant.issued` | Omit it from the hash field list |
 | **A17** | Concurrent audited writes produce an **unbroken chain** — MySQL only, single-threaded SQLite cannot observe it | Drop `lockForUpdate()` |
 | **A18** | The evidence start date is **rendered on every tab** | Remove it from one |
 
@@ -379,10 +485,21 @@ must run against MySQL in CI, exactly as P1-07's M-R12 recorded.
 with `started_at = now()` and the genesis hash. Nothing else is created, altered
 or backfilled (D-109).
 
-**Down.** Drop both tables, in that order. **Nothing else is touched**, so a
-rollback cannot lose a business record — but it **does** discard the evidence
-gathered since deployment, and the deployment note must say so rather than
-presenting rollback as free.
+**Down.** Drops both tables, in that order. **Nothing else is touched**, so a
+rollback cannot lose a business record — but it **does** destroy every audit
+row gathered since deployment.
+
+**PRODUCTION SAFEGUARD (ruled).** `down()` exists for CI and development
+migration testing. Once production holds audit evidence:
+
+| Rule | |
+| --- | --- |
+| **Deployment must never automatically drop the Audit tables** | The deploy workflow runs `migrate --force` and never `migrate:rollback`; this is asserted, not assumed |
+| A production rollback that would destroy audit evidence | Requires **explicit operator approval** and a **database-level backup or snapshot taken first** |
+| That backup | Is an **operational safeguard**, not the product export feature D-110 prohibits. It is taken by an operator with database access, is never reachable from the application, and no screen offers it |
+
+Recorded prominently in the deployment and rollback documentation, not only
+here.
 
 **Proven on MySQL 8.4 in CI**, migrate → rollback → migrate, and the new
 concurrency case runs in the existing MySQL suite step.
@@ -444,3 +561,11 @@ are already known:
 No implementation. No schema created. No deployment.
 **P1-02 remains OPEN / CARRIED / UNVERIFIED. P1-07's carried items remain
 carried. D-19 is unchanged. P1-09 and P1-10 are not started.**
+
+### 14.1 Product Owner rulings carried into this design
+
+| Item | Ruling |
+| --- | --- |
+| Chain-head serialisation cost | **Accepted for Phase 1.** Recorded as a future scaling consideration; no pre-emptive redesign |
+| Sign-out and session expiry | **Best effort.** Never prevented, never resurrected, `Log::critical` only, and that log is not evidence |
+| Rollback | **Approved with a production safeguard** — §10. Deployment never drops the Audit tables; a production rollback needs operator approval and a database backup first, which is an operational safeguard and not the D-110 export |
