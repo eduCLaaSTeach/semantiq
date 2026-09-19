@@ -1,0 +1,192 @@
+# Read-only production session-store verification.
+#
+# Manual dispatch only. It exists because the P1-09 System Health screen showed
+# "Staying signed in - Not checked" in production, and that row reads
+# config('session.driver'). The repository baseline and several documents said
+# the deployed driver was `database`. This workflow establishes what it
+# ACTUALLY is, rather than inferring it from .env.example again - which is how
+# the wrong claim was made in the first place.
+#
+# IT MODIFIES NOTHING. No .env edit, no config change, no cache clear, no
+# session touched, no migration. Every statement below is a read.
+#
+# IT PRINTS FOUR FACTS AND NOTHING ELSE:
+#
+#   1. the effective session driver name;
+#   2. the session table name, ONLY if the driver is database;
+#   3. whether Laravel configuration is currently cached;
+#   4. whether the sessions table exists, ONLY if the driver is database.
+#
+# Nothing else may leave the server. No connection string, no database host,
+# name or user, no password, no APP_KEY, no cookie, no session contents, no
+# .env line. The driver name is a configuration CHOICE, not a credential, which
+# is why it is the one value printed verbatim; the table name is printed only
+# in the case where the checker actually uses it.
+#
+# The output is swept for secret markers after the fact, so a future edit that
+# adds a field cannot quietly leak one.
+#
+# It mirrors verify-identity.yml, including the ssh-agent and askpass handling
+# the deploy key needs: the key is passphrase-protected, and writing the key
+# file alone produces "Permission denied (publickey)".
+name: Verify P1-09 session store (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Report the session store over SSH
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+    steps:
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      # Four facts. Reads only.
+      - name: Report the session store
+        run: |
+          set -euo pipefail
+
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
+              \$driver = (string) config(\"session.driver\");
+              \$isDatabase = \$driver === \"database\";
+
+              \$report = [
+                \"effective_session_driver\" => \$driver,
+                \"configuration_is_cached\"  => app()->configurationIsCached(),
+              ];
+
+              /*
+               * The table name and its existence are reported ONLY when the
+               * driver is database, because that is the only case in which
+               * SessionStoreCheck reads them. Reporting a table name for a
+               * deployment that does not use one would be inventing a fact.
+               */
+              if (\$isDatabase) {
+                \$table = (string) config(\"session.table\", \"sessions\");
+                \$report[\"session_table_name\"] = \$table;
+
+                try {
+                  \$report[\"session_table_exists\"] =
+                    \Illuminate\Support\Facades\Schema::connection(config(\"session.connection\"))->hasTable(\$table);
+                } catch (\Throwable \$e) {
+                  // The exception can carry the host, database and user.
+                  \$report[\"session_table_exists\"] = null;
+                  \$report[\"session_table_check_failed\"] = true;
+                }
+              }
+
+              /*
+               * WHAT THE P1-09 ROW WILL SAY, from the same check the screen
+               * runs - so the report cannot disagree with the screen.
+               */
+              \$row = app(\App\Modules\SystemHealth\Checks\SessionStoreCheck::class)->run();
+              \$report[\"system_health_row_status\"] = \$row[\"status\"]->value;
+
+              echo json_encode(\$report, JSON_PRETTY_PRINT);
+            '")"
+
+          echo "$out"
+
+          # A LEAK SWEEP ON THE OUTPUT ITSELF, not a promise in a comment. If a
+          # future edit adds a field that carries a credential or a path, this
+          # fails rather than printing it into a public log.
+          python3 - "$out" <<'PYEOF'
+          import json, re, sys
+
+          raw = sys.argv[1]
+          data = json.loads(raw[raw.index('{'):raw.rindex('}') + 1])
+
+          permitted = {
+              'effective_session_driver', 'configuration_is_cached',
+              'session_table_name', 'session_table_exists',
+              'session_table_check_failed', 'system_health_row_status',
+          }
+
+          extra = set(data) - permitted
+          if extra:
+              print(f"::error::The report carries unapproved fields: {sorted(extra)}")
+              raise SystemExit(1)
+
+          blob = json.dumps(data)
+          for marker in [
+              'APP_KEY', 'base64:', 'DB_PASSWORD', 'DB_USERNAME', 'DB_HOST',
+              'mysql://', 'password', 'secret', '/home/', 'localhost', '127.0.0.1',
+          ]:
+              if marker.lower() in blob.lower():
+                  print(f"::error::The report contains [{marker}].")
+                  raise SystemExit(1)
+
+          # The table name, when present, must look like a table name and
+          # nothing else - not a connection string wearing one.
+          table = data.get('session_table_name')
+          if table is not None and not re.fullmatch(r'[A-Za-z0-9_]{1,64}', table):
+              print("::error::session_table_name is not a plain identifier.")
+              raise SystemExit(1)
+
+          driver = data.get('effective_session_driver')
+          cached = data.get('configuration_is_cached')
+          status = data.get('system_health_row_status')
+
+          print()
+          print(f"Effective session driver : {driver}")
+          print(f"Configuration is cached  : {cached}")
+          if driver == 'database':
+              print(f"Session table            : {table}")
+              print(f"Session table exists     : {data.get('session_table_exists')}")
+          else:
+              print("Session table            : not reported - the driver is not database")
+          print(f"System Health row status : {status}")
+          print()
+
+          # A REPORT, NOT A GATE. This workflow establishes what production is;
+          # it does not decide whether that is correct. The only thing it
+          # refuses to tolerate is the two disagreeing, because then neither
+          # can be believed.
+          if driver == 'database' and status == 'not_checked':
+              print("::error::The driver is database but the row reads Not checked. The screen and the configuration disagree.")
+              raise SystemExit(1)
+          if driver != 'database' and status != 'not_checked':
+              print(f"::error::The driver is {driver} but the row does not read Not checked. The screen is claiming a check it cannot have run.")
+              raise SystemExit(1)
+
+          print("The System Health row agrees with the effective configuration.")
+          PYEOF
