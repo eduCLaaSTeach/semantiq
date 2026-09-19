@@ -47,21 +47,33 @@ final class StepUpTest extends TestCase
     }
 
     /**
-     * N-S1. THE FIVE ACTIONS, and only five.
+     * N-S1. THE CATALOGUE OF ACTIONS.
      *
      * Mutation: drop one. Each is an action that changes who holds privileged
      * authority, or that raises information above the level everybody else
      * sees.
+     *
+     * P1-07 CHANGED THIS LIST TWICE, both deliberately and both recorded.
+     * revoke_organisation_administrator is §12's corrective prerequisite: the
+     * catalogue has always said revoking that role needs a fresh sign-in and
+     * the enum did not carry the case, so the revoke went through without one.
+     * The three review actions are P1-07's own - a review decision has to mark
+     * the item as well as change the access, so it cannot re-use P1-05's
+     * performers.
      */
-    public function test_exactly_five_actions_require_step_up(): void
+    public function test_the_step_up_action_catalogue_is_exactly_this(): void
     {
         $this->assertSame(
             [
                 'grant_system_administrator',
                 'revoke_system_administrator',
                 'grant_organisation_administrator',
+                'revoke_organisation_administrator',
                 'self_grant',
                 'grant_restricted_sensitivity',
+                'review_revoke_privileged',
+                'revoke_restricted_entitlement',
+                'self_review',
             ],
             array_map(static fn (StepUpAction $action): string => $action->value, StepUpAction::cases()),
         );

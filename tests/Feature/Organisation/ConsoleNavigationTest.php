@@ -77,11 +77,13 @@ final class ConsoleNavigationTest extends TestCase
                 'Business Domains' => '/console/domains',
                 'Identity & SSO' => '/console/identity',
                 'Security Status' => '/console/security',
+                'Access Reviews' => '/console/access-reviews',
             ],
             $this->reachable($areas),
-            'Something other than the five delivered capabilities is reachable from the sidebar. '
-            .'Organisation, Users & Groups, Roles & Access, Business Domains and Identity & SSO '
-            .'are what P1-01 to P1-05 delivered; every other entry is a roadmap label.'
+            'Something other than the seven delivered capabilities is reachable from the sidebar. '
+            .'Organisation, Users & Groups, Roles & Access, Business Domains, Identity & SSO, '
+            .'Security Status and Access Reviews are what P1-01 to P1-07 delivered; every other '
+            .'entry is a roadmap label.'
         );
     }
 
@@ -102,6 +104,7 @@ final class ConsoleNavigationTest extends TestCase
             'Business Domains' => '/console/domains',
             'Identity & SSO' => '/console/identity',
             'Security Status' => '/console/security',
+            'Access Reviews' => '/console/access-reviews',
         ], $reachable);
 
         // And those hrefs actually serve their screens, rather than merely
@@ -172,11 +175,11 @@ final class ConsoleNavigationTest extends TestCase
 
         $inert = 0;
 
-        // P1-06 delivered Security Status, so it is no longer a roadmap entry.
+        // P1-07 delivered Access Reviews, so it is no longer a roadmap entry.
         // Every OTHER entry must still carry no route at all.
         $delivered = [
             'Organisation', 'Users & Groups', 'Roles & Access', 'Business Domains',
-            'Identity & SSO', 'Security Status',
+            'Identity & SSO', 'Security Status', 'Access Reviews',
         ];
 
         foreach ($this->flatten($areas) as $node) {
@@ -213,7 +216,7 @@ final class ConsoleNavigationTest extends TestCase
         $this->assertSame([], $this->productAreas($response));
 
         // And not merely filtered out of the prop - absent from the delivered HTML.
-        foreach (['Sales Intelligence', 'Semantic Model', 'Access Reviews'] as $roadmapLabel) {
+        foreach (['Sales Intelligence', 'Semantic Model', 'Audit'] as $roadmapLabel) {
             $response->assertDontSee($roadmapLabel);
         }
     }

@@ -19,6 +19,12 @@ use App\Modules\Domains\Models\BusinessDomain;
 use App\Modules\Platform\Identity\AuthenticationFailed;
 use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Models\User;
+use App\Modules\Reviews\Models\AccessReviewItem;
+use App\Modules\Reviews\Services\ReviewDecisionService;
+use App\Modules\Reviews\Support\ReviewDecision;
+use App\Modules\Reviews\Support\ReviewKind;
+use App\Modules\Reviews\Support\ReviewState;
+use App\Modules\Reviews\Support\ReviewViolation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -48,6 +54,7 @@ final class StepUpController
 
     public function __construct(
         private readonly StepUpService $stepUp,
+        private readonly ReviewDecisionService $reviews,
         private readonly IdentityProvider $provider,
         private readonly RoleAssignmentService $roles,
         private readonly EntitlementService $entitlements,
@@ -223,10 +230,65 @@ final class StepUpController
                 ? $this->performSelfEntitlementGrant($pending, $actor)
                 : $this->performGrant($pending, $actor),
 
-            StepUpAction::RevokeSystemAdministrator => $this->performRevoke($pending, $actor),
+            StepUpAction::RevokeSystemAdministrator,
+            StepUpAction::RevokeOrganisationAdministrator => $this->performRevoke($pending, $actor),
+
+            /*
+             * P1-07. The review decision is performed by the unit that owns it,
+             * from the stored target, and it marks the item as well as changing
+             * the access. Routing these into performRevoke would revoke the
+             * access and leave the review pending forever.
+             */
+            StepUpAction::ReviewRevokePrivileged,
+            StepUpAction::RevokeRestrictedEntitlement,
+            StepUpAction::SelfReview => $this->performReviewDecision($pending, $actor),
 
             StepUpAction::GrantRestrictedSensitivity => $this->performCeiling($pending, $actor),
         };
+    }
+
+    /**
+     * P1-07. The review decision, performed from the STORED target.
+     *
+     * The item is found by the reviewed object's id rather than carried in the
+     * pending row, because generation guarantees at most one PENDING item per
+     * object - so no column was added to a P1-05 table for a P1-07 concern.
+     *
+     * The decision itself was written on the item before the redirect and is
+     * re-read here; nothing comes from the request, which came back through
+     * the browser.
+     */
+    private function performReviewDecision(PendingStepUp $pending, User $actor): RedirectResponse
+    {
+        $item = AccessReviewItem::query()
+            ->where('state', ReviewState::Pending->value)
+            ->when(
+                $pending->role_assignment_id !== null,
+                fn ($q) => $q->where('role_assignment_id', $pending->role_assignment_id),
+                fn ($q) => $q->where('domain_entitlement_id', $pending->domain_entitlement_id),
+            )
+            ->first();
+
+        if ($item === null || $item->pending_decision === null) {
+            throw AccessViolation::stepUpInvalid();
+        }
+
+        $decision = $item->pending_decision;
+
+        try {
+            $this->reviews->decide($item, $decision, $actor);
+        } catch (ReviewViolation) {
+            // The confirmation was genuine; the item moved underneath it. The
+            // reference is consumed either way - this method runs inside the
+            // transaction that consumed it.
+            throw AccessViolation::stepUpInvalid();
+        }
+
+        return redirect()
+            ->route($item->kind === ReviewKind::Privileged ? 'access-reviews.privileged' : 'access-reviews.domains')
+            ->with('confirmation', $decision === ReviewDecision::Retain
+                ? 'Access confirmed. Nothing about the access was changed.'
+                : 'Access removed. It ended at that moment.');
     }
 
     private function performGrant(PendingStepUp $pending, User $actor): RedirectResponse

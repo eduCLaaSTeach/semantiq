@@ -41,12 +41,24 @@ final class RouteAuthorizationMatrixTest extends TestCase
      * instead of find-and-replaced: a blanket substitution would have opened
      * the front door of the product to an Organisation Administrator.
      */
+    /**
+     * Each prefix and the classes its routes may carry.
+     *
+     * MOST PREFIXES CARRY EXACTLY ONE. Access Reviews carries two by design:
+     * reading a review needs EvidenceRead, deciding one needs AccessAdmin, and
+     * the per-item authority is checked again in the controller and inside the
+     * decision transaction. Listing both here rather than loosening the
+     * assertion keeps every other prefix as strict as it was.
+     *
+     * @var array<string, list<ActionClass>>
+     */
     private const MATRIX = [
-        'console/organisation' => ActionClass::OrgAdmin,
-        'console/people' => ActionClass::OrgAdmin,
-        'console/domains' => ActionClass::OrgAdmin,
-        'console/access' => ActionClass::AccessAdmin,
-        'console/identity' => ActionClass::PlatformAdmin,
+        'console/organisation' => [ActionClass::OrgAdmin],
+        'console/people' => [ActionClass::OrgAdmin],
+        'console/domains' => [ActionClass::OrgAdmin],
+        'console/access' => [ActionClass::AccessAdmin],
+        'console/access-reviews' => [ActionClass::EvidenceRead, ActionClass::AccessAdmin],
+        'console/identity' => [ActionClass::PlatformAdmin],
     ];
 
     private OrganisationFactory $make;
@@ -112,16 +124,25 @@ final class RouteAuthorizationMatrixTest extends TestCase
             $uri = $route->uri();
 
             foreach (self::MATRIX as $prefix => $expected) {
-                if (! str_starts_with($uri, $prefix)) {
+                /*
+                 * MATCHED ON A SEGMENT BOUNDARY, not on a bare prefix.
+                 * "console/access-reviews" starts with "console/access", so a
+                 * plain str_starts_with checked every review route against the
+                 * Roles & Access class and would have done the same to any
+                 * future console/access-* feature.
+                 */
+                if ($uri !== $prefix && ! str_starts_with($uri, $prefix.'/')) {
                     continue;
                 }
 
                 $seen[$prefix] = ($seen[$prefix] ?? 0) + 1;
 
-                $this->assertSame(
+                $declared = $this->declaredClassFor($route);
+
+                $this->assertContains(
+                    $declared,
                     $expected,
-                    $this->declaredClassFor($route),
-                    "Route [{$uri}] does not carry {$expected->value}."
+                    "Route [{$uri}] carries [{$declared?->value}], which this prefix does not permit."
                 );
             }
         }

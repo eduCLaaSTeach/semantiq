@@ -2620,3 +2620,122 @@ button.shell-link:hover .icon { color: var(--accent); }
     min-width: 0;
   }
 }
+
+/* ---- P1-07 Access Reviews ------------------------------------------------ */
+
+/*
+ * Only genuinely new elements get `rev-` names. The page chrome, the tab strip,
+ * the refusal banner and the actions are the shared `org-` classes every other
+ * feature uses - duplicating them here would give the product a fourth tab
+ * strip to keep in step, which is the failure the G2 correction had to fix once
+ * already.
+ */
+.rev-empty {
+  margin: 0;
+  padding: var(--space-5) var(--space-4);
+  border: 1px dashed var(--card-border-strong);
+  border-radius: var(--radius-card);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.rev-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rev-row {
+  padding: var(--space-4);
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-left: 3px solid var(--card-border-strong);
+  border-radius: var(--radius-card);
+}
+
+/* Overdue is a VISIBILITY treatment and nothing more: being overdue never
+   changes anybody's access. D-90. */
+.rev-row-overdue { border-left-color: var(--attention-edge); }
+
+.rev-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rev-row-head h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* State carries a WORD, never colour alone - the same rule as every badge. */
+.rev-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--badge-neutral-bg);
+  color: var(--badge-neutral-fg);
+}
+
+.rev-state-pending { background: var(--badge-attention-bg); color: var(--badge-attention-fg); }
+.rev-state-retained { background: var(--badge-success-bg); color: var(--badge-success-fg); }
+.rev-state-revoked { background: var(--badge-danger-bg); color: var(--danger-fg); }
+
+.rev-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0 0;
+}
+
+.rev-facts div { margin: 0; }
+
+.rev-facts dt {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.rev-facts dd {
+  margin: 2px 0 0;
+  color: var(--text);
+}
+
+.rev-note {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.rev-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+.rev-pagination {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* FLEX-BASIS FOLLOWS THE MAIN AXIS - the P1-06 lesson. Nothing here uses a
+   basis that would become a height, and the fact grid collapses to one column
+   rather than shrinking below a readable width. */
+@media (max-width: 640px) {
+  .rev-facts { grid-template-columns: 1fr; }
+  .rev-actions .org-action { flex: 1 1 auto; }
+}
