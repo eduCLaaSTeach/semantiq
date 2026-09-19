@@ -116,6 +116,7 @@ A field is provided against every check above. Please also record:
 | **A real Microsoft Entra outage** | Would mean breaking sign-in for everyone | The *Unavailable* and *Needs attention* states were rendered in a browser from stored sign-in state, which is exactly what the screen reads in production |
 | **"Opening this page contacts nobody"** | **You cannot see this on a screen.** It is a claim about what the server did not do | Tests empty the sign-in caches — the condition under which a call would happen — record every outbound request, and assert none was made. Restoring the earlier design makes those tests fail | 
 | **A second person reading this screen at the same time** | Would mean creating a second permanent System Administrator | Not done. Carried |
+| **Two people opening this page at the very same instant** | The local test server handles one request at a time, so it cannot produce a genuine collision, and forcing one deadlocked the test database. **This was a real defect and it is fixed** — each check now uses its own private key, so two readers cannot interfere with each other — but the fix is proven by automated tests rather than by two people trying it at once |
 | **The session-store check under load or contention** | Would mean generating artificial load on production | Covered by tests only |
 
 **Carried forward from earlier units and still open — not affected by this

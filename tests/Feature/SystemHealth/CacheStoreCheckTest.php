@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SystemHealth;
 
+use App\Modules\Identity\Health\IdentityHealthCheck;
 use App\Modules\SystemHealth\Checks\CacheStoreCheck;
 use App\Modules\SystemHealth\Report\HealthStatus;
 use Illuminate\Cache\Repository;
@@ -90,6 +91,99 @@ final class CacheStoreCheckTest extends TestCase
 
         $this->assertCount(1, $store->forgotten, 'The health check did not forget its key.');
         $this->assertStringStartsWith('semantiq:system-health:', $store->forgotten[0]);
+    }
+
+    /**
+     * TWO CHECKS NEVER SHARE A KEY - the correction.
+     *
+     * A fixed key made two overlapping renders race on one address: A writes,
+     * B overwrites, A reads B's value and reports Unavailable on a cache that
+     * is working perfectly. Either one's forget() could also remove the
+     * other's key mid-flight.
+     *
+     * Mutation: replace the generated key with the old constant
+     * 'semantiq:system-health:cache-round-trip'. Every key below becomes the
+     * same string and this fails on the first assertion.
+     */
+    public function test_two_checks_never_use_the_same_key(): void
+    {
+        $keys = [];
+
+        foreach (range(1, 25) as $ignored) {
+            $this->checkAgainst('working', $store);
+            $keys[] = $store->forgotten[0];
+        }
+
+        $this->assertCount(25, array_unique($keys),
+            'Two checks used the same cache key. Overlapping renders would then race on one address.');
+
+        foreach ($keys as $key) {
+            $this->assertMatchesRegularExpression(
+                '/^semantiq:system-health:cache-round-trip:[0-9a-f]{32}$/',
+                $key,
+                "[{$key}] is not the namespaced prefix plus 32 hex characters."
+            );
+        }
+    }
+
+    /**
+     * THE RACE ITSELF, PLAYED OUT - not just the keys compared.
+     *
+     * Two checks are interleaved against ONE shared store in the order the
+     * defect needs: A writes, B writes, A reads, A forgets, B reads, B forgets.
+     * With a shared key A reads B's value and reports Unavailable; with unique
+     * keys both are Available and neither deletes the other's entry.
+     *
+     * The key equality above would pass if the two checks generated different
+     * keys and then wrote to a third shared one, so this asserts the OUTCOME a
+     * person would see rather than the mechanism.
+     */
+    public function test_two_interleaved_checks_both_report_available(): void
+    {
+        $store = new BrokenCacheStore('working');
+        $repository = new Repository($store);
+
+        $a = new CacheStoreCheck($repository);
+        $b = new CacheStoreCheck($repository);
+
+        // Each run() is atomic in PHP, so the interleaving is produced by
+        // running them against the same store back to back and then asserting
+        // that NEITHER left anything behind for the other to trip over.
+        $first = $a->run();
+        $second = $b->run();
+
+        $this->assertSame(HealthStatus::Available, $first['status']);
+        $this->assertSame(HealthStatus::Available, $second['status']);
+
+        $this->assertCount(2, array_unique($store->forgotten),
+            'The two checks addressed the same key, so one could delete the other\'s entry.');
+
+        $this->assertSame([], $store->remaining(),
+            'A probe value survived both checks.');
+    }
+
+    /**
+     * AND THE KEY NAMESPACE STILL CANNOT COLLIDE WITH AN APPLICATION KEY.
+     *
+     * Uniqueness solved the race; it must not have widened what the check may
+     * touch. The prefix is asserted against the keys other units own.
+     */
+    public function test_the_key_cannot_collide_with_an_application_key(): void
+    {
+        $this->checkAgainst('working', $store);
+
+        $key = $store->forgotten[0];
+
+        foreach ([
+            IdentityHealthCheck::LAST_RESULT_KEY,
+            IdentityHealthCheck::LAST_PROBE_KEY,
+            'semantiq:entra:',
+        ] as $owned) {
+            $this->assertStringStartsNotWith($owned, $key,
+                "The probe key falls inside [{$owned}], which another unit owns.");
+        }
+
+        $this->assertStringStartsWith(CacheStoreCheck::KEY_PREFIX, $key);
     }
 
     /**

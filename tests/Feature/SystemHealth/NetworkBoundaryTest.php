@@ -217,6 +217,122 @@ final class NetworkBoundaryTest extends TestCase
         $this->assertNothingWasContacted('storedReport() reached the network while reading rubbish.');
     }
 
+    /**
+     * A STATE WITHOUT A USABLE TIME IS NOT A RESULT - correction 2.
+     *
+     * The first version validated the state and took the instant on trust, so
+     * ['state' => 'healthy'] with no 'at' rendered as
+     * "Microsoft Entra ID - Available" with NO AGE BENEATH IT. The age is the
+     * screen's only defence against a stale cached answer, so an answer whose
+     * age is unknown must not be shown as an answer at all. D-114.
+     *
+     * Mutation: remove the timestamp validation - accept the state alone, or
+     * restore `checkedAt: is_string($at) ? $at : null`. Every case below that
+     * carries a bad instant then reports a real state with no age.
+     */
+    public function test_a_stored_state_without_a_usable_time_is_not_checked(): void
+    {
+        $withoutATime = [
+            'no at key at all' => ['state' => IdentityHealthReport::HEALTHY],
+            'a null at' => ['state' => IdentityHealthReport::HEALTHY, 'at' => null],
+            'an empty at' => ['state' => IdentityHealthReport::DEGRADED, 'at' => ''],
+            'a whitespace at' => ['state' => IdentityHealthReport::FAILED, 'at' => '   '],
+            'a word where a time belongs' => ['state' => IdentityHealthReport::HEALTHY, 'at' => 'recently'],
+            'a malformed instant' => ['state' => IdentityHealthReport::HEALTHY, 'at' => '2026-13-45T99:99:99'],
+            'an integer at' => ['state' => IdentityHealthReport::DEGRADED, 'at' => 1700000000],
+            'an array at' => ['state' => IdentityHealthReport::FAILED, 'at' => ['2026-01-01']],
+        ];
+
+        foreach ($withoutATime as $description => $stored) {
+            Cache::flush();
+            Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, $stored, now()->addDay());
+
+            $reported = app(IdentityHealthCheck::class)->storedReport();
+
+            $this->assertSame(
+                IdentityHealthReport::NOT_CHECKED,
+                $reported->state,
+                "With {$description}, a state was reported without a time to qualify it."
+            );
+
+            $this->assertNull(
+                $reported->checkedAt,
+                "With {$description}, an age was invented."
+            );
+        }
+
+        $this->assertNothingWasContacted('Validating the stored instant reached the network.');
+    }
+
+    /** Garbage state plus a perfectly good time is still Not checked. */
+    public function test_a_garbage_state_with_a_valid_time_is_not_checked(): void
+    {
+        Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, [
+            'state' => 'probably_fine',
+            'at' => now()->subHour()->toIso8601String(),
+        ], now()->addDay());
+
+        $reported = app(IdentityHealthCheck::class)->storedReport();
+
+        $this->assertSame(IdentityHealthReport::NOT_CHECKED, $reported->state);
+        $this->assertNull($reported->checkedAt);
+        $this->assertNothingWasContacted('Reading a garbage state reached the network.');
+    }
+
+    /**
+     * ON THE RENDERED ROW, because that is where a Product Owner would have
+     * seen it.
+     *
+     * The method-level cases above prove the contract; this proves the screen
+     * honours it. A state with no time must render Not checked, never
+     * Available, and must carry no age.
+     */
+    public function test_the_screen_never_shows_a_state_without_its_age(): void
+    {
+        Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, [
+            'state' => IdentityHealthReport::HEALTHY,
+        ], now()->addDay());
+
+        $row = null;
+
+        foreach (app(SystemHealthReport::class)->toArray() as $area) {
+            foreach ($area['rows'] as $candidate) {
+                if ($candidate['name'] === 'Microsoft Entra ID') {
+                    $row = $candidate;
+                }
+            }
+        }
+
+        $this->assertNotNull($row);
+        $this->assertSame(HealthStatus::NotChecked->value, $row['status'],
+            'A stored state with no measurement time rendered as a result.');
+        $this->assertNull($row['checkedAt']);
+
+        /*
+         * AND THE RULE HOLDS BOTH WAYS, on every row: a row carrying a real
+         * status must either be measured live (no age) or carry an age. There
+         * is no third shape, and the third shape is the defect.
+         */
+        foreach (app(SystemHealthReport::class)->toArray() as $area) {
+            foreach ($area['rows'] as $candidate) {
+                if ($candidate['name'] !== 'Microsoft Entra ID') {
+                    continue;
+                }
+
+                $isAResult = in_array($candidate['status'], [
+                    HealthStatus::Available->value,
+                    HealthStatus::Degraded->value,
+                    HealthStatus::Unavailable->value,
+                ], true);
+
+                if ($isAResult) {
+                    $this->assertNotNull($candidate['checkedAt'],
+                        'The stored sign-in row reported a result with no age.');
+                }
+            }
+        }
+    }
+
     /** And a good value still comes back unchanged, or the case above is met by returning a constant. */
     public function test_stored_report_returns_each_real_state_unchanged(): void
     {

@@ -3,7 +3,8 @@ import AppShell from '../../Layouts/AppShell'
 import HealthStatusBadge from '../../Components/HealthStatusBadge'
 
 /**
- * System Health. Five areas, eleven rows, and no control that changes anything.
+ * System Health. Five areas, fourteen rows, and no control that changes
+ * anything.
  *
  * THE ROW IS THE WHOLE PAYLOAD: a name, a status, one sentence and - for the
  * one row that is not live - an age. The server's HealthRow has no field for a
@@ -86,10 +87,10 @@ export default function Index({ productAreas, areas }) {
 
                             {/*
                               * NO AREA-LEVEL STATUS, deliberately. An area verdict
-                              * would be a twelfth status nothing measured, rolled
-                              * up from rows whose meanings do not combine: "one
-                              * Not applicable and one Unavailable" has no summary
-                              * that is not a lie.
+                              * would be a seventh status nothing measured - the
+                              * enum has six - rolled up from rows whose meanings
+                              * do not combine: "one Not applicable and one
+                              * Unavailable" has no summary that is not a lie.
                               */}
                             <ul className="sys-rows">
                                 {area.rows.map((row) => (

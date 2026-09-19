@@ -727,13 +727,18 @@ final class SystemHealthTest extends TestCase
     // -----------------------------------------------------------------------
 
     /**
-     * H17. ELEVEN ROWS, FIVE AREAS, asserted as an equality.
+     * H17. FOURTEEN ROWS, FIVE AREAS, asserted as an equality.
+     *
+     * 9 projected from existing authoritative sources, 2 new round trips, 3
+     * derived from the deployment. The DESIGN said "eleven" while its own
+     * tables listed fourteen; this equality is why the document and the
+     * implementation cannot drift again.
      *
      * A row added without a check behind it fails here, and so does a row
      * silently lost. The names are the business words a Product Owner reads,
      * which is also what the test script refers to.
      */
-    public function test_the_five_areas_carry_exactly_the_eleven_declared_rows(): void
+    public function test_the_five_areas_carry_exactly_the_fourteen_declared_rows(): void
     {
         $shape = [];
 

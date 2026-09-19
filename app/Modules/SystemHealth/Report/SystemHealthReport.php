@@ -16,12 +16,16 @@ use Illuminate\Support\Carbon;
 use Throwable;
 
 /**
- * The eleven rows, and the ONE place each one's status comes from.
+ * The fourteen rows, and the ONE place each one's status comes from.
+ *
+ * 9 are PROJECTED from existing authoritative operational sources, 2 are
+ * genuinely new round-trip checks, and 3 are derived from what this deployment
+ * actually runs.
  *
  * TWO RULES THIS CLASS EXISTS TO HOLD:
  *
- *   ONE AUTHORITATIVE CHECK PER OPERATIONAL FACT. Nine of the eleven rows are
- *   answered by checks that already existed before this unit. This class
+ *   ONE AUTHORITATIVE CHECK PER OPERATIONAL FACT. Nine of the fourteen rows
+ *   are answered by checks that already existed before this unit. This class
  *   PROJECTS them into an area; it never reimplements one to make it appear
  *   there. There is no second `select 1`, no second is_writable(), no second
  *   chain walk.

@@ -150,6 +150,24 @@ final class IdentityHealthCheck
      * FAILED because nothing is cached - inventing an outage from "nobody
      * looked" is the same defect as inventing health from it, and a false red
      * on a working sign-in is the one this codebase already refuses elsewhere.
+     *
+     * A STATE WITHOUT A USABLE TIME IS NOT A RESULT, and that is a correction.
+     *
+     * The first version validated the state and took the instant on trust. So
+     * a cache entry of ['state' => 'healthy'] - no 'at' at all, or an 'at' that
+     * will not parse - rendered as:
+     *
+     *     Microsoft Entra ID     Available     (and no age beneath it)
+     *
+     * which reads as a measurement taken now. It is the exact failure this
+     * whole method exists to prevent, arriving through the other field: the
+     * screen's only defence against a stale cached answer is the age printed
+     * next to it, so an answer whose age is unknown must not be shown as an
+     * answer. D-114.
+     *
+     * Both halves are therefore required. Either one missing or malformed
+     * returns NOT_CHECKED, and the caller gets no age to render because there
+     * is none to invent.
      */
     public function storedReport(): StoredIdentityHealth
     {
@@ -158,31 +176,57 @@ final class IdentityHealthCheck
         $probeAt = is_array($probe) ? ($probe['at'] ?? null) : null;
 
         $state = is_array($stored) ? ($stored['state'] ?? null) : null;
+        $at = is_array($stored) ? ($stored['at'] ?? null) : null;
 
         // An unrecognised value is not trustworthy, whatever it is. A cache
         // entry written by an older release, or half-written, must not be
         // rendered as a status; it is exactly as unknown as no entry at all.
-        $trustworthy = in_array($state, [
+        $recognised = in_array($state, [
             IdentityHealthReport::HEALTHY,
             IdentityHealthReport::DEGRADED,
             IdentityHealthReport::FAILED,
         ], true);
 
-        if (! $trustworthy) {
+        $measuredAt = $this->parsedInstant($at);
+
+        if (! $recognised || $measuredAt === null) {
             return new StoredIdentityHealth(
                 state: IdentityHealthReport::NOT_CHECKED,
                 checkedAt: null,
-                lastProbeAt: is_string($probeAt) ? $probeAt : null,
+                lastProbeAt: $this->parsedInstant($probeAt),
             );
         }
 
-        $at = $stored['at'] ?? null;
-
         return new StoredIdentityHealth(
             state: (string) $state,
-            checkedAt: is_string($at) ? $at : null,
-            lastProbeAt: is_string($probeAt) ? $probeAt : null,
+            checkedAt: $measuredAt,
+            lastProbeAt: $this->parsedInstant($probeAt),
         );
+    }
+
+    /**
+     * The instant, or null - and PARSING is the test, not is_string().
+     *
+     * "recently", "", "0000-00-00", an array, an integer: each is a string or a
+     * value that looks stored, and none of them is a time. Carbon is asked to
+     * parse it here rather than at render, so a value that would have produced
+     * no age produces no RESULT instead.
+     *
+     * Still no network: Carbon parses a string.
+     */
+    private function parsedInstant(mixed $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            Carbon::parse($value);
+        } catch (Throwable) {
+            return null;
+        }
+
+        return $value;
     }
 
     /**

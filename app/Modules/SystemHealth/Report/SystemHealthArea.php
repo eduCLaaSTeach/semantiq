@@ -8,9 +8,10 @@ namespace App\Modules\SystemHealth\Report;
  * Five areas, in the order a reader needs them.
  *
  * An AREA is a heading with rows, and nothing more: no status of its own, no
- * count, no badge. An area-level verdict would be a twelfth status nothing
- * measured, computed from rows whose meanings do not combine - "one Not
- * applicable and one Unavailable" has no summary that is not a lie.
+ * count, no badge. An area-level verdict would be a SEVENTH status nothing
+ * measured - the enum has six - computed from rows whose meanings do not
+ * combine: "one Not applicable and one Unavailable" has no summary that is not
+ * a lie.
  */
 final readonly class SystemHealthArea
 {

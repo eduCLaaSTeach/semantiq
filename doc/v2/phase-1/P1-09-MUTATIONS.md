@@ -4,10 +4,16 @@
 CLAUDE.md §2: a test that cannot fail is worse than no test, because it reports
 safety that does not exist.
 
-**44 mutations. 44 killed — but six survived first, and those six are the
+**51 mutations. 51 killed — but six survived first, and those six are the
 useful part of this document.** A mutation that dies immediately confirms a
 guard that was already sound. A mutation that survives has found a test
 measuring something other than what it claims to.
+
+**Seven of the 51 were added after the Gate C review**, against two defects the
+Product Owner found by reading the code rather than the tests: a cache check
+that raced with itself, and a stored sign-in state that could claim a result
+with no measurement time. Neither was reachable by any mutation of the code as
+it then stood, because **neither guard existed** — §4.
 
 ---
 
@@ -112,7 +118,48 @@ absent when it should. Only the second direction catches a literal.
 
 ---
 
-## 3. Two things the mutation pass did NOT do
+## 3. The seven added at Gate C review
+
+### Correction A — the cache check raced with itself
+
+The defect needed no mutation to find: one fixed key meant two overlapping
+renders wrote to the same address, and the loser read the winner's value and
+reported **Unavailable on a healthy cache**. The mutations below prove the fix
+is real rather than incidental.
+
+| # | Mutation | Verdict | Killed by |
+| --- | --- | --- | --- |
+| C1-M1 | Restore the single constant key | **KILLED** | the 25-key case, the interleaved case, the isolation case |
+| C1-M2 | Unique but **predictable** — a static counter | **KILLED** | the 25-key case, which asserts 32 hex characters rather than mere uniqueness |
+| C1-M3 | `forget()` the prefix rather than the generated key | **KILLED** | the 25-key case and the interleaved case, which assert nothing is left in the store |
+
+**C1-M2 is the one worth keeping.** A counter is unique within a process and
+collides across two of them, which is exactly the deployment this check runs
+in. Asserting *distinct* would have passed it; asserting the **shape** does
+not.
+
+**No lock was added.** Serialising renders behind a mutex to protect a
+throwaway diagnostic value would make the screen slower and could stall under
+contention — a health page must not become the thing that needs diagnosing.
+Unique keys remove the race rather than guarding it.
+
+### Correction B — a stored state could claim a result with no age
+
+| # | Mutation | Verdict | Killed by |
+| --- | --- | --- | --- |
+| C2-M1 | Take the instant on trust — the line as it was | **KILLED** | the eight-shapes case and the rendered-row case |
+| C2-M2 | `is_string()` only; never parse | **KILLED** | the eight-shapes case — `'recently'` and `'2026-13-45T99:99:99'` are strings |
+| C2-M3 | Accept an empty or whitespace instant | **KILLED** | same |
+| C2-M4 | Reject the instant but report the state anyway, just without an age | **KILLED** | both |
+
+**C2-M4 is the subtle one.** It is what a careful person would write if they
+understood the rule as *"do not invent an age"* rather than *"a state without a
+time is not a result"* — the state still renders as Available, and the age is
+simply missing, which is the original defect wearing a tidier implementation.
+
+---
+
+## 4. Two things the mutation pass did NOT do
 
 - **It did not break production, and it issued no DDL.** Every failure is
   induced at a dependency boundary: a manager that cannot hand out a
@@ -120,6 +167,13 @@ absent when it should. Only the second direction catches a literal.
   there, a storage path that does not exist. `Schema::drop()` appears nowhere —
   it commits the open transaction on MySQL and cost P1-08 four cases that were
   green on SQLite and red on the engine production runs. D-128.
-- **It did not prove the absence of every defect.** It proves that these
-  particular guards fail when the thing they name is broken. What is NOT
-  covered is recorded in the verification document, not implied by a green run.
+- **It did not prove the absence of every defect, and the Gate C review is the
+  evidence for that.** A 44-for-44 mutation score was reported against a build
+  that contained **two real defects**: a cache check that raced with itself and
+  a stored state that could claim a result with no age. Both were found by
+  **reading the code**, not by mutating it — because a mutation can only break
+  a guard that exists, and neither guard existed.
+
+  A mutation score measures the tests that are there. It says nothing about the
+  case nobody thought to write, which is why it is reported here beside what is
+  NOT covered rather than in place of it.

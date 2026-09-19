@@ -29,11 +29,22 @@
 
 ## 1. The five areas, and the authoritative source behind every row
 
-**Eleven rows.** Nine are answered by checks that already exist; two are new.
-Three of the existing checks are reached through a **new network-free entry
+**14 rows: 9 projected from existing authoritative operational sources, 2
+genuinely new round-trip checks, and 3 deployment-derived Jobs rows.**
+
+Some of the existing checks are reached through a **new network-free entry
 point** onto the same check, because the entry point P1-09 first chose was not
-network-free (§14, correction 1). **No check logic is copied, reimplemented or
+network-free (§13, correction 1). **No check logic is copied, reimplemented or
 forked** — only the way in is new.
+
+> **Count corrected after approval.** This section and §0 said *eleven* while
+> the tables below listed fourteen — 3 + 1 + 3 + 4 + 3. The tables are what was
+> designed and what was built; the number was simply wrong, and wrong in the
+> first draft rather than introduced by a correction. The Product Owner
+> approved the fix as a **documentation correction that does not reopen
+> DESIGN**. The fourteen rows are asserted as an equality in
+> `SystemHealthTest`, so the document and the implementation cannot drift
+> again.
 
 ### Application
 

@@ -130,4 +130,15 @@ final class BrokenCacheStore implements Store
     {
         return '';
     }
+
+    /**
+     * What is still held. Used to prove a health check left nothing behind -
+     * and that one check did not delete another's entry.
+     *
+     * @return array<string, mixed>
+     */
+    public function remaining(): array
+    {
+        return $this->values;
+    }
 }
