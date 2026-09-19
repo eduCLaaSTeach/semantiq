@@ -91,7 +91,19 @@ jobs:
                   \"entitlement_ceilings\"         => \Illuminate\Support\Facades\Schema::hasTable(\"entitlement_ceilings\"),
                   \"pending_step_ups\"             => \Illuminate\Support\Facades\Schema::hasTable(\"pending_step_ups\"),
                   \"step_up_target_column\"        => \Illuminate\Support\Facades\Schema::hasColumn(\"pending_step_ups\", \"role_assignment_id\"),
+
+                  /* P1-07. The two review tables, and the three GENERIC
+                     step-up columns that bind a confirmation to one exact
+                     subject and one exact intent. */
+                  \"access_review_cycles\"         => \Illuminate\Support\Facades\Schema::hasTable(\"access_review_cycles\"),
+                  \"access_review_items\"          => \Illuminate\Support\Facades\Schema::hasTable(\"access_review_items\"),
+                  \"step_up_subject_type\"         => \Illuminate\Support\Facades\Schema::hasColumn(\"pending_step_ups\", \"subject_type\"),
+                  \"step_up_subject_id\"           => \Illuminate\Support\Facades\Schema::hasColumn(\"pending_step_ups\", \"subject_id\"),
+                  \"step_up_subject_intent\"       => \Illuminate\Support\Facades\Schema::hasColumn(\"pending_step_ups\", \"subject_intent\"),
+                  \"review_pending_decision_absent\" => ! \Illuminate\Support\Facades\Schema::hasColumn(\"access_review_items\", \"pending_decision\"),
                 ],
+                \"review_cycles_total\"    => \Illuminate\Support\Facades\DB::table(\"access_review_cycles\")->count(),
+                \"review_items_total\"     => \Illuminate\Support\Facades\DB::table(\"access_review_items\")->count(),
                 \"assignments\"            => \$roles,
                 \"assignments_total\"      => count(\$roles),
                 \"active_system_admins\"   => \app(\App\Modules\Access\Services\AdministratorSetGuard::class)->effectiveCount(),
@@ -141,6 +153,28 @@ jobs:
           # branch.
           if not schema['step_up_target_column']:
               problems.append('pending_step_ups.role_assignment_id is missing. The Gate C self-grant correction is not deployed.')
+
+          # P1-07. THE TWO REVIEW TABLES AND THE GENERIC STEP-UP BINDING.
+          #
+          # The three subject columns are what bind a confirmation to ONE exact
+          # review and ONE exact decision. Without them a returning step-up
+          # could execute an intent nobody confirmed, so their absence is a
+          # security finding rather than a missing feature.
+          for table in ('access_review_cycles', 'access_review_items'):
+              if not schema[table]:
+                  problems.append(f'Table [{table}] is missing. The P1-07 migration did not complete.')
+
+          for column in ('step_up_subject_type', 'step_up_subject_id', 'step_up_subject_intent'):
+              if not schema[column]:
+                  problems.append(f'pending_step_ups.{column.removeprefix("step_up_")} is missing. '
+                                  'A review confirmation cannot bind to one exact decision.')
+
+          # And the mutable column it replaced must be GONE: while it exists,
+          # two places carry the same fact and one of them can be edited while
+          # the reviewer is away at Microsoft.
+          if not schema['review_pending_decision_absent']:
+              problems.append('access_review_items.pending_decision still exists. A decision held on the '
+                              'item can be changed while its confirmation is away.')
 
           # 2. THE ADMINISTRATOR FLOOR - D-49a. Never zero.
           if data['active_system_admins'] < 1:
