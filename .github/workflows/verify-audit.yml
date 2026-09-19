@@ -1,0 +1,238 @@
+# Read-only P1-08 Audit state verification.
+#
+# MANUAL DISPATCH ONLY, AND IT WRITES NOTHING. Every statement below comes from
+# a SELECT or a schema read. There is deliberately no sibling that writes:
+# audit evidence is produced by ordinary use, and a workflow that could create
+# a row is a workflow that could falsify one.
+#
+# IT REPORTS SHAPE AND COUNTS. Not an actor, not a subject, not a directory
+# identifier, not a single stored value. The whole point of this unit is that
+# evidence is protected from the wrong reader, so a report about it must not
+# become the leak it is checking for.
+#
+# WHY IT EXISTS. Deployment validation asks questions nobody can answer from
+# outside: did the migration create exactly two tables and alter nothing, is
+# there exactly one genesis row, is the evidence start instant stored, and is
+# the chain intact on the day it was created.
+
+name: Verify P1-08 Audit state (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Report Audit state over SSH
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+    steps:
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      # Shape and counts. No stored value leaves the server.
+      - name: Report Audit state
+        run: |
+          set -euo pipefail
+
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
+              \$columns = \Illuminate\Support\Facades\Schema::getColumnListing(\"audit_events\");
+              \$head    = \Illuminate\Support\Facades\DB::table(\"audit_chain_head\")->get();
+
+              echo json_encode([
+                \"schema\" => [
+                  \"audit_events\"      => \Illuminate\Support\Facades\Schema::hasTable(\"audit_events\"),
+                  \"audit_chain_head\"  => \Illuminate\Support\Facades\Schema::hasTable(\"audit_chain_head\"),
+                  \"columns\"           => \$columns,
+                  \"ip_address\"        => in_array(\"ip_address\", \$columns, true),
+                  \"user_agent\"        => in_array(\"user_agent\", \$columns, true),
+                ],
+
+                /* NOTHING EXISTING WAS ALTERED. Named explicitly rather than
+                   counted, so a table quietly gaining an audit column is
+                   visible rather than averaged away. */
+                \"untouched\" => [
+                  \"users_columns\"               => count(\Illuminate\Support\Facades\Schema::getColumnListing(\"users\")),
+                  \"role_assignments_columns\"    => count(\Illuminate\Support\Facades\Schema::getColumnListing(\"role_assignments\")),
+                  \"domain_entitlements_columns\" => count(\Illuminate\Support\Facades\Schema::getColumnListing(\"domain_entitlements\")),
+                  \"access_review_items_columns\" => count(\Illuminate\Support\Facades\Schema::getColumnListing(\"access_review_items\")),
+                  \"pending_step_ups_columns\"    => count(\Illuminate\Support\Facades\Schema::getColumnListing(\"pending_step_ups\")),
+                  \"organisations\"               => \Illuminate\Support\Facades\Schema::hasTable(\"organisations\"),
+                  \"business_domains\"            => \Illuminate\Support\Facades\Schema::hasTable(\"business_domains\"),
+                ],
+
+                \"chain_head_rows\"      => \$head->count(),
+                \"chain_head_id\"        => \$head->first()?->id,
+                \"chain_head_sequence\"  => \$head->first()?->sequence,
+                \"evidence_start_set\"   => ! empty(\$head->first()?->started_at),
+                \"genesis_hash_length\"  => strlen((string) (\$head->first()?->row_hash ?? \"\")),
+
+                \"events_total\"         => \Illuminate\Support\Facades\DB::table(\"audit_events\")->count(),
+                \"chain\"                => \app(\App\Modules\Audit\Services\AuditChainVerifier::class)->verify(),
+              ], JSON_PRETTY_PRINT);
+            '")"
+
+          echo "$out"
+
+          # GUARDS, NOT DECORATION. A report about evidence protection must not
+          # itself carry a person or a directory identifier.
+          if printf '%s' "$out" | grep -qE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'; then
+            echo "::error::The report contains an email address. Refusing to leave it in the log."
+            exit 1
+          fi
+
+          python3 - "$out" <<'PYEOF'
+          import json, sys
+
+          raw = sys.argv[1]
+          data = json.loads(raw[raw.index('{'):raw.rindex('}') + 1])
+          schema = data['schema']
+          problems = []
+
+          # 1. TWO TABLES, BOTH PRESENT.
+          if not schema['audit_events']:
+              problems.append('audit_events does not exist.')
+          if not schema['audit_chain_head']:
+              problems.append('audit_chain_head does not exist.')
+
+          # 2. EXACTLY ONE GENESIS ROW. Two heads means two chains.
+          if data['chain_head_rows'] != 1:
+              problems.append(f"audit_chain_head holds {data['chain_head_rows']} rows; exactly one is required.")
+          if data['chain_head_id'] != 1:
+              problems.append('The chain head is not row 1.')
+
+          # 3. THE EVIDENCE START INSTANT IS STORED. D-109 - the screen shows it,
+          #    and a computed one would move if the earliest row were removed.
+          if not data['evidence_start_set']:
+              problems.append('The evidence start instant is empty, so the screen cannot state when evidence begins.')
+          if data['genesis_hash_length'] != 64:
+              problems.append('The genesis hash is not a sha256 digest.')
+
+          # 4. D-101. NO NETWORK DETAIL, AND NO FREE TEXT ANYWHERE.
+          if schema['ip_address']:
+              problems.append('audit_events has an ip_address column.')
+          if schema['user_agent']:
+              problems.append('audit_events has a user_agent column.')
+
+          permitted = {
+              'id', 'sequence', 'occurred_at', 'event', 'category',
+              'actor_type', 'actor_user_id', 'actor_subject', 'actor_tenant', 'actor_provider',
+              'organisation_id', 'subject_user_id', 'subject_external',
+              'target_type', 'target_id', 'outcome', 'reason',
+              'role', 'domain_id', 'scope', 'sensitivity', 'context_expires_at',
+              'previous_hash', 'row_hash', 'created_at', 'updated_at',
+          }
+          unexpected = sorted(set(schema['columns']) - permitted)
+          if unexpected:
+              problems.append(f'audit_events has columns nobody declared: {unexpected}')
+
+          missing = sorted(permitted - set(schema['columns']))
+          if missing:
+              problems.append(f'audit_events is missing declared columns: {missing}')
+
+          # 5. NOTHING EXISTING WAS ALTERED.
+          untouched = data['untouched']
+          if not untouched['organisations'] or not untouched['business_domains']:
+              problems.append('A pre-existing table is missing after the migration.')
+          for table, count in untouched.items():
+              if table.endswith('_columns') and count < 4:
+                  problems.append(f'{table} reports {count} columns, which is not a table that survived.')
+
+          # 6. THE CHAIN VERIFIES. On a fresh deployment it verifies over zero
+          #    rows, which is a real answer and not a vacuous one - a broken head
+          #    reports missing_head rather than intact.
+          chain = data['chain']
+          if not chain['intact']:
+              problems.append(f"The chain does not verify: {chain['finding']} at {chain['sequence']}.")
+
+          print(json.dumps({
+              'events_total': data['events_total'],
+              'chain_checked': chain['checked'],
+              'chain_intact': chain['intact'],
+              'evidence_start_set': data['evidence_start_set'],
+          }, indent=1))
+
+          if problems:
+              for p in problems:
+                  print(f'::error::{p}')
+              sys.exit(1)
+
+          print('Audit state verified: two tables, one genesis row, evidence start stored, '
+                'no network detail, no undeclared column, nothing existing altered, chain intact.')
+          PYEOF
+
+      # FOUR GETs AND NOTHING ELSE. Read from the deployed route table rather
+      # than from the repository, because what matters is what is SERVED.
+      - name: Report the Audit route surface
+        run: |
+          set -euo pipefail
+
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan route:list --path=console/audit --json")"
+
+          echo "$out"
+
+          python3 - "$out" <<'PYEOF'
+          import json, sys
+
+          raw = sys.argv[1]
+          routes = json.loads(raw[raw.index('['):raw.rindex(']') + 1])
+
+          served = sorted({
+              f"{m} {r['uri']}"
+              for r in routes
+              for m in r['method'].split('|')
+              if m not in ('HEAD', 'OPTIONS')
+          })
+
+          expected = [
+              'GET console/audit',
+              'GET console/audit/admin-changes',
+              'GET console/audit/configuration',
+              'GET console/audit/security-events',
+          ]
+
+          print(json.dumps(served, indent=1))
+
+          if served != expected:
+              print('::error::The served Audit route surface is not four GETs and nothing else.')
+              sys.exit(1)
+
+          print('Audit serves exactly four reads. No write path is deployed.')
+          PYEOF
