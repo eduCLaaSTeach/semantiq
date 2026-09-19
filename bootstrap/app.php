@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Modules\Access\Http\Middleware\RequireActionClass;
+use App\Modules\Audit\Providers\AuditServiceProvider;
 use App\Modules\Domains\Console\InitialiseBusinessDomains;
 use App\Modules\Organisation\Http\Middleware\RequireOrganisation;
 use App\Modules\Organisation\Providers\OrganisationServiceProvider;
@@ -50,6 +51,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // P1-07. Registers the review step-up completion with P1-05's registry.
         // Access names nothing from Reviews; the dependency runs one way only.
         ReviewsServiceProvider::class,
+        AuditServiceProvider::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [

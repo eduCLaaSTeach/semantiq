@@ -78,9 +78,10 @@ final class ConsoleNavigationTest extends TestCase
                 'Identity & SSO' => '/console/identity',
                 'Security Status' => '/console/security',
                 'Access Reviews' => '/console/access-reviews',
+                'Audit' => '/console/audit',
             ],
             $this->reachable($areas),
-            'Something other than the seven delivered capabilities is reachable from the sidebar. '
+            'Something other than the eight delivered capabilities is reachable from the sidebar. '
             .'Organisation, Users & Groups, Roles & Access, Business Domains, Identity & SSO, '
             .'Security Status and Access Reviews are what P1-01 to P1-07 delivered; every other '
             .'entry is a roadmap label.'
@@ -105,6 +106,7 @@ final class ConsoleNavigationTest extends TestCase
             'Identity & SSO' => '/console/identity',
             'Security Status' => '/console/security',
             'Access Reviews' => '/console/access-reviews',
+            'Audit' => '/console/audit',
         ], $reachable);
 
         // And those hrefs actually serve their screens, rather than merely
@@ -175,11 +177,11 @@ final class ConsoleNavigationTest extends TestCase
 
         $inert = 0;
 
-        // P1-07 delivered Access Reviews, so it is no longer a roadmap entry.
+        // P1-08 delivered Audit, so it is no longer a roadmap entry either.
         // Every OTHER entry must still carry no route at all.
         $delivered = [
             'Organisation', 'Users & Groups', 'Roles & Access', 'Business Domains',
-            'Identity & SSO', 'Security Status', 'Access Reviews',
+            'Identity & SSO', 'Security Status', 'Access Reviews', 'Audit',
         ];
 
         foreach ($this->flatten($areas) as $node) {
@@ -192,10 +194,17 @@ final class ConsoleNavigationTest extends TestCase
             $inert++;
         }
 
-        $this->assertGreaterThan(
+        /*
+         * AN EXACT COUNT, not a floor. 43 roadmap entries less the 8 delivered
+         * leaves 35, and a floor was the weaker assertion: it passed while the
+         * delivered set grew underneath it, and would have kept passing against
+         * a menu that had quietly lost entries.
+         */
+        $this->assertSame(
             35,
             $inert,
-            'Almost nothing was checked, so this guard would pass against an empty menu.'
+            'The inert roadmap is not 35 entries. Either the menu changed or a delivered '
+            .'capability was added to the exemption list without being delivered.'
         );
     }
 
@@ -216,7 +225,7 @@ final class ConsoleNavigationTest extends TestCase
         $this->assertSame([], $this->productAreas($response));
 
         // And not merely filtered out of the prop - absent from the delivered HTML.
-        foreach (['Sales Intelligence', 'Semantic Model', 'Audit'] as $roadmapLabel) {
+        foreach (['Sales Intelligence', 'Semantic Model', 'System Health'] as $roadmapLabel) {
             $response->assertDontSee($roadmapLabel);
         }
     }

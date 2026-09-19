@@ -6,6 +6,7 @@ namespace App\Modules\Platform\Bootstrap;
 
 use App\Modules\Platform\Models\BootstrapGrant;
 use App\Modules\Platform\Security\SecurityEventLogger;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -29,30 +30,33 @@ final class GrantIssuer
      */
     public function issue(string $expectedSubject, string $expectedTenant, ?string $issuedBy = null): string
     {
-        if ($this->state->isConfigured()) {
-            throw new RuntimeException(
-                'A System Administrator already exists. Bootstrap is closed. It reopens only if '
-                .'no active System Administrator remains.'
-            );
-        }
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($expectedSubject, $expectedTenant, $issuedBy): string {
+            if ($this->state->isConfigured()) {
+                throw new RuntimeException(
+                    'A System Administrator already exists. Bootstrap is closed. It reopens only if '
+                    .'no active System Administrator remains.'
+                );
+            }
 
-        $grant = Str::random(64);
+            $grant = Str::random(64);
 
-        BootstrapGrant::query()->create([
-            'token_hash' => BootstrapGrant::hashFor($grant),
-            'expected_subject' => mb_strtolower(trim($expectedSubject)),
-            'expected_tenant' => $expectedTenant,
-            'issued_by' => $issuedBy,
-            'expires_at' => now()->addMinutes(self::TTL_MINUTES),
-        ]);
+            BootstrapGrant::query()->create([
+                'token_hash' => BootstrapGrant::hashFor($grant),
+                'expected_subject' => mb_strtolower(trim($expectedSubject)),
+                'expected_tenant' => $expectedTenant,
+                'issued_by' => $issuedBy,
+                'expires_at' => now()->addMinutes(self::TTL_MINUTES),
+            ]);
 
-        $this->events->record(SecurityEventLogger::BOOTSTRAP_GRANT_ISSUED, [
-            'subject' => mb_strtolower(trim($expectedSubject)),
-            'tenant' => $expectedTenant,
-            'expires_at' => now()->addMinutes(self::TTL_MINUTES)->toIso8601String(),
-            'result' => 'issued',
-        ]);
+            $this->events->record(SecurityEventLogger::BOOTSTRAP_GRANT_ISSUED, [
+                'subject' => mb_strtolower(trim($expectedSubject)),
+                'tenant' => $expectedTenant,
+                'expires_at' => now()->addMinutes(self::TTL_MINUTES)->toIso8601String(),
+                'result' => 'issued',
+            ]);
 
-        return $grant;
+            return $grant;
+        });
     }
 }

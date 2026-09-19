@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
+use App\Modules\Platform\Security\EvidenceRecorder;
 use App\Modules\Platform\Security\SecurityEventLogger;
+use App\Modules\Platform\Security\UnrecordedEvidence;
 
 /**
  * A SecurityEventLogger that remembers what it was asked to record.
@@ -24,6 +26,17 @@ use App\Modules\Platform\Security\SecurityEventLogger;
  */
 final class RecordingSecurityEventLogger extends SecurityEventLogger
 {
+    /**
+     * Durable persistence is OFF by default here, and that is a choice made out
+     * loud rather than a nullable dependency nobody notices. These cases assert
+     * WHICH EVENT FIRED; the audit suite resolves the real logger from the
+     * container and asserts what was stored.
+     */
+    public function __construct(?EvidenceRecorder $evidence = null)
+    {
+        parent::__construct($evidence ?? new UnrecordedEvidence);
+    }
+
     /** @var list<array{event: string, context: array<string, scalar|null>}> */
     public array $recorded = [];
 

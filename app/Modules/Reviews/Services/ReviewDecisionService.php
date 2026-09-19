@@ -136,7 +136,22 @@ final class ReviewDecisionService
         return hash_equals($item->composition_fingerprint, $live) ? null : SupersededReason::CompositionChanged;
     }
 
+    /**
+     * PUBLIC, SO IT TAKES ITS OWN BOUNDARY. D-111.
+     *
+     * decide() already calls this inside a transaction, where this becomes a
+     * savepoint and costs nothing. But a public method is reachable from
+     * anywhere, and "it happens to be called from inside one today" is not a
+     * guarantee - it is a comment somebody deletes. The static atomicity guard
+     * found this one; no test exercised the unwrapped path, so the runtime
+     * guard never saw it.
+     */
     public function supersede(AccessReviewItem $item, SupersededReason $reason, ?User $actor = null): AccessReviewItem
+    {
+        return DB::transaction(fn (): AccessReviewItem => $this->applySupersede($item, $reason, $actor));
+    }
+
+    private function applySupersede(AccessReviewItem $item, SupersededReason $reason, ?User $actor): AccessReviewItem
     {
         $item->forceFill([
             'state' => ReviewState::Superseded,
@@ -147,6 +162,7 @@ final class ReviewDecisionService
         $this->events->record(SecurityEventLogger::REVIEW_ITEM_SUPERSEDED, [
             'user_id' => $item->subject_user_id,
             'related_id' => $actor?->getKey(),
+            'organisation_id' => $item->organisation_id,
             'entity_id' => $item->getKey(),
             'reason' => $reason->value,
             'result' => 'superseded',
@@ -190,6 +206,7 @@ final class ReviewDecisionService
         $context = [
             'user_id' => $item->subject_user_id,
             'related_id' => $actor->getKey(),
+            'organisation_id' => $item->organisation_id,
             'entity_id' => $item->getKey(),
             'role' => $item->role_code?->value,
             'domain_id' => $item->business_domain_id,
@@ -227,6 +244,7 @@ final class ReviewDecisionService
         $this->events->record(SecurityEventLogger::REVIEW_REFUSED, [
             'user_id' => $item->subject_user_id,
             'related_id' => $actor->getKey(),
+            'organisation_id' => $item->organisation_id,
             'entity_id' => $item->getKey(),
             'reason' => $reason,
             'result' => 'refused',

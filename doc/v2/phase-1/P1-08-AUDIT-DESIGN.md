@@ -172,12 +172,56 @@ evidence.
 
 | Caller shape | Handling |
 | --- | --- |
-| A **successful** state change inside `DB::transaction` — every P1-01/03/04/05/07 write | The insert **joins that transaction**. A failed insert rolls the change back with it. **No ordering hazard exists**, and this is most of the surface |
+| A **successful** state change inside `DB::transaction` | The insert **joins that transaction**. A failed insert rolls the change back with it |
 | A **refusal** raised from inside a transaction that is about to roll back | **Written on a separate connection-level transaction that commits independently** — see §3.3 |
 | Not in a transaction | `record()` opens one for the insert alone |
 | **Sign-in success** | **This is the one true hazard.** `CallbackController::issueSession()` today regenerates the session, writes the session keys, **then** records. Session state is not transactional, so a failed insert would leave somebody signed in and unevidenced. **The order is inverted:** persist `auth.login.succeeded` first, and only then regenerate and populate the session. If persistence fails, **no session is issued** and the person is sent to a refusal state |
 | **Sign-in refusal** | The refusal **stands**. Failing closed can make a success fail; it must never turn a refusal into anything else. Persistence failure is `Log::critical` only |
 | **Logout, session expiry** | **RULED best effort.** `Log::critical` on failure, and that operational log is **not** audit evidence. Sign-out is never prevented and an expired session is never resurrected because durable storage is unavailable. Successful sign-in and state-changing security/admin operations **remain fail-closed** |
+
+### 3.2a CORRECTION — "every P1-01/03/04/05/07 write" WAS FALSE
+
+This document originally said a state change and its evidence were already in
+the same transaction across the estate. **They were not**, and the Product
+Owner found it at Gate C.
+
+**Fourteen emitters saved first and recorded afterwards, with nothing around
+them**, across six modules — organisation profile updates, user reactivation,
+three group operations, team-membership changes, clearing a manager, every
+structure create and move, activation and deactivation of every structural
+node, step-up requests, the first-run grant, and the baseline domain
+initialiser. In every one of them a failed audit write would have raised
+**after** the change had already committed: the operation reported failure and
+had in fact happened.
+
+The claim was reviewed and approved because nothing in the code contradicted
+it — and nothing in the code said anything at all. **So the requirement is now
+enforced in two places rather than asserted once:**
+
+| Guard | Catches |
+| --- | --- |
+| **Runtime** — `AuditWriter` refuses to record a `StateChange` outside a transaction | Any emitter a test exercises, the moment it runs |
+| **Static** — `AuditAtomicityTest` walks every emit site, following private helpers to their callers | The emitter **no test exercises**, at build time |
+
+Neither is sufficient alone. A static guard is a guess about reachability; a
+runtime guard ships a hole in whatever the suite does not reach.
+
+**The runtime guard needs a baseline**, because `RefreshDatabase` holds a
+transaction open for every test — without one the harness would satisfy the
+check on every emitter's behalf and it would prove nothing. Two mutations
+survived the first measurement for exactly that reason, and
+`AuditAtomicityGuardTest` now points at the guard itself.
+
+**Two events are classified rather than exempted**, because a transaction
+cannot cover either:
+
+| Event | Class | Why |
+| --- | --- | --- |
+| `auth.login.succeeded` | `StateChangeRecordedFirst` | The session is not in the database. The guarantee is the **order** — evidence first, session second — so a failure leaves no session to roll back |
+| `identity.health.state_changed` | `BestEffort` | A **cache** note about whether Microsoft is reachable. Nothing in the database changes and no transaction could roll it back; demanding one was a guard asking for the impossible |
+
+**There is no exemption list**, and a test asserts there is none. An exemption
+list is the thing somebody appends to at five o'clock.
 
 ### 3.3 Refusals — evidence that must SURVIVE the rollback
 

@@ -84,7 +84,8 @@ final class NoBusinessSchemaTest extends TestCase
         sort($modules);
 
         $this->assertSame(
-            ['Access', 'Domains', 'Identity', 'Organisation', 'People', 'Platform', 'Reviews', 'Security'],
+            ['Access',
+                'Audit', 'Domains', 'Identity', 'Organisation', 'People', 'Platform', 'Reviews', 'Security'],
             $modules,
             'A module directory appeared for a unit that has not been delivered. '
             .'Directories are not pre-created to reserve them.'

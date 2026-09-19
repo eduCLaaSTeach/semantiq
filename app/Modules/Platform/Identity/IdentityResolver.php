@@ -46,6 +46,7 @@ final class IdentityResolver
             $this->events->record(SecurityEventLogger::LOGIN_REFUSED_INACTIVE, [
                 'provider' => $identity->provider,
                 'user_id' => $user->id,
+                'organisation_id' => $user->organisation_id,
                 'result' => 'refused',
                 'reason' => 'inactive',
             ]);

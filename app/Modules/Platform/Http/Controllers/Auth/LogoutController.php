@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Platform\Http\Controllers\Auth;
 
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
+use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Security\SecurityEventLogger;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -30,6 +31,9 @@ final class LogoutController
         if (is_int($userId) || is_string($userId)) {
             $this->events->record(SecurityEventLogger::LOGOUT, [
                 'user_id' => (int) $userId,
+                // So sign-out sits beside sign-in on one organisation's
+                // evidence. One lookup, on sign-out only.
+                'organisation_id' => User::query()->whereKey($userId)->value('organisation_id'),
                 'result' => 'signed_out',
             ]);
         }

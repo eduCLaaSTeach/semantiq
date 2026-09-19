@@ -122,20 +122,26 @@ final class GroupService
     /** An inactive group keeps its members and its history. */
     public function deactivate(Group $group, User $actor): Group
     {
-        $group->forceFill(['status' => GroupStatus::Inactive->value])->save();
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($group, $actor): Group {
+            $group->forceFill(['status' => GroupStatus::Inactive->value])->save();
 
-        $this->record(SecurityEventLogger::GROUP_DEACTIVATED, $group, $actor);
+            $this->record(SecurityEventLogger::GROUP_DEACTIVATED, $group, $actor);
 
-        return $group;
+            return $group;
+        });
     }
 
     public function reactivate(Group $group, User $actor): Group
     {
-        $group->forceFill(['status' => GroupStatus::Active->value])->save();
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($group, $actor): Group {
+            $group->forceFill(['status' => GroupStatus::Active->value])->save();
 
-        $this->record(SecurityEventLogger::GROUP_ACTIVATED, $group, $actor);
+            $this->record(SecurityEventLogger::GROUP_ACTIVATED, $group, $actor);
 
-        return $group;
+            return $group;
+        });
     }
 
     /**
@@ -196,6 +202,7 @@ final class GroupService
 
             $this->events->record(SecurityEventLogger::GROUP_MEMBER_ADDED, [
                 'user_id' => $actor->id,
+                'organisation_id' => $group->organisation_id,
                 'entity_id' => $group->id,
                 'related_id' => $user->id,
             ]);
@@ -218,15 +225,19 @@ final class GroupService
             );
         }
 
-        $membership->forceFill(['left_at' => now()])->save();
+        // D-111: the change and its evidence commit together, or neither does.
+        return DB::transaction(function () use ($membership, $actor): GroupMembership {
+            $membership->forceFill(['left_at' => now()])->save();
 
-        $this->events->record(SecurityEventLogger::GROUP_MEMBER_REMOVED, [
-            'user_id' => $actor->id,
-            'entity_id' => $membership->group_id,
-            'related_id' => $membership->user_id,
-        ]);
+            $this->events->record(SecurityEventLogger::GROUP_MEMBER_REMOVED, [
+                'user_id' => $actor->id,
+                'organisation_id' => $membership->group?->organisation_id,
+                'entity_id' => $membership->group_id,
+                'related_id' => $membership->user_id,
+            ]);
 
-        return $membership;
+            return $membership;
+        });
     }
 
     /**
