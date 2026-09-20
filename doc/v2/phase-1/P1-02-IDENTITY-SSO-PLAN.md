@@ -74,6 +74,30 @@ That is why the boundaries in §6 and §10 are written before the screens.
 > What P1-10 does own is the surface through which those settings can be
 > *established by a customer* during first-run setup, rather than only by
 > editing `.env` over SSH.
+>
+> **AND THE AUTHORITATIVE SOURCE OF P1-02's OWN CONFIGURATION CHANGES —
+> Product Owner ruling, 20 September 2026.**
+>
+> Merely linking to this unit's screens does not solve a first installation,
+> because P1-02's Microsoft settings come from `.env`, `.env` is excluded from
+> deployment, and **nothing in the application can write it.** So P1-10 is
+> authorised to introduce the persisted configuration seam:
+>
+> ```text
+> server .env only  →  typed + encrypted application-managed configuration, OWNED BY P1-02
+> ```
+>
+> **This is a migration, not a second model.** P1-02 still owns identity
+> configuration; it simply stops reading it from a file nobody can write.
+> P1-10's First-Run UI **invokes P1-02's owning service** rather than writing
+> identity configuration itself.
+>
+> **After cutover, `.env` is NOT the permanent source of truth for
+> Identity/SSO configuration, and no indefinite fallback to it remains.** A
+> future change that restores it as authority reopens both the first-install
+> circularity and the two-credential-sources failure. Existing production
+> requires a controlled one-time cutover with a rollback path, designed in
+> P1-10's DESIGN and **not performed during PLAN or DESIGN**.
 
 ### Out of scope — each owned elsewhere
 

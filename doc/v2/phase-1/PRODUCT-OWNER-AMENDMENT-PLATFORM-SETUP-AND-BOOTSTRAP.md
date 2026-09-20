@@ -60,6 +60,35 @@ Four integration families:
 Entra ID, additional approved providers, login experience, SSO health and
 session policy. P1-10 projects and links; it does not restate.
 
+> **EXTENDED 20 September 2026 — projecting and linking is NOT sufficient, and
+> this is authority.**
+>
+> P1-02's Microsoft configuration is sourced from `.env`; `.env` is excluded
+> from rsync; **nothing in the application can write it.** A Bootstrap
+> Administrator linked to P1-02's existing screens therefore still cannot
+> configure Entra — so the circularity this amendment exists to remove would
+> survive the unit built to remove it.
+>
+> **P1-10 is authorised to introduce the secure persisted configuration seam
+> that makes P1-02 customer-configurable**, as a migration of P1-02's *one*
+> authoritative configuration:
+>
+> ```text
+> server .env only  →  typed + encrypted application-managed configuration, owned by P1-02
+> ```
+>
+> P1-02 reads the new authoritative configuration; P1-10's First-Run UI invokes
+> P1-02's owning service; there is **one** credential model; no secret returns
+> to React; existing production requires a **controlled one-time cutover** with
+> a rollback path, designed in P1-10's DESIGN and **not performed during PLAN
+> or DESIGN**.
+>
+> **AFTER CUTOVER, `.env` IS NOT THE PERMANENT SOURCE OF TRUTH FOR
+> IDENTITY/SSO CONFIGURATION, AND NO INDEFINITE FALLBACK TO IT REMAINS.** This
+> sentence is repeated in the P1-10 PLAN and in P1-02's PLAN deliberately: a
+> single mention is how an architectural decision gets quietly reversed by a
+> later session that finds `.env` simpler.
+
 **This is the P1-09 lesson applied one level up.** System Health projects nine
 existing checks and reimplements none, and a guard fails the build if it tries.
 Platform Integrations is the same shape with a larger blast radius, because

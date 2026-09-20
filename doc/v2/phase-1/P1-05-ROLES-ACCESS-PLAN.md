@@ -853,7 +853,7 @@ this is where it stops being theoretical.
 
 | Forbidden | Why |
 | --- | --- |
-| **A password screen** | SemantIQ has no passwords. Adding one would invent the credential store the whole identity design exists to avoid |
+| **A password screen** | SemantIQ has no passwords **for the people it serves**. Adding one to Roles & Access would invent the credential store the whole identity design exists to avoid. *(Amended 20 Sep 2026: the Bootstrap Administrator's local credential is an installation principal outside the access model entirely — it never enters `RoleCatalogue`, never receives an `ActionClass` and never reaches a business domain. It is not a counter-example to this row; it is why the row must keep saying "no password screen **here**".)* |
 | **A confirmation dialog labelled "step-up"** | A dialog proves the browser is present, not that the human is. **Do not fake it** |
 | **A "recently signed in" flag the application sets itself** | The application would be asserting freshness rather than proving it |
 

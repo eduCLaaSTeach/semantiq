@@ -503,7 +503,28 @@ The Phase 1 experience should be a guided setup, not a collection of security pa
 | **ID**  | **Requirement**                                                                                                                                                                                                  | **Priority** |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | SYS-000 | A fresh SemantIQ deployment shall start with no business access and shall require a controlled bootstrap of the first organisation/tenant trust and System Administrator before normal administration can begin. | Must         |
-| SYS-001 | The platform shall authenticate every interactive user through an approved identity provider before any protected content is returned.                                                                           | Must         |
+| SYS-001 | **Normal SemantIQ users** must authenticate through an approved identity provider before protected application/business content is returned. **The narrowly scoped local Bootstrap Administrator is the sole pre-SSO exception**, limited to First-Run / Recovery Platform Setup, with **zero business-domain access** and **automatic shutdown** after establishment of the first permanent System Administrator. *(Amended 20 September 2026 — see the note below.)* | Must         |
+
+> **SYS-001 — AMENDED 20 September 2026.** Authority:
+> `doc/v2/phase-1/PRODUCT-OWNER-AMENDMENT-PLATFORM-SETUP-AND-BOOTSTRAP.md`.
+>
+> **The original wording was:** *"The platform shall authenticate every
+> interactive user through an approved identity provider before any protected
+> content is returned."*
+>
+> **Why it changed:** it was literally unachievable on a fresh installation.
+> An approved identity provider cannot be configured until somebody privileged
+> can sign in, and nobody privileged could sign in until one was configured.
+> The requirement described the steady state and silently assumed somebody had
+> already reached it.
+>
+> **What did NOT change, and this is the point:** normal authentication is not
+> weakened in any way. The exception is **one** principal, it is an
+> installation principal rather than a user, it reaches **no business-domain
+> content at all**, and it **shuts itself off** — automatically, as product
+> behaviour rather than a setting — once the first permanent System
+> Administrator has authenticated through the approved normal path. The
+> requirement now says what it always meant.
 | SYS-002 | A user shall have no business-domain data access until a domain entitlement is granted.                                                                                                                          | Must         |
 | SYS-003 | Effective access shall combine role, domain, scope and sensitivity.                                                                                                                                              | Must         |
 | SYS-004 | System Administrator status shall not automatically grant Finance, People, Sales or other business-data access.                                                                                                  | Must         |
