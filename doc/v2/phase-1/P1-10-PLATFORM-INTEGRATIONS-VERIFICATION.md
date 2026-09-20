@@ -7,7 +7,7 @@ claim as an observed production result, and nothing below is presented as one.
 | --- | --- |
 | Unit | **P1-10 — Platform Integrations & Setup** (delivery order 12) |
 | DESIGN | merge `a7aef47` — the six Product Owner corrections applied |
-| Suite | **1079 tests, 1073 passed, 0 failed, 0 errors, 85,874 assertions** |
+| Suite | **1082 tests, 1076 passed, 0 failed, 0 errors** |
 | P1-10 cases | **62** under `tests/Feature/Setup`, plus five architecture files |
 | Diff | 89 files, +8,695 / −133 |
 | Status | **NOT DEPLOYED — awaiting Product Owner Gate C review** |
@@ -161,6 +161,11 @@ the **atomic closing write** inside `GrantRedeemer`'s transaction, and the
   names no part of the access model at all.
 - **`/up` and `semantiq:health` unchanged** — and the one regression that did
   reach them was found and fixed before handover.
+- **No `APP_KEY` rotation tooling**, and that is now a **guard** rather than a
+  sentence: `NoKeyRotationToolingTest` fails the build on a rotation command, a
+  re-encryption method, a second key in the environment, or any decrypt path
+  that branches on `key_version`. *"We recorded a key version"* reads like a
+  mitigation, and the next person will be tempted to treat it as one.
 - **No deployment.**
 
 ---

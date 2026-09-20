@@ -250,6 +250,26 @@ wrong lesson.
 
 ---
 
+## M-P10-10 — a re-encryption method added to the secret store — **KILLED**
+
+**The mutation.** `IntegrationSecretStore::reEncrypt()` — the tooling the
+Product Owner explicitly said not to build in P1-10.
+
+**Killed by:** `NoKeyRotationToolingTest::test_no_rotation_or_re_encryption_tooling_was_built`.
+
+**Why this guard exists rather than a sentence in a document.** *"We recorded a
+key version"* reads like a mitigation, and the next person to touch this will
+be tempted to treat it as one — to write a rotation command *"since the version
+is already there"*. `key_version` records **which** key encrypted a row; it
+cannot decrypt a row whose key is gone, and a version column on an
+undecryptable ciphertext tells you accurately which key you no longer have.
+
+The file also asserts that **nothing branches on `key_version`**: a decrypt
+path that did would be promising a capability — reading an old key — that this
+deployment does not have.
+
+---
+
 ## Flaws found in the TESTS, recorded rather than quietly fixed
 
 A mutation record that lists only code defects implies the tests were right
