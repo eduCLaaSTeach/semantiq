@@ -3155,7 +3155,17 @@ button.shell-link:hover .icon { color: var(--accent); }
 
 .setup-panel-emphasis { border-color: var(--accent); }
 
-.setup-panel h2 { font-size: 16px; margin: 0 0 var(--space-2); }
+.setup-panel h2 {
+  font-size: 16px;
+  margin: 0 0 var(--space-2);
+  /* A NOMINATED ADDRESS IS ONE UNBREAKABLE WORD.
+     "Send this link to the.new.administrator@example.test" is a heading
+     containing a 33-character token with no space in it, and at 390px it made
+     .setup-main 402px wide - the whole column overflowed the phone. Found by
+     measuring at 390 with a realistic address; a short one fits and hides it,
+     which is why the sweep uses a long one. */
+  overflow-wrap: anywhere;
+}
 
 .setup-panel-head {
   display: flex;
@@ -3171,6 +3181,8 @@ button.shell-link:hover .icon { color: var(--accent); }
   margin: 0 0 var(--space-3);
   color: var(--text-muted);
   font-size: 13px;
+  /* Same reason: these carry addresses and identifiers. */
+  overflow-wrap: anywhere;
 }
 
 .setup-meta, .setup-hint {
@@ -3229,20 +3241,31 @@ button.shell-link:hover .icon { color: var(--accent); }
 
 .setup-field label { font-size: 13px; font-weight: 500; }
 
-.setup-field input {
+/* THE HOUSE INPUT, NOT A SECOND ONE.
+   These deviated from .org-form input in four ways - a weaker border, the
+   canvas colour instead of the chrome colour, a different height and a
+   different focus offset - so a customer moving between setup and the console
+   would have seen two different treatments of the same control. The canvas
+   background in particular read as "disabled" on a white card. Matched
+   exactly; only the full width differs, because these fields sit in a
+   single-column form rather than a filter row. */
+.setup-field input,
+.setup-field select {
   width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--card-border);
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--card-border-strong);
   border-radius: var(--radius-control);
-  background: var(--canvas);
+  background: var(--chrome);
   color: var(--text);
   font: inherit;
   font-size: 13px;
 }
 
-.setup-field input:focus-visible {
+.setup-field input:focus-visible,
+.setup-field select:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .setup-form-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }

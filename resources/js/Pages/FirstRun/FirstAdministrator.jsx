@@ -1,4 +1,4 @@
-import { useForm } from '@inertiajs/react'
+import { Link, useForm } from '@inertiajs/react'
 import SetupShell from '../../Layouts/SetupShell'
 
 /**
@@ -90,10 +90,25 @@ export default function FirstAdministrator({ steps, identityIsReady, handoffLink
                         </form>
                     </>
                 ) : (
-                    <p className="setup-description">
-                        Microsoft sign-in has not been entered and tested yet. Until it is, a
-                        nominated administrator would have no way to sign in.
-                    </p>
+                    <>
+                        <p className="setup-description">
+                            Microsoft sign-in has not been entered and tested yet. Until it is, a
+                            nominated administrator would have no way to sign in.
+                        </p>
+
+                        {/*
+                          * A BLOCKED STATE THAT NAMES THE BLOCKER MUST ALSO OFFER THE WAY OUT.
+                          *
+                          * Without this the screen says what is wrong and leaves the
+                          * administrator to find the fix themselves - which on a setup
+                          * surface, at the last step, is where somebody gives up. The rail
+                          * is there too, but a reader who has just been told what is
+                          * missing should not have to go looking for it.
+                          */}
+                        <Link href="/first-run/integration/identity" className="org-action">
+                            Go to Microsoft sign-in
+                        </Link>
+                    </>
                 )}
             </section>
         </SetupShell>

@@ -183,6 +183,88 @@ It was replaced by an assertion on the real cache contents.
 
 ---
 
+## M-P10-7 — the bootstrap guard trusts the session key alone — **KILLED**
+
+**The mutation.** `RequireBootstrapSession` reduced to `if (! is_int($id))`,
+dropping the live `isOpen()` re-read — the "check the state at sign-in only"
+shortcut D-166 exists to forbid.
+
+**Killed by:**
+
+```
+test_b3_and_b4_an_established_session_fails_on_its_next_request
+test_b4_the_session_key_survives_and_grants_nothing
+```
+
+**B4 asserts the session key is STILL PRESENT after the refusal**, which is the
+whole point. Production runs **file** sessions, so a shutdown that depended on
+deleting session state would be defeated by a file that happens to remain. The
+guarantee has to be that the guard *re-reads the world*, not that somebody
+removed something.
+
+---
+
+## M-P10-8 — `BootstrapCloser` knows it is unprotected and proceeds — **KILLED**
+
+**The mutation.** The `throw` removed from the `DB::transactionLevel() === 0`
+check, leaving the check itself in place.
+
+**Killed by:** `AuditAtomicityTest::test_every_state_changing_emitter_is_inside_a_transaction`,
+which re-flagged `BootstrapCloser.php::close`.
+
+**Why the mutation exists.** `BootstrapCloser` opens no transaction — it
+*requires its caller's*, which is stricter, and the only correct choice here:
+opening its own would create exactly the window it exists to remove. The
+atomicity guard was taught that **mechanism** rather than given an exemption,
+and this mutation is the proof that the teaching is conditional: **a level check
+alone does not qualify; the throw is what makes it a guard rather than a
+comment.**
+
+---
+
+## M-P10-9 — an invented CSS custom property — **KILLED**
+
+**The mutation.** `var(--focus)` reintroduced on the setup field focus ring.
+
+**Killed by:** `EveryCssTokenIsDeclaredTest`.
+
+**This guard was written because the first draft of the setup stylesheet used
+FIVE tokens that do not exist** — `--page`, `--hover`, `--selected`, `--focus`,
+`--danger` — every one of which looks exactly like a real one. CSS drops an
+undefined custom property **silently**: no build failure, no test failure, no
+render failure. What it produces is a focus ring that never appears, a dead
+hover state, an error message in the body colour and a panel with no
+background. Every one of those is on the professional-polish gate, and none of
+them fails anything until somebody looks.
+
+**Its first run found three PRE-EXISTING usages** of `var(--edge)` in P1-05 and
+P1-08 code. An undefined token invalidates the whole `border` declaration, so
+the Audit filter controls, the Audit rows and the access-decision path panel
+have been rendering **with no border at all**. Fixed in passing and marked as
+carried-in.
+
+**The guard strips comments first.** The notes explaining why a token was wrong
+necessarily name it, so a guard that read them would be failed by its own
+explanation — and the fix would be to delete the explanation, which is the
+wrong lesson.
+
+---
+
+## Flaws found in the TESTS, recorded rather than quietly fixed
+
+A mutation record that lists only code defects implies the tests were right
+first time. These were not.
+
+| Case | The flaw |
+| --- | --- |
+| **B11** | Satisfied by the hash replacement while claiming to guard the openness predicate. See M-P10-1 — the surviving mutation |
+| **H5** (first draft) | `assertTrue($store->forgetIgnored ?? true)` referred to a property that does not exist, so `?? true` made it pass unconditionally. Replaced by an assertion on the real cache contents, which required a new `IGNORES_FORGET` cache behaviour to be honest |
+| **`FirstRunRoutesDoNotCollide`** | Keyed the expectation map on URI alone, so `POST first-run/sign-in` overwrote the `GET`, and the case asserted a GET resolves to the POST's route name. It failed for a reason with nothing to do with route collisions — which would have taught the next person to loosen the assertion rather than fix the key |
+| **`test_the_client_secret_is_read_in_exactly_one_place`** | Scanned one directory. The read moved out of it, so left alone the guard would have found **zero** readers and passed |
+| **The browser sweep** | Checked `page.url().includes(path)`, and `/first-run` is a prefix of every other path — so the sign-in page counted as the overview. It also treated the sandbox's blocked Google Fonts request as a product console error, and used a SHORT nominated address, which fits at 390px and hides the overflow a real one causes |
+
+---
+
 ## Defects these guards found in the implementation, not in the design
 
 Recorded because they are the return on writing the mutation before the code is
@@ -196,3 +278,8 @@ finished, and because two of them were found by guards **another unit** wrote.
 | **The full suite** | `/up` returned 500 instead of 503 with the database down. `HealthInspector` wrapped the identity check in a `try/catch` that looked complete and was not: **constructor injection built the check, the provider and the discovery client before the method body ran**, so a failure while constructing them escaped the guard written to contain it |
 | **The full suite** | `PlatformSetting::current()` used `firstOrCreate`, so every identity resolution — including the one behind the unauthenticated entry page — was a **write** |
 | **`test_the_client_secret_is_read_in_exactly_one_place`** | The guard scanned `app/Modules/Identity` only. P1-10 moved the read to `Platform\Setup`, so left alone it would have found **zero** readers and passed — a guard reporting a safety that had simply moved out of its field of view |
+| **P1-08's atomicity guard, a second time** | `integration.configuration.changed` was recorded in the controller, one line after the write returned — outside the transaction, so a failed audit write could not roll the configuration change back. Nothing about the controller *looked* wrong, which is what the static guard is for |
+| **The browser sweep at 390px** | The nominated address sits in a heading — `Send this link to the.new.administrator@example.test` — and is one unbreakable 33-character word. It made the main column **402px wide inside a 390px viewport**. A short address fits and hides it entirely |
+| **The browser sweep, implementation terms** | The AI provider field was a text input whose LABEL carried the permitted values: *"AI service (azure_openai or openai)"*. A raw enum value on a customer's screen, and the field had the wrong control — a choice typed as free text also lets somebody enter "Azure OpenAI" and learn nothing until the connection test says the provider cannot be checked. Both it and the mail security field are now selects |
+| **Reading the rendered screens** | `.org-action-quiet` is a MODIFIER — every other use in the codebase pairs it with `.org-action`. Used alone, "Sign out" and "Test connection" rendered as bare browser buttons. The setup inputs also deviated from `.org-form input` in four ways, including a canvas background on a white card that reads as *disabled* |
+| **Reading the rendered screens** | The First-Run overview rendered the step rail **and** a list of the same four integrations with the same status — two identical lists on one screen, each claiming to be the way to navigate. And the blocked nomination state named the blocker without offering any way to act on it, at the last step of a setup flow, which is where somebody gives up |

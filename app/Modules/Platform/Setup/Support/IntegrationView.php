@@ -30,6 +30,8 @@ final readonly class IntegrationView
         public string $statusInWords,
         public ?string $explanation,
         public array $fields,
+        /** @var array<string, array<string, string>> field => (value => words) */
+        public array $choices,
         public array $secrets,
         public ?string $lastTestedAt,
         public ?string $lastChangedAt,
@@ -46,6 +48,7 @@ final readonly class IntegrationView
             'statusInWords' => $this->statusInWords,
             'explanation' => $this->explanation,
             'fields' => $this->fields,
+            'choices' => $this->choices,
             'secrets' => $this->secrets,
             'lastTestedAt' => $this->lastTestedAt,
             'lastChangedAt' => $this->lastChangedAt,

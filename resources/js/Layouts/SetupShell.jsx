@@ -35,7 +35,7 @@ export default function SetupShell({ title, lead, steps = [], current, children,
                 </div>
 
                 <form onSubmit={signOut} className="setup-head-actions">
-                    <button type="submit" className="org-action-quiet">
+                    <button type="submit" className="org-action org-action-quiet">
                         Sign out
                     </button>
                 </form>

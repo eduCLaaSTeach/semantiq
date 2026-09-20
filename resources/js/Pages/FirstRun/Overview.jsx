@@ -20,7 +20,15 @@ export default function Overview({ steps, canNominate, isConfigured }) {
         <SetupShell
             title="Set up SemantIQ"
             lead="Enter the details SemantIQ needs, then hand over to the first permanent administrator."
-            steps={steps}
+            /*
+             * NO STEP RAIL ON THIS SCREEN, DELIBERATELY.
+             *
+             * The overview IS the hub: it lists the same four integrations
+             * with the same status the rail would. Rendering both put two
+             * identical lists side by side on one screen, each claiming to be
+             * the way to navigate. The rail belongs on the step screens, where
+             * there is something to navigate away from.
+             */
         >
             {isConfigured ? (
                 <p className="setup-note">
@@ -66,10 +74,16 @@ export default function Overview({ steps, canNominate, isConfigured }) {
                         </Link>
                     </>
                 ) : (
-                    <p className="setup-description">
-                        Enter and test Microsoft sign-in first. Until then a nominated administrator
-                        would have no way to sign in.
-                    </p>
+                    <>
+                        <p className="setup-description">
+                            Enter and test Microsoft sign-in first. Until then a nominated
+                            administrator would have no way to sign in.
+                        </p>
+
+                        <Link href="/first-run/integration/identity" className="org-action">
+                            Go to Microsoft sign-in
+                        </Link>
+                    </>
                 )}
             </section>
         </SetupShell>

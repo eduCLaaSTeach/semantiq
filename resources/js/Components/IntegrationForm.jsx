@@ -65,23 +65,56 @@ export default function IntegrationForm({ integration, updateUrl, testUrl }) {
             ) : null}
 
             <form onSubmit={save} className="setup-form">
-                {Object.keys(integration.fields).map((field) => (
-                    <div className="setup-field" key={field}>
-                        <label htmlFor={`${integration.family}-${field}`}>{labelFor(field)}</label>
-                        <input
-                            id={`${integration.family}-${field}`}
-                            type="text"
-                            autoComplete="off"
-                            value={form.data[field] ?? ''}
-                            onChange={(event) => form.setData(field, event.target.value)}
-                        />
-                        {form.errors[field] ? (
-                            <p className="setup-error" role="alert">
-                                {form.errors[field]}
-                            </p>
-                        ) : null}
-                    </div>
-                ))}
+                {Object.keys(integration.fields).map((field) => {
+                    const choices = integration.choices?.[field]
+
+                    return (
+                        <div className="setup-field" key={field}>
+                            <label htmlFor={`${integration.family}-${field}`}>{labelFor(field)}</label>
+
+                            {/*
+                             * A CHOICE GETS A SELECT, NOT A TEXT BOX.
+                             *
+                             * These were text inputs whose LABEL carried the
+                             * permitted values - "AI service (azure_openai or
+                             * openai)" - which put a raw enum value on a
+                             * customer's screen and let somebody type
+                             * "Azure OpenAI" and learn nothing until the
+                             * connection test failed. The stored value is
+                             * still the machine name; only what is shown
+                             * changed.
+                             */}
+                            {choices ? (
+                                <select
+                                    id={`${integration.family}-${field}`}
+                                    value={form.data[field] ?? ''}
+                                    onChange={(event) => form.setData(field, event.target.value)}
+                                >
+                                    <option value="">Not chosen yet</option>
+                                    {Object.entries(choices).map(([value, words]) => (
+                                        <option value={value} key={value}>
+                                            {words}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <input
+                                    id={`${integration.family}-${field}`}
+                                    type="text"
+                                    autoComplete="off"
+                                    value={form.data[field] ?? ''}
+                                    onChange={(event) => form.setData(field, event.target.value)}
+                                />
+                            )}
+
+                            {form.errors[field] ? (
+                                <p className="setup-error" role="alert">
+                                    {form.errors[field]}
+                                </p>
+                            ) : null}
+                        </div>
+                    )
+                })}
 
                 {Object.entries(integration.secrets).map(([name, configured]) => (
                     <div className="setup-field" key={name}>
@@ -109,7 +142,7 @@ export default function IntegrationForm({ integration, updateUrl, testUrl }) {
 
                     <button
                         type="button"
-                        className="org-action-quiet"
+                        className="org-action org-action-quiet"
                         onClick={runTest}
                         disabled={test.processing}
                     >
@@ -148,12 +181,12 @@ function labelFor(field) {
         redirect_uri: 'Redirect address',
         host: 'Mail server address',
         port: 'Port',
-        encryption: 'Security (tls or ssl)',
+        encryption: 'Connection security',
         username: 'Username',
         password: 'Password',
         from_address: 'Send from address',
         from_name: 'Send from name',
-        provider: 'AI service (azure_openai or openai)',
+        provider: 'AI service',
         endpoint: 'Service address',
         deployment: 'Model or deployment name',
         api_key: 'API key',

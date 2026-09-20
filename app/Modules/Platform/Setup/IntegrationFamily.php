@@ -87,6 +87,37 @@ enum IntegrationFamily: string
         };
     }
 
+    /**
+     * Fields that are a CHOICE, with the words a person reads.
+     *
+     * These were free-text inputs whose LABEL carried the permitted values -
+     * "AI service (azure_openai or openai)". The browser sweep caught it: a
+     * raw enum value on a user-facing surface is the first item on the
+     * professional-polish gate, and it was there because the field had the
+     * wrong control. A choice typed as free text also lets an administrator
+     * enter "Azure OpenAI" and be told nothing until the connection test says
+     * the provider cannot be checked.
+     *
+     * The stored VALUE stays the machine name, because that is what the
+     * adapters match on. Only what is displayed changes.
+     *
+     * @return array<string, string> stored value => the words shown
+     */
+    public function choices(string $field): array
+    {
+        return match (true) {
+            $this === self::Ai && $field === 'provider' => [
+                'azure_openai' => 'Azure OpenAI',
+                'openai' => 'OpenAI',
+            ],
+            $this === self::Email && $field === 'encryption' => [
+                'tls' => 'STARTTLS (usually port 587)',
+                'ssl' => 'SSL/TLS (usually port 465)',
+            ],
+            default => [],
+        };
+    }
+
     /** The name a person sees. Never the enum value. */
     public function inWords(): string
     {

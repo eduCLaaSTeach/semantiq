@@ -48,6 +48,7 @@ final class SetupProjection
         $status = HealthStatus::tryFrom((string) $row?->status) ?? HealthStatus::NotChecked;
 
         $fields = [];
+        $choices = [];
 
         // THE ALLOWLIST DECIDES WHAT IS SENT, not whatever the row happens to
         // hold. A field written before an allowlist changed cannot leak out
@@ -55,6 +56,12 @@ final class SetupProjection
         foreach ($family->fields() as $field) {
             $value = $settings[$field] ?? null;
             $fields[$field] = is_scalar($value) ? $value : null;
+
+            $options = $family->choices($field);
+
+            if ($options !== []) {
+                $choices[$field] = $options;
+            }
         }
 
         $secrets = [];
@@ -71,6 +78,7 @@ final class SetupProjection
             statusInWords: IntegrationView::statusInWords($status),
             explanation: $row?->explanation,
             fields: $fields,
+            choices: $choices,
             secrets: $secrets,
             lastTestedAt: $row?->last_tested_at?->toIso8601String(),
             lastChangedAt: $row?->last_changed_at?->toIso8601String(),
