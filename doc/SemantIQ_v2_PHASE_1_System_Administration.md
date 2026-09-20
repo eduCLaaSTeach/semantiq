@@ -502,7 +502,69 @@ Platform support can identify operational failures safely.
 
 ---
 
-## P1-10 — Administration Home
+## P1-10 — Platform Integrations & Setup
+
+> **ADDED by Product Owner amendment, 20 September 2026** —
+> `doc/v2/phase-1/PRODUCT-OWNER-AMENDMENT-PLATFORM-SETUP-AND-BOOTSTRAP.md`.
+> **Administration Home, previously P1-10, becomes P1-11** and is unchanged in
+> substance — see below.
+
+### Menu
+`System Administration → Platform Integrations`
+
+### Why it exists
+A product whose integrations can only be configured by editing `.env` over SSH
+is not a product a customer administers. And the first administrator cannot be
+established before SSO exists, because the approved grant can only be redeemed
+once Entra is already configured — **circular on a fresh installation.**
+
+### Contents
+- **Identity / SSO** — surfaced and linked; **P1-02 remains the authoritative
+  owner.** No second Entra configuration model;
+- **Email & Notifications** — the platform email connection boundary. A
+  connection, **not** a notification system;
+- **AI Provider** — a reusable platform connection only. **No Phase 3 AI
+  business functionality**;
+- **Microsoft Fabric** — the connection/trust boundary only. **No Phase 2
+  functionality**;
+- **First-Run / Platform Setup** for the local **Bootstrap Administrator**;
+- nomination of the first permanent System Administrator.
+
+### Key rules
+- secrets **encrypted at rest**, never returned to the browser, never in Audit
+  context, logs, URLs or workflow output;
+- a fixed status vocabulary aligned with P1-09's health semantics;
+- the Bootstrap Administrator is an **installation principal, not a role**,
+  holds **zero business-domain access**, and is **disabled automatically** once
+  SSO is verified and a permanent System Administrator has authenticated;
+- **no vendor default password**; credentials established by an
+  operator-controlled process;
+- **reuse the existing P1-00 grant mechanism** rather than building a second
+  bootstrap system.
+
+### Minimum tests
+- the Bootstrap Administrator cannot reach business-domain data;
+- it cannot assign itself a role, and cannot remain enabled after transition;
+- an old bootstrap credential cannot be replayed; a recovery grant is
+  single-use and expiring;
+- secrets never round-trip to the browser, and a failed connection test reveals
+  no token;
+- a successful test cannot implicitly enable business access;
+- Platform Integration configuration never weakens P1-05 access control.
+
+### Exit
+A customer can establish and verify SemantIQ's external services through the
+product, and a fresh installation can reach its first permanent System
+Administrator without a hand-edited `.env`.
+
+---
+
+## P1-11 — Administration Home
+
+> **RENUMBERED from P1-10 on 20 September 2026.** The unit is unchanged in
+> substance. It stays last, and the reason is now stronger: it must **project**
+> the integration and readiness facts P1-10 delivers rather than inventing them.
+> **P1-11 must not be implemented before P1-10 is accepted.**
 
 ### Menu
 `System Administration → Administration Home`

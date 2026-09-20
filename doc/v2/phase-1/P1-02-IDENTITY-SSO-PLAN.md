@@ -61,13 +61,27 @@ That is why the boundaries in §6 and §10 are written before the screens.
 | 5 | **Session Policy** — the P1-00 values, surfaced **read-only** (D-26), and the D-31 correction |
 | 6 | The **Identity & SSO** navigation entry becomes reachable; nothing else unlocks |
 
+> **AMENDED 20 September 2026 — P1-02 KEEPS IDENTITY OWNERSHIP.**
+> `PRODUCT-OWNER-AMENDMENT-PLATFORM-SETUP-AND-BOOTSTRAP.md` adds **P1-10 —
+> Platform Integrations & Setup**, which includes an Identity/SSO family.
+>
+> **This does not move anything out of P1-02.** P1-02 remains the authoritative
+> owner of Microsoft Entra ID, additional approved providers, the login
+> experience, SSO health and session policy. **There must be no second Entra
+> configuration model.** P1-10 may surface Identity/SSO setup and readiness and
+> **navigate** to the screens P1-02 owns; it does not restate them.
+>
+> What P1-10 does own is the surface through which those settings can be
+> *established by a customer* during first-run setup, rather than only by
+> editing `.env` over SSH.
+
 ### Out of scope — each owned elsewhere
 
 | Excluded | Owner |
 | --- | --- |
 | The Login page's design, copy, brand, layout | **Frozen UI foundation** — accepted, not reopened |
 | The authentication flow itself: redirect, callback, token validation, nonce, PKCE, state, session issuance | **P1-00** — *"Do not rebuild the Login flow"* |
-| Bootstrap, the first-administrator grant, its issuance or redemption | **P1-00** |
+| Bootstrap, the first-administrator grant, its issuance or redemption | **P1-00** — and, from 20 September 2026, the **local Bootstrap Administrator** and **First-Run Platform Setup** are **P1-10**'s. See the note below |
 | User provisioning, invitation, deactivation | **P1-03** |
 | Groups, directory sync, group-to-role mapping | **P1-03** |
 | Roles, permissions, access model | **P1-05** |

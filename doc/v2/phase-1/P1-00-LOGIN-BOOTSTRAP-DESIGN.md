@@ -434,6 +434,21 @@ not stored, so it cannot drift from reality.
 
 While CONFIGURED, both `/first-run/{grant}` and the Artisan command refuse.
 
+> **AMENDED 20 September 2026** —
+> `PRODUCT-OWNER-AMENDMENT-PLATFORM-SETUP-AND-BOOTSTRAP.md`.
+>
+> **The predicate is unchanged and is deliberately kept computed rather than
+> stored**, for exactly the reason given above. What the amendment changes is
+> what UNCONFIGURED *permits*:
+>
+> | State | Amended meaning |
+> | --- | --- |
+> | **UNCONFIGURED** | No permanent SSO System Administrator has been established yet. **The local Bootstrap Administrator setup path is available**, under its own controlled credential, in addition to the grant path below |
+> | **CONFIGURED** | At least one permanent System Administrator has authenticated through the approved normal identity path. **Normal bootstrap login is closed** — both the grant and the local principal. Recovery is possible only through the privileged operator procedure |
+>
+> P1-10 is directed to reuse this predicate and this grant mechanism rather than
+> introduce a second notion of "is this installation set up yet".
+
 **Recovery (D-03)** is the same command under the same rule: it becomes available
 again **only** when the count of active System Administrators is zero. That is
 not a special mode and not a flag — it is the same UNCONFIGURED predicate

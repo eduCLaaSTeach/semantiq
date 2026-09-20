@@ -87,6 +87,13 @@ Fresh deployment, no System Administrator exists
 Application entry reports UNCONFIGURED
     ↓
 Operator creates a single-use bootstrap grant through the approved channel   [D-03]
+    ↑
+    │  AMENDED 20 Sep 2026: on a FRESH installation this flow cannot start,
+    │  because Entra is not yet configured. The local Bootstrap Administrator
+    │  performs First-Run Platform Setup first, configures and verifies SSO,
+    │  and then nominates the first permanent administrator - who enters
+    │  through exactly the flow below, unchanged.
+    │
     ↓
 Nominated first administrator opens the bootstrap entry
     ↓
@@ -517,7 +524,31 @@ DESIGN time.
 > DESIGN. Named human identities and runtime values are deliberately absent —
 > see §20.6.
 
-### D-03 — First System Administrator bootstrap · **APPROVED — Option A**
+### D-03 — First System Administrator bootstrap · **APPROVED — Option A** · **PARTLY SUPERSEDED 20 September 2026**
+
+> **Superseded in part by Product Owner amendment, 20 September 2026** —
+> `PRODUCT-OWNER-AMENDMENT-PLATFORM-SETUP-AND-BOOTSTRAP.md`.
+>
+> **The original decision below required the first administrator to pass Entra
+> SSO before any privileged application access. It is kept in full**, because it
+> was taken, implemented and verified, and because **all ten of its rules still
+> govern the grant mechanism.**
+>
+> **What is superseded:** the assumption that no privileged access of any kind
+> may occur before SSO is configured. That is circular on a fresh installation —
+> SSO cannot be configured until somebody privileged can sign in, and the grant
+> below can only be redeemed once Entra is *already* configured on the server.
+>
+> **The amendment:** a narrowly scoped local **Bootstrap Administrator** may
+> perform First-Run Platform Setup before SSO is configured. It is an
+> installation principal, **not a role**, holds **zero business-domain access**,
+> and is **disabled automatically** once SSO is verified and a permanent System
+> Administrator has authenticated.
+>
+> **What is unchanged:** the first *permanent* System Administrator still
+> authenticates through the approved normal identity path. Rules 1–10 below
+> stand, and P1-10 is directed to **reuse this mechanism rather than build a
+> second one**.
 
 Single-use bootstrap grant, redeemed only through successful Entra SSO.
 
