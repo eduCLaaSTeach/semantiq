@@ -26,6 +26,8 @@ final readonly class IntegrationView
     public function __construct(
         public string $family,
         public string $name,
+        /** What this integration is FOR. Never a status - `explanation` is that. */
+        public string $describedAs,
         public string $status,
         public string $statusInWords,
         public ?string $explanation,
@@ -44,6 +46,7 @@ final readonly class IntegrationView
         return [
             'family' => $this->family,
             'name' => $this->name,
+            'describedAs' => $this->describedAs,
             'status' => $this->status,
             'statusInWords' => $this->statusInWords,
             'explanation' => $this->explanation,
@@ -76,6 +79,7 @@ final readonly class IntegrationView
         return [
             'family' => $this->family,
             'name' => $this->name,
+            'describedAs' => $this->describedAs,
             'status' => $this->status,
             'statusInWords' => $this->statusInWords,
             'explanation' => $this->explanation,

@@ -682,3 +682,55 @@ OLD GUARD VERDICT: FAIL - "A write route exists under console/identity."
 
 That is the evidence the correction was necessary, rather than a claim that it
 was.
+
+---
+
+## GATE D — the UI correction round
+
+Eleven mutations. **Nine killed first time; two survived and both were the same
+kind of flaw in the test rather than a gap in the rule.**
+
+### The tab layout
+
+| # | Mutation | Result | Killed by |
+| --- | --- | --- | --- |
+| M-UI-1 | Append a fifth tab in `renderTab()` | **KILLED** | `test_there_are_exactly_four_tabs` (+ 3 more) |
+| M-UI-2 | Rename a family back to "Email delivery" | **KILLED** | `test_the_tab_labels_are_exactly_the_approved_names` |
+| M-UI-3 | Hard-code the labels in the controller instead of reading the enum | **KILLED** | `test_the_labels_are_the_family_names_and_not_a_second_copy` |
+| M-UI-4 | Send `toArray()` for identity, giving it an editable form | **KILLED** | `test_the_identity_tab_is_a_summary_and_a_link`, `test_the_console_sends_identity_as_a_summary_with_no_fields_or_secrets` |
+| M-UI-5 | Hard-code Identity as the active family, so every URL renders one tab | **KILLED** | `test_the_active_tab_follows_the_route` (+ 3 more) |
+| M-UI-6 | Let the tab route answer POST as well as GET | **KILLED** | `test_the_tabs_add_no_write_route`, `test_the_console_integrations_route_set_is_exactly_this` |
+| M-UI-7 | `withoutMiddleware` the action class on the tab route | **KILLED** | `test_every_tab_route_requires_platform_administration` |
+| M-UI-8 | Put the credential map on every tab entry | **KILLED** | `test_the_tab_props_carry_no_value_at_all` |
+| M-UI-11 | `consolePath()` returns an address with no route | **KILLED** | `test_every_tab_href_is_a_real_route` |
+
+### The two that survived, and why they are worth reading
+
+**M-UI-9 — rename the strip's classes to `integrations-tabs`. SURVIVED.**
+
+The guard read the component file and asserted it contained `org-tabs`. It
+still did — **in the docblock explaining why the component uses `org-tabs`**.
+The assertion was satisfied by a comment *about* the rule while the rendered
+class had stopped following it.
+
+Narrowed to what React actually emits: `className="org-tabs"`, the template
+literal `` `org-tab${ ``, and `' org-tab-active'`. Re-run as **M-UI-9b**
+(rename the nav) and **M-UI-9c** (rename only the tab class, leaving the nav
+alone, which the first fix could still have missed) — **both KILLED**.
+
+**M-UI-10 — build `describedAs` from the stored row: `$row?->explanation ??
+$family->describedAs()`. SURVIVED.**
+
+Nothing in the fixture had ever been tested, so every `explanation` was null
+and the mutant fell straight through to the enum. The test passed **for a
+reason unrelated to the rule it claims to check** — the exact failure
+`CLAUDE.md` §2 names, arriving for the third time in this unit.
+
+The case now writes a stored explanation to every row first, and asserts three
+things: the description is the enum's, it does not contain the stored words,
+and the stored words are still carried on `explanation` beside the status,
+where a connection-test result belongs. Re-run as **M-UI-10b** — **KILLED**.
+
+**Both survivors are the same shape**: a guard whose premise was never
+established. Neither changed the implementation; both changed what the test
+proves.

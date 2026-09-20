@@ -126,6 +126,7 @@ final class SetupProjection
         return new IntegrationView(
             family: $family->value,
             name: $family->inWords(),
+            describedAs: $family->describedAs(),
             status: $status->value,
             statusInWords: IntegrationView::statusInWords($status),
             explanation: $row?->explanation,
