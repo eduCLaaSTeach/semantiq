@@ -275,6 +275,15 @@ notices until the `.env` secret expires.
 exactly two branches, that the `store` branch reads no `env()`, and that no
 `??` couples them.
 
+**A naming note, found by reading the tree rather than by naming from scratch.**
+`App\Modules\Platform\Identity\IdentityResolver` **already exists** and does
+something entirely different: it maps an already-verified external identity to
+an existing `User`, and never creates one (SYS-014, SYS-015). Calling this class
+`IdentityResolver` would put two unrelated jobs behind one word in one
+namespace. **This one is `IdentityConfigurationSource`** — it answers *where
+the identity configuration comes from*, and the existing class keeps its name
+and its meaning untouched.
+
 ### 3.3 Per-resolution configuration — §1's resolution
 
 - The three container bindings resolve their values **from the resolver, at
@@ -706,11 +715,12 @@ test request has no recipient field).
 > **Two requirements follow, and the draft stated neither.**
 >
 > 1. **The health and configuration checks must resolve the same authoritative
->    source as the runtime provider.** Every site above moves to the §3.2
->    resolver. **Do not leave direct `config('identity.microsoft.*')` reads
+>    source as the runtime provider.** Every site above moves to §3.2's
+>    `IdentityConfigurationSource`. **Do not leave direct `config('identity.microsoft.*')` reads
 >    that bypass the new resolver** — otherwise the screen reports on `.env`
 >    while sign-in uses the store, which is worse than no screen.
->    **Guard: `NoDirectIdentityConfigRead`** — outside the resolver itself,
+>    **Guard: `NoDirectIdentityConfigRead`** — outside
+>    `IdentityConfigurationSource` itself,
 >    **zero** occurrences of the string **`identity.microsoft.`** anywhere in
 >    `app/`. **The dotted key, not the `config('…` call**, because
 >    `IdentityConfigurationReport::missingKeys()` holds the four keys in an
