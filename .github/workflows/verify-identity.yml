@@ -10,6 +10,22 @@
 # configured", "is the approved session policy in force" and "is anything
 # unapproved registered".
 #
+# P1-10 CORRECTED TWO THINGS HERE, AND BOTH WERE WRONG ANSWERS RATHER THAN
+# MISSING ONES.
+#
+# 1. The presence report read config("identity.microsoft.*") straight out of
+#    .env. After the controlled cutover the authority is the encrypted store and
+#    .env is no longer read, so that report would have described a file nobody
+#    signs in with - and said PRESENT for a deployment that was not configured.
+#    It now asks IdentityConfigurationSource, which is what the sign-in path
+#    asks.
+#
+# 2. The route guard rejected any PUT or DELETE under console/identity. Exactly
+#    one PUT is now correct: the post-install Microsoft sign-in change, behind
+#    Microsoft step-up and candidate verification. The guard is NARROWED to an
+#    equality on the approved write set, not relaxed - a second write route
+#    added anywhere under this prefix still fails it.
+#
 # It runs NO LIVE PROBE. A verification workflow must not generate outbound
 # traffic to Microsoft on demand from CI; the SSO Health screen owns that, under
 # a provider-wide lock.
@@ -21,6 +37,18 @@ name: Verify P1-02 identity state (read-only)
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_identity_source:
+        description: >-
+          Which identity authority this run expects to find in force. Production
+          stays on `env` until the separate controlled cutover is approved; pass
+          `store` only after that cutover has been performed deliberately.
+        required: false
+        default: env
+        type: choice
+        options:
+          - env
+          - store
 
 permissions:
   contents: read
@@ -67,19 +95,38 @@ jobs:
 
           ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
 
-      # Booleans and counts. No value from .env, no log content, no live probe.
+      # Booleans, counts and key NAMES. No value from .env, no value from the
+      # store, no log content, no live probe.
       - name: Report identity state
+        env:
+          EXPECTED_IDENTITY_SOURCE: ${{ inputs.expected_identity_source || 'env' }}
         run: |
           set -euo pipefail
 
           out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
             "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
-              // PRESENCE ONLY. Every one of these is a boolean; not one value is
-              // read into anything that is printed.
+              // PRESENCE ONLY, AND FROM THE ONE AUTHORITY.
+              //
+              // THIS USED TO READ config(\"identity.microsoft.*\") DIRECTLY, and
+              // P1-10 turned that into the wrong question. After the controlled
+              // cutover the authority is the encrypted store and .env is no
+              // longer read at all, so a report built from config() would
+              // describe a file the application has stopped signing anybody in
+              // with - and would say PRESENT for a deployment whose real
+              // configuration was missing, which is the exact direction of
+              // error a verification workflow must not make.
+              //
+              // IdentityConfigurationSource is the single resolver the sign-in
+              // path itself uses, and missingKeys() returns NAMES, never values.
+              \$identity = app(\App\Modules\Platform\Setup\Identity\IdentityConfigurationSource::class)->resolve();
+              \$missing = \$identity->missingKeys();
+
               \$present = [];
-              foreach ([\"tenant_id\",\"client_id\",\"client_secret\",\"redirect_uri\"] as \$k) {
-                \$present[\$k] = ((string) config(\"identity.microsoft.\".\$k)) !== \"\";
+              foreach ([\"MICROSOFT_TENANT_ID\",\"MICROSOFT_CLIENT_ID\",\"MICROSOFT_CLIENT_SECRET\",\"MICROSOFT_REDIRECT_URI\"] as \$k) {
+                \$present[\$k] = ! in_array(\$k, \$missing, true);
               }
+
+              \$settings = \App\Modules\Platform\Setup\Models\PlatformSetting::current();
 
               \$policy = new \App\Modules\Identity\Support\SessionPolicy;
 
@@ -92,18 +139,36 @@ jobs:
                 \$rows[\$row[\"key\"]] = \$row[\"state\"];
               }
 
+              // METHOD AND URI, NOT METHOD ALONE.
+              //
+              // The guard below used to reject any PUT or DELETE under
+              // console/identity. P1-10 Gate C round 3 makes exactly one PUT
+              // correct - the post-install Microsoft sign-in change, behind
+              // Microsoft step-up and candidate verification - so a method-only
+              // report can no longer express the rule. It is NARROWED rather
+              // than relaxed: the approved write set is an equality, so a second
+              // write route added anywhere under this prefix still fails.
               \$identityRoutes = [];
+              \$identityWrites = [];
               foreach (\Illuminate\Support\Facades\Route::getRoutes() as \$r) {
-                if (str_starts_with(\$r->uri(), \"console/identity\")) {
-                  foreach (\$r->methods() as \$m) {
-                    if (! in_array(\$m, [\"HEAD\",\"OPTIONS\"], true)) { \$identityRoutes[] = \$m; }
-                  }
+                if (! str_starts_with(\$r->uri(), \"console/identity\")) { continue; }
+                foreach (\$r->methods() as \$m) {
+                  if (in_array(\$m, [\"HEAD\",\"OPTIONS\"], true)) { continue; }
+                  \$identityRoutes[] = \$m;
+                  if (! in_array(\$m, [\"GET\",\"POST\"], true)) { \$identityWrites[] = \$m.\" \".\$r->uri(); }
                 }
               }
               sort(\$identityRoutes);
+              sort(\$identityWrites);
 
               echo json_encode([
                 \"identity_keys_present\"      => \$present,
+                \"identity_source\"            => \$identity->source,
+                \"identity_config_revision\"   => \$identity->revision,
+                \"identity_configuration_complete\" => \$identity->isComplete(),
+                \"identity_missing_keys\"      => \$missing,
+                \"identity_imported_recorded\" => \$settings->identity_imported_at !== null,
+                \"identity_committed_recorded\" => \$settings->identity_committed_at !== null,
                 \"d31_enforced_idle_minutes\"  => \$policy->idleMinutes(),
                 \"d31_approved_idle_minutes\"  => \App\Modules\Identity\Support\SessionPolicy::APPROVED_IDLE_MINUTES,
                 \"d31_enforced_absolute_hours\" => \$policy->absoluteHours(),
@@ -117,17 +182,27 @@ jobs:
                 \"health_state\"               => \$health->state(),
                 \"health_rows\"                => \$rows,
                 \"identity_route_methods\"     => \$identityRoutes,
+                \"identity_write_routes\"      => \$identityWrites,
               ], JSON_PRETTY_PRINT);
             '")"
 
           echo "$out"
 
           # A guard, not just a report: the approved policy must be the enforced
-          # one, and nothing unapproved may be registered.
+          # one, nothing unapproved may be registered, the identity authority
+          # must be the one expected, and the identity write set must be exactly
+          # the one approved change route.
           python3 - "$out" <<'PYEOF'
-          import json, sys
+          import json, os, sys
           raw = sys.argv[1]
           data = json.loads(raw[raw.index('{'):raw.rindex('}') + 1])
+
+          # P1-10 Gate C round 3. Exactly one write route is approved under
+          # console/identity, and it is the post-install Microsoft sign-in
+          # change. This is an EQUALITY so that adding a second one fails here.
+          APPROVED_IDENTITY_WRITES = ['PUT console/identity/entra']
+
+          expected_source = os.environ.get('EXPECTED_IDENTITY_SOURCE') or 'env'
 
           problems = []
           if not data.get('d31_policy_matches_approved'):
@@ -136,8 +211,30 @@ jobs:
               problems.append('The dead IDLE_MINUTES constant is back.')
           if data.get('unapproved_providers'):
               problems.append('An unapproved identity provider is registered.')
-          if 'PUT' in data.get('identity_route_methods', []) or 'DELETE' in data.get('identity_route_methods', []):
-              problems.append('A write route exists under console/identity.')
+
+          writes = data.get('identity_write_routes', [])
+          if writes != APPROVED_IDENTITY_WRITES:
+              problems.append(
+                  f'The identity write-route set is {writes!r}, not the approved {APPROVED_IDENTITY_WRITES!r}.'
+              )
+
+          source = data.get('identity_source')
+          if source != expected_source:
+              problems.append(
+                  f'The effective identity authority is {source!r}, not the expected {expected_source!r}. '
+                  'A cutover this run did not expect has happened, or one that was expected has not.'
+              )
+
+          if not data.get('identity_configuration_complete'):
+              problems.append(
+                  'The resolved identity configuration is incomplete: '
+                  f'{data.get("identity_missing_keys")}.'
+              )
+
+          # A half-finished cutover is worse than either end of it: the authority
+          # says .env while the record says the store was adopted.
+          if source == 'env' and (data.get('identity_imported_recorded') or data.get('identity_committed_recorded')):
+              problems.append('Cutover timestamps are recorded while the authority is still the environment.')
 
           for p in problems:
               print(f'::error::{p}')
