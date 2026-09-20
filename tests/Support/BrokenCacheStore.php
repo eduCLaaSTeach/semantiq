@@ -39,6 +39,21 @@ final class BrokenCacheStore implements Store
 
     public const THROWING = 'throwing';
 
+    /**
+     * IGNORES_FORGET stores and returns values perfectly and simply never
+     * removes one. It reports success, as a cache that cannot unlink does.
+     *
+     * It is the only behaviour here that is not an outage. It is the behaviour
+     * of a FILE cache - which is what production runs - when the unlink fails:
+     * a permissions change, a full disk, a directory somebody moved. Nothing
+     * throws, nothing is logged, and the stale entry stays perfectly readable.
+     *
+     * It exists because "we call forget() on change" is the obvious way to
+     * invalidate a cached health result, and this is the cache against which
+     * that obvious way silently does nothing.
+     */
+    public const IGNORES_FORGET = 'ignores_forget';
+
     /** @var array<string, mixed> */
     private array $values = [];
 
@@ -56,6 +71,7 @@ final class BrokenCacheStore implements Store
             self::THROWING => throw new RuntimeException('connection to redis://secret-host.internal:6379 refused'),
             self::EMPTY, self::FORGETFUL => null,
             self::LYING => 'a value belonging to somebody else',
+            self::IGNORES_FORGET => $this->values[$key] ?? null,
             default => $this->values[$key] ?? null,
         };
     }
@@ -78,8 +94,13 @@ final class BrokenCacheStore implements Store
     public function forget($key): bool
     {
         $this->forgotten[] = $key;
-        unset($this->values[$key]);
 
+        if ($this->behaviour !== self::IGNORES_FORGET) {
+            unset($this->values[$key]);
+        }
+
+        // TRUE EITHER WAY. A cache that could tell you it had failed to remove
+        // something would be a cache you could rely on forget() with.
         return true;
     }
 

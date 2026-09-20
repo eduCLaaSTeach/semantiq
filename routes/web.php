@@ -102,7 +102,35 @@ Route::prefix('auth')->name('auth.')->group(function (): void {
  */
 Route::prefix('first-run')->name('first_run.')->group(function (): void {
     Route::get('closed', fn () => (new StateController)('bootstrap-closed'))->name('closed');
-    Route::get('{grant}', BeginController::class)->name('begin');
+
+    /*
+     * THE GRANT ROUTE IS CONSTRAINED TO THE SHAPE A GRANT ACTUALLY HAS.
+     *
+     * It used to be Route::get('{grant}', ...) with no constraint, and `closed`
+     * above survived only because it is declared FIRST. Declaration order is a
+     * habit, not a guarantee: it is invisible at the call site, it is lost by
+     * any refactor that sorts or regroups these lines, and it silently stops
+     * protecting anything the moment a static route is added below.
+     *
+     * P1-10 adds eight static routes at this same depth - sign-in, identity,
+     * email, ai, fabric, first-administrator, complete, sign-out - so
+     * /first-run/sign-in would have been swallowed as a grant token. That is
+     * the collision class P1-03 correction 1 and P1-04 were written against,
+     * arriving a third time.
+     *
+     * GrantIssuer generates Str::random(64), so this is the token's real shape.
+     * No static route can match it: every one of the eight is far shorter than
+     * 64 characters and several contain a hyphen, which the character class
+     * excludes. The constraint does not make the ambiguity unlikely - it makes
+     * it UNREPRESENTABLE, which is the only version that survives a reorder.
+     *
+     * FirstRunRoutesDoNotCollide asserts this with the route collection
+     * re-registered in REVERSE declaration order, so a test that passes only
+     * because of ordering fails.
+     */
+    Route::get('{grant}', BeginController::class)
+        ->where('grant', '[A-Za-z0-9]{64}')
+        ->name('begin');
 });
 
 /*

@@ -101,6 +101,88 @@ engine production uses.
 
 ---
 
+## M-P10-4 — the `where()` constraint removed from the grant route — **KILLED**
+
+**The mutation.** `Route::get('{grant}', …)` returned to its unconstrained
+production form.
+
+**Killed by two cases:**
+
+```
+test_the_grant_route_is_constrained_to_the_token_shape
+test_every_static_route_resolves_with_the_declaration_order_reversed
+```
+
+**The forward case still passed.** Resolving each URI against the live router
+succeeds on the unconstrained route set too, because the live set happens to be
+in the lucky order. **Re-registering the collection backwards removes the luck
+and leaves only the constraint**, which is the property actually being claimed.
+
+The guard also asserts the constraint **accepts** twenty real `Str::random(64)`
+tokens. A pattern that rejected genuine grants would pass a
+"no static route matches" test while breaking First-Run for everyone — a guard
+satisfied by being wrong in the other direction.
+
+---
+
+## M-P10-5 — the fresh-installation authority move deleted — **KILLED**
+
+**The mutation.** The `DB::transaction` block removed from
+`IdentityCutover::commitFreshInstallation()`, so a passing verification leaves
+`identity_source` at `env` — the defect Correction 4 describes.
+
+**Killed by:**
+
+```
+test_c4_a_verified_fresh_installation_makes_microsoft_auth_read_the_store
+test_c4_no_cutover_command_is_required
+```
+
+**C4 configures no identity `.env` at all.** A case that left the harness's
+identity configuration in place could pass by accidentally reading the
+environment — which is the behaviour being ruled out — and would keep passing
+with the fix removed.
+
+**C4 asserts on `app(IdentityProvider::class)->isConfigured()`**, resolved
+through the container exactly as `/auth/microsoft` resolves it. Asserting only
+on the source would have left the container bindings unproven, and they are the
+half that had to change.
+
+---
+
+## M-P10-6 — revision binding replaced by `Cache::forget()` alone — **KILLED by H5 only**
+
+**The mutation.** The revision stripped from `resultKey()` and `probeKey()`,
+leaving the housekeeping `forget()` as the sole invalidation mechanism.
+
+**Result, exactly as the DESIGN predicted:**
+
+```
+SURVIVED: test_h4_changing_the_tenant_makes_the_stored_identity_result_unreadable
+KILLED:   test_h4_the_revision_is_what_changes_the_key
+KILLED:   test_h5_invalidation_survives_a_cache_that_ignores_forget
+```
+
+**H4's behavioural case survives a `forget()`-only implementation**, because
+`forget()` works perfectly against an ordinary cache. That is not a weakness in
+H4 — it is the reason H5 exists, and the DESIGN said so before the code was
+written: *"A `forget()`-only implementation passes H4 and fails H5."*
+
+**H5 required a new cache behaviour to be honest.** `BrokenCacheStore` gained
+`IGNORES_FORGET`: it stores and returns values perfectly and simply never
+removes one, reporting success — **what a file cache does when the unlink
+fails**, which is the cache production actually runs. The case asserts the old
+entry is *still physically present and readable* after the change, and that
+`storedReport()` says **Not checked** anyway, because nobody asks for that key
+any more.
+
+**One assertion in the first draft of H5 was vacuous** and is recorded here
+rather than quietly fixed: `assertTrue($store->forgetIgnored ?? true)` referred
+to a property that does not exist, so `?? true` made it pass unconditionally.
+It was replaced by an assertion on the real cache contents.
+
+---
+
 ## Defects these guards found in the implementation, not in the design
 
 Recorded because they are the return on writing the mutation before the code is

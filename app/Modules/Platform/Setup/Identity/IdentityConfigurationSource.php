@@ -130,6 +130,25 @@ final class IdentityConfigurationSource
     }
 
     /**
+     * WHAT THE STORE HOLDS, whether or not it is the authority yet.
+     *
+     * THIS IS NOT resolve() AND MUST NOT BE CONFUSED WITH IT. resolve() answers
+     * "what is in force"; this answers "what has been typed and saved". On a
+     * fresh installation those are different in the way that matters most:
+     * in-force is the empty .env, and the candidate is the configuration the
+     * administrator just entered. Verifying through resolve() would therefore
+     * test nothing, pass or fail for reasons unrelated to what was typed, and
+     * either block a correct configuration or approve one nobody checked.
+     *
+     * Never memoised: a candidate exists to be changed and re-tested, often
+     * several times in a row.
+     */
+    public function storedCandidate(): IdentityConfiguration
+    {
+        return $this->fromStore(PlatformSetting::current());
+    }
+
+    /**
      * The pre-cutover authority. config() reads config/identity.php, which
      * reads the server environment.
      */
