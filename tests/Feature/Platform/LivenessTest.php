@@ -26,10 +26,15 @@ final class LivenessTest extends TestCase
     /**
      * The reason /up is registered outside the web middleware group.
      *
-     * The session driver is `database`. A liveness route inside the web group
-     * starts a session, so it cannot answer when the database is down - which is
-     * exactly when a monitor needs an answer. Local verification caught this as a
-     * 500 with a stack trace where a plain 503 belonged.
+     * A liveness route inside the web group STARTS A SESSION, so it cannot
+     * answer whenever the session backing store is impaired - which is exactly
+     * when a monitor needs an answer. Local verification caught this as a 500
+     * with a stack trace where a plain 503 belonged.
+     *
+     * This used to open "The session driver is `database`." That was an
+     * unnecessary premise and untrue of production, which runs `file`. The case
+     * below breaks the DATABASE specifically because that is a store /up must
+     * survive either way; the rule it proves is driver-independent.
      */
     public function test_it_reports_503_rather_than_crashing_when_the_database_is_down(): void
     {

@@ -498,6 +498,43 @@ below carries its current status and, where it has moved, the date it moved.
 | **P1-02** *(ACCEPTED 2 Sep 2026)* | **Phase 1 orchestration** — *reassigned 18 Sep 2026, see below* | The provider-wide Re-check limit, observed with two administrators | **OPEN / CARRIED / UNVERIFIED.** Needs a genuine second **permanent** System Administrator. **Do not create a fake privileged account to close it.** Automated evidence stands. It was carried to P1-05 and then to P1-06; both are now closed and the prerequisite still does not exist, so it belongs to no single unit |
 | **P1-04** *(ACCEPTED 3 Sep 2026)* | **P1-05** | **A DISABLED DOMAIN CAN NEVER BROADEN ACCESS** | **CLOSED 15 Sep 2026.** Observed by the Product Owner at section H of the P1-05 test script against real production data — `P1-05-ROLES-ACCESS-VERIFICATION.md` §10. P1-04 intentionally contained **no access engine**, so the failure was unreachable there and became reachable the moment P1-05 built effective access. All five cases below were run; they are kept as the historical required evidence |
 
+### Production session-driver alignment — **OPEN / CARRIED**, recorded 20 September 2026
+
+**Not a carried gate in the usual sense.** The four rows above defer a *live
+observation* a unit could not make. This one records a **deployment that has
+drifted from an approved target**, found while verifying P1-09 in production.
+
+| | |
+| --- | --- |
+| **Intended target** | **`SESSION_DRIVER=database`** — unchanged. `.env.example` declares it, and the P1-BASE design records it as the one place the baseline deliberately looks ahead |
+| **Current production** | **`file`**, established by read-only SSH verification — workflow `verify-session-store`, run `35453840140`. Configuration is not cached, so the value is live |
+| **Present P1-09 defect** | **NONE.** `SessionStoreCheck` supports a database round trip only, so *Staying signed in* correctly reads **Not checked**. The Product Owner accepted this and does **not** require the row to be made green |
+| **Migration** | **Already exists** — `0001_01_01_000000_create_sessions_table.php`. Nothing needs building to adopt the target |
+| **Why it was not fixed during P1-09** | Switching drivers **terminates every existing session**. That is a controlled deployment correction with its own gate, not a UI fix, and the `file` driver is functioning |
+| **Resolve by** | **Final Phase 1 acceptance**, together with confirmation of the required privilege-change / session-revocation behaviour |
+
+**DO NOT CLAIM SERVER-SIDE PER-USER SESSION REVOCATION IS IMPLEMENTED.** It is
+not. Established from the code, not assumed: the only two invalidations in the
+application are `$request->session()->invalidate()` — sign-out and the expiry
+middleware — and both act on the **viewer's own** session and work on any
+driver. Nothing reads `sessions.user_id`. The table was prepared for that
+control; the control does not exist yet.
+
+**What the drift does and does not cost today:** it breaks no delivered
+control, and file sessions survive deploys because `storage/` is excluded from
+rsync. It will matter the day per-user revocation is built, because on `file`
+that would **silently fail rather than error** — the worst of the three
+outcomes, and the reason this is carried rather than closed.
+
+**How it was found is worth keeping.** The claim *"`SESSION_DRIVER=database` on
+this deployment (verified)"* was written into the P1-09 DESIGN from
+`.env.example` — a repository file read and reported as deployment reality.
+Nothing was verified. It took a Product Owner looking at a real screen to catch
+it. `.env` is excluded from rsync, deliberately, so a value predating the
+baseline stays in force indefinitely and nothing else would have corrected it.
+
+---
+
 The first two were recorded in the P1-02 Product Owner test script §12 and were
 missing from this register — which is the exact way a carried gate gets quietly
 lost, and the reason this table exists. Added when P1-03 was delivered, and
@@ -506,6 +543,11 @@ closed by it the next day.
 **ONE PHASE 1 CARRIED VERIFICATION GATE REMAINS OPEN: the P1-02 provider-wide
 SSO Re-check.** The other three are closed — P1-01→P1-03 and P1-02→P1-03 on
 3 September 2026, and P1-04→P1-05 on 15 September 2026.
+
+**ONE PHASE 1 ALIGNMENT FINDING IS ALSO OPEN: the production session driver**,
+recorded above on 20 September 2026. It is listed separately because it is not
+a deferred observation — it is a deployment that has drifted from an approved
+target, and closing it requires a controlled deployment rather than a test.
 
 ### The P1-02 gate — reassigned to Phase 1 orchestration, 18 September 2026
 
