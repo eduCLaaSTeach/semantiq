@@ -7,8 +7,8 @@ claim as an observed production result, and nothing below is presented as one.
 | --- | --- |
 | Unit | **P1-10 — Platform Integrations & Setup** (delivery order 12) |
 | DESIGN | merge `a7aef47` — the six Product Owner corrections applied |
-| Suite | **1082 tests, 1076 passed, 0 failed, 0 errors** |
-| P1-10 cases | **62** under `tests/Feature/Setup`, plus **six** architecture files — `FirstRunRoutesDoNotCollide`, `BootstrapIsNotAUser`, `ConnectionTestsAreNotCapabilities`, `EveryCssTokenIsDeclared`, `OneStatusVocabulary`, `NoKeyRotationTooling` |
+| Suite | **1086 tests, 1080 passed, 0 failed, 0 errors** |
+| P1-10 cases | **62** under `tests/Feature/Setup`, plus **seven** architecture files — `FirstRunRoutesDoNotCollide`, `BootstrapIsNotAUser`, `ConnectionTestsAreNotCapabilities`, `EveryCssTokenIsDeclared`, `OneStatusVocabulary`, `NoKeyRotationTooling`, `IdentityHasOneSource` |
 | Diff | 90 files, ~+8,900 / −133 |
 | Status | **NOT DEPLOYED — awaiting Product Owner Gate C review** |
 
@@ -87,6 +87,15 @@ the writer's transaction. Found by the same guard, a second time.
 **`Hash::check` against the unusable sentinel RAISES** rather than returning
 false, so a closed principal would have produced a 500 with a stack trace
 instead of the generic refusal every other case gets.
+
+**Two guards the DESIGN names existed only in comments.**
+`NoDirectIdentityConfigRead` and `EnvIsNotIdentityAuthorityAfterCutover` were
+referenced in three code comments as though they were tests. They were not —
+found by walking the Gate C proof list against the code rather than against the
+document. Both are now written, and both are killed by mutation: a dotted key
+restored **inside an array** (the shape a call-shape guard misses) and a
+`?: config(…)` fallback on the store branch (the edit somebody makes in good
+faith).
 
 **Three pre-existing `var(--edge)` usages** in P1-05 and P1-08 code, found by a
 new CSS guard. An undefined custom property invalidates the whole declaration,

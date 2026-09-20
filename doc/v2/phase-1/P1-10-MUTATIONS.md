@@ -270,6 +270,53 @@ deployment does not have.
 
 ---
 
+## M-P10-11 and M-P10-12 — the two guards the DESIGN names — **both KILLED**
+
+**These two existed only in comments until the Gate C proof list was walked
+against the code.** Three separate code comments referenced
+`NoDirectIdentityConfigRead` and `EnvIsNotIdentityAuthorityAfterCutover` as
+though they were tests. **They were not.** A comment asserting a coverage that
+does not exist is worse than no comment, because the next reader believes it.
+
+**M-P10-11 — a direct identity read restored, in the ARRAY shape.**
+
+```php
+foreach (['MICROSOFT_TENANT_ID' => 'identity.microsoft.tenant_id'] as $name => $key) {
+    if ((string) config($key) === '') { … }
+}
+```
+
+Chosen deliberately: **this is the shape a call-shape guard misses**, and four
+of the eleven original reads looked exactly like it.
+
+```
+KILLED: test_only_the_configuration_source_names_the_identity_keys
+```
+
+**M-P10-12 — the "make it more robust" fallback.**
+
+```php
+tenantId: $this->string($stored, 'tenant_id') ?: (string) config('identity.microsoft.tenant_id'),
+```
+
+```
+KILLED: test_the_store_branch_reads_no_environment
+```
+
+**This is the edit somebody makes in good faith.** It looks like defensiveness
+and it is the two-authorities defect: the store is edited, the old `.env` value
+keeps working, everything looks correct, and nobody finds out until the `.env`
+secret expires — at which point the deployment breaks for a reason that has not
+been true for months.
+
+**Writing the guard also found a flaw in the guard.** The first version compared
+the iterator's path against reflection's with `===`; one is built from
+`__DIR__.'/../..'` and the other is absolute, so the comparison excluded
+nothing and the guard failed against the one file it exists to permit. Both
+sides now go through `realpath()`.
+
+---
+
 ## Flaws found in the TESTS, recorded rather than quietly fixed
 
 A mutation record that lists only code defects implies the tests were right
