@@ -36,6 +36,9 @@ Checks 1 to 7 look at the third. Check 8 confirms nothing else moved.
 | Deployment | **Deploy to cPanel (SSH)** run **154** — SUCCESS |
 | Suite at merge | **1176 tests, 1170 passed, 0 failures** |
 | Suite now | **1186 tests, 1180 passed, 0 failures** — ten cases added for the defect in §9.6 |
+| Follow-up merge | `27904cc` — PR #132: the §9.6 defect, the read-only production verification, and this script |
+| Follow-up CI / deploy | CI run **343**, deploy run **155** — SUCCESS, first attempt |
+| Production state verified | `Verify P1-10 Platform Setup state` run 1 and `Verify P1-02 identity state` run 4 — both SUCCESS |
 
 > Deploy run 154 needed a second attempt. The first attempt stopped at the
 > pre-flight identity check when the SSH connection to the server timed out.
@@ -180,7 +183,7 @@ the controlled cutover is a separate, scheduled exercise and this is not it.
 | 6.1 | Find the actions | There are **two**, named differently: **Test connection** and **Send test email** | |
 | 6.2 | Read what each one says it does | Test connection checks the mail server accepts the details **and sends nothing**. Send test email actually sends one | |
 | 6.3 | Look for somewhere to type who the test email goes to | **There is none.** No recipient box, no CC, no BCC, no subject, no message body | |
-| 6.4 | Read who it says it will go to | Your own address — the one you signed in with | |
+| 6.4 | Read who it says it will go to | It says so on the screen, in words: it sends one short message to **your own email address**, using the send-from address above, and **you cannot send it anywhere else** | |
 | 6.5 | Check the other three integrations | **Send test email appears on Email delivery only** | |
 
 > **Do not press Send test email** unless real, approved SMTP settings are
