@@ -125,12 +125,32 @@ final class FirstRunRoutesDoNotCollideTest extends TestCase
         $expected = [];
 
         foreach ($original as $route) {
-            if (str_starts_with($route->uri(), 'first-run')) {
-                $firstRun[] = $route;
+            if (! str_starts_with($route->uri(), 'first-run')) {
+                continue;
+            }
 
-                if (! str_contains($route->uri(), '{')) {
-                    $expected[$route->uri()] = $route->getName();
+            $firstRun[] = $route;
+
+            if (str_contains($route->uri(), '{')) {
+                continue;
+            }
+
+            /*
+             * KEYED ON METHOD AND URI, NOT URI ALONE.
+             *
+             * The first version keyed on the URI, so POST first-run/sign-in
+             * silently overwrote GET first-run/sign-in in the expectation map -
+             * and the case then asserted that a GET resolves to the POST's
+             * route name, which it never could. It failed for a reason with
+             * nothing to do with route collisions, which would have taught the
+             * next person to loosen the assertion rather than fix the key.
+             */
+            foreach ($route->methods() as $method) {
+                if (in_array($method, ['HEAD', 'OPTIONS'], true)) {
+                    continue;
                 }
+
+                $expected[$method.' '.$route->uri()] = $route->getName();
             }
         }
 
@@ -142,13 +162,15 @@ final class FirstRunRoutesDoNotCollideTest extends TestCase
             $reversed->add($route);
         }
 
-        foreach ($expected as $uri => $name) {
-            $matched = $this->matchIn($reversed, $uri);
+        foreach ($expected as $key => $name) {
+            [$method, $uri] = explode(' ', $key, 2);
+
+            $matched = $this->matchIn($reversed, $uri, $method);
 
             $this->assertSame(
                 $name,
                 $matched?->getName(),
-                "[{$uri}] resolved to [".($matched?->getName() ?? 'nothing').'] with the declaration '
+                "[{$key}] resolved to [".($matched?->getName() ?? 'nothing').'] with the declaration '
                 .'order reversed. It reaches its own controller only because of where it happens to '
                 .'be declared, which is not a guarantee.',
             );
@@ -195,9 +217,9 @@ final class FirstRunRoutesDoNotCollideTest extends TestCase
             .'describing a shape that does not exist and real grants will 404.');
     }
 
-    private function matchIn(RouteCollection $routes, string $uri): ?RoutingRoute
+    private function matchIn(RouteCollection $routes, string $uri, string $method = 'GET'): ?RoutingRoute
     {
-        $request = Request::create('/'.$uri, 'GET');
+        $request = Request::create('/'.$uri, $method);
 
         try {
             return $routes->match($request);

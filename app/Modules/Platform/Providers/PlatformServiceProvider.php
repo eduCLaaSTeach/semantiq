@@ -14,6 +14,8 @@ use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Identity\Microsoft\EntraDiscovery;
 use App\Modules\Platform\Identity\Microsoft\EntraProvider;
 use App\Modules\Platform\Identity\Microsoft\IdTokenValidator;
+use App\Modules\Platform\Setup\Console\CreateBootstrapAdministratorCommand;
+use App\Modules\Platform\Setup\Console\IssueBootstrapRecoveryCommand;
 use App\Modules\Platform\Setup\Identity\IdentityConfigurationSource;
 use App\Shared\Navigation\Contracts\NavigationAuthorizer;
 use App\Shared\Navigation\NavigationRegistry;
@@ -152,7 +154,16 @@ final class PlatformServiceProvider extends ServiceProvider
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([HealthCommand::class, IssueBootstrapGrantCommand::class, SessionPolicyCommand::class]);
+            $this->commands([
+                HealthCommand::class,
+                IssueBootstrapGrantCommand::class,
+                SessionPolicyCommand::class,
+                // P1-10. SSH only, both of them, and deliberately: one creates
+                // the pre-SSO credential that can complete First-Run, and the
+                // other is the ONLY thing that can reopen it once it closes.
+                CreateBootstrapAdministratorCommand::class,
+                IssueBootstrapRecoveryCommand::class,
+            ]);
         }
 
         // The Platform module still registers NO navigation nodes. P1-01

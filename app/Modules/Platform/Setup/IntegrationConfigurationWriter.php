@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Platform\Setup;
 
 use App\Modules\Identity\Health\IdentityHealthCheck;
+use App\Modules\Platform\Security\SecurityEventLogger;
 use App\Modules\Platform\Setup\Identity\IdentityConfigurationSource;
 use App\Modules\Platform\Setup\Models\IntegrationConfiguration;
 use App\Modules\Platform\Setup\Models\PlatformSetting;
@@ -44,6 +45,7 @@ final class IntegrationConfigurationWriter
     public function __construct(
         private readonly IntegrationSecretStore $secrets,
         private readonly IdentityConfigurationSource $identityConfiguration,
+        private readonly SecurityEventLogger $events,
     ) {}
 
     /**
@@ -54,6 +56,20 @@ final class IntegrationConfigurationWriter
      */
     public function save(IntegrationFamily $family, array $fields, array $secrets = [], ?int $actorId = null): void
     {
+        /*
+         * THE EVIDENCE IS RECORDED IN HERE, NOT BY THE CALLER.
+         *
+         * The first version left integration.configuration.changed in the
+         * controller, one line after this method returned - outside the
+         * transaction, so a failed audit write could not roll the configuration
+         * change back. P1-08's static atomicity guard caught it, which is
+         * precisely the case that guard exists for: nothing about the
+         * controller LOOKED wrong.
+         *
+         * Putting it here also means every caller gets it. A second surface -
+         * First-Run alongside Platform Integrations - cannot be the one that
+         * forgets, because there is nothing for it to remember.
+         */
         $this->assertFieldsAreAllowed($family, $fields);
         $this->assertSecretsAreAllowed($family, $secrets);
 
@@ -89,6 +105,15 @@ final class IntegrationConfigurationWriter
             if ($meaningful && $family === IntegrationFamily::Identity) {
                 $this->invalidateIdentityHealth();
             }
+
+            $this->events->record(SecurityEventLogger::INTEGRATION_CONFIGURATION_CHANGED, [
+                // The FAMILY, which is a configuration choice and not a
+                // credential. No host, no endpoint, no identifier, and no key
+                // in ALLOWED_KEYS that one could occupy.
+                'provider' => $family->value,
+                'user_id' => $actorId,
+                'result' => 'changed',
+            ]);
         });
 
         // AFTER the transaction commits, because a memoised value discarded

@@ -80,12 +80,13 @@ final class ConsoleNavigationTest extends TestCase
                 'Access Reviews' => '/console/access-reviews',
                 'Audit' => '/console/audit',
                 'System Health' => '/console/system-health',
+                'Integrations' => '/console/integrations',
             ],
             $this->reachable($areas),
-            'Something other than the nine delivered capabilities is reachable from the sidebar. '
+            'Something other than the ten delivered capabilities is reachable from the sidebar. '
             .'Organisation, Users & Groups, Roles & Access, Business Domains, Identity & SSO, '
-            .'Security Status, Access Reviews, Audit and System Health are what P1-01 to P1-09 '
-            .'delivered; every other entry is a roadmap label.'
+            .'Security Status, Access Reviews, Audit, System Health and Integrations are what '
+            .'P1-01 to P1-10 delivered; every other entry is a roadmap label.'
         );
     }
 
@@ -109,6 +110,7 @@ final class ConsoleNavigationTest extends TestCase
             'Access Reviews' => '/console/access-reviews',
             'Audit' => '/console/audit',
             'System Health' => '/console/system-health',
+            'Integrations' => '/console/integrations',
         ], $reachable);
 
         // And those hrefs actually serve their screens, rather than merely
@@ -154,14 +156,14 @@ final class ConsoleNavigationTest extends TestCase
         // The Product Owner states the roadmap as 43 entries. Asserted as a
         // number as well as a list, because the number is what gets quoted in a
         // status report and is therefore what gets quoted wrongly.
-        $this->assertCount(43, $this->flatten($areas), 'The roadmap is not 43 entries.');
+        $this->assertCount(44, $this->flatten($areas), 'The roadmap is not 44 entries.');
 
         $perArea = array_map(fn (array $area): int => count($this->flatten([$area])), $areas);
 
         $this->assertSame(
-            [19, 14, 10],
+            [19, 14, 11],
             $perArea,
-            'The per-area counts are not 19 Workplace, 14 Fabric, 10 System Administration.'
+            'The per-area counts are not 19 Workplace, 14 Fabric, 11 System Administration.'
         );
     }
 
@@ -179,13 +181,14 @@ final class ConsoleNavigationTest extends TestCase
 
         $inert = 0;
 
-        // P1-09 delivered System Health, so it is no longer a roadmap entry
-        // either. Every OTHER entry must still carry no route at all -
-        // Administration Home included, which stays locked until P1-10.
+        // P1-09 delivered System Health and P1-10 delivers Integrations, so
+        // neither is a roadmap entry any more. Every OTHER entry must still
+        // carry no route at all - Administration Home included, which is now
+        // P1-11 and stays locked.
         $delivered = [
             'Organisation', 'Users & Groups', 'Roles & Access', 'Business Domains',
             'Identity & SSO', 'Security Status', 'Access Reviews', 'Audit',
-            'System Health',
+            'System Health', 'Integrations',
         ];
 
         foreach ($this->flatten($areas) as $node) {
@@ -517,6 +520,9 @@ final class ConsoleNavigationTest extends TestCase
             'Access Reviews',
             'Audit',
             'System Health',
+            // P1-10. It sits last because it was added last; the order here is
+            // the approved order, not an alphabetical or thematic one.
+            'Integrations',
         ];
     }
 

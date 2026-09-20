@@ -958,7 +958,9 @@ button.shell-link:hover .icon { color: var(--accent); }
 /* The grant path a simulated decision came through. Indented under the answer
    because it is evidence FOR the answer, not a second answer. */
 .org-path {
-  border: 1px solid var(--edge);
+  /* CARRIED-IN DEFECT. See the note on .aud-filters: var(--edge) is declared
+     nowhere, so this evidence panel has been rendering with no border. */
+  border: 1px solid var(--card-border);
   border-radius: var(--radius-control);
   background: var(--card);
   padding: var(--space-3);
@@ -2829,7 +2831,14 @@ button.shell-link:hover .icon { color: var(--accent); }
   text-overflow: ellipsis;
   width: 100%;
   padding: var(--space-2);
-  border: 1px solid var(--edge);
+  /* CARRIED-IN DEFECT, found by EveryCssTokenIsDeclaredTest and fixed here.
+     This said var(--edge), which is declared nowhere. An undefined custom
+     property invalidates the WHOLE declaration at computed-value time, so
+     `border` fell back to its initial value - `medium none currentcolor` - and
+     these Audit filter controls have been rendering with NO BORDER at all. An
+     input with no border on a light card is close to invisible. It failed no
+     build, no test and no render, which is exactly why the guard exists. */
+  border: 1px solid var(--card-border);
   border-radius: var(--radius-control);
   background: var(--card);
   color: var(--text);
@@ -2852,7 +2861,10 @@ button.shell-link:hover .icon { color: var(--accent); }
 }
 
 .aud-row {
-  border: 1px solid var(--edge);
+  /* CARRIED-IN DEFECT. See the note on .aud-filters: this token is declared
+     nowhere, so every Audit row has been rendering with no border - the rows
+     run together as one block of text. */
+  border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
   background: var(--card);
   padding: var(--space-4);
@@ -3019,4 +3031,251 @@ button.shell-link:hover .icon { color: var(--accent); }
   background: transparent;
   color: var(--text-muted);
   border: 1px dashed var(--card-border-strong);
+}
+
+/* ---- P1-10 First-Run setup chrome ----------------------------------------
+   DELIBERATELY NOT THE APPLICATION SHELL. No rail, no product areas, no
+   organisation switcher. A setup surface that looks like the console invites
+   the assumption that the console is reachable from it - and the bootstrap
+   principal can reach no console route at all.
+
+   It is also deliberately not the .entry card: setup is a task with steps and
+   forms, and a 420px centred card would make every field a scroll. The two
+   share the brand mark and nothing else. */
+
+.setup {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+}
+
+.setup-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--divider);
+  background: var(--chrome);
+}
+
+.setup-mark { display: inline-flex; flex: 0 0 auto; }
+
+.setup-head-text { flex: 1 1 auto; min-width: 0; }
+
+.setup-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.setup-head h1 { font-size: 20px; margin: var(--space-1) 0 0; }
+
+.setup-lead {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.setup-head-actions { flex: 0 0 auto; }
+
+.setup-body {
+  flex: 1 1 auto;
+  display: flex;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  align-items: flex-start;
+}
+
+.setup-steps {
+  flex: 0 0 240px;
+  position: sticky;
+  top: var(--space-6);
+}
+
+.setup-steps-title {
+  margin: 0 0 var(--space-2);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.setup-steps ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.setup-step a {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  text-decoration: none;
+  color: inherit;
+}
+
+.setup-step a:hover { background: var(--surface-hover); }
+
+.setup-step a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.setup-step-current a {
+  background: var(--surface-hover);
+  border-color: var(--card-border);
+}
+
+.setup-step-name { display: block; font-size: 13px; font-weight: 500; }
+
+.setup-step-meta { display: block; font-size: 12px; color: var(--text-muted); }
+
+.setup-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 720px;
+}
+
+.setup-panel {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+}
+
+.setup-panel-emphasis { border-color: var(--accent); }
+
+.setup-panel h2 { font-size: 16px; margin: 0 0 var(--space-2); }
+
+.setup-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.setup-panel-head h2 { margin-bottom: var(--space-1); }
+
+.setup-description {
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.setup-meta, .setup-hint {
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.setup-note, .setup-confirmation {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  font-size: 13px;
+}
+
+.setup-warning {
+  margin: var(--space-3) 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.setup-error {
+  margin: var(--space-1) 0 0;
+  font-size: 12px;
+  color: var(--danger-fg);
+}
+
+.setup-list { list-style: none; margin: 0; padding: 0; }
+
+.setup-list-link {
+  display: block;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--divider);
+  text-decoration: none;
+  color: inherit;
+}
+
+.setup-list li:first-child .setup-list-link { border-top: 0; }
+
+.setup-list-link:hover .setup-list-name { text-decoration: underline; }
+
+.setup-list-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.setup-list-name { display: block; font-size: 14px; font-weight: 500; }
+
+.setup-list-meta { display: block; font-size: 12px; color: var(--text-muted); }
+
+.setup-form { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.setup-field { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.setup-field label { font-size: 13px; font-weight: 500; }
+
+.setup-field input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.setup-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.setup-form-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+.setup-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* The one-time handover link. It must be readable and selectable in full, and
+   it must WRAP: a 64-character token in a fixed-width box would be truncated
+   on a phone, and the administrator would copy a link that does not work. */
+.setup-handoff {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  user-select: all;
+}
+
+@media (max-width: 860px) {
+  .setup-body { flex-direction: column; padding: var(--space-4); gap: var(--space-4); }
+
+  .setup-steps { position: static; flex: 1 1 auto; width: 100%; }
+
+  .setup-steps ol { flex-direction: row; flex-wrap: wrap; }
+
+  .setup-step a { padding: var(--space-2); }
+
+  .setup-head { flex-wrap: wrap; padding: var(--space-4); gap: var(--space-3); }
+
+  .setup-main { max-width: none; }
 }

@@ -146,6 +146,20 @@ final class ApprovedMenu
             // which is shown to System Administrators only, so nothing is
             // widened.
             NavigationNode::leaf($area, 'System Health', 'i-heart-pulse', 'system-health.show', 'system-health.view'),
+            /*
+             * P1-10. NAVIGATION THAT EXISTS TECHNICALLY BUT NOBODY CAN FIND IS
+             * NOT DELIVERED - the last item on the professional-polish gate,
+             * and the one this project has missed before.
+             *
+             * "Integrations" rather than "Platform Integrations": the node
+             * already sits inside System Administration, so the qualifier
+             * would repeat the parent. PlatformAdmin, like System Health and
+             * Identity beside it, because these are deployment-wide
+             * credentials and not one organisation's. D-19 IS UNCHANGED -
+             * this node sits inside an area shown to System Administrators
+             * only, so nothing is widened.
+             */
+            NavigationNode::leaf($area, 'Integrations', 'i-plug', 'integrations.show', 'integrations.view'),
         ];
     }
 }

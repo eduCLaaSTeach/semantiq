@@ -31,6 +31,9 @@ use App\Modules\Platform\Http\Controllers\ConsoleController;
 use App\Modules\Platform\Http\Controllers\EntryController;
 use App\Modules\Platform\Http\Controllers\FirstRun\BeginController;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
+use App\Modules\Platform\Setup\Http\Controllers\FirstRunController;
+use App\Modules\Platform\Setup\Http\Controllers\IntegrationController;
+use App\Modules\Platform\Setup\Http\Middleware\RequireBootstrapSession;
 use App\Modules\Reviews\Http\Controllers\AccessReviewDecisionController;
 use App\Modules\Reviews\Http\Controllers\AccessReviewsController;
 use App\Modules\Security\Http\Controllers\BaselineController;
@@ -128,6 +131,58 @@ Route::prefix('first-run')->name('first_run.')->group(function (): void {
      * re-registered in REVERSE declaration order, so a test that passes only
      * because of ordering fails.
      */
+    /*
+     * P1-10. THE LOCAL SETUP SURFACE.
+     *
+     * Outside the `console` prefix and outside EnsureSessionIsCurrent, because
+     * that middleware resolves a User and the bootstrap principal is not one
+     * (D-166). RequireBootstrapSession sets `semantiq_bootstrap` instead, and
+     * the two attributes are disjoint: every console route reads
+     * `semantiq_user`, which a bootstrap request never carries.
+     *
+     * SIGN-IN AND RECOVERY SIT OUTSIDE THE GUARD, necessarily - they are how a
+     * bootstrap session is obtained in the first place.
+     */
+    Route::get('sign-in', [FirstRunController::class, 'signInForm'])->name('sign_in');
+    Route::post('sign-in', [FirstRunController::class, 'signIn'])->name('sign_in.submit');
+    Route::get('recover', [FirstRunController::class, 'recoverForm'])->name('recover');
+    Route::post('recover', [FirstRunController::class, 'recover'])->name('recover.submit');
+
+    Route::middleware(RequireBootstrapSession::class)->group(function (): void {
+        Route::post('sign-out', [FirstRunController::class, 'signOut'])->name('sign_out');
+
+        Route::get('/', [FirstRunController::class, 'overview'])->name('overview');
+
+        Route::get('first-administrator', [FirstRunController::class, 'nominateForm'])
+            ->name('first_administrator');
+        Route::post('first-administrator', [FirstRunController::class, 'nominate'])
+            ->name('first_administrator.submit');
+
+        Route::get('complete', [FirstRunController::class, 'complete'])->name('complete');
+
+        /*
+         * The four integration screens, by family.
+         *
+         * `{family}` is constrained to the four names IntegrationFamily
+         * declares. Without the constraint this would match `sign-in`,
+         * `recover`, `complete` and `first-administrator` too - the same
+         * collision class as the grant route above, one level down, and the
+         * reason FirstRunRoutesDoNotCollide reverses the declaration order
+         * rather than trusting it.
+         */
+        Route::get('integration/{family}', [FirstRunController::class, 'family'])
+            ->where('family', 'identity|email|ai|fabric')
+            ->name('integration');
+
+        Route::put('integration/{family}', [IntegrationController::class, 'update'])
+            ->where('family', 'identity|email|ai|fabric')
+            ->name('integration.update');
+
+        Route::post('integration/{family}/test', [IntegrationController::class, 'test'])
+            ->where('family', 'identity|email|ai|fabric')
+            ->name('integration.test');
+    });
+
     Route::get('{grant}', BeginController::class)
         ->where('grant', '[A-Za-z0-9]{64}')
         ->name('begin');
@@ -556,6 +611,40 @@ Route::prefix('console')
             ->name('system-health.')
             ->group(function (): void {
                 Route::get('/', [SystemHealthController::class, 'show'])->name('show');
+            });
+
+        /*
+         * P1-10. PLATFORM INTEGRATIONS - the same settings First-Run writes,
+         * after setup is over.
+         *
+         * PlatformAdmin, like System Health and Identity, and for the same
+         * reason: these are deployment-wide facts and credentials, not one
+         * organisation's. RequireOrganisation is deliberately absent - a
+         * deployment whose organisation is not configured yet is exactly when
+         * somebody needs this screen.
+         *
+         * It shares IntegrationController with First-Run on purpose. Two
+         * controllers would be two validation rules, two invalidation paths
+         * and two chances to forget one - and "saving" would come to mean
+         * something slightly different depending on which screen you were on.
+         *
+         * THERE IS NO REVEAL VERB HERE FOR ANY SECRET, and none anywhere in
+         * the route table. NoSecretRevealRouteExists asserts that as an
+         * equality rather than by naming the routes that do exist.
+         */
+        Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)
+            ->prefix('integrations')
+            ->name('integrations.')
+            ->group(function (): void {
+                Route::get('/', [IntegrationController::class, 'index'])->name('show');
+
+                Route::put('{family}', [IntegrationController::class, 'update'])
+                    ->where('family', 'identity|email|ai|fabric')
+                    ->name('update');
+
+                Route::post('{family}/test', [IntegrationController::class, 'test'])
+                    ->where('family', 'identity|email|ai|fabric')
+                    ->name('test');
             });
 
         Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)

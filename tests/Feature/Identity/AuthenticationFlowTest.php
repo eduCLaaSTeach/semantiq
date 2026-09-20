@@ -293,6 +293,7 @@ final class AuthenticationFlowTest extends TestCase
                 // reading whether the machine is working grants no business
                 // access and names no business record.
                 'System Health' => '/console/system-health',
+                'Integrations' => '/console/integrations',
                 // AND THE DUPLICATES ARE GONE. P1-09 found this array
                 // repeating 'Access Reviews' and 'Audit' - the very defect the
                 // comment a few lines up describes, repeated. PHP collapses a
