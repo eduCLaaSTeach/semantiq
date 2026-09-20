@@ -71,6 +71,18 @@ final class StepUpTest extends TestCase
      * Establishing one for the first time is deliberately NOT here: there is
      * nothing to take away, and requiring it would make First-Run
      * unsatisfiable on a deployment that has no Microsoft yet.
+     *
+     * GATE C ROUND 3 ADDS A TWELFTH: reconfigure_identity, P1-02's post-install
+     * change to Microsoft sign-in.
+     *
+     * It is a separate action rather than a reuse of replace_integration_secret
+     * for the reason P1-07 established when it refused to reuse the revoke
+     * actions - the completion handler must do something the others do not.
+     * Confirming a credential change APPLIES it; confirming an identity change
+     * must VERIFY the candidate against Microsoft first and apply it only if
+     * that answers. Routing it through the integration performer would activate
+     * an unverified directory and leave nobody able to sign in, with the
+     * evidence saying it succeeded.
      */
     public function test_the_step_up_action_catalogue_is_exactly_this(): void
     {
@@ -87,6 +99,7 @@ final class StepUpTest extends TestCase
                 'self_review',
                 'replace_integration_secret',
                 'remove_integration_secret',
+                'reconfigure_identity',
             ],
             array_map(static fn (StepUpAction $action): string => $action->value, StepUpAction::cases()),
         );

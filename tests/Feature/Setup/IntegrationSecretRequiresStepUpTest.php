@@ -16,9 +16,11 @@ use App\Modules\Platform\Setup\IntegrationConfigurationWriter;
 use App\Modules\Platform\Setup\IntegrationFamily;
 use App\Modules\Platform\Setup\Models\IntegrationConfiguration;
 use App\Modules\Platform\Setup\Secrets\IntegrationSecretStore;
+use App\Modules\Platform\Setup\Secrets\StagedChangeStore;
 use App\Modules\Platform\Setup\Secrets\StagedIntegrationChange;
 use App\Modules\SystemHealth\Report\HealthStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -211,8 +213,23 @@ final class IntegrationSecretRequiresStepUpTest extends TestCase
         $this->assertSame(HealthStatus::Available->value, $row->status);
     }
 
-    /** The non-secret fields ARE saved before the redirect, so nothing is retyped. */
-    public function test_the_non_secret_fields_survive_the_redirect(): void
+    /**
+     * THE NON-SECRET FIELDS ARE STAGED, NOT SAVED - Gate C round 3.
+     *
+     * THIS CASE USED TO ASSERT THE OPPOSITE, and the reasoning was wrong in
+     * both halves. It said the fields were "not the privileged part" and that
+     * discarding them would mean re-typing, so it saved them before the
+     * redirect - which meant a confirmed change could land in two pieces, and
+     * left the configuration holding a NEW HOST beside an OLD PASSWORD for as
+     * long as the administrator took at Microsoft. That is the exact mixed
+     * state a step-up exists to make unreachable.
+     *
+     * Both concerns are still met: nothing is re-typed, because the whole
+     * change is carried in the staged row and applied on return.
+     *
+     * Mutation: save the fields before staging, as the first version did.
+     */
+    public function test_the_typed_fields_are_staged_and_not_written_before_confirmation(): void
     {
         $this->givenEmailIsEstablished();
 
@@ -224,9 +241,58 @@ final class IntegrationSecretRequiresStepUpTest extends TestCase
 
         $row = IntegrationConfiguration::query()->where('family', 'email')->firstOrFail();
 
-        $this->assertSame('smtp.moved.example', $row->settings['host'],
-            'The typed fields were discarded on the way to Microsoft, so the administrator has to '
-            .'type them again when they come back.');
+        $this->assertSame('smtp.example.test', $row->settings['host'],
+            'THE NEW HOST WAS WRITTEN BEFORE ANYBODY CONFIRMED IT. Until the administrator comes '
+            .'back from Microsoft the deployment now holds the new destination beside the old '
+            .'credential - so the next connection test offers the saved password to a server '
+            .'nobody has authorised.');
+
+        // ...and it is not lost either. It is waiting in the staged row.
+        $staged = StagedIntegrationChange::query()->latest('id')->firstOrFail();
+
+        $this->assertSame(
+            StagedIntegrationChange::OPERATION_RECONFIGURE,
+            $staged->operation,
+            'A change carrying both a credential and a destination was staged as something other '
+            .'than a reconfiguration, so the two halves can be applied separately.',
+        );
+
+        $this->assertSame('smtp.moved.example', $staged->fields['host'] ?? null,
+            'The typed field was discarded on the way to Microsoft, so the administrator has to '
+            .'type it again when they come back.');
+    }
+
+    /**
+     * ...AND THE WHOLE CHANGE LANDS AT ONCE WHEN IT IS CONFIRMED.
+     *
+     * The other half of the same property. A staged reconfiguration that
+     * applied only its credential, or only its fields, would be the mixed
+     * state arriving a few seconds later instead.
+     */
+    public function test_a_confirmed_reconfiguration_applies_both_halves_together(): void
+    {
+        $this->givenEmailIsEstablished();
+
+        $this->actingAsAdministrator()
+            ->put('/console/integrations/email', [
+                'host' => 'smtp.moved.example',
+                'secret_password' => self::NEW_PASSWORD,
+            ]);
+
+        $staged = StagedIntegrationChange::query()->latest('id')->firstOrFail();
+
+        DB::transaction(function () use ($staged): void {
+            app(StagedChangeStore::class)->apply((int) $staged->getKey(), $this->admin->id);
+        });
+
+        $row = IntegrationConfiguration::query()->where('family', 'email')->firstOrFail();
+
+        $this->assertSame('smtp.moved.example', $row->settings['host']);
+        $this->assertSame(self::NEW_PASSWORD, app(IntegrationSecretStore::class)->get('email', 'password'));
+
+        // The stored result went with them: it described neither.
+        $this->assertSame(HealthStatus::NotChecked->value, $row->status);
+        $this->assertNull($row->last_tested_at);
     }
 
     /** A plain Test connection requires no step-up. It changes nothing. */

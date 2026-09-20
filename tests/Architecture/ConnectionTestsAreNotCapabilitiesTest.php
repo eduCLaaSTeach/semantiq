@@ -131,27 +131,73 @@ final class ConnectionTestsAreNotCapabilitiesTest extends TestCase
     }
 
     /**
-     * T4. THE TEST MESSAGE HAS NOWHERE TO PUT A RECIPIENT.
+     * T4. NOTHING HERE TAKES A RECIPIENT FROM A REQUEST.
      *
-     * Mutation: accept a `to` field so somebody can "check it arrives". A test
-     * that can be pointed at an address is an open relay wearing a diagnostic's
-     * clothes, and it sends from the deployment's own domain.
+     * THE RULE USED TO BE "no class in this module may name `->to(` at all",
+     * and that was enforceable while nothing was ever sent. D-153 requires ONE
+     * message to be sent, so a blanket ban now forbids the approved behaviour -
+     * and the thing being protected was never "no addressing". It was "no
+     * address somebody outside can choose".
+     *
+     * SO THE CLAIM SPLITS IN TWO, and both halves are stronger than the ban:
+     *
+     *   1. NO class may name a request-shaped recipient key. `to`, `recipient`,
+     *      `cc`, `bcc` and Mail::to() are forbidden EVERYWHERE, including in
+     *      the sender, because that is the open-relay shape.
+     *   2. Exactly ONE class may address a message, exactly once, and never to
+     *      more than one address.
+     *
+     * Mutation: add a second `->to(`, a `->cc(`, or read `'to'` from a request.
      */
     public function test_t4_no_test_request_carries_a_recipient(): void
     {
-        $forbidden = ["'to'", '"to"', "'recipient'", '->to(', 'Mail::to'];
+        $requestShaped = ["'to'", '"to"', "'recipient'", "'cc'", "'bcc'", 'Mail::to'];
+
+        $addressers = [];
 
         foreach ($this->moduleSources() as $path => $source) {
-            foreach ($forbidden as $needle) {
+            foreach ($requestShaped as $needle) {
                 $this->assertStringNotContainsString(
                     $needle,
                     $source,
-                    basename($path)." names [{$needle}]. There is deliberately no recipient field: "
-                    .'the optional test message goes to the signed-in principal, resolved '
-                    .'server-side, and no parameter changes that.',
+                    basename($path)." names [{$needle}]. A recipient that can be named in a "
+                    .'request is an open relay wearing a diagnostic\'s clothes: it sends from the '
+                    .'deployment\'s own domain, through its own authenticated server, to anywhere.',
                 );
             }
+
+            foreach (['->cc(', '->bcc(', '->addTo(', '->addCc(', '->addBcc('] as $extra) {
+                $this->assertStringNotContainsString(
+                    $extra,
+                    $source,
+                    basename($path)." names [{$extra}], so one message can reach an address "
+                    .'nobody chose deliberately.',
+                );
+            }
+
+            if (! str_contains($source, '->to(')) {
+                continue;
+            }
+
+            $addressers[] = basename($path);
+
+            $this->assertSame(
+                1,
+                substr_count($source, '->to('),
+                basename($path).' addresses a message more than once. One test message reaches '
+                .'one address - the signed-in principal\'s own.',
+            );
         }
+
+        sort($addressers);
+
+        $this->assertSame(
+            ['TestEmailSender.php'],
+            $addressers,
+            'The set of classes that address an email has changed. D-153 permits exactly one, and '
+            .'its recipient comes from its own parameter - which TestEmailGoesOnlyToThePrincipal '
+            .'pins by reflection and by driving every request shape somebody would try.',
+        );
     }
 
     /**

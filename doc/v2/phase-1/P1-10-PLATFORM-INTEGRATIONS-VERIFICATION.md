@@ -7,12 +7,13 @@ claim as an observed production result, and nothing below is presented as one.
 | --- | --- |
 | Unit | **P1-10 — Platform Integrations & Setup** (delivery order 12) |
 | DESIGN | merge `a7aef47` — the six Product Owner corrections applied |
-| Suite | **1137 tests, 1131 passed, 0 failed, 0 errors** (6 skipped, 1 risky — all pre-existing) |
+| Suite | **1176 tests, 1170 passed, 0 failed, 0 errors** (6 skipped, 1 risky — all pre-existing) |
 | P1-10 cases | **105** under `tests/Feature/Setup`, plus **nine** architecture files — `FirstRunRoutesDoNotCollide`, `BootstrapIsNotAUser`, `ConnectionTestsAreNotCapabilities`, `EveryCssTokenIsDeclared`, `OneStatusVocabulary`, `NoKeyRotationTooling`, `IdentityHasOneSource`, `IdentityIsNotWritableOnTheConsole`, `OneSecretPerFamily` |
 | Status | **NOT DEPLOYED — awaiting Product Owner Gate C review** |
 
-**§8 records the four Gate C corrections.** Sections 1–7 describe the state at
-the first Gate C submission and are left as written.
+**§8 records Gate C round 2's four corrections; §10–§12 record round 3's three,
+and the six-table schema amendment.** Sections 1–7 describe the state at the
+first Gate C submission and are left as written.
 
 ---
 
@@ -423,3 +424,221 @@ administrator (console) and one without (First-Run still open).
 | A real Microsoft step-up round trip for a credential replacement | It needs a live Entra tenant. The redirect, the staged row, the single-use consumption and the refusal paths are covered by automated cases; **the completed round trip is carried to live observation** |
 | The 30-minute and 4-hour expiries in a real browser session | Observing them means waiting 30 minutes and 4 hours. The boundaries are asserted at 29 m 59 s / 30 m and 3 h 59 m / 4 h with a travelled clock |
 | Any connection test against a real mail, AI or Fabric endpoint | No real credentials were created, per the Product Owner's instruction |
+
+---
+
+## 10. DESIGN AMENDMENT RECORD — the schema is six tables, not five
+
+The approved DESIGN described **five** tables. The implementation has **six**.
+This section states the difference, and why, rather than leaving the document
+and the database disagreeing.
+
+### The five the DESIGN approved
+
+| Table | What it holds |
+| --- | --- |
+| `platform_settings` | the singleton row: identity authority, revision, cutover timestamps |
+| `integration_configurations` | one row per family: the typed non-secret fields, status, explanation, last-tested and last-changed |
+| `integration_secrets` | one row per named secret: ciphertext, key version, who changed it and when |
+| `bootstrap_administrators` | the local setup principal: email, password hash, closure flag |
+| `bootstrap_recovery_tokens` | single-use tokens that reopen a closed bootstrap session |
+
+### The sixth, added at Gate C round 2
+
+| Table | What it holds |
+| --- | --- |
+| `staged_integration_changes` | a privileged change held between "the administrator asked" and "Microsoft confirmed it was really them" |
+
+**It exists because D-159 requires a round trip.** Replacing a credential needs
+step-up; step-up means leaving for Microsoft and coming back; and the new
+credential has to survive that. Every place it could have been kept is worse:
+
+| Considered | Why not |
+| --- | --- |
+| the session | the session store on this deployment **is a database table**, so this puts a plaintext credential in a row that is not the credential store, with none of its protections |
+| `pending_step_ups` | P1-05's privileged-action table. Its columns are structural and safe to read; a secret there makes every listing of pending confirmations one careless select away from rendering one |
+| the URL | in the access log, the referrer header and browser history before anybody decides how to store it |
+| ask again on return | a credential typed twice, and a confirmation screen that becomes a second thing worth phishing |
+
+So it is **encrypted, short-lived (10 minutes), single-use**, in a table whose
+only job is this. The step-up row carries only an opaque id, through the
+`subject_type` / `subject_id` seam P1-07 established.
+
+### The one column added at Gate C round 3
+
+`staged_integration_changes.fields` — a nullable JSON column, and the
+`reconfigure` operation that uses it.
+
+**Why a column and not a seventh table.** Correction 2 required that changing a
+credential's DESTINATION be staged too, and that nothing be written before the
+confirmation. What is being staged is *one privileged change to one family*,
+and it already has a row here. Splitting the fields into a table of their own
+would make "the whole change" something the completion handler reassembles from
+two places — and a partial apply is precisely the mixed old-secret /
+new-destination state the correction exists to prevent.
+
+`fields` is **not encrypted, deliberately**: a host, a port and a directory
+identifier are values the administrator typed and can see on the screen they
+typed them into. Encrypting them would imply a protection the screen itself
+does not offer, and would route non-secret data through the one decryption path
+that exists to stay small and auditable.
+
+**The same row now serves P1-02's identity change** (correction 1) rather than
+a seventh table for that. An identity reconfiguration is a staged privileged
+change with an encrypted payload and some non-secret fields, which is what this
+row already is.
+
+### What did NOT change
+
+No table was added for the test email (D-153) — it stores nothing. No table was
+added for the post-install SSO change. **`ALLOWED_KEYS` remains 15.** The audit
+tables are P1-08's and are untouched.
+
+---
+
+## 11. Gate C round 3 — three product and security gaps closed
+
+### Correction 1 — Microsoft sign-in is manageable after installation
+
+**The gap.** First-Run could establish an identity configuration. After
+installation the Entra screen was read-only and said so: *"These are set on the
+server. They cannot be changed from this screen."* A customer whose Entra client
+secret expired — which they all do — had no route back except SSH, which is the
+thing this unit exists to remove. The Product Owner's requirement — *the
+customer can set up and manage SSO through SemantIQ* — was met during setup and
+nowhere else.
+
+**P1-02 remains the sole owner.** Platform Integrations still has no identity
+write route; it shows a summary and links here. What changed is that here now
+has somewhere to link to:
+
+```
+Integrations → Manage Identity & SSO → Microsoft Entra ID
+    → Change configuration → Microsoft step-up
+    → verify the candidate → atomic activation
+```
+
+**Verify, then activate — never the other way round.** This is the only
+configuration in SemantIQ whose failure locks everybody out of the deployment
+that holds it, including whoever broke it. So:
+
+| Claim | Evidence |
+| --- | --- |
+| An edit without step-up changes nothing | redirect to `/console/access/step-up/`; the live directory is unchanged |
+| The candidate is verified before anything is written | `ProviderProbe` runs on the staged candidate, through its own discovery client and cache namespace, so it cannot pass by reading what a previous sign-in cached nor poison live trust |
+| **A failed candidate probe leaves the old SSO active** | `test_a_failed_candidate_probe_leaves_the_old_configuration_active` — directory *and* secret unchanged |
+| A failed or expired step-up applies nothing | the staged row is consumed by a conditional UPDATE whose guard is in the `WHERE`; an expired one returns `false` |
+| One confirmation applies exactly once | a second `activate()` on the same row returns `false` |
+| The secret never reaches React, the session, Audit or the log | the change screen's box is bound to its own empty form state; `secretIsSet` is a boolean; the step-up row carries an id |
+| P1-09's old identity health does not survive | the revision increments, so the previous directory's cached result is unreadable |
+| **A required field cannot be partially cleared while SSO is in use** | refused before anything is staged, in both the `null` and literal-`''` shapes |
+| Platform Integrations still contains no Identity edit form | props assertion plus the route-constraint equality |
+
+### Correction 2 — D-159 protects the destination, not only the secret
+
+**The gap, in one sequence:**
+
+```
+the SMTP password is already saved
+  → somebody changes only the mail server address
+  → the password is untouched, so nothing is privileged
+  → the change saves immediately
+  → the next test or send offers that password to a host they chose
+```
+
+Nothing was stolen and nothing was replaced. The credential was handed
+somewhere new. The same shape existed for the AI endpoint and the Fabric
+directory and application.
+
+**`IntegrationFamily::destinationFields()`** now names them in the type:
+
+| Family | Privileged once a credential exists |
+| --- | --- |
+| Email | `host`, `port`, `encryption`, `username` |
+| AI | `provider`, `endpoint`, `deployment` |
+| Fabric | `tenant_id`, `client_id`, `workspace_id` |
+| Identity | *(none — correction 1 owns it)* |
+
+`from_address` and `from_name` are deliberately absent: they are display
+identity, and changing them cannot cause the stored password to be offered to a
+different server.
+
+**Nothing is saved before the confirmation.** The whole change is staged —
+fields and secret together — and applied in one transaction, so the live
+configuration never holds a new destination beside an old credential. The
+previous behaviour saved the fields immediately on the reasoning that they were
+"not the privileged part"; both halves of that were wrong, and the test that
+asserted it has been rewritten to assert the opposite.
+
+**A change is privileged only when it actually changes something.** Re-submitting
+the same values, or editing a display field, saves directly — a confirmation
+people meet for no reason is one they learn to click through.
+
+### Correction 3 — D-153 send test email
+
+**The gap.** `EmailConnectionTester` proved the server accepts the credentials.
+It proved nothing about whether the server will accept a *message* from the
+configured send-from address, which is a different permission and the one that
+actually fails in production. D-153 was documented and not delivered.
+
+| Claim | Evidence |
+| --- | --- |
+| **The recipient is the authenticated principal, server-side** | System Administrator → their own address; Bootstrap Administrator → the configured setup address |
+| **The request cannot redirect it** | eight payload shapes (`to`, `recipient`, `email`, `address`, `cc`, `bcc`, an array, a custom subject/body) all leave the recipient unchanged |
+| ...and the signature makes it unrepresentable | `send()` takes one `string $recipient` and nothing else; subject and body are class constants; no `cc`, `bcc` or second `to` anywhere in the module |
+| The configured From identity is used | a missing send-from address is refused rather than falling back to the SMTP username |
+| An SMTP refusal is reported safely | one of the sender's own declared sentences; the provider's message is inspected for shape and discarded |
+| One per administrator per minute | a second attempt inside the minute is refused; it releases after 61 seconds |
+| The evidence carries no address | the family and the outcome only |
+| No other integration can send anything | there is no route for one |
+
+**The screen was corrected too:** *"Testing … does not send anything"* now names
+**Test connection** explicitly, because it sat two inches above a button that
+sends an email.
+
+---
+
+## 12. Gate C round 3 — browser verification
+
+Chromium via Playwright, **1440×1000 light** and **390×844 dark**, against a
+locally served build of this branch.
+
+| Observation | 1440 light | 390 dark |
+| --- | --- | --- |
+| Horizontal overflow, all four screens | none | none |
+| Identity read screen — inputs | **0** | **0** |
+| Identity read screen — `Change configuration` link | present | present |
+| Stale "cannot be changed from this screen" wording | **gone** | **gone** |
+| Change screen — directory pre-filled | yes | yes |
+| Change screen — client secret box | `type=password`, **empty**, "Saved — leave blank to keep it" | same |
+| Change screen — the four-step notice above the fields | present | present |
+| Focus ring, every visible control | `2px` | `2px` |
+| Send test email block | on **Email only** | on **Email only** |
+| Send test email — recipient/subject/body inputs | **0** | **0** |
+| "does not send anything" sentence | scoped to **Test connection** | same |
+| First-Run send control | present, 0 inputs | present, 0 inputs |
+| Raw keys or enum values on screen | none | none |
+| Any saved secret in the page source | **none** | **none** |
+| Browser console errors | **none** | **none** |
+
+**Three defects were found by looking and fixed** — the contradicting page
+description, the flashed refusal that would never have rendered, and the
+"does not send anything" sentence sitting above a send button. None of them was
+caught by a test, and the first two would have been invisible until a customer
+hit them.
+
+**A fourth observation was investigated and is NOT a defect.** At 390px three
+navigation buttons report no focus ring. They are `.shell-area-label` elements
+in the **collapsed** rail — `getBoundingClientRect()` reports them as not
+rendered — and they behave identically on System Health, a screen this unit
+never touched. It is pre-existing AppShell behaviour on hidden elements, not a
+reachable control without a focus indicator.
+
+### What was NOT done, by instruction
+
+| Not done | Why |
+| --- | --- |
+| The production SSO cutover | explicitly held by the Product Owner |
+| A real test email from production | explicitly held; the send path is exercised against a faked transport, so what is proven is **which address SemantIQ would send to**, not that SMTP works |
+| Real AI or Fabric credentials | explicitly held |
+| The completed Microsoft step-up round trip | needs a live Entra tenant. The redirect, the staging, the single-use consumption, the verification and every refusal path are covered automatically; **the live round trip is carried forward** |

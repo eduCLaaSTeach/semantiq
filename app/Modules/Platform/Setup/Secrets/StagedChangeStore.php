@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Setup\Secrets;
 
+use App\Modules\Platform\Setup\IntegrationConfigurationWriter;
 use App\Modules\Platform\Setup\IntegrationFamily;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -49,7 +50,10 @@ final class StagedChangeStore
      */
     private const LIFETIME_MINUTES = 10;
 
-    public function __construct(private readonly IntegrationSecretStore $secrets) {}
+    public function __construct(
+        private readonly IntegrationSecretStore $secrets,
+        private readonly IntegrationConfigurationWriter $configuration,
+    ) {}
 
     /**
      * Stage a replacement. Returns the row id, which is what travels in the
@@ -68,6 +72,50 @@ final class StagedChangeStore
             'secret_name' => $name,
             'operation' => StagedIntegrationChange::OPERATION_REPLACE,
             'ciphertext' => Crypt::encryptString($value),
+            'requested_by_user_id' => $actorId,
+            'expires_at' => now()->addMinutes(self::LIFETIME_MINUTES),
+        ])->getKey();
+    }
+
+    /**
+     * Stage a WHOLE privileged change - Gate C round 3.
+     *
+     * Fields, a secret, or both, applied together or not at all. This is what
+     * stops the live configuration ever holding a new destination beside an old
+     * credential: there is no moment at which half of this has been written,
+     * because the caller stages everything and writes nothing until the
+     * confirmation comes back.
+     *
+     * @param  array<string, scalar|null>  $fields
+     */
+    public function stageReconfiguration(
+        IntegrationFamily $family,
+        array $fields,
+        ?string $secretName,
+        ?string $secretValue,
+        int $actorId,
+    ): int {
+        if ($secretName !== null) {
+            $this->assertSecretIsAllowed($family, $secretName);
+        }
+
+        foreach (array_keys($fields) as $name) {
+            if (! in_array((string) $name, $family->fields(), true)) {
+                throw new InvalidArgumentException(
+                    sprintf('[%s] has no field [%s].', $family->value, (string) $name),
+                );
+            }
+        }
+
+        return (int) StagedIntegrationChange::query()->create([
+            'family' => $family->value,
+            // A reconfiguration need not name a secret at all. The column is
+            // not nullable, and an empty string is the honest reading of
+            // "this change is about the destination".
+            'secret_name' => $secretName ?? '',
+            'operation' => StagedIntegrationChange::OPERATION_RECONFIGURE,
+            'ciphertext' => $secretValue === null ? null : Crypt::encryptString($secretValue),
+            'fields' => $fields,
             'requested_by_user_id' => $actorId,
             'expires_at' => now()->addMinutes(self::LIFETIME_MINUTES),
         ])->getKey();
@@ -96,7 +144,7 @@ final class StagedChangeStore
      * means it was consumed, expired or never existed, and the caller's
      * transaction - including the step-up consumption - rolls back with it.
      *
-     * @return array{family: IntegrationFamily, name: string, operation: string}|null
+     * @return array{family: IntegrationFamily, name: string, operation: string, fieldsApplied: bool}|null
      */
     public function apply(int $stagedId, ?int $actorId = null): ?array
     {
@@ -126,9 +174,39 @@ final class StagedChangeStore
         }
 
         $family = IntegrationFamily::from($staged->family);
+        $fieldsApplied = false;
 
         if ($staged->operation === StagedIntegrationChange::OPERATION_REMOVE) {
             $this->secrets->forget($family->value, $staged->secret_name);
+        } elseif ($staged->operation === StagedIntegrationChange::OPERATION_RECONFIGURE) {
+            /*
+             * FIELDS AND SECRET TOGETHER, INSIDE THE CALLER'S TRANSACTION.
+             *
+             * The order is deliberate: if the secret cannot be decrypted the
+             * whole thing returns null and the caller rolls back, so the
+             * fields do not land on their own. That is the mixed
+             * old-secret / new-destination state this design exists to make
+             * unreachable.
+             */
+            if (is_string($staged->ciphertext) && $staged->ciphertext !== '') {
+                $adopted = $this->secrets->adoptStaged(
+                    $family->value,
+                    $staged->secret_name,
+                    $staged->ciphertext,
+                    $actorId,
+                );
+
+                if (! $adopted) {
+                    return null;
+                }
+            }
+
+            $fields = is_array($staged->fields) ? $staged->fields : [];
+
+            if ($fields !== []) {
+                $this->configuration->applyFields($family, $fields, $actorId);
+                $fieldsApplied = true;
+            }
         } elseif (! is_string($staged->ciphertext) || $staged->ciphertext === '') {
             // A staged replacement with no payload is not a replacement.
             return null;
@@ -172,6 +250,7 @@ final class StagedChangeStore
             'family' => $family,
             'name' => $staged->secret_name,
             'operation' => $staged->operation,
+            'fieldsApplied' => $fieldsApplied,
         ];
     }
 

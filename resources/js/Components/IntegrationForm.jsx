@@ -25,6 +25,7 @@ export default function IntegrationForm({
     updateUrl,
     testUrl,
     removeUrlFor,
+    sendTestUrl,
     reconfirm = false,
 }) {
     const initial = {}
@@ -44,6 +45,7 @@ export default function IntegrationForm({
     const form = useForm(initial)
     const test = useForm({})
     const removal = useForm(reconfirm ? { password: '' } : {})
+    const testEmail = useForm({})
 
     // WHICH CREDENTIAL THE ADMINISTRATOR HAS ASKED TO REMOVE, if any. Removal
     // is never one click: the confirmation says which credential, by name, and
@@ -58,6 +60,19 @@ export default function IntegrationForm({
     const runTest = (event) => {
         event.preventDefault()
         test.post(testUrl, { preserveScroll: true })
+    }
+
+    /*
+     * D-153. THERE IS NO RECIPIENT TO COLLECT, so there is nothing to submit.
+     *
+     * The message goes to the address of whoever is signed in, resolved on the
+     * server. A recipient box here would be the entire defect: it would turn a
+     * diagnostic into a way of sending mail from the deployment's own domain to
+     * anywhere.
+     */
+    const sendTestEmail = (event) => {
+        event.preventDefault()
+        testEmail.post(sendTestUrl, { preserveScroll: true })
     }
 
     /*
@@ -235,11 +250,61 @@ export default function IntegrationForm({
                     </p>
                 ) : null}
 
+                {/*
+                 * THIS SENTENCE DESCRIBES Test connection AND MUST NOT BE READ
+                 * AS COVERING Send test email.
+                 *
+                 * "It does not send anything" was true of every action on this
+                 * card until D-153 arrived. Leaving it where it was would have
+                 * made the screen say, two inches above a button that sends an
+                 * email, that nothing is sent. So it is tied to the control it
+                 * describes, and the sending action carries its own.
+                 */}
                 <p className="setup-hint">
-                    Testing checks that SemantIQ can reach this service with the details entered. It
-                    does not send anything, read any data or change anything.
+                    <strong>Test connection</strong> checks that SemantIQ can reach this service
+                    with the details entered. It does not send anything, read any data or change
+                    anything.
                 </p>
             </form>
+
+            {/*
+             * D-153. SEND TEST EMAIL - a separate action, and only for Email.
+             *
+             * Test connection proves the server accepts the username and
+             * password. This proves it accepts a MESSAGE from the configured
+             * send-from address, which is a different permission and the one
+             * that actually fails in production.
+             *
+             * THERE IS NO RECIPIENT FIELD, and the screen says where the
+             * message goes rather than leaving the reader to wonder.
+             */}
+            {sendTestUrl ? (
+                <div className="setup-send-test">
+                    <h3>Send a test email</h3>
+
+                    <p className="setup-hint">
+                        Sends one short message to your own email address, using the send-from
+                        address entered above. You cannot send it anywhere else.
+                    </p>
+
+                    <div className="setup-form-actions">
+                        <button
+                            type="button"
+                            className="org-action org-action-quiet"
+                            onClick={sendTestEmail}
+                            disabled={testEmail.processing}
+                        >
+                            {testEmail.processing ? 'Sending…' : 'Send test email'}
+                        </button>
+                    </div>
+
+                    {testEmail.errors.test ? (
+                        <p className="setup-error" role="alert">
+                            {testEmail.errors.test}
+                        </p>
+                    ) : null}
+                </div>
+            ) : null}
 
             {/*
              * SAVED CREDENTIALS — Gate C correction 4B.

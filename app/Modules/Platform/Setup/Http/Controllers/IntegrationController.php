@@ -10,6 +10,7 @@ use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Security\SecurityEventLogger;
 use App\Modules\Platform\Setup\Bootstrap\BootstrapReconfirmation;
 use App\Modules\Platform\Setup\Connections\ConnectionTesterRegistry;
+use App\Modules\Platform\Setup\Connections\SendsTestEmail;
 use App\Modules\Platform\Setup\IntegrationConfigurationWriter;
 use App\Modules\Platform\Setup\IntegrationFamily;
 use App\Modules\Platform\Setup\Secrets\IntegrationSecretStore;
@@ -55,6 +56,7 @@ final class IntegrationController
         private readonly StepUpService $stepUp,
         private readonly BootstrapReconfirmation $reconfirmation,
         private readonly IntegrationSecretStore $secrets,
+        private readonly SendsTestEmail $testEmail,
     ) {}
 
     /**
@@ -135,19 +137,26 @@ final class IntegrationController
         }
 
         /*
-         * D-159. REPLACING AN ESTABLISHED CREDENTIAL NEEDS A FRESH SIGN-IN.
+         * D-159, AS WIDENED BY GATE C ROUND 3.
          *
-         * Establishing one for the first time does not: there is nothing to
-         * take away, and the administrator already holds PlatformAdmin.
-         * IntegrationChangeAuthority answers that question in one place, so
-         * this surface and First-Run cannot come to disagree about it.
+         * Once a credential exists, THREE kinds of change are privileged:
+         * replacing it, removing it, and MOVING WHERE IT IS SENT. The third is
+         * the one the first version missed, and it is the dangerous one,
+         * because it needs no credential at all:
          *
-         * THE NON-SECRET FIELDS ARE SAVED EITHER WAY, BEFORE THE REDIRECT.
-         * Sending somebody to Microsoft and discarding the host and port they
-         * had just typed would mean re-typing them on return, and the fields
-         * are not the privileged part - the credential is.
+         *   the SMTP password is saved
+         *     -> change only the mail server address
+         *     -> nothing asks who is asking
+         *     -> the next test hands that password to the new host.
+         *
+         * IntegrationChangeAuthority answers all three in one place, so this
+         * surface and First-Run cannot come to disagree about any of them.
          */
-        $partition = $this->authority->partition($resolved, $secrets);
+        $partition = $this->authority->partition($resolved, $secrets, [], $fields);
+
+        $privileged = $partition['replace'] !== []
+            || $partition['remove'] !== []
+            || $partition['destination'] !== [];
 
         /*
          * D-159, THE BOOTSTRAP HALF.
@@ -162,7 +171,7 @@ final class IntegrationController
          * privileged.
          */
         if ($this->isBootstrapRequest($request)) {
-            if ($partition['replace'] !== [] || $partition['remove'] !== []) {
+            if ($privileged) {
                 if (! $this->reconfirmation->confirms($request, $request->input('password'))) {
                     throw ValidationException::withMessages([
                         'password' => 'That password was not accepted.',
@@ -178,24 +187,78 @@ final class IntegrationController
             return back()->with('confirmation', $resolved->inWords().' settings saved.');
         }
 
-        $this->writer->save(
-            $resolved,
-            $fields,
-            // Only the secrets being ESTABLISHED go straight through.
-            $partition['establish'],
-            $this->actorId($request),
-        );
-
-        if ($partition['replace'] !== []) {
-            return $this->confirmThroughMicrosoft(
-                $request,
-                $resolved,
-                StepUpAction::ReplaceIntegrationSecret,
-                $partition['replace'],
-            );
+        if ($privileged) {
+            /*
+             * NOTHING IS WRITTEN BEFORE THE CONFIRMATION - the correction.
+             *
+             * The first version saved the non-secret fields immediately,
+             * reasoning that they were not the privileged part and that
+             * discarding them would mean re-typing. Both halves were wrong:
+             * the destination IS a privileged part, and writing it before the
+             * confirmation is exactly how the configuration comes to hold a
+             * new host beside an old password - the mixed state a step-up is
+             * supposed to make unreachable.
+             *
+             * THE WHOLE CHANGE IS STAGED, including the fields that are not
+             * themselves privileged. Applying an unprivileged field now and a
+             * privileged one later would leave the form showing a save that
+             * half happened.
+             */
+            return $this->confirmReconfiguration($request, $resolved, $fields, $partition);
         }
 
+        $this->writer->save($resolved, $fields, $partition['establish'], $this->actorId($request));
+
         return back()->with('confirmation', $resolved->inWords().' settings saved.');
+    }
+
+    /**
+     * Stage a whole privileged change and send the administrator to Microsoft.
+     *
+     * @param  array<string, scalar|null>  $fields
+     * @param  array{replace: array<string, string>, remove: list<string>, establish: array<string, string>, destination: array<string, scalar|null>, ordinary: array<string, scalar|null>}  $partition
+     */
+    private function confirmReconfiguration(
+        Request $request,
+        IntegrationFamily $family,
+        array $fields,
+        array $partition,
+    ): RedirectResponse {
+        $actorId = $this->actorId($request);
+
+        if ($actorId === null) {
+            throw ValidationException::withMessages([
+                'family' => 'That change cannot be confirmed from here.',
+            ]);
+        }
+
+        // A removal arriving through update() is not a thing the form can ask
+        // for - removal has its own verb - so this path never carries one.
+        $replace = $partition['replace'] + $partition['establish'];
+
+        if (count($replace) > 1) {
+            throw ValidationException::withMessages([
+                'family' => 'Only one credential can be confirmed at a time.',
+            ]);
+        }
+
+        $secretName = $replace === [] ? null : (string) array_key_first($replace);
+        $secretValue = $replace === [] ? null : (string) reset($replace);
+
+        $stagedId = $this->staged->stageReconfiguration(
+            $family,
+            $fields,
+            $secretName,
+            $secretValue,
+            $actorId,
+        );
+
+        return $this->beginStepUp(
+            $request,
+            $family,
+            StepUpAction::ReplaceIntegrationSecret,
+            $stagedId,
+        );
     }
 
     /**
@@ -323,6 +386,24 @@ final class IntegrationController
                 $actorId,
             );
 
+        return $this->beginStepUp($request, $family, $action, $stagedId);
+    }
+
+    /**
+     * Bind an already-staged change to a fresh Microsoft confirmation.
+     *
+     * SPLIT OUT so that the two staging shapes - one named credential, or a
+     * whole reconfiguration - reach the step-up through the SAME call. The
+     * alternative was a second copy of the target array, which is the one place
+     * a future edit could put something in the step-up row that does not belong
+     * there.
+     */
+    private function beginStepUp(
+        Request $request,
+        IntegrationFamily $family,
+        StepUpAction $action,
+        int $stagedId,
+    ): RedirectResponse {
         $reference = $this->stepUp->begin(
             $request->attributes->get('semantiq_user'),
             $request->session()->getId(),
@@ -366,6 +447,105 @@ final class IntegrationController
         ]);
 
         return back()->with('confirmation', $result->explanation);
+    }
+
+    /**
+     * D-153. SEND ONE TEST MESSAGE TO THE PERSON WHO PRESSED THE BUTTON.
+     *
+     * THE RECIPIENT IS RESOLVED HERE, SERVER-SIDE, FROM THE AUTHENTICATED
+     * PRINCIPAL. It is the single most important line in this action:
+     *
+     *   normal console      the signed-in System Administrator's own address,
+     *                       from the User record Microsoft authenticated;
+     *   First-Run           the Bootstrap Administrator's configured address.
+     *
+     * NOTHING FROM THE REQUEST IS CONSULTED. There is no recipient field in the
+     * validation rules because there is no recipient field at all, and
+     * TestEmailSender's signature has no parameter a request body could reach.
+     * A test that could be pointed at an address is an open relay wearing a
+     * diagnostic's clothes - sending from the customer's own domain, through
+     * their own authenticated server, to anywhere.
+     *
+     * IT REQUIRES NO STEP-UP, deliberately. It changes no stored configuration,
+     * and the only thing it can do is send one fixed message to the address of
+     * the person already signed in.
+     *
+     * ONE PER ADMINISTRATOR PER MINUTE. The same limiter shape as Test
+     * connection, keyed on the actor rather than the family: the thing being
+     * rationed is outbound mail from this deployment, not attention paid to one
+     * integration.
+     */
+    public function sendTestEmail(Request $request): RedirectResponse
+    {
+        $recipient = $this->principalEmail($request);
+
+        if ($recipient === null) {
+            throw ValidationException::withMessages([
+                'test' => 'A test message can only be sent to your own address, and this session '
+                    .'has none.',
+            ]);
+        }
+
+        $key = 'integration-test-email:'.$recipient;
+
+        if (RateLimiter::tooManyAttempts($key, 1)) {
+            throw ValidationException::withMessages([
+                'test' => 'A test message was sent a moment ago. Please wait a minute before '
+                    .'sending another.',
+            ]);
+        }
+
+        RateLimiter::hit($key, self::TEST_EVERY_SECONDS);
+
+        $result = $this->testEmail->send($recipient);
+
+        /*
+         * THE RESULT IS REPORTED AND NOT STORED.
+         *
+         * recordTestResult() is for Test connection, which describes whether
+         * the integration is reachable. Sending is a different question, and
+         * writing this answer into the same column would make the card claim
+         * something it was not asked.
+         */
+        $this->events->record(SecurityEventLogger::INTEGRATION_CONNECTION_TESTED, [
+            // The family and the outcome. Never the recipient - it is a
+            // person's address, and `provider` is the only key here that
+            // carries a configuration choice.
+            'provider' => IntegrationFamily::Email->value,
+            'user_id' => $this->actorId($request),
+            'result' => $result->status->value,
+        ]);
+
+        return back()->with('confirmation', $result->explanation);
+    }
+
+    /**
+     * The authenticated principal's OWN address, whichever surface this is.
+     *
+     * TWO SOURCES, BOTH SERVER-SIDE, NEITHER OF THEM THE REQUEST BODY. The
+     * bootstrap attribute is set by RequireBootstrapSession only after it has
+     * re-read the live state; the user attribute is set by
+     * EnsureSessionIsCurrent. A request carries exactly one of them.
+     */
+    private function principalEmail(Request $request): ?string
+    {
+        $bootstrap = $request->attributes->get('semantiq_bootstrap');
+
+        if ($bootstrap !== null) {
+            $email = trim((string) $bootstrap->email);
+
+            return $email === '' ? null : $email;
+        }
+
+        $user = $request->attributes->get('semantiq_user');
+
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $email = trim((string) $user->email);
+
+        return $email === '' ? null : $email;
     }
 
     /**

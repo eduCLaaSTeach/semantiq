@@ -25,21 +25,52 @@ import IdentityTabs from './IdentityTabs'
  * it interrupts, and role="status" for a confirmation, because a success is news
  * rather than an interruption.
  */
-export default function IdentityPage({ productAreas, title, description, errors = {}, actions = null, children }) {
-    const refusal = errors.identity
+export default function IdentityPage({
+    productAreas,
+    title,
+    description,
+    errors = {},
+    actions = null,
+    children,
+}) {
     const page = usePage()
     const { url } = page
-    const { confirmation } = page.props
+    const { confirmation, refusal: flashedRefusal } = page.props
+
+    /*
+     * TWO SOURCES, BOTH RENDERED, AND THE SECOND WAS MISSING.
+     *
+     * `errors.identity` is a refused form field. `refusal` is a flashed
+     * sentence - which is what a rejected Microsoft Entra candidate produces:
+     * the administrator confirmed at Microsoft, came back, and the details did
+     * not check out. Nothing about that is a field error.
+     *
+     * Until Gate C round 3 this component read only the first, so a flashed
+     * refusal would have gone to a blank page. HandleInertiaRequests carries
+     * the same note about Access Reviews, where exactly that happened and no
+     * automated test caught it: assertSessionHas('refusal') passes on a message
+     * that reaches the session and never reaches the screen.
+     */
+    const refusal = errors.identity ?? flashedRefusal
 
     return (
         <AppShell productAreas={productAreas} title="Identity & SSO">
             <div className="org-page">
                 <header className="org-feature">
                     <h1>Identity &amp; SSO</h1>
+                    {/*
+                     * THIS USED TO SAY "Everything here is read-only: identity
+                     * settings are held on the server and are not changed from
+                     * this screen."
+                     *
+                     * Gate C round 3 made that false, and it was shown at the
+                     * top of EVERY Identity screen - including the change
+                     * screen itself, where the page contradicted its own form
+                     * two inches further down.
+                     */}
                     <p>
-                        See how sign-in is configured and whether it is healthy. Everything here is
-                        read-only: identity settings are held on the server and are not changed from
-                        this screen.
+                        See how sign-in is configured and whether it is healthy, and change the
+                        Microsoft Entra details SemantIQ signs people in with.
                     </p>
                 </header>
 
@@ -62,7 +93,9 @@ export default function IdentityPage({ productAreas, title, description, errors 
 
                 {confirmation && !refusal ? (
                     <div className="org-confirmation" role="status">
-                        <span className="org-confirmation-mark" aria-hidden="true">&#10003;</span>
+                        <span className="org-confirmation-mark" aria-hidden="true">
+                            &#10003;
+                        </span>
                         {confirmation}
                     </div>
                 ) : null}

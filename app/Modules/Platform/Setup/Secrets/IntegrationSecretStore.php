@@ -122,6 +122,36 @@ final class IntegrationSecretStore
         return true;
     }
 
+    /**
+     * Decrypt a staged payload WITHOUT storing it - P1-02's verify-first path.
+     *
+     * WHY THIS EXISTS AND WHY IT IS HERE. Changing Microsoft sign-in must probe
+     * the candidate BEFORE the candidate is saved, and the probe needs the
+     * candidate client secret. adoptStaged() cannot serve that: it stores what
+     * it decrypts, which is the one thing the identity path must not do until
+     * the probe has answered.
+     *
+     * It is in this class for the same reason adoptStaged() is - so that
+     * SecretsAreDecryptedInOnePlace stays a single checkable claim. The
+     * alternative was a second decrypt inside the Identity module, which is
+     * exactly the drift that guard exists to catch.
+     *
+     * NULL, NOT AN EXCEPTION, on failure. A DecryptException describes the
+     * ciphertext it failed on, and the caller turns null into a refusal that
+     * describes nothing.
+     */
+    public function decryptStaged(string $ciphertext): ?string
+    {
+        try {
+            $value = Crypt::decryptString($ciphertext);
+        } catch (DecryptException) {
+            // Deliberately swallowed whole. See the class docblock.
+            return null;
+        }
+
+        return $value === '' ? null : $value;
+    }
+
     public function forget(string $family, string $name): void
     {
         IntegrationSecret::query()

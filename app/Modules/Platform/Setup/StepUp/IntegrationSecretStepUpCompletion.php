@@ -13,6 +13,7 @@ use App\Modules\Platform\Security\SecurityEventLogger;
 use App\Modules\Platform\Setup\IntegrationConfigurationWriter;
 use App\Modules\Platform\Setup\IntegrationFamily;
 use App\Modules\Platform\Setup\Secrets\StagedChangeStore;
+use App\Modules\Platform\Setup\Secrets\StagedIntegrationChange;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -90,7 +91,7 @@ final class IntegrationSecretStepUpCompletion implements StepUpCompletion
             ->route('integrations.show')
             ->with('confirmation', $applied['operation'] === 'remove'
                 ? $applied['family']->inWords().' credential removed.'
-                : $applied['family']->inWords().' credential replaced.');
+                : $applied['family']->inWords().' settings updated.');
     }
 
     /**
@@ -112,7 +113,19 @@ final class IntegrationSecretStepUpCompletion implements StepUpCompletion
          * that changed without its stored test result being withdrawn is the
          * Correction 5 defect reappearing through the step-up door.
          */
-        $this->writer->recordSecretChanged($applied['family'], (int) $actor->getKey());
+        /*
+         * A RECONFIGURATION HAS ALREADY WITHDRAWN THE STORED RESULT.
+         *
+         * StagedChangeStore::apply() calls applyFields() for it, which clears
+         * status, explanation and last_tested_at in this same transaction.
+         * Calling recordSecretChanged() as well would be harmless but would
+         * make two places responsible for one invalidation - and the day they
+         * disagree, the one that runs second wins silently.
+         */
+        if ($applied['operation'] !== StagedIntegrationChange::OPERATION_RECONFIGURE
+            || $applied['fieldsApplied'] === false) {
+            $this->writer->recordSecretChanged($applied['family'], (int) $actor->getKey());
+        }
 
         $this->events->record(SecurityEventLogger::INTEGRATION_CONFIGURATION_CHANGED, [
             // The FAMILY and the OPERATION. Never the secret name's value, and

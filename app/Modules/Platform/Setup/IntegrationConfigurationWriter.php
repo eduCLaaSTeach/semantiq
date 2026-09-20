@@ -164,6 +164,54 @@ final class IntegrationConfigurationWriter
     }
 
     /**
+     * FIELDS CONFIRMED THROUGH STEP-UP - Gate C round 3.
+     *
+     * The destination half of a staged reconfiguration. It is separate from
+     * save() for the same reason recordSecretChanged() is: save() opens its own
+     * transaction, and this must run INSIDE the one consuming the step-up, so
+     * that a lost race takes the destination change back with the confirmation
+     * that authorised it.
+     *
+     * It does not re-derive "was this meaningful". A change that reached here
+     * came through a confirmation, which is only ever demanded for a change
+     * that moves where a credential is sent - so the stored result is withdrawn
+     * unconditionally.
+     *
+     * @param  array<string, scalar|null>  $fields
+     */
+    public function applyFields(IntegrationFamily $family, array $fields, ?int $actorId = null): void
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException(
+                'applyFields() must run inside the transaction that applies the change.',
+            );
+        }
+
+        $this->assertFieldsAreAllowed($family, $fields);
+
+        $row = IntegrationConfiguration::query()->firstOrCreate(
+            ['family' => $family->value],
+            ['settings' => [], 'status' => HealthStatus::NotChecked->value],
+        );
+
+        $existing = is_array($row->settings) ? $row->settings : [];
+
+        $row->settings = [...$existing, ...$fields];
+        $row->status = HealthStatus::NotChecked->value;
+        $row->explanation = null;
+        $row->last_tested_at = null;
+        $row->last_changed_at = now();
+        $row->last_changed_by_user_id = $actorId;
+        $row->save();
+
+        if ($family === IntegrationFamily::Identity) {
+            $this->invalidateIdentityHealth();
+        }
+
+        $this->identityConfiguration->forget();
+    }
+
+    /**
      * The ONLY writer of a positive status.
      *
      * It takes a HealthStatus and a CHOSEN sentence from the adapter that ran

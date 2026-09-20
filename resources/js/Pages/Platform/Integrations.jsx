@@ -48,6 +48,12 @@ export default function Integrations({ productAreas, integrations, summaries }) 
                         removeUrlFor={(name) =>
                             `/console/integrations/${integration.family}/secret/${name}`
                         }
+                        // D-153. Only Email can send, so only Email is offered it.
+                        sendTestUrl={
+                            integration.family === 'email'
+                                ? '/console/integrations/email/send-test'
+                                : undefined
+                        }
                     />
                 ))}
             </div>

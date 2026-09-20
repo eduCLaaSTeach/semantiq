@@ -200,6 +200,19 @@ Route::prefix('first-run')->name('first_run.')->group(function (): void {
             ->where('family', 'email|ai|fabric')
             ->where('name', '[a-z_]{1,64}')
             ->name('integration.secret.remove');
+
+        /*
+         * D-153 during setup. The recipient is the BOOTSTRAP ADMINISTRATOR'S
+         * configured address - the one the operator typed when the local
+         * account was created - resolved server-side exactly as on the console.
+         *
+         * It matters most here: setup is where the mail configuration is first
+         * entered, and where "it authenticates but it cannot send" is most
+         * likely to be discovered months later by somebody who never gets a
+         * password reset.
+         */
+        Route::post('integration/email/send-test', [IntegrationController::class, 'sendTestEmail'])
+            ->name('integration.email.send_test');
     });
 
     Route::get('{grant}', BeginController::class)
@@ -695,6 +708,24 @@ Route::prefix('console')
                     ->where('family', 'email|ai|fabric')
                     ->where('name', '[a-z_]{1,64}')
                     ->name('secret.remove');
+
+                /*
+                 * D-153. SEND ONE TEST MESSAGE - Gate C round 3.
+                 *
+                 * NO {family} AND NO RECIPIENT, and neither is an omission.
+                 * Email is the only family that can send anything, so a family
+                 * parameter would be a parameter with one legal value; and the
+                 * recipient is the signed-in administrator's own address,
+                 * resolved server-side, because a test that can be pointed at
+                 * an address is an open relay with a diagnostic's name on it.
+                 *
+                 * Test connection proves the server accepts the credentials.
+                 * This proves it accepts a MESSAGE from the configured From
+                 * address, which is a different permission and the one that
+                 * actually fails in production.
+                 */
+                Route::post('email/send-test', [IntegrationController::class, 'sendTestEmail'])
+                    ->name('email.send_test');
             });
 
         Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)
@@ -703,6 +734,23 @@ Route::prefix('console')
             ->group(function (): void {
                 Route::get('/', [EntraController::class, 'show'])->name('entra');
                 Route::post('entra/reveal', [EntraController::class, 'reveal'])->name('entra.reveal');
+
+                /*
+                 * GATE C ROUND 3. MICROSOFT SIGN-IN IS CONFIGURABLE AFTER
+                 * INSTALLATION, AND ONLY FROM HERE.
+                 *
+                 * P1-02 owns identity. Platform Integrations shows a summary
+                 * and links to this screen, and has no identity write route at
+                 * all - IdentityIsNotWritableOnTheConsole asserts that as an
+                 * equality, so this pair cannot be quietly duplicated there.
+                 *
+                 * The PUT stages a candidate and redirects to Microsoft. It
+                 * writes nothing: the live configuration is the only way
+                 * anybody signs in, and it is not touched until a confirmation
+                 * comes back AND the candidate answers a discovery round trip.
+                 */
+                Route::get('entra/change', [EntraController::class, 'edit'])->name('entra.edit');
+                Route::put('entra', [EntraController::class, 'update'])->name('entra.update');
 
                 Route::get('providers', [ProvidersController::class, 'show'])->name('providers');
                 Route::get('login-experience', [LoginExperienceController::class, 'show'])->name('login-experience');

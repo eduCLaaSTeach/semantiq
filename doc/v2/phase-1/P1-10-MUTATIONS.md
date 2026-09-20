@@ -512,3 +512,115 @@ there.
 | **M-C4-2's premise** | The docblock claimed the `NotChecked` guard protected a real test result from being overwritten. It does not — `! isConfigured()` cannot fire for a complete configuration. The reasoning was wrong and the guard was weaker than the mutant |
 | **M-C1-2 itself** | Written against a channel that does not persist, so it could not have leaked whatever the code did |
 | **`NotConfiguredAndRemovalTest` (first run)** | A private helper named `status()` overrides `PHPUnit\Framework\TestCase::status()`, which is `final` — a **PHP fatal error**, so the file did not run at all and reported as "no output" rather than as a failure |
+
+---
+
+# Gate C round 3 — mutations
+
+The Product Owner held the merge again with three product and security gaps.
+**Seventeen mutations were run against the corrections. All seventeen were
+killed on the first attempt.**
+
+That is a better result than round 2 and a less interesting one. It is stated
+plainly rather than presented as a triumph: the two rounds before this produced
+four survivors between them, and a clean sheet is what happens when the tests
+are written before the code rather than to fit it. The useful entries in this
+file remain the survivors above.
+
+| | |
+| --- | --- |
+| Killed first time | **17 of 17** |
+| Survived | 0 |
+
+---
+
+## Correction 1 — post-install SSO management (P1-02)
+
+| ID | Mutation | Result |
+| --- | --- | --- |
+| **M-R3-1** | `EntraController::update()` writes the fields through the configuration writer before staging them | **KILLED** (3 of 17) |
+| **M-R3-2** | `IdentityReconfiguration::activate()` skips the probe result check and commits whatever was staged | **KILLED** (2 of 17) |
+| **M-R3-3** | The partial-clear refusal is removed, so a configured deployment can have its directory emptied | **KILLED** (1 of 17) |
+| **M-R3-4** | The staged identity change is consumed without the `consumed_at IS NULL` guard, making the confirmation replayable | **KILLED** (1 of 17) |
+| **M-R3-5** | `applyFields()` stops incrementing the identity revision, so the previous directory's cached health survives | **KILLED** (1 of 17) |
+
+**M-R3-2 is the one that matters.** It is the shape of the whole correction: the
+confirmation proves *who is asking*, and the probe proves *whether the answer
+works*. Applying on the first without the second activates an unverified
+directory and leaves nobody able to sign in — including the administrator who
+just confirmed — with the evidence saying it succeeded.
+
+**M-R3-1 is the edit somebody makes to be helpful.** "Save what they typed so
+they do not have to type it again." It is exactly what the Platform Integrations
+controller used to do, and round 3 correction 2 is the Product Owner finding it
+there.
+
+---
+
+## Correction 2 — destination changes are privileged
+
+| ID | Mutation | Result |
+| --- | --- | --- |
+| **M-R3-6** | `host` removed from `Email`'s destination fields | **KILLED** (2 of 10) |
+| **M-R3-7** | `endpoint` removed from `Ai`'s | **KILLED** (1 of 10) |
+| **M-R3-8** | `tenant_id` and `client_id` removed from `Fabric`'s | **KILLED** (1 of 10) |
+| **M-R3-9** | The controller saves the fields before staging the privileged change | **KILLED** (6 of 18) |
+| **M-R3-10** | `from_name` — a display-only field — classified as a destination | **KILLED** (2 of 10) |
+| **M-R3-11** | Any *submitted* destination field is privileged, whether or not its value changed | **KILLED** (1 of 10) |
+| **M-R3-12** | A staged reconfiguration applies its secret and drops its fields | **KILLED** (1 of 18) |
+
+**M-R3-10 and M-R3-11 are the two that guard the other direction.** A control
+that demands a Microsoft round trip for editing a sender name, or for pressing
+Save with nothing edited, is a control people learn to click through — and then
+it is not protecting anything. Both are killed, so the rule cannot be made
+either too narrow or too broad without the build saying so.
+
+**M-R3-12** is the mixed-state mutation. It leaves the deployment holding the
+new destination beside the old credential, which is precisely the window the
+staging design exists to close.
+
+---
+
+## Correction 3 — D-153 test email
+
+| ID | Mutation | Result |
+| --- | --- | --- |
+| **M-R3-13** | The recipient is read from the request (`$request->input('to') ?? …`) | **KILLED** (1 of 11) |
+| **M-R3-14** | The bootstrap principal is ignored, so setup falls through to the User path | **KILLED** (1 of 11) |
+| **M-R3-15** | The one-per-minute limiter is removed | **KILLED** (1 of 11) |
+| **M-R3-16** | A missing send-from address falls back to the SMTP username | **KILLED** (1 of 11) |
+| **M-R3-17** | The recipient is written into the audit evidence | **KILLED** (1 of 11) |
+
+**M-R3-13 is the open relay.** It is one line, it looks like a convenience
+("let an administrator check it arrives somewhere else"), and it turns a
+diagnostic into a way of sending mail from the customer's own domain, through
+their own authenticated server, to anywhere.
+
+**M-R3-16 is the quieter one.** Falling back to the username is the obvious
+tidy-up, and it makes the test pass for a sender the deployment will never
+actually send from — a green result that proves nothing about the permission
+that fails in production.
+
+---
+
+## Flaws found in the TESTS this round
+
+Recorded because a clean mutation sheet would otherwise imply the tests were
+right first time. They were not.
+
+| Case | The flaw |
+| --- | --- |
+| **`PostInstallSsoChangeTest`'s Microsoft stub** | `Http::fake()` **appends** stubs and the FIRST match wins. Calling it a second time with a different tenant left the original answering, so the probe received the OLD directory's issuer for the NEW directory's URL and reported a good candidate as broken. Three cases failed for a reason unrelated to the code. There is now ONE stub, switched by a property, which cannot be got wrong by ordering — and `IdTokenValidationTest` already recorded the same trap |
+| **The same stub's return type** | Inside a fake, `Http::response()` returns a `PromiseInterface`, not a `Response`. A `: Response` hint made every call throw a `TypeError`, which `ProviderProbe` catches and reports as *"Microsoft did not answer"* — a network-shaped failure with no network involved |
+| **`test_the_entra_screen_offers_the_change…`** | Used `assertSee` on an Inertia response, which carries JSON props and no rendered markup. It failed against a screen that was correct. It now reads the component source, and the behavioural claim is made by the route case above it |
+| **The partial-clear cases** | Asserted `=== ''`, which never fires: `ConvertEmptyStringsToNull` turns a blank box into `null` first. The controller now detects *submitted and empty* in both shapes, and a case drives the request with that middleware disabled — the same lesson round 2 recorded for the blank-secret rule, arriving in a second place |
+| **The bootstrap test-email case** | Left the permanent System Administrator from `setUp()` in place. First-Run exists only while a deployment has none, so the case was signed out at the door and asserted against an empty log — it would have passed no matter what the code did |
+| **A test that tried to extend a `final` class** | The first draft subclassed `TestEmailSender` to fake it. Dropping `final` would have removed the guarantee the test exists to check — that nothing can override where the message goes — so the seam is now a declared interface and the class stays final |
+
+## Defects these corrections found elsewhere
+
+| Found by | The defect |
+| --- | --- |
+| **Reading `IdentityPage`** | It renders a refusal from `errors.identity` only. A **flashed** `refusal` — which is what a rejected Entra candidate produces — would have gone to a blank page on every Identity screen. `HandleInertiaRequests` already carries a note about exactly this happening to Access Reviews, where no automated test caught it either: `assertSessionHas('refusal')` passes on a message that reaches the session and never reaches the screen |
+| **Reading the rendered change screen** | Every Identity page carried the header *"Everything here is read-only: identity settings are held on the server and are not changed from this screen."* After correction 1 that is false — and it was being shown at the top of the change screen itself, contradicting the form two inches below it |
+| **Reading the rendered Integrations card** | *"Testing checks that SemantIQ can reach this service… It does not send anything"* sat two inches above a new button that sends an email. The sentence is now tied to **Test connection** by name, and the sending action carries its own |

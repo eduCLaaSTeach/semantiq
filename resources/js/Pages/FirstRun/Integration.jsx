@@ -37,6 +37,11 @@ export default function Integration({ integration, steps }) {
                         ? undefined
                         : (name) => `/first-run/integration/${integration.family}/secret/${name}`
                 }
+                sendTestUrl={
+                    integration.family === 'email'
+                        ? '/first-run/integration/email/send-test'
+                        : undefined
+                }
                 reconfirm
             />
         </SetupShell>

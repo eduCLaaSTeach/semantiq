@@ -15,6 +15,8 @@ use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Identity\Microsoft\EntraDiscovery;
 use App\Modules\Platform\Identity\Microsoft\EntraProvider;
 use App\Modules\Platform\Identity\Microsoft\IdTokenValidator;
+use App\Modules\Platform\Setup\Connections\SendsTestEmail;
+use App\Modules\Platform\Setup\Connections\TestEmailSender;
 use App\Modules\Platform\Setup\Console\CreateBootstrapAdministratorCommand;
 use App\Modules\Platform\Setup\Console\IssueBootstrapRecoveryCommand;
 use App\Modules\Platform\Setup\Identity\IdentityConfigurationSource;
@@ -36,6 +38,15 @@ final class PlatformServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        /*
+         * D-153's send, behind its declared seam.
+         *
+         * TestEmailSender stays final - it is the one place that opens an SMTP
+         * connection and decides where a message goes - so the substitutable
+         * thing is the interface rather than the class.
+         */
+        $this->app->bind(SendsTestEmail::class, TestEmailSender::class);
+
         /*
          * P1-01 replaces DenyAllNavigationAuthorizer: there is now something to
          * navigate to. Still UX only - every route re-authorises on its own.

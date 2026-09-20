@@ -78,14 +78,39 @@ enum StepUpAction: string
      * PlatformAdmin, and requiring it would make First-Run unsatisfiable on a
      * deployment that has no Microsoft yet.
      *
-     * IDENTITY IS NOT HERE. After Gate C correction 3 the normal console has no
-     * identity write path at all - P1-02 owns it - so there is no action for
-     * this to authorise. First-Run's identity writes are the Bootstrap
-     * principal's, and those reconfirm the local password instead, because
-     * Microsoft step-up cannot exist before Microsoft does.
+     * IDENTITY IS NOT IN THESE TWO. The normal console has no identity write
+     * path at all - P1-02 owns it - so neither of these could authorise one.
+     * First-Run's identity writes are the Bootstrap principal's, and those
+     * reconfirm the local password instead, because Microsoft step-up cannot
+     * exist before Microsoft does.
      */
     case ReplaceIntegrationSecret = 'replace_integration_secret';
     case RemoveIntegrationSecret = 'remove_integration_secret';
+
+    /*
+     * P1-02, GATE C ROUND 3. CHANGING MICROSOFT SIGN-IN AFTER INSTALLATION.
+     *
+     * It has an action of its own rather than reusing ReplaceIntegrationSecret,
+     * for the reason P1-07 established when it refused to reuse the revoke
+     * actions: the completion handler must do something the others do not.
+     * Confirming a credential change APPLIES it. Confirming an identity change
+     * must VERIFY the candidate against Microsoft first and apply it only if
+     * that answers - because the thing being changed is the only way anybody
+     * signs in, and a configuration that does not work locks every
+     * administrator out of the deployment that holds it.
+     *
+     * Routing that through the integration performer would apply an unverified
+     * directory and leave the deployment unreachable, with the evidence saying
+     * it succeeded.
+     *
+     * THE CIRCULARITY IS DELIBERATE AND IT IS SAFE. Changing sign-in requires
+     * signing in, which means the CURRENT configuration must still work to
+     * authorise replacing it - so a broken configuration cannot be "fixed" from
+     * here by somebody who cannot already get in. That is the correct
+     * direction: recovery from a broken directory is the Bootstrap
+     * administrator's job, not a console screen's.
+     */
+    case ReconfigureIdentity = 'reconfigure_identity';
 
     /** The P1-07 review actions, named once so nothing has to list them twice. */
     public function isReviewDecision(): bool
@@ -112,6 +137,7 @@ enum StepUpAction: string
             self::SelfReview => 'review your own access',
             self::ReplaceIntegrationSecret => 'replace a saved connection credential',
             self::RemoveIntegrationSecret => 'remove a saved connection credential',
+            self::ReconfigureIdentity => 'change how people sign in with Microsoft',
         };
     }
 }

@@ -2196,6 +2196,48 @@ button.shell-link:hover .icon { color: var(--accent); }
   color: var(--text);
 }
 
+/* CHANGING MICROSOFT SIGN-IN - Gate C round 3.
+
+   The notice is bordered and sits ABOVE the fields, because it is the thing
+   that makes this screen safe to try: nothing is written until the change is
+   confirmed and checked. A hint under the button would be read after the
+   decision it informs. */
+.idn-notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  background: var(--canvas);
+}
+
+.idn-notice p {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+}
+
+.idn-notice p:last-child { margin-bottom: 0; }
+
+.idn-steps {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* Separated from the rows above by a rule: everything above it describes the
+   configuration, and this changes it. */
+.idn-actions {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--card-border);
+}
+
+.idn-actions .org-hint-plain {
+  margin: var(--space-2) 0 0;
+  max-width: 60ch;
+}
+
 /* A state. Colour is NEVER the only signal - every one carries its word, and
    the word is what a screen reader announces. */
 .idn-state {
@@ -3344,6 +3386,21 @@ button.shell-link:hover .icon { color: var(--accent); }
 }
 
 .setup-removal-confirm .setup-field:last-of-type { margin-bottom: var(--space-3); }
+
+/* SEND TEST EMAIL - D-153. Separated from the form by a rule, like the removal
+   block: everything above it describes or changes the configuration, and this
+   actually sends something out of the deployment. */
+.setup-send-test {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--card-border);
+}
+
+.setup-send-test h3 {
+  font-size: 13px;
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+}
 
 /* The one-time handover link. It must be readable and selectable in full, and
    it must WRAP: a 64-character token in a fixed-width box would be truncated

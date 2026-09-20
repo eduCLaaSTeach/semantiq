@@ -71,6 +71,61 @@ enum IntegrationFamily: string
     }
 
     /**
+     * THE FIELDS THAT DECIDE WHERE A SAVED CREDENTIAL IS SENT - Gate C round 3.
+     *
+     * D-159 originally protected the credential and nothing else. That is half
+     * a control. A credential has a destination, and moving the destination
+     * while leaving the credential alone sends the credential somewhere new:
+     *
+     *   an SMTP password is saved
+     *     -> somebody changes only the mail server address
+     *     -> the password is untouched, so nothing asks who they are
+     *     -> the next test hands that password to a host they chose.
+     *
+     * So when a secret is ESTABLISHED, changing any of these is privileged in
+     * exactly the same way replacing the secret is.
+     *
+     * THIS IS NOT meaningfulFields(). That answers "does the last test result
+     * still mean anything", which is a question about staleness and includes
+     * anything the provider sees. This answers "does this change who holds our
+     * credential", which is a question about trust. They overlap today and they
+     * are not the same question - `deployment` on an Azure OpenAI resource is
+     * part of the authenticated path, while a presentation-only field could be
+     * meaningful without being privileged.
+     *
+     * WHAT IS DELIBERATELY ABSENT. Email's `from_address` and `from_name` are
+     * display identity, not connection identity: changing them cannot cause the
+     * stored password to be offered to a different server. They stay
+     * unprivileged so that editing a sender name does not send an administrator
+     * to Microsoft - a confirmation demanded for something harmless is a
+     * confirmation people learn to click through.
+     *
+     * IDENTITY IS ABSENT TOO, and that is correction 1's answer rather than an
+     * omission: the normal console has no identity write path at all, and P1-02
+     * owns the privileged change with its own verify-then-activate flow.
+     *
+     * @return list<string>
+     */
+    public function destinationFields(): array
+    {
+        return match ($this) {
+            // P1-02 owns every identity change after installation.
+            self::Identity => [],
+
+            // Where the mail goes and who it authenticates as.
+            self::Email => ['host', 'port', 'encryption', 'username'],
+
+            // Which service answers, and - on a deployment-bound provider -
+            // which deployment the key is presented to.
+            self::Ai => ['provider', 'endpoint', 'deployment'],
+
+            // The directory and application the client secret authenticates
+            // to, and the workspace that trust reaches.
+            self::Fabric => ['tenant_id', 'client_id', 'workspace_id'],
+        };
+    }
+
+    /**
      * The named secrets this family may hold. A name outside this list is
      * refused, so "store one more thing, encrypted" is not available as a
      * shortcut around the typed field allowlist above.

@@ -26,7 +26,7 @@ thing:
 | DESIGN merge | `a7aef47` — the six corrections you required |
 | Implementation | **NOT DEPLOYED.** This script describes what to test **after** you approve Gate C and it is deployed |
 | Suite at handover | **1137 tests, 1131 passed, 0 failures** |
-| Gate C corrections | the four you required on PR #131 — **CHECKS 9 to 14 below** |
+| Gate C corrections | round 2's four — **CHECKS 9 to 14** — and round 3's three — **CHECKS 15 to 17** |
 
 > **This has not been deployed.** Nothing below has been done to production.
 
@@ -78,9 +78,10 @@ thing:
 
 ## 6–11. The checks
 
-**Fourteen checks.** Checks 1–8 are the original unit. **Checks 9–14 are the four
-Gate C corrections you required.** Record PASS / FAIL and what you saw for each
-step.
+**Seventeen checks.** Checks 1–8 are the original unit. Checks 9–14 are the four
+Gate C corrections from round 2. **Checks 15–17 are the three from round 3: SSO
+you can manage after installation, destination changes that need confirming, and
+the test email.** Record PASS / FAIL and what you saw for each step.
 
 ---
 
@@ -368,11 +369,107 @@ here, because during setup Microsoft may not exist yet.
 
 ---
 
+### CHECK 15 — Microsoft sign-in can be changed after installation
+
+**This is your round 3 correction 1, and the biggest one.** Until now First-Run
+could set sign-in up and nobody could ever change it. A customer whose Entra
+client secret expired — which they all do — had no way back except SSH.
+
+> ### ⚠ THIS CHANGES HOW EVERYONE SIGNS IN
+>
+> Do CHECK 15 **before** you do anything else that day, and have the current
+> working details to hand. SemantIQ checks the new details against Microsoft
+> before they take effect and keeps the old ones if the check fails — but read
+> the screen, not this paragraph, and stop if it does not say the same thing.
+
+| # | Do this | Expect | P/F |
+| --- | --- | --- | --- |
+| 15.1 | Open **Integrations**. On the Microsoft Entra ID card, click **Manage Identity & SSO** | You arrive on the Identity & SSO screen you already know | |
+| 15.2 | Read that screen | It no longer says the details are "set on the server" or "cannot be changed from this screen" | |
+| 15.3 | Find **Change configuration** at the bottom | It is there, with a sentence saying you will be asked to sign in with Microsoft again | |
+| 15.4 | Click it | A change screen opens. It lists, before the fields: you enter details → SemantIQ asks you to sign in again → SemantIQ checks them → only then do they take effect | |
+| 15.5 | Check what is pre-filled | Directory, application and return address carry your **current** values. The **client secret box is empty** | |
+| 15.6 | Right-click → **View page source** and search for your real client secret | **It is not there** | |
+| 15.7 | Clear the **Directory (tenant) ID** and press Continue | **Refused**, saying it cannot be left empty while sign-in is in use. Nothing is staged | |
+| 15.8 | Put the correct directory back. Change the **return address** to something wrong — e.g. add `-x` — and press **Continue to Microsoft** | You are sent to Microsoft to sign in | |
+| 15.9 | Complete the Microsoft sign-in | You return to Identity & SSO with a message saying the details did not check out, **and sign-in has not been changed** | |
+| 15.10 | Confirm you can still sign out and sign back in normally | You can. The old configuration is still live | |
+| 15.11 | Now do a **real** change you actually want — most likely a new client secret from Microsoft Entra — and complete the Microsoft sign-in | You return with a confirmation that sign-in has been updated and checked | |
+| 15.12 | Sign out completely and sign back in | It works, using the new details | |
+| 15.13 | Open **System Health** | The sign-in row does **not** still show the result from before the change | |
+
+> **15.9 AND 15.10 ARE THE POINT.** A confirmed but wrong change must leave
+> you able to sign in. Everything else on this screen depends on that being
+> true.
+
+**Evidence:** screenshots at 15.4, 15.9 and 15.11, and confirmation you signed
+out and back in at 15.12.
+
+---
+
+### CHECK 16 — Moving where a credential is sent also needs confirming
+
+**This is your round 3 correction 2.** A saved password does not have to be
+stolen if the destination can be moved to meet it.
+
+| # | Do this | Expect | P/F |
+| --- | --- | --- | --- |
+| 16.1 | In **Email delivery**, with a password already saved, change only the **Send from name** and press Save | Saves immediately. **No Microsoft prompt** — a display name cannot redirect anything | |
+| 16.2 | Now change only the **Mail server address** and press Save | You are sent to **Microsoft to sign in again**, even though you did not touch the password | |
+| 16.3 | Cancel at Microsoft, return to Integrations and reload | The mail server address is **unchanged**. Nothing was saved | |
+| 16.4 | Repeat 16.2 and complete the Microsoft sign-in | The new address is saved, and the status returns to **Not checked** | |
+| 16.5 | Press **Save** again without editing anything | Saves immediately. **No Microsoft prompt** — nothing changed | |
+| 16.6 | Try the same with **AI service** → Service address, if a key is saved | Same behaviour: confirmation required | |
+| 16.7 | Try the same with **Microsoft Fabric** → Directory or Application ID, if a secret is saved | Same behaviour: confirmation required | |
+| 16.8 | On an integration with **no** saved credential, change its address and Save | Saves immediately. There is nothing to redirect | |
+
+> **16.3 IS THE ONE THAT MATTERS.** If the new address were saved before you
+> confirmed, the deployment would be holding a new destination beside an old
+> credential — and the next connection test would offer that credential to it.
+
+**Evidence:** screenshots at 16.2 and 16.3.
+
+---
+
+### CHECK 17 — Send test email, and only to you
+
+**This is your round 3 correction 3, D-153.** Test connection proves the mail
+server accepts the username and password. It proves nothing about whether the
+server will let SemantIQ actually **send** — which is a different permission,
+and the one that fails in production.
+
+> **This sends a real email.** It goes to your own address and nowhere else.
+> Do not do CHECK 17 on production until you are content with 17.5.
+
+| # | Do this | Expect | P/F |
+| --- | --- | --- | --- |
+| 17.1 | Look at the Email delivery card | Below the form there is a **Send a test email** section, separate from Test connection | |
+| 17.2 | Read the sentence under **Test connection** | It now says **Test connection** checks reachability and does not send anything — it no longer reads as covering the whole card | |
+| 17.3 | Read the sentence under **Send test email** | It says the message goes to your own address and that you cannot send it anywhere else | |
+| 17.4 | Look for a recipient box, a subject box or a message box | **There are none.** There is only a button | |
+| 17.5 | Press **Send test email** | A confirmation appears saying a message was sent to your own address | |
+| 17.6 | Check your own inbox | One short message arrives, subject **SemantIQ email delivery test**, from the **Send from address** you configured — not from the SMTP username | |
+| 17.7 | Press the button again straight away | **Refused**, saying to wait a minute | |
+| 17.8 | Wait a minute and press it again | It sends | |
+| 17.9 | Open **Audit** and find the entry | It records that a connection was tested and the outcome. It does **not** contain your email address, the mail host or the password | |
+| 17.10 | Check that **AI service** and **Microsoft Fabric** have no such button | They do not. Only Email can send anything | |
+
+> **17.4 AND 17.6 TOGETHER ARE THE CHECK.** A test that could be pointed at an
+> address would let anyone with console access send mail from your own domain,
+> through your own server, to anywhere. And a test that sent from the SMTP
+> username rather than your configured sender would pass while proving nothing
+> about the address you actually send from.
+
+**Evidence:** the received message's headers from 17.6 — specifically the From
+address — and the Audit entry from 17.9.
+
+---
+
 ## 11. PASS / FAIL
 
 Each step above has a P/F box. **A single FAIL on 3.5, 5.1/5.2, 6.7, 7.3, 8.6,
-9.5, 10.4, 10.6, 11.6, 12.5, 14.2 or 14.5 should stop acceptance** — those
-protect a guarantee rather than a convenience.
+9.5, 10.4, 10.6, 11.6, 12.5, 14.2, 14.5, 15.7, 15.9, 15.10, 16.3, 17.4 or 17.6
+should stop acceptance** — those protect a guarantee rather than a convenience.
 
 Checks 13 and 14 cannot be run on production (see §12.9). A blank P/F there is
 expected and is **not** a FAIL.

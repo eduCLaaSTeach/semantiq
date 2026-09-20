@@ -115,19 +115,32 @@ final class IdentityIsNotWritableOnTheConsoleTest extends TestCase
         }
     }
 
-    /** The console route set is exactly this, so a new verb has to be justified. */
+    /**
+     * The console route set is exactly this, so a new verb has to be justified.
+     *
+     * THE FIFTH IS D-153's SEND, added at Gate C round 3. It is the only route
+     * here that causes something to leave the deployment, and it is deliberately
+     * the narrowest shape in the table: no `{family}` - Email is the only family
+     * that can send anything, so a parameter would have one legal value - and no
+     * recipient, because the address comes from the signed-in principal.
+     *
+     * NONE OF THEM ACCEPTS `identity`, which is the claim the rest of this file
+     * makes. The send route does not even have a family segment to accept it
+     * with.
+     */
     public function test_the_console_integrations_route_set_is_exactly_this(): void
     {
         $this->assertSame(
             [
                 'DELETE console/integrations/{family}/secret/{name}',
                 'GET console/integrations',
+                'POST console/integrations/email/send-test',
                 'POST console/integrations/{family}/test',
                 'PUT console/integrations/{family}',
             ],
             $this->consoleIntegrationRoutes(),
-            'The Platform Integrations route set changed. One read, one write, one test and one '
-            .'explicit removal - and no reveal verb for any secret.',
+            'The Platform Integrations route set changed. One read, one write, one connection '
+            .'test, one explicit removal and one send - and no reveal verb for any secret.',
         );
     }
 

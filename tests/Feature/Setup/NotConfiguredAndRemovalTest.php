@@ -187,7 +187,15 @@ final class NotConfiguredAndRemovalTest extends TestCase
         $this->givenEmailIsCompleteAndTested();
 
         $response = $this->actingAsAdministrator()
-            ->put('/console/integrations/email', ['host' => 'smtp.moved.example', 'secret_password' => '']);
+            ->put('/console/integrations/email', [
+                // A DISPLAY FIELD, NOT A DESTINATION. `host` would now be
+                // privileged on its own - a credential is established - and
+                // the redirect this case refuses would be the CORRECT answer
+                // to the wrong question. The claim here is about the blank
+                // secret, so nothing else in the request may be privileged.
+                'from_name' => 'SemantIQ Operations',
+                'secret_password' => '',
+            ]);
 
         $location = $response->headers->get('Location') ?? '';
 
@@ -209,8 +217,8 @@ final class NotConfiguredAndRemovalTest extends TestCase
 
         // ...and the edit the administrator actually made DID happen.
         $this->assertSame(
-            'smtp.moved.example',
-            app(SetupProjection::class)->forFamily(IntegrationFamily::Email)->fields['host'],
+            'SemantIQ Operations',
+            app(SetupProjection::class)->forFamily(IntegrationFamily::Email)->fields['from_name'],
             'The non-secret field was not saved, so the blank secret turned the whole save into a '
             .'no-op rather than just itself.',
         );
@@ -245,7 +253,10 @@ final class NotConfiguredAndRemovalTest extends TestCase
 
         $response = $this->withoutMiddleware(ConvertEmptyStringsToNull::class)
             ->actingAsAdministrator()
-            ->put('/console/integrations/email', ['host' => 'smtp.moved.example', 'secret_password' => '']);
+            ->put('/console/integrations/email', [
+                'from_name' => 'SemantIQ Operations',
+                'secret_password' => '',
+            ]);
 
         $this->assertStringNotContainsString(
             '/console/access/step-up/',
