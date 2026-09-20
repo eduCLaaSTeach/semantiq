@@ -112,7 +112,9 @@ local server with a seeded setup administrator.** Not production.
 
 | | |
 | --- | --- |
-| Screens | 7 — sign-in, overview, the four integration steps, first administrator, complete |
+| Screens rendered | **8** — sign-in, overview, the four integration steps, first administrator, complete, **and recovery** |
+| Also rendered | the **first-administrator screen carrying a live handover link**, driven end to end: sign in, enter Entra details, nominate, and read the one-time link off the page |
+| **NOT browser-rendered** | **`/console/integrations`.** See below — this is stated rather than glossed |
 | Widths | **1440px and 390px** |
 | Themes | **light and dark** |
 | Per-element overflow | measured per element, per P1-09's rule, not per page |
@@ -135,6 +137,30 @@ local server with a seeded setup administrator.** Not production.
    rendered as bare browser buttons. The setup inputs also deviated from
    `.org-form input` in four ways, including a canvas background on a white
    card that reads as *disabled*.
+
+### The one screen that was not browser-rendered
+
+**`/console/integrations` was verified by rendered HTTP response, not by a
+browser.** Reaching it needs an authenticated System Administrator session, and
+the only way to obtain one is a real Microsoft round trip. Minting a session
+cookie by hand was attempted and abandoned rather than bodged: it would have
+meant either adding a test-only route to the product or reproducing the
+encryption and middleware chain outside it, and a screen "verified" through a
+path the application does not use is not verified.
+
+**What IS proven about it:**
+
+- `test_s1_no_secret_appears_in_the_rendered_integrations_page` requests the
+  real route, asserts **200**, asserts the page renders the stored
+  configuration (`smtp.example.test` appears), and asserts **no stored secret
+  appears anywhere in the body**;
+- it renders `IntegrationForm` — **the same component**, with the same labels,
+  selects, secret hints and buttons, that **was** browser-verified on four
+  First-Run screens at 1440px and 390px in both themes;
+- `AppShell` around it is P1-01's, unchanged and long since verified.
+
+**What is NOT proven: how that specific page looks in a browser.** It is carried
+as a check on the Product Owner script (CHECK 1) rather than claimed here.
 
 **Two things were fixed from reading the rendered screens rather than from a
 test:** the overview rendered the step rail **and** a list of the same four

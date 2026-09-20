@@ -280,9 +280,18 @@ run by hand — it is reported as what it is.
 
 ### 12.5 The browser evidence is from a local server, not production
 
-Seven screens at 1440px and 390px, light and dark, were driven in a real
-Chromium browser against a local server. **No screen was opened on production**,
+Eight First-Run screens at 1440px and 390px, light and dark, were driven in a
+real Chromium browser against a local server, including the first-administrator
+screen carrying a live handover link. **No screen was opened on production**,
 because the implementation is not deployed.
+
+**The Integrations screen itself (CHECK 1) was NOT browser-rendered.** Reaching
+it needs an authenticated System Administrator session, which needs a real
+Microsoft round trip. It is proven to return 200 with its real content and no
+secret by an automated test, and it uses the same form component that *was*
+browser-verified on four First-Run screens — but **how that page looks in a
+browser is exactly what CHECK 1 is asking you to confirm**, and it is not
+claimed here.
 
 ### 12.6 There is still no JavaScript test runner
 
