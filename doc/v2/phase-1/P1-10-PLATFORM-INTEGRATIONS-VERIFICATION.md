@@ -730,7 +730,75 @@ The one outbound call the deployment does make is Microsoft **discovery**,
 inside `semantiq:health`, which is the existing pre-P1-10 behaviour of that
 command and is how the identity row in its report is produced.
 
-### 13.4 What could NOT be verified from the delivery environment
+### 13.4 Read from production, by the two read-only workflows
+
+Both dispatched against `27904cc`, after deploy run **155** (SUCCESS, first
+attempt) had put the correction in §14 live. Both **passed their guards**, which
+is a stronger statement than "they ran": each is a guard rather than a
+narration, and a wrong answer fails the run.
+
+**`Verify P1-10 Platform Setup state (read-only)` — run 1, SUCCESS**
+
+| Reported | Value |
+| --- | --- |
+| `tables_present` | **all six `true`** — `platform_settings`, `integration_configurations`, `integration_secrets`, `bootstrap_administrators`, `bootstrap_recovery_tokens`, `staged_integration_changes` |
+| `identity_source` | **`env`** |
+| `identity_configuration_complete` | `true`, `identity_missing_keys` `[]` |
+| `identity_imported_recorded` / `identity_committed_recorded` | `false` / `false` |
+| `permanent_administrator_exists` | `true` |
+| `bootstrap_local_login_open` | **`false`** |
+| `bootstrap_administrator_exists` | **`false`** |
+| `recovery_tokens_total` / `live` | `0` / `0` |
+| `staged_changes_total` / `live` | `0` / `0` |
+| `local_health_ok` | `true`, `local_health_failing` `[]` |
+| `integration_families.identity.status` | **`not_checked`** |
+| `integration_families.email` / `ai` / `fabric` | all **`not_configured`** |
+| `secret_row_counts` | **empty** — no integration secret exists on production |
+| `audit_allowed_keys` | **15** |
+
+**`Verify P1-02 identity state (read-only)` — run 4, SUCCESS**
+
+| Reported | Value |
+| --- | --- |
+| Four Microsoft settings | all **present**, resolved from `env` |
+| `health_state` | **`healthy`** |
+| `health_rows` | eight **`healthy`**; `microsoft_reachable` **`not_checked`** |
+| `identity_write_routes` | **`["PUT console/identity/entra"]`** — exactly the approved set |
+| `unapproved_providers` | `[]` |
+| D-31 session policy | enforced 60 minutes idle / 12 hours absolute, **matches approved** |
+| `session_storage` | **`file`** |
+
+**Four of these deserve reading rather than skimming.**
+
+**`identity_source: env`.** The deployment did not cut over, did not import and
+did not combine. Both cutover timestamps are absent, so there is no
+half-finished transition either — the authority and the record agree.
+
+**`identity.status: not_checked`.** This is §14's correction, live. Before it,
+this field would have read `not_configured` on a deployment whose Microsoft
+sign-in is complete and working. `not_checked` is the honest answer:
+configured, and nobody has tested it from that screen.
+
+**`microsoft_reachable: not_checked` is not a failure.** It is the stored result
+of the explicit administrator re-check, which nobody has run on this
+deployment. That action takes a provider-wide lock and generates outbound
+traffic to Microsoft, and a verification workflow must not trigger it — so the
+workflow reads the stored answer and reports it as unmeasured rather than
+guessing. The eight rows that can be answered without a network call are all
+healthy, and the live evidence that Microsoft answers is separate: deploy step
+26 ran `semantiq:health` on a cache step 25 had just cleared, so its identity
+check was a genuine cold-cache discovery round trip, and it passed.
+
+**`session_storage: file`.** The carried production session-driver alignment
+item is **reconfirmed, not closed**. Production still stores sessions on the
+filesystem while `.env` says `database` elsewhere in the P1-09 record; this
+verification changes nothing about it and it remains **OPEN / CARRIED**.
+
+**Nothing in either output is a secret, a tenant, a client identifier, an
+endpoint or a mail server.** Every value above is a boolean, a count, a status
+word or a field name.
+
+### 13.5 What could NOT be verified from the delivery environment
 
 **Stated plainly, and not inferred from anything that passed.**
 
