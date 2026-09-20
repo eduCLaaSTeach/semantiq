@@ -1119,3 +1119,55 @@ rule. One was an assertion satisfied by a *comment about* the rule it checks;
 the other fell through to the correct answer because the fixture had never been
 tested. Both are recorded in full in `P1-10-MUTATIONS.md` and both are killed
 after the tests were strengthened.
+
+### 15.8 Deployed, and verified on production
+
+| | |
+| --- | --- |
+| Correction PR | **#134** |
+| Merge | **`eec366eda4fd46e38a444e1d083a865b08707961`** — squash into `main` |
+| CI | run **347** — SUCCESS |
+| Deployment | **Deploy to cPanel (SSH)** run **157** — SUCCESS, first attempt |
+
+**Observed directly on production, unauthenticated:**
+
+| Path | Result |
+| --- | --- |
+| `GET /up` | **200**, body `ok` |
+| `GET /` | **200** |
+| `GET /console/integrations` | **302** to the sign-in root |
+| `GET /console/integrations/email` | **302** to the sign-in root |
+| `GET /console/integrations/ai` | **302** to the sign-in root |
+| `GET /console/integrations/fabric` | **302** to the sign-in root |
+| `GET /console/integrations/identity` | **404** |
+| `GET /first-run/sign-in` | **302 → `/first-run/closed`** |
+
+The four tab routes exist and are guarded. **The fifth is a 404 on purpose** —
+that is §15.3's decision, observable on the live system rather than argued
+about, and it is what keeps `PUT /console/integrations/identity` a 404 too.
+
+**Read from production by the two read-only workflows**, both dispatched
+against `eec366e`, **both passed their guards**:
+
+- `Verify P1-10 Platform Setup state` run **2** — all six tables present,
+  `identity_source` **`env`**, both cutover timestamps absent, bootstrap local
+  login **closed**, no setup administrator, no recovery token, no staged
+  change, local health ok, identity **`not_checked`**, email / AI / Fabric
+  **`not_configured`**, no integration secret, Audit key catalogue **15**.
+- `Verify P1-02 identity state` run **5** — four Microsoft settings present and
+  resolved from `env`, `health_state` **healthy**, identity write routes
+  **exactly `["PUT console/identity/entra"]`**, no unapproved provider, the
+  approved D-31 session policy enforced, `session_storage` **`file`**.
+
+**Nothing moved.** Every value is the same as the previous round's, which is
+the point: this was a UI correction, and the state it is allowed to have
+changed is none of it. `session_storage` still reads `file`, so the carried
+production session-driver alignment item remains **OPEN / CARRIED**.
+
+**What could still NOT be verified from the delivery environment:** the
+console screens were not opened on production, for the two reasons in §13.5 —
+signing in needs Microsoft credentials this environment does not have, and its
+Chromium does not trust the inspecting proxy's certificate authority. The
+browser evidence in §15.6 is from a local server. **Gate D CHECKS 1 to 7 remain
+the Product Owner's first look at these screens on the live system**, and
+CHECK 1 is now the layout comparison that was held for.
