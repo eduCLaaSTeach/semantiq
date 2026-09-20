@@ -60,6 +60,17 @@ final class StepUpTest extends TestCase
      * The three review actions are P1-07's own - a review decision has to mark
      * the item as well as change the access, so it cannot re-use P1-05's
      * performers.
+     *
+     * P1-10 ADDED TWO, AND THEY ARE THE FIRST THAT ARE NOT ABOUT A ROLE.
+     * D-159 requires a fresh sign-in before an ESTABLISHED integration
+     * credential is replaced or removed - the mail password, the AI key, the
+     * Fabric client secret. That is the same class of authority from the other
+     * direction: somebody who can silently replace the mail credential can
+     * redirect the deployment's outbound mail.
+     *
+     * Establishing one for the first time is deliberately NOT here: there is
+     * nothing to take away, and requiring it would make First-Run
+     * unsatisfiable on a deployment that has no Microsoft yet.
      */
     public function test_the_step_up_action_catalogue_is_exactly_this(): void
     {
@@ -74,6 +85,8 @@ final class StepUpTest extends TestCase
                 'review_revoke_privileged',
                 'revoke_restricted_entitlement',
                 'self_review',
+                'replace_integration_secret',
+                'remove_integration_secret',
             ],
             array_map(static fn (StepUpAction $action): string => $action->value, StepUpAction::cases()),
         );

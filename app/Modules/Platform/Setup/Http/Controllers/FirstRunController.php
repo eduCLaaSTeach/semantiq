@@ -7,6 +7,7 @@ namespace App\Modules\Platform\Setup\Http\Controllers;
 use App\Modules\Platform\Bootstrap\BootstrapState;
 use App\Modules\Platform\Setup\Bootstrap\BootstrapAccess;
 use App\Modules\Platform\Setup\Bootstrap\BootstrapAuthenticator;
+use App\Modules\Platform\Setup\Bootstrap\BootstrapReconfirmation;
 use App\Modules\Platform\Setup\Bootstrap\BootstrapRecovery;
 use App\Modules\Platform\Setup\Bootstrap\FirstAdministratorHandoff;
 use App\Modules\Platform\Setup\Identity\IdentityCutover;
@@ -39,6 +40,7 @@ final class FirstRunController
         private readonly BootstrapAuthenticator $authenticator,
         private readonly BootstrapState $state,
         private readonly SetupProjection $projection,
+        private readonly BootstrapReconfirmation $reconfirmation,
     ) {}
 
     /** Step 1. The local sign-in screen. */
@@ -132,7 +134,30 @@ final class FirstRunController
     ): RedirectResponse {
         $data = $request->validate([
             'email' => ['required', 'email', 'max:255'],
+            // D-159. The current local password, from the BODY only.
+            'password' => ['required', 'string'],
         ]);
+
+        /*
+         * D-159. RECONFIRM BEFORE THE HANDOFF.
+         *
+         * Issuing the first permanent administrator handoff is the single most
+         * privileged act in the product: it decides who runs the deployment.
+         * A bootstrap session that has been left open on an unattended screen
+         * must not be enough to do it.
+         *
+         * Microsoft step-up cannot be used here - Microsoft may not exist yet,
+         * which is why First-Run exists - so the local password is asked for
+         * again. Checked BEFORE anything is staged or issued, so a refusal
+         * leaves no grant, no cutover and no trace beyond the refusal itself.
+         */
+        if (! $this->reconfirmation->confirms($request, $request->input('password'))) {
+            throw ValidationException::withMessages([
+                // Generic. It does not say whether the password was wrong or
+                // the principal has closed.
+                'password' => 'That password was not accepted.',
+            ]);
+        }
 
         /*
          * CORRECTION 4, AT THE MOMENT IT MATTERS.

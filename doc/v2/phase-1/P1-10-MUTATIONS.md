@@ -350,3 +350,165 @@ finished, and because two of them were found by guards **another unit** wrote.
 | **The browser sweep, implementation terms** | The AI provider field was a text input whose LABEL carried the permitted values: *"AI service (azure_openai or openai)"*. A raw enum value on a customer's screen, and the field had the wrong control — a choice typed as free text also lets somebody enter "Azure OpenAI" and learn nothing until the connection test says the provider cannot be checked. Both it and the mail security field are now selects |
 | **Reading the rendered screens** | `.org-action-quiet` is a MODIFIER — every other use in the codebase pairs it with `.org-action`. Used alone, "Sign out" and "Test connection" rendered as bare browser buttons. The setup inputs also deviated from `.org-form input` in four ways, including a canvas background on a white card that reads as *disabled* |
 | **Reading the rendered screens** | The First-Run overview rendered the step rail **and** a list of the same four integrations with the same status — two identical lists on one screen, each claiming to be the way to navigate. And the blocked nomination state named the blocker without offering any way to act on it, at the last step of a setup flow, which is where somebody gives up |
+
+---
+
+# Gate C corrections — the second round of mutations
+
+The Product Owner held the merge of PR #131 and named four implementation gaps
+against the approved D-148 / D-159 / D-165. Nineteen mutations were run against
+the corrections. **Twelve were killed on the first attempt. Three survived, and
+each survivor changed something** — one exposed a badly chosen mutation, one
+exposed a weak test, and one showed the *mutant was better than the original*.
+
+| | |
+| --- | --- |
+| Killed first time | 12 |
+| Survived, then killed after strengthening the test | 2 |
+| Survived and found to be EQUIVALENT | 1 (recorded, with what it taught) |
+| Re-run mutations | 4 |
+
+---
+
+## Correction 1 — D-159 step-up and Bootstrap reconfirmation
+
+| ID | Mutation | Result |
+| --- | --- | --- |
+| **M-C1-1** | `update()` passes the whole `$secrets` array to the writer instead of `$partition['establish']` — a replacement saves directly, with no step-up | **KILLED** (2 of 7) |
+| **M-C1-2** | An extra `'leaked' => <plaintext>` key added to the step-up target array | ***SURVIVED* — and correctly.** See below |
+| **M-C1-2b** | The plaintext concatenated into `subject_intent`, a **persisted** column every listing reads | **KILLED** (1 of 7) |
+| **M-C1-3** | The First-Run branch's privileged-change condition replaced with `if (false)` — a replacement during setup asks for no password | **KILLED** (3 of 10) |
+| **M-C1-4** | `nominate()` short-circuits its reconfirmation with `true \|\|` | **KILLED** (2 of 10) |
+
+### M-C1-2 — the mutation that was wrong, not the test
+
+The mutation added a plaintext credential to the array handed to
+`StepUpService::begin()`. Nothing failed.
+
+**That is correct behaviour, and the mutation was the flawed thing.** `begin()`
+does not persist the array it is given — it reads *named keys* out of it and
+writes those to explicit columns. An unknown key is silently dropped and never
+reaches the database, the log or the response. The P1-05 seam is a **allowlist
+by construction**, which is precisely the property that makes it safe to pass a
+target array across a module boundary at all.
+
+So the mutation could not leak anything. **M-C1-2b** was written to leak through
+the channel that *does* persist — `subject_intent` — and was killed immediately.
+Recorded rather than quietly replaced, because "the guard held" and "the
+mutation was incapable of breaking it" are different claims and only one of them
+is evidence.
+
+---
+
+## Correction 2 — D-165 Bootstrap session policy
+
+| ID | Mutation | Result |
+| --- | --- | --- |
+| **M-C2-1** | `IDLE_MINUTES` raised to 100000 — the 30-minute idle limit removed | **KILLED** (3 of 11) |
+| **M-C2-2** | `ABSOLUTE_HOURS` raised to 100000 — the 4-hour absolute limit removed | **KILLED** (2 of 11) |
+| **M-C2-3** | `touch()` called *before* the expiry checks rather than after them | **KILLED** (3 of 11) |
+
+M-C2-3 is the one worth keeping in mind. It is the edit somebody makes for
+tidiness — record the activity first, then validate — and it makes the absolute
+limit unreachable by refreshing the idle clock on the very request that should
+have been refused.
+
+---
+
+## Correction 3 — Identity ownership (D-148)
+
+| ID | Mutation | Result |
+| --- | --- | --- |
+| **M-C3-1** | `identity` added back to every console route constraint | **KILLED** (1 of 6) |
+| **M-C3-2** | `index()` returns `$this->projection->all()` again, so identity arrives as an editable card | **KILLED** (1 of 6) |
+| **M-C3-3** | `IntegrationFamily::writableOnTheConsole()` includes `Identity` | **KILLED** (2 of 6) |
+
+M-C3-2 is why the props are asserted as well as the routes. A route that does
+not resolve stops the *write*; it does nothing about a screen that still ships
+the directory and application identifiers into the page source and renders a
+form that posts nowhere. To a reader that is a second Identity administration
+surface which happens to be broken.
+
+---
+
+## Correction 4 — Not configured, and explicit removal
+
+| ID | Mutation | Result |
+| --- | --- | --- |
+| **M-C4-1** | An absent configuration row defaults to `NotChecked` — the original defect | **KILLED** (4 of 12) |
+| **M-C4-2** | The `$stored === NotChecked &&` guard dropped from the derivation | ***SURVIVED*. The mutant was better.** See below |
+| **M-C4-2b** | The guard restored after the code adopted the mutant | **KILLED** (1 of 14) |
+| **M-C4-2c** | The `NotApplicable` arm dropped from the match | **KILLED** (1 of 14) |
+| **M-C4-3** | `removeSecret()` deletes the credential directly, with no step-up | **KILLED** (1 of 12) |
+| **M-C4-4** | `$submitted !== ''` dropped, so a blank field counts as a submitted secret | ***SURVIVED* twice.** See below |
+| **M-C4-4c** | The same, against the strengthened case | **KILLED** (1 of 15) |
+| **M-C4-5** | The unknown-secret-name check replaced with `if (false)` | **KILLED** (1 of 12) |
+
+### M-C4-2 — the mutation that was an improvement
+
+`SetupProjection` derived *Not configured* only when the stored status was
+already `NotChecked`, on the stated reasoning that a real test result must not
+be overwritten. Removing that condition **changed no test**, because the
+condition protects a state the writer already prevents: every write invalidates
+the stored status, so "a positive stored result" and "an incomplete
+configuration" cannot normally hold at once.
+
+**Normally.** If they ever do — a restored backup, a direct database edit, a
+future write path that forgets to invalidate — the original code displayed a
+stale **Available** beside a configuration missing a required field. That is the
+most misleading sentence this screen is capable of: it reports a working
+integration that cannot possibly work.
+
+So the mutant was adopted as the implementation, `NotApplicable` was given an
+explicit arm (it is a product statement rather than a report about the
+configuration), and two cases were added that write the impossible pair directly
+and assert what is shown. **The docblock that justified the original guard was
+also wrong, and has been replaced rather than left to mislead the next reader.**
+
+### M-C4-4 — the assertion that was satisfied by a refusal
+
+The first version of `test_a_blank_secret_field_keeps_the_saved_value` asserted
+only that the credential was still present afterwards. Dropping `!== ''` left it
+present too — because the blank then counted as a **replacement**, the request
+was redirected to Microsoft, and nothing had been written *yet*. The mutation
+survived while the screen had quietly become one where changing a port sends you
+to re-authenticate and then blanks your password on return.
+
+This is CLAUDE.md §2 exactly: *"an assertion satisfied by any refusal."* The case
+now asserts the whole behaviour — no step-up redirect, **no staged row**, the
+credential intact, and the non-secret field actually saved.
+
+**And it survived a second time.** With the stronger assertions in place the
+mutation *still* changed nothing, for a completely different reason: Laravel's
+`ConvertEmptyStringsToNull` had already turned the blank field into `null`
+before the controller ran, so `is_string()` rejected it unaided. The explicit
+check had **never been the thing enforcing the rule**.
+
+That is worth stating plainly rather than glossing as "equivalent mutant": the
+promise this screen makes to an administrator — *leave it blank to keep it* —
+was resting on a global framework middleware, and would have broken the day
+anybody reordered or removed it for an unrelated reason. A third case now drives
+the same request with that conversion disabled, which is the only way the
+controller's own check is observable at all, and **M-C4-4c** kills the mutation
+there.
+
+---
+
+## Defects these mutations found in the implementation
+
+| Found by | The defect |
+| --- | --- |
+| **P1-08's atomicity guard** | `IntegrationSecretStepUpCompletion::complete()` recorded a state-changing event while relying entirely on `StepUpService::consume()` to have opened the transaction. True on the real path, and not a property the class held itself — the static guard cannot see a transaction two classes away, and a guard that has to be told which callers are trustworthy is the exemption list it exists to avoid. It now opens its own (nested, so a savepoint on the real path) |
+| **`SecretsAreDecryptedInOnePlace`** | `StagedChangeStore` decrypted its own column and passed the plaintext to `put()`. It worked, and it made a **second place in the application where a secret becomes readable** — so "no secret escapes" stopped being one claim to check. The ciphertext is now handed to `IntegrationSecretStore::adoptStaged()`, which owns every decrypt |
+| **Reading `confirmThroughMicrosoft` adversarially** | It stages `array_key_first($replace)`. Every family declares exactly one secret *today*, so a family that gained a second would have the second **silently dropped** — typed, confirmed at Microsoft, never saved, discoverable only at the next connection test. It now refuses, and `OneSecretPerFamilyTest` makes the day that assumption ends a red build |
+| **Reading the rendered screen** | The AI and Fabric cards showed a **"Not configured" badge beside the sentence "This has not been checked yet."** Both halves were individually correct; only the combination was wrong, which is why no test caught it. The fallback sentence now follows the status |
+| **Reading the rendered screen at 390px** | `overflow-wrap: anywhere` on panel headings — added in the first round for an unbreakable 33-character email address — also shrinks a heading's intrinsic min-content width to one character. Beside the status badge in a flex row, the browser then squeezed ordinary headings until they broke mid-word: **"Microso / ft Fabric"** and "AI / service" on a customer's screen. Fixed by scoping `anywhere` to the address token itself, letting the head row wrap, and giving the heading block `min-width: 0` — which is where the overflow fix belonged in the first place. **Both cases were re-measured**, because the obvious repair reintroduced the 426px overflow the original rule existed to stop |
+
+## Flaws found in the TESTS, this round
+
+| Case | The flaw |
+| --- | --- |
+| **`test_a_blank_secret_field_keeps_the_saved_value`** | Satisfied by a refusal. See M-C4-4 |
+| **M-C4-2's premise** | The docblock claimed the `NotChecked` guard protected a real test result from being overwritten. It does not — `! isConfigured()` cannot fire for a complete configuration. The reasoning was wrong and the guard was weaker than the mutant |
+| **M-C1-2 itself** | Written against a channel that does not persist, so it could not have leaked whatever the code did |
+| **`NotConfiguredAndRemovalTest` (first run)** | A private helper named `status()` overrides `PHPUnit\Framework\TestCase::status()`, which is `final` — a **PHP fatal error**, so the file did not run at all and reported as "no output" rather than as a failure |

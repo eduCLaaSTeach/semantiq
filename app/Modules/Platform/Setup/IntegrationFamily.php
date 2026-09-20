@@ -88,6 +88,35 @@ enum IntegrationFamily: string
     }
 
     /**
+     * WHICH FAMILIES THE NORMAL CONSOLE MAY WRITE - D-148.
+     *
+     * IDENTITY IS NOT ONE OF THEM, and that is an ownership boundary rather
+     * than a caution. P1-02 owns Microsoft Entra configuration after
+     * installation: its screens, its re-check, its masking and reveal rules.
+     * Rendering the same editable form under Platform Integrations would make
+     * this a SECOND Identity administration surface - two places to change one
+     * thing, two sets of validation, and two chances for one of them to be
+     * more permissive.
+     *
+     * FIRST-RUN IS THE EXPLICIT EXCEPTION, and it is an exception about WHO
+     * rather than about ownership: the local Bootstrap principal is not a User
+     * and can reach no `/console/*` route at all, so P1-02's screens are
+     * unreachable to it. First-Run renders the setup form and still calls
+     * P1-02's owning writer - it does not create a second model.
+     *
+     * @return list<self>
+     */
+    public static function writableOnTheConsole(): array
+    {
+        return [self::Email, self::Ai, self::Fabric];
+    }
+
+    public function isWritableOnTheConsole(): bool
+    {
+        return in_array($this, self::writableOnTheConsole(), true);
+    }
+
+    /**
      * Fields that are a CHOICE, with the words a person reads.
      *
      * These were free-text inputs whose LABEL carried the permitted values -

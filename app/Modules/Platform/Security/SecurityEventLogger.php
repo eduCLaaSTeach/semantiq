@@ -60,6 +60,20 @@ class SecurityEventLogger
 
     public const BOOTSTRAP_SIGNOUT = 'bootstrap.signout';
 
+    /*
+     * D-165. The setup session ran out of one of its two clocks.
+     *
+     * ITS OWN EVENT rather than bootstrap.signout, because they are different
+     * facts: a sign-out is somebody leaving, an expiry is the deployment
+     * ending a privileged session on its own. Reading a trail where both said
+     * "signed out" would make an abandoned session indistinguishable from a
+     * closed one, and the abandoned one is the one worth noticing.
+     *
+     * `reason` carries which clock - an existing ALLOWED_KEY with a fixed
+     * vocabulary. NO KEY IS ADDED.
+     */
+    public const BOOTSTRAP_SESSION_EXPIRED = 'bootstrap.session.expired';
+
     public const BOOTSTRAP_ADMINISTRATOR_CREATED = 'bootstrap.administrator.created';
 
     /*
@@ -325,6 +339,7 @@ class SecurityEventLogger
         self::BOOTSTRAP_SIGNIN_SUCCEEDED,
         self::BOOTSTRAP_SIGNIN_REFUSED,
         self::BOOTSTRAP_SIGNOUT,
+        self::BOOTSTRAP_SESSION_EXPIRED,
         self::BOOTSTRAP_ADMINISTRATOR_CREATED,
         self::BOOTSTRAP_CLOSED,
         self::BOOTSTRAP_RECOVERY_ISSUED,

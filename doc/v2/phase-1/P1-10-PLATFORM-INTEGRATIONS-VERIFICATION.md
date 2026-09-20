@@ -7,10 +7,12 @@ claim as an observed production result, and nothing below is presented as one.
 | --- | --- |
 | Unit | **P1-10 — Platform Integrations & Setup** (delivery order 12) |
 | DESIGN | merge `a7aef47` — the six Product Owner corrections applied |
-| Suite | **1086 tests, 1080 passed, 0 failed, 0 errors** |
-| P1-10 cases | **62** under `tests/Feature/Setup`, plus **seven** architecture files — `FirstRunRoutesDoNotCollide`, `BootstrapIsNotAUser`, `ConnectionTestsAreNotCapabilities`, `EveryCssTokenIsDeclared`, `OneStatusVocabulary`, `NoKeyRotationTooling`, `IdentityHasOneSource` |
-| Diff | 90 files, ~+8,900 / −133 |
+| Suite | **1137 tests, 1131 passed, 0 failed, 0 errors** (6 skipped, 1 risky — all pre-existing) |
+| P1-10 cases | **105** under `tests/Feature/Setup`, plus **nine** architecture files — `FirstRunRoutesDoNotCollide`, `BootstrapIsNotAUser`, `ConnectionTestsAreNotCapabilities`, `EveryCssTokenIsDeclared`, `OneStatusVocabulary`, `NoKeyRotationTooling`, `IdentityHasOneSource`, `IdentityIsNotWritableOnTheConsole`, `OneSecretPerFamily` |
 | Status | **NOT DEPLOYED — awaiting Product Owner Gate C review** |
+
+**§8 records the four Gate C corrections.** Sections 1–7 describe the state at
+the first Gate C submission and are left as written.
 
 ---
 
@@ -218,3 +220,191 @@ P1-11 deferred with D-130 – D-147 preserved.**
 **No JavaScript test runner exists.** The browser evidence in §4 is a manual
 sweep, recorded as such — not an automated gate that would catch a regression
 next month.
+
+---
+
+## 8. Gate C corrections — what was built, and how each is proven
+
+The Product Owner held the merge of PR #131 and named four implementation gaps
+against the approved D-148 / D-159 / D-165. Each is below with the evidence.
+**Nineteen mutations were run; every one is killed or recorded as equivalent
+with what it taught.** Full detail in `P1-10-MUTATIONS.md`.
+
+### Correction 1 — D-159 step-up and Bootstrap local reconfirmation
+
+**Normal console.** Replacing or removing an *established* credential now
+requires Microsoft step-up through the **existing** P1-05/P1-07 framework — two
+new `StepUpAction` cases and one `StepUpCompletion`, registered in the same
+registry P1-07 established. No second step-up system was built.
+
+**The staging problem, and how it is solved without storing a secret unsafely.**
+The new credential has to survive a round trip to Microsoft. Every obvious place
+to keep it is worse than a dedicated table: the session store on this deployment
+*is* a database table; `pending_step_ups` is P1-05's structural table that every
+listing reads; the URL is in the access log and the referrer; and asking again
+on return makes the confirmation screen a second thing worth phishing.
+
+So `staged_integration_changes` holds it **encrypted, short-lived (10 minutes),
+single-use**, and the step-up row carries only the staged row's **id**.
+Consumption is a conditional `UPDATE` inside the same transaction that consumes
+the step-up, and the ciphertext column is **nulled the moment it is used**, so
+the window in which a credential exists in two places is one transaction.
+
+| Claim | Evidence |
+| --- | --- |
+| Replacing an established secret without step-up is refused | `IntegrationSecretRequiresStepUpTest` — redirect to `/console/access/step-up/`, credential unchanged |
+| Establishing a *first* credential needs no step-up | same file. Requiring it would make First-Run unsatisfiable before Microsoft exists |
+| A successful step-up applies the change exactly once | conditional `UPDATE` with the guard in the `WHERE`; a lost race returns null and rolls the caller back |
+| An expired or refused step-up changes nothing | `test_an_expired_step_up_leaves_the_configuration_unchanged` |
+| `Test connection` requires no step-up | `test_a_connection_test_requires_no_step_up` |
+| **The plaintext never enters step-up storage, the log or Audit** | `test_the_plaintext_never_enters_step_up_storage_or_audit`; `StagedIntegrationChange` hides `ciphertext` and has no decrypt accessor. Mutation **M-C1-2b** writes it into `subject_intent` and is killed |
+
+**Bootstrap half.** First-Run cannot use Microsoft step-up, because Microsoft may
+not exist yet. It reconfirms the **current Bootstrap password** instead, before
+anything is written or staged — for replacing or removing an integration secret,
+and for the first permanent administrator handoff. The password is read from the
+request body only, is never session-persisted, never logged, never written to
+Audit, and every refusal is the same generic sentence. The check goes through
+`Hash::check` via the existing bootstrap credential boundary.
+
+`IntegrationChangeAuthority` answers *"is this change privileged?"* for **both**
+surfaces, so the console and First-Run cannot come to disagree about it.
+
+### Correction 2 — D-165 Bootstrap session policy
+
+30-minute idle, 4-hour absolute, both **server-side**, both independent of
+Laravel's `SESSION_LIFETIME`. The session id is regenerated at authentication
+and the bootstrap state is re-evaluated on every request.
+
+`RequireBootstrapSession` runs the checks **in the required order** — access
+still open, then principal identity, then idle, then absolute — and **updates
+last-activity only after the request has passed them all.** On expiry it clears
+the bootstrap principal keys and the recovery marker, regenerates the session,
+redirects to local sign-in, and records the one new event
+`bootstrap.session.expired`.
+
+| Boundary | Result |
+| --- | --- |
+| 29 min 59 s idle | valid |
+| 30 min idle | **refused** |
+| 3 h 59 min absolute | valid |
+| 4 h absolute, with continuous activity | **refused** |
+| stale recovery context | expires with its bootstrap session |
+| normal SemantIQ user session policy | **unchanged** |
+
+Mutations removing either timeout fail (**M-C2-1**, **M-C2-2**), as does moving
+the activity update before the checks (**M-C2-3**) — the tidy-looking edit that
+makes the absolute limit unreachable.
+
+**`ALLOWED_KEYS` remains 15.** The expiry event carries only keys that already
+existed; the catalogue grew from 87 events to 88, and the tripwire in
+`SystemHealthArchitectureTest` was moved deliberately with the reason recorded
+beside it.
+
+### Correction 3 — Identity is a summary and a link on the normal console
+
+`PUT /console/integrations/identity` and `POST /console/integrations/identity/test`
+**no longer exist**. The boundary is in the route constraint (`email|ai|fabric`),
+not in a controller check: a controller refusal is something somebody can weaken;
+a route that does not resolve has nothing to weaken.
+
+The screen renders `IntegrationSummaryCard` for Microsoft sign-in — status
+badge, last-checked, and **Manage Identity & SSO** → `/console/identity`. It has
+**no input, no select and no test button**, and the props it receives contain
+**no `fields`, `secrets` or `choices` keys at all**: the server sends a
+different shape, so the identifiers are not in the page source to be revealed by
+a later edit.
+
+**First-Run keeps its identity form**, which is the explicit exception — the
+Bootstrap principal is not a `User` and can reach no `/console/*` route — and it
+still writes through the **P1-02-owned** `IntegrationConfigurationWriter` rather
+than a second model. First-Run may establish and replace Microsoft sign-in;
+**removing** it is not routed there, because P1-02 owns taking it away.
+
+`IdentityIsNotWritableOnTheConsoleTest` asserts the writable set as an
+**equality** (`email`, `ai`, `fabric`), that no console route pattern accepts
+`identity` while all three others still match, the console route set exactly,
+that First-Run can still set identity up, and — behaviourally — that the props
+carry identity as a summary only. Mutations **M-C3-1/2/3** are all killed.
+
+### Correction 4 — Not configured, and explicit credential removal
+
+**A. Status semantics.** `SetupProjection` now derives:
+
+| State | Shown |
+| --- | --- |
+| nothing entered, or a required field missing | **Not configured** |
+| complete, never tested | **Not checked** |
+| tested | Available / Needs attention / Unavailable |
+| explicitly not applicable | **Not applicable** — the one stored status the derivation must not touch |
+
+It is **derived, not stored**, so a meaningful edit that *removes* a required
+field lands on **Not configured** without anything having to notice it was a
+removal. All four families are covered.
+
+**B. Removal.** `Remove saved credential` is an **explicit action with its own
+verb, route and confirmation** — `DELETE .../secret/{name}`. It is **never**
+inferred from a blank password field: the form promises that leaving the box
+empty keeps the saved value, and that promise now has a test that survives the
+framework middleware being taken away (see M-C4-4 in the mutation record).
+
+Removal requires D-159 step-up on the console and local-password reconfirmation
+during First-Run. It deletes **only the named allowed secret**, clears the
+previous test evidence and explanation through the owning writer in one
+transaction, recalculates the status to **Not configured**, and records evidence
+carrying **the family and the outcome only** — no credential, host or endpoint.
+An unknown secret name is refused; an absent credential is a no-op that reveals
+nothing either way.
+
+### Defects the corrections themselves surfaced
+
+| Found by | Defect |
+| --- | --- |
+| `actorId()` behaviour test | `property_exists($user, 'id')` is **false** for an Eloquent model — `id` lives in `$attributes` and is reached through `__get`. So the actor was `null` for **every console request**: configuration changes recorded no author, and the D-159 step-up refused to begin because it could not identify who was asking. It failed silently in both directions — nothing threw, the write still happened, `last_changed_by_user_id` was simply empty. **This had been broken since the original EXECUTE** |
+| P1-08's atomicity guard | `IntegrationSecretStepUpCompletion::complete()` relied on its caller's transaction. It now opens its own |
+| `SecretsAreDecryptedInOnePlace` | `StagedChangeStore` had become a **second place a secret becomes readable**. The ciphertext is now handed to `IntegrationSecretStore::adoptStaged()` |
+| Adversarial reading | `confirmThroughMicrosoft` stages one secret and would have **silently dropped** a second. It now refuses, and `OneSecretPerFamilyTest` makes that assumption's end a red build |
+
+---
+
+## 9. Gate C browser verification — what was actually observed
+
+Chromium via Playwright, at **1440×1000 light** and **390×844 dark**, against a
+locally served build of this branch. Two servers: one with a permanent
+administrator (console) and one without (First-Run still open).
+
+| Observation | 1440 light | 390 dark |
+| --- | --- | --- |
+| `/console/integrations` horizontal overflow | none, `scrollWidth` 1440 | none, `scrollWidth` 390 |
+| Identity card inputs / buttons | **0 / 0** | **0 / 0** |
+| Identity card link | `Manage Identity & SSO → /console/identity` | same |
+| Identity card badge | `✓ Available` | same |
+| `Saved credentials` blocks | Email (Password), AI (API key) | same |
+| Removal confirmation | names the credential, says it cannot be recovered, says the integration will stop working, and states that Microsoft re-authentication follows | same |
+| Focus ring on the danger button | `2px solid` | `2px solid` |
+| First-Run integration form | reconfirmation field present, labelled *Confirm with your setup password* | same |
+| First-Run **identity** removal control | **absent**, as designed | **absent** |
+| First-Run nomination password field | present | present |
+| Raw enum / key / route names on screen | none | none |
+| Any saved secret in the page source | **none** | **none** |
+| Browser console errors | only `fonts.googleapis.com` blocked by the sandbox's TLS interception, and a dev-server favicon 404 — **no product errors** | same |
+
+**Two defects were found by reading the rendered screen and fixed:**
+
+1. The AI and Fabric cards showed a **"Not configured"** badge beside the
+   sentence *"This has not been checked yet."* Both halves were individually
+   correct; only the combination was wrong, which is why no test caught it.
+2. At 390px, `overflow-wrap: anywhere` on panel headings broke ordinary titles
+   mid-word — **"Microso / ft Fabric"**, "AI / service". The obvious repair
+   reintroduced the 426px overflow that rule originally existed to stop, so
+   **both cases were re-measured**: headings are now one line each at both
+   widths, and the long nominated address still fits at 390 with
+   `scrollWidth` 390.
+
+### What was NOT observed, and why
+
+| Not observed | Why |
+| --- | --- |
+| A real Microsoft step-up round trip for a credential replacement | It needs a live Entra tenant. The redirect, the staged row, the single-use consumption and the refusal paths are covered by automated cases; **the completed round trip is carried to live observation** |
+| The 30-minute and 4-hour expiries in a real browser session | Observing them means waiting 30 minutes and 4 hours. The boundaries are asserted at 29 m 59 s / 30 m and 3 h 59 m / 4 h with a travelled clock |
+| Any connection test against a real mail, AI or Fabric endpoint | No real credentials were created, per the Product Owner's instruction |

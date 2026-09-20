@@ -55,6 +55,38 @@ enum StepUpAction: string
     case RevokeRestrictedEntitlement = 'revoke_restricted_entitlement';
     case SelfReview = 'self_review';
 
+    /*
+     * P1-10 - D-159. TWO ACTIONS, AND THEY ARE ABOUT A CREDENTIAL RATHER THAN
+     * A ROLE.
+     *
+     * Every action above changes who holds privileged authority. These change
+     * a stored credential the deployment authenticates WITH - the mail
+     * password, the AI key, the Fabric client secret - which is the same class
+     * of thing from the other direction: somebody who can silently replace the
+     * mail credential can redirect the deployment's outbound mail, and somebody
+     * who can replace the Fabric secret can point it at a directory they
+     * control.
+     *
+     * REPLACING AND REMOVING ARE SEPARATE, not one "change" action, because the
+     * completion handler must not have to infer which it is from whether a
+     * payload happens to be present. An absent payload would then mean
+     * "removal" - and an absent payload is also what a failed decrypt looks
+     * like.
+     *
+     * ESTABLISHING a credential for the first time does NOT require step-up.
+     * There is nothing to take away, the administrator already holds
+     * PlatformAdmin, and requiring it would make First-Run unsatisfiable on a
+     * deployment that has no Microsoft yet.
+     *
+     * IDENTITY IS NOT HERE. After Gate C correction 3 the normal console has no
+     * identity write path at all - P1-02 owns it - so there is no action for
+     * this to authorise. First-Run's identity writes are the Bootstrap
+     * principal's, and those reconfirm the local password instead, because
+     * Microsoft step-up cannot exist before Microsoft does.
+     */
+    case ReplaceIntegrationSecret = 'replace_integration_secret';
+    case RemoveIntegrationSecret = 'remove_integration_secret';
+
     /** The P1-07 review actions, named once so nothing has to list them twice. */
     public function isReviewDecision(): bool
     {
@@ -78,6 +110,8 @@ enum StepUpAction: string
             self::ReviewRevokePrivileged => 'remove privileged access after review',
             self::RevokeRestrictedEntitlement => 'remove access to restricted information after review',
             self::SelfReview => 'review your own access',
+            self::ReplaceIntegrationSecret => 'replace a saved connection credential',
+            self::RemoveIntegrationSecret => 'remove a saved connection credential',
         };
     }
 }

@@ -50,6 +50,7 @@ final class BootstrapAuthenticator
     public function __construct(
         private readonly BootstrapAccess $access,
         private readonly SecurityEventLogger $events,
+        private readonly BootstrapSessionPolicy $policy,
     ) {}
 
     /**
@@ -81,6 +82,10 @@ final class BootstrapAuthenticator
         $request->session()->regenerate();
         $request->session()->put(self::SESSION_KEY, $principal->id);
 
+        // D-165. Both clocks start here, server-side, AFTER regeneration - a
+        // timestamp written before it would be discarded with the old session.
+        $this->policy->begin($request);
+
         $principal->last_signed_in_at = now();
         $principal->save();
 
@@ -89,9 +94,9 @@ final class BootstrapAuthenticator
 
     public function signOut(Request $request): void
     {
-        $request->session()->forget(self::SESSION_KEY);
-        $request->session()->forget(BootstrapAccess::RECOVERY_SESSION_KEY);
-        $request->session()->regenerate();
+        // The policy clears every key this session held, including both clocks
+        // and the recovery marker, so sign-out and expiry leave the same state.
+        $this->policy->clear($request);
 
         // BestEffort by declaration. Failing here would keep a privileged
         // session alive because its farewell note could not be filed.

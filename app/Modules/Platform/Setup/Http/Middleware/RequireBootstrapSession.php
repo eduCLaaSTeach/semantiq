@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Setup\Http\Middleware;
 
+use App\Modules\Platform\Security\SecurityEventLogger;
 use App\Modules\Platform\Setup\Bootstrap\BootstrapAccess;
 use App\Modules\Platform\Setup\Bootstrap\BootstrapAuthenticator;
 use App\Modules\Platform\Setup\Bootstrap\BootstrapPrincipal;
+use App\Modules\Platform\Setup\Bootstrap\BootstrapSessionPolicy;
 use App\Modules\Platform\Setup\Bootstrap\Models\BootstrapAdministrator;
 use Closure;
 use Illuminate\Http\Request;
@@ -34,7 +36,11 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class RequireBootstrapSession
 {
-    public function __construct(private readonly BootstrapAccess $access) {}
+    public function __construct(
+        private readonly BootstrapAccess $access,
+        private readonly BootstrapSessionPolicy $policy,
+        private readonly SecurityEventLogger $events,
+    ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -52,10 +58,36 @@ final class RequireBootstrapSession
             return redirect()->route('first_run.sign_in');
         }
 
+        /*
+         * D-165. THE TWO CLOCKS, CHECKED THIRD AND FOURTH.
+         *
+         * After openness and identity, because an expired session on a closed
+         * bootstrap should read as closed rather than as timed out, and before
+         * the touch below, because touching first would refresh the idle window
+         * on the very request that should have failed it - and the idle timeout
+         * would then never fire at all.
+         */
+        if ($this->policy->hasExpired($request)) {
+            $this->policy->clear($request);
+
+            // BestEffort by declaration: failing to record this must not keep
+            // an expired privileged session alive.
+            $this->events->record(SecurityEventLogger::BOOTSTRAP_SESSION_EXPIRED, [
+                'result' => 'expired',
+                'reason' => 'session_timeout',
+            ]);
+
+            return redirect()->route('first_run.sign_in');
+        }
+
         $request->attributes->set(
             'semantiq_bootstrap',
             new BootstrapPrincipal($principal->id, $principal->email),
         );
+
+        // ONLY NOW. Every check above has passed, so this request is a real
+        // one and the idle clock may move.
+        $this->policy->touch($request);
 
         return $next($request);
     }

@@ -6,6 +6,7 @@ namespace App\Modules\Platform\Providers;
 
 use App\Modules\Access\Engine\AccessEngine;
 use App\Modules\Access\Services\AdministratorSetGuard;
+use App\Modules\Access\StepUp\StepUpCompletionRegistry;
 use App\Modules\Organisation\Support\SystemAdministratorNavigationAuthorizer;
 use App\Modules\Platform\Console\Commands\IssueBootstrapGrantCommand;
 use App\Modules\Platform\Console\HealthCommand;
@@ -17,6 +18,7 @@ use App\Modules\Platform\Identity\Microsoft\IdTokenValidator;
 use App\Modules\Platform\Setup\Console\CreateBootstrapAdministratorCommand;
 use App\Modules\Platform\Setup\Console\IssueBootstrapRecoveryCommand;
 use App\Modules\Platform\Setup\Identity\IdentityConfigurationSource;
+use App\Modules\Platform\Setup\StepUp\IntegrationSecretStepUpCompletion;
 use App\Shared\Navigation\Contracts\NavigationAuthorizer;
 use App\Shared\Navigation\NavigationRegistry;
 use Illuminate\Contracts\Routing\Registrar;
@@ -153,6 +155,17 @@ final class PlatformServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        /*
+         * P1-10's half of D-159, registered through the seam P1-07 opened.
+         *
+         * ONE LINE, HERE, rather than an import inside StepUpController. P1-05
+         * must not learn what an integration credential is: later units consume
+         * Access, never the other way round, and the moment that reverses the
+         * accepted unit becomes a switchboard for everything that came after.
+         */
+        $this->app->make(StepUpCompletionRegistry::class)
+            ->register($this->app->make(IntegrationSecretStepUpCompletion::class));
+
         if ($this->app->runningInConsole()) {
             $this->commands([
                 HealthCommand::class,

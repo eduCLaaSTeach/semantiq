@@ -57,6 +57,35 @@ final readonly class IntegrationView
     }
 
     /**
+     * Gate C correction 3. WHAT THE NORMAL CONSOLE RECEIVES FOR IDENTITY.
+     *
+     * D-148 gives Microsoft sign-in to P1-02. The Platform Integrations screen
+     * may SAY how it is, and link to the screen that owns it, and that is all -
+     * so this carries the safe status and nothing an editor would need.
+     *
+     * THE FIELDS ARE ABSENT, NOT HIDDEN. A summary that carried `fields` and
+     * `secrets` and left the component to render neither would put the
+     * directory and application identifiers in the page source of a screen that
+     * has no business holding them, and would come back the first time somebody
+     * reused the same component for a different card.
+     *
+     * @return array<string, mixed>
+     */
+    public function toSummaryArray(): array
+    {
+        return [
+            'family' => $this->family,
+            'name' => $this->name,
+            'status' => $this->status,
+            'statusInWords' => $this->statusInWords,
+            'explanation' => $this->explanation,
+            'lastTestedAt' => $this->lastTestedAt,
+            'lastChangedAt' => $this->lastChangedAt,
+            'required' => $this->required,
+        ];
+    }
+
+    /**
      * The status in the words a person reads. Never the enum value.
      *
      * THESE ARE HealthStatusBadge'S WORDS, EXACTLY.

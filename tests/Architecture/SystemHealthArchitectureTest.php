@@ -230,12 +230,22 @@ final class SystemHealthArchitectureTest extends TestCase
          * THE ASSERTION THAT IS ACTUALLY ABOUT P1-09 IS THIS ONE: no event
          * belongs to this unit's subject at all.
          *
-         * The count below is a tripwire, not the guarantee. It was 77 and is
-         * now 87 because P1-10 declared ten events, which is a legitimate
-         * addition by a different unit - and that is exactly the weakness of a
-         * global count standing in for a per-unit claim: it fails for reasons
-         * that have nothing to do with the unit it names, and the temptation
-         * each time is to bump the number without reading why it moved.
+         * The count below is a tripwire, not the guarantee. It was 77, then 87
+         * because P1-10 declared ten events, and is now 88 because Gate C
+         * correction 2 added ONE more: bootstrap.session.expired, the explicit
+         * evidence that a setup session was ended by the 30-minute idle or
+         * 4-hour absolute limit. Without it the expiry would be silent, and a
+         * D-165 timeout would be indistinguishable in the record from an
+         * administrator closing the tab.
+         *
+         * Each of those is a legitimate addition by a different unit - and
+         * that is exactly the weakness of a global count standing in for a
+         * per-unit claim: it fails for reasons that have nothing to do with the
+         * unit it names, and the temptation each time is to bump the number
+         * without reading why it moved.
+         *
+         * ALLOWED_KEYS DID NOT MOVE. A new event is not a new key, and the
+         * expiry carries only keys that already existed.
          *
          * So the number stays, as a deliberate stop-and-look on ANY event
          * addition, and the sentence beside it no longer claims to be evidence
@@ -249,7 +259,7 @@ final class SystemHealthArchitectureTest extends TestCase
                 "[{$event}] instruments the System Health screen. Reading a health page is not a security event.");
         }
 
-        $this->assertSame(87, count(SecurityEventLogger::events()),
+        $this->assertSame(88, count(SecurityEventLogger::events()),
             'The event catalogue changed size. Read why before changing this number.');
 
         foreach ($this->moduleSources() as $path => $source) {

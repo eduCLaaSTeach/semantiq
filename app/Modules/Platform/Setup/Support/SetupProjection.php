@@ -45,7 +45,59 @@ final class SetupProjection
         $row = IntegrationConfiguration::query()->where('family', $family->value)->first();
 
         $settings = is_array($row?->settings) ? $row->settings : [];
-        $status = HealthStatus::tryFrom((string) $row?->status) ?? HealthStatus::NotChecked;
+
+        /*
+         * NOT CONFIGURED IS NOT NOT CHECKED, and the difference is the whole of
+         * Gate C correction 4A.
+         *
+         *   Not configured  nothing has been entered, or a field the provider
+         *                   needs is missing. There is nothing to check.
+         *   Not checked     a complete configuration exists and nobody has
+         *                   tested it yet.
+         *
+         * The first draft defaulted an absent row to Not checked, which reads
+         * as "somebody should press Test" for an integration that has never
+         * been set up - and leaves an administrator looking for a test button
+         * to explain a state that has nothing to do with testing.
+         *
+         * IT IS DERIVED, NOT STORED. A stored status would have to be
+         * recalculated on every write and would drift the first time somebody
+         * forgot; asking whether the configuration is complete cannot drift,
+         * because completeness IS the question. It also means a meaningful edit
+         * that REMOVES a required field lands on Not configured without
+         * anything having to notice that it was a removal.
+         *
+         * AN INCOMPLETE CONFIGURATION NEVER REPORTS A POSITIVE RESULT, whatever
+         * the row says - and that is a correction found by mutation testing
+         * rather than by design.
+         *
+         * The first version only derived when the stored status was already
+         * NotChecked, reasoning that a real test result must win. Mutating that
+         * guard away changed no test, because it protects a state the writer
+         * already prevents: every write invalidates the stored status, so
+         * "complete test result" and "incomplete configuration" cannot normally
+         * be true together.
+         *
+         * NORMALLY. If they ever ARE - a direct database edit, a restored
+         * backup, or a future write path that forgets to invalidate - the old
+         * version displayed a stale "Available" beside a configuration missing
+         * a required field, which is the single most misleading thing this
+         * screen could say. The mutant was better than the original, so the
+         * mutant is now the code.
+         *
+         * NOT APPLICABLE IS THE ONE EXCEPTION, and it is explicit. It means the
+         * check cannot apply to this deployment at all, which is a product
+         * statement rather than a report about the configuration - overriding
+         * it with "Not configured" would tell an administrator to go and fill
+         * in something that is deliberately absent.
+         */
+        $stored = HealthStatus::tryFrom((string) $row?->status) ?? HealthStatus::NotChecked;
+
+        $status = match (true) {
+            $stored === HealthStatus::NotApplicable => $stored,
+            ! $this->isConfigured($family) => HealthStatus::NotConfigured,
+            default => $stored,
+        };
 
         $fields = [];
         $choices = [];

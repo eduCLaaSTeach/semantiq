@@ -181,6 +181,25 @@ Route::prefix('first-run')->name('first_run.')->group(function (): void {
         Route::post('integration/{family}/test', [IntegrationController::class, 'test'])
             ->where('family', 'identity|email|ai|fabric')
             ->name('integration.test');
+
+        /*
+         * Explicit credential removal during setup - Gate C correction 4B.
+         *
+         * IDENTITY IS NOT IN THE CONSTRAINT, unlike the three routes above.
+         * First-Run may ESTABLISH and REPLACE Microsoft sign-in, because the
+         * Bootstrap principal cannot reach P1-02's console screens and setup
+         * would otherwise be unsatisfiable. Removing it is a different matter:
+         * it is the one required family, removal mid-setup only makes the
+         * deployment less finishable, and P1-02 owns taking it away once there
+         * is anybody who can sign in to do so.
+         *
+         * Like the console route, this is a SEPARATE VERB and never inferred
+         * from a blank password field.
+         */
+        Route::delete('integration/{family}/secret/{name}', [IntegrationController::class, 'removeSecret'])
+            ->where('family', 'email|ai|fabric')
+            ->where('name', '[a-z_]{1,64}')
+            ->name('integration.secret.remove');
     });
 
     Route::get('{grant}', BeginController::class)
@@ -638,13 +657,44 @@ Route::prefix('console')
             ->group(function (): void {
                 Route::get('/', [IntegrationController::class, 'index'])->name('show');
 
+                /*
+                 * D-148. THE WRITABLE SET EXCLUDES IDENTITY, IN THE ROUTE
+                 * CONSTRAINT.
+                 *
+                 * Not in the controller, and not by a check inside update() -
+                 * in the constraint, so PUT /console/integrations/identity
+                 * does not resolve to a route at all. A controller-level
+                 * refusal is a refusal somebody can weaken; a route that does
+                 * not exist has nothing to weaken.
+                 *
+                 * P1-02 owns Microsoft Entra configuration after installation.
+                 * The card on this screen is a SUMMARY AND A LINK to it.
+                 *
+                 * First-Run keeps its identity form, because the Bootstrap
+                 * principal cannot reach P1-02's console screens - see
+                 * IntegrationFamily::writableOnTheConsole().
+                 */
                 Route::put('{family}', [IntegrationController::class, 'update'])
-                    ->where('family', 'identity|email|ai|fabric')
+                    ->where('family', 'email|ai|fabric')
                     ->name('update');
 
                 Route::post('{family}/test', [IntegrationController::class, 'test'])
-                    ->where('family', 'identity|email|ai|fabric')
+                    ->where('family', 'email|ai|fabric')
                     ->name('test');
+
+                /*
+                 * Explicit credential removal - Gate C correction 4B.
+                 *
+                 * A SEPARATE ROUTE, never inferred from a blank password
+                 * field. A blank field means "keep what is saved", which is
+                 * what the form says it means; making it also mean "delete the
+                 * credential" would destroy a working integration for anybody
+                 * who opened the page to change a port.
+                 */
+                Route::delete('{family}/secret/{name}', [IntegrationController::class, 'removeSecret'])
+                    ->where('family', 'email|ai|fabric')
+                    ->where('name', '[a-z_]{1,64}')
+                    ->name('secret.remove');
             });
 
         Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)

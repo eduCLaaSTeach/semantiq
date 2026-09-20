@@ -122,6 +122,48 @@ final class IntegrationConfigurationWriter
     }
 
     /**
+     * A SECRET CHANGED OUTSIDE save() - the step-up completion path.
+     *
+     * Replacing or removing a credential through D-159's two-stage flow does
+     * not go through save(): the value was staged before the administrator left
+     * for Microsoft, and is applied by StagedChangeStore when they come back.
+     * The invalidation still has to happen, and it has to happen HERE rather
+     * than in the completion handler, so there is one place that knows what a
+     * meaningful change does to a stored result.
+     *
+     * Without this, a credential replaced through step-up would leave the
+     * previous Available and its timestamp standing - Correction 5's defect
+     * reappearing through a door Correction 5 did not know about.
+     *
+     * MUST run inside the caller's transaction, which is the one consuming the
+     * step-up reference.
+     */
+    public function recordSecretChanged(IntegrationFamily $family, ?int $actorId = null): void
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException(
+                'recordSecretChanged() must run inside the transaction that applies the change.',
+            );
+        }
+
+        $row = IntegrationConfiguration::query()->firstOrCreate(
+            ['family' => $family->value],
+            ['settings' => [], 'status' => HealthStatus::NotChecked->value],
+        );
+
+        $row->status = HealthStatus::NotChecked->value;
+        $row->explanation = null;
+        $row->last_tested_at = null;
+        $row->last_changed_at = now();
+        $row->last_changed_by_user_id = $actorId;
+        $row->save();
+
+        if ($family === IntegrationFamily::Identity) {
+            $this->invalidateIdentityHealth();
+        }
+    }
+
+    /**
      * The ONLY writer of a positive status.
      *
      * It takes a HealthStatus and a CHOSEN sentence from the adapter that ran

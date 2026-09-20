@@ -79,6 +79,7 @@ final class EventCatalogue
         'bootstrap.signin.succeeded' => ['First-run setup', 'Setup administrator signed in'],
         'bootstrap.signin.refused' => ['First-run setup', 'Setup administrator sign-in refused'],
         'bootstrap.signout' => ['First-run setup', 'Setup administrator signed out'],
+        'bootstrap.session.expired' => ['First-run setup', 'Setup session timed out'],
         'bootstrap.administrator.created' => ['First-run setup', 'Setup administrator created'],
         'bootstrap.closed' => ['First-run setup', 'First-run setup closed'],
         'bootstrap.recovery.issued' => ['First-run setup', 'Setup recovery token issued'],
@@ -219,6 +220,11 @@ final class EventCatalogue
         // Failing a sign-out on an audit error keeps a privileged session
         // alive, which is the wrong direction to fail in.
         'bootstrap.signout' => [AuditCategory::UserAccess, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::BestEffort],
+        // BestEffort, like auth.session.expired above it and for the same
+        // reason: failing to end an expired privileged session because its
+        // note could not be filed would KEEP that session alive, which is the
+        // wrong direction to fail in.
+        'bootstrap.session.expired' => [AuditCategory::SecurityEvents, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::BestEffort],
         'bootstrap.administrator.created' => [AuditCategory::AdminChanges, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
         // THE EVIDENCE THAT BOOTSTRAP WAS CLOSED. StateChange, so it commits
         // inside the same transaction as the closure and the first permanent

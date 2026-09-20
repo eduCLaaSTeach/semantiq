@@ -87,6 +87,41 @@ final class IntegrationSecretStore
         }
     }
 
+    /**
+     * Adopt a credential that was staged for a D-159 confirmation.
+     *
+     * THE CIPHERTEXT COMES IN AND THE DECRYPTION HAPPENS HERE, which is the
+     * whole reason this method exists rather than StagedChangeStore simply
+     * decrypting its own column and calling put().
+     *
+     * That version worked and was wrong: it made a SECOND place in the
+     * application where a secret is turned back into plaintext, and
+     * "no secret escapes" stopped being one claim to check and became two.
+     * SecretsAreDecryptedInOnePlace caught it, which is exactly what it is for.
+     *
+     * FALSE, NOT AN EXCEPTION, when the payload cannot be decrypted - the same
+     * silence as get(), for the same reason: a DecryptException describes the
+     * ciphertext it failed on. The caller rolls back rather than writing an
+     * empty credential over a working one.
+     */
+    public function adoptStaged(string $family, string $name, string $ciphertext, ?int $actorId = null): bool
+    {
+        try {
+            $value = Crypt::decryptString($ciphertext);
+        } catch (DecryptException) {
+            // Deliberately swallowed whole. See the class docblock.
+            return false;
+        }
+
+        if ($value === '') {
+            return false;
+        }
+
+        $this->put($family, $name, $value, $actorId);
+
+        return true;
+    }
+
     public function forget(string $family, string $name): void
     {
         IntegrationSecret::query()

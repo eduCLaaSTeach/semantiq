@@ -3163,8 +3163,17 @@ button.shell-link:hover .icon { color: var(--accent); }
      containing a 33-character token with no space in it, and at 390px it made
      .setup-main 402px wide - the whole column overflowed the phone. Found by
      measuring at 390 with a realistic address; a short one fits and hides it,
-     which is why the sweep uses a long one. */
-  overflow-wrap: anywhere;
+     which is why the sweep uses a long one.
+
+     break-word, NOT anywhere. `anywhere` also shrinks the element's intrinsic
+     MIN-CONTENT width to one character, and beside the status badge in the
+     flex row below that let the browser squeeze an ordinary heading until it
+     broke mid-word: "Microso / ft Fabric" and "AI / service" on a customer's
+     screen at 390px. `break-word` still breaks the unbreakable address - it
+     just will not volunteer to break "Microsoft". The overflow it was added
+     for is held by min-width: 0 and the wrap below, which is where that
+     belonged in the first place. */
+  overflow-wrap: break-word;
 }
 
 .setup-panel-head {
@@ -3173,6 +3182,27 @@ button.shell-link:hover .icon { color: var(--accent); }
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
+  /* THE BADGE DROPS BELOW THE HEADING BEFORE THE HEADING IS CRUSHED. On a
+     phone there is not room for both, and a readable title with the status
+     underneath beats a title broken across a syllable. */
+  flex-wrap: wrap;
+}
+
+/* Lets the heading block shrink below its min-content width instead of
+   pushing the column wider than the viewport - the actual cause of the 402px
+   overflow, rather than the character-level breaking that was standing in
+   for it. */
+.setup-panel-head > div {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+/* An identifier that has no spaces in it and must be allowed to break anywhere
+   rather than widen the column: a nominated email address in a heading, and
+   nothing else. Scoped to the token instead of to every heading, because
+   `anywhere` on a heading also lets the browser break ordinary words. */
+.setup-breakable {
+  overflow-wrap: anywhere;
 }
 
 .setup-panel-head h2 { margin-bottom: var(--space-1); }
@@ -3271,6 +3301,49 @@ button.shell-link:hover .icon { color: var(--accent); }
 .setup-form-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 
 .setup-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* SAVED CREDENTIALS AND THEIR REMOVAL — Gate C correction 4B.
+
+   SEPARATED FROM THE FORM BY A RULE, not just by a gap. Everything above this
+   line is reversible by typing something else and saving again; removal is not,
+   and the boundary has to be visible before the button is read rather than
+   after it is pressed. */
+.setup-removal {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--card-border);
+}
+
+.setup-removal h3 {
+  font-size: 13px;
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+  text-transform: none;
+}
+
+.setup-removal-item + .setup-removal-item {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--card-border);
+}
+
+.setup-removal-name {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  /* These carry field names and, in the confirmation below, service names. */
+  overflow-wrap: anywhere;
+}
+
+.setup-removal-state { color: var(--text-muted); }
+
+.setup-removal-confirm {
+  padding: var(--space-3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+}
+
+.setup-removal-confirm .setup-field:last-of-type { margin-bottom: var(--space-3); }
 
 /* The one-time handover link. It must be readable and selectable in full, and
    it must WRAP: a 64-character token in a fixed-width box would be truncated
