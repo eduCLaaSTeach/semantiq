@@ -202,14 +202,68 @@ enum IntegrationFamily: string
         };
     }
 
-    /** The name a person sees. Never the enum value. */
+    /**
+     * The name a person sees. Never the enum value.
+     *
+     * THESE ARE D-148's WORDS, RESTORED. The ruling named the four integrations
+     * "Identity/SSO, Email & Notifications, AI Provider, Microsoft Fabric", and
+     * the implementation drifted to "Email delivery" and "AI service" - close
+     * enough to look deliberate, different enough that the screen, the decision
+     * record and the body of the test message SemantIQ sends all disagreed
+     * about what the feature is called.
+     *
+     * ONE NAME PER FAMILY, FROM HERE. The tab strip, the section heading and
+     * the First-Run step list all read this method, so a fifth spelling cannot
+     * appear without changing this line. TestEmailSender::BODY already said
+     * "Email & Notifications connection", which is how the drift was noticed.
+     */
     public function inWords(): string
     {
         return match ($this) {
             self::Identity => 'Microsoft Entra ID',
-            self::Email => 'Email delivery',
-            self::Ai => 'AI service',
+            self::Email => 'Email & Notifications',
+            self::Ai => 'AI Provider',
             self::Fabric => 'Microsoft Fabric',
         };
+    }
+
+    /**
+     * What this integration is FOR, in a sentence, for the section heading.
+     *
+     * Not a status and not an instruction. Every other feature's section head
+     * carries one of these - System Health's "Checked when this page was
+     * opened", Company Profile's "Create the organisation before adding any
+     * structure" - and a tab that opened onto a bare card was the one place in
+     * System Administration that told the reader nothing about what they had
+     * just opened.
+     */
+    public function describedAs(): string
+    {
+        return match ($this) {
+            self::Identity => 'How people sign in to SemantIQ. Managed on the Identity & SSO '
+                .'screen, which is also where it is checked.',
+            self::Email => 'The mail server SemantIQ sends notifications and system messages '
+                .'through.',
+            self::Ai => 'The AI service SemantIQ will use. Saving these details stores them and '
+                .'checks they are accepted; no request for a generated answer is ever made here.',
+            self::Fabric => 'The Microsoft Fabric workspace SemantIQ will connect to. Nothing is '
+                .'read from it on this screen.',
+        };
+    }
+
+    /**
+     * Where this family's tab lives.
+     *
+     * THE FIRST TAB IS THE BARE PATH, exactly as Company Profile is
+     * /console/organisation and Microsoft Entra ID is /console/identity. Every
+     * Pattern B strip in this product is shaped that way, and a fourth shape
+     * invented here would be the thing the Product Owner asked us to stop
+     * doing.
+     */
+    public function consolePath(): string
+    {
+        return $this === self::Identity
+            ? '/console/integrations'
+            : '/console/integrations/'.$this->value;
     }
 }

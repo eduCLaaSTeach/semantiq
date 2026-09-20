@@ -7,7 +7,7 @@ claim as an observed production result, and nothing below is presented as one.
 | --- | --- |
 | Unit | **P1-10 — Platform Integrations & Setup** (delivery order 12) |
 | DESIGN | merge `a7aef47` — the six Product Owner corrections applied |
-| Suite | **1186 tests, 1180 passed, 0 failed, 0 errors** (6 skipped, 1 risky — all pre-existing) — 1176/1170 at Gate C, plus the ten cases §14 added |
+| Suite | **1198 tests, 1192 passed, 0 failed, 0 errors** (6 skipped, 1 risky — all pre-existing) — 1176/1170 at Gate C, plus the ten cases §14 added and the twelve §15 added |
 | P1-10 cases | **105** under `tests/Feature/Setup`, plus **nine** architecture files — `FirstRunRoutesDoNotCollide`, `BootstrapIsNotAUser`, `ConnectionTestsAreNotCapabilities`, `EveryCssTokenIsDeclared`, `OneStatusVocabulary`, `NoKeyRotationTooling`, `IdentityHasOneSource`, `IdentityIsNotWritableOnTheConsole`, `OneSecretPerFamily` |
 | Merge | `1a4068b` — squash of PR #131 into `main`, after Gate C approval at `020de16` |
 | Status | **DEPLOYED. Gate C approved; awaiting Product Owner Gate D acceptance** |
@@ -940,3 +940,182 @@ CI failure** rather than a discovery. It pins each hard-coded expectation in
 both verification workflows to the thing it is a copy of: the approved identity
 write set to the registered routes, the six table names to tables that exist,
 and the Audit key count to the catalogue. Three mutations, three killed.
+
+---
+
+## 15. GATE D — THE UI CORRECTION
+
+**Held by the Product Owner after looking at the live screen.** Not a defect a
+test could have found, and not one any of the three Gate C browser sweeps did:
+every one of them checked this screen *against itself*.
+
+### 15.1 What was wrong
+
+Platform Integrations was **the only System Administration feature that had
+invented its own information architecture.** Every other one — Organisation,
+Users and groups, Identity & SSO, Security Status, Access Reviews, Audit,
+System Health — reads:
+
+```
+FEATURE      the feature, named once, with what it is for
+TAB          the section you are in, route-backed
+SECTION      that section's own heading, description and status
+CONTENT      the section's body
+```
+
+Integrations was a feature header followed by **four detached cards stacked on
+one URL**. It was not broken, and each card was individually fine, which is
+exactly why three rounds of review passed over it: nothing in it was wrong
+until it was put beside Organisation.
+
+### 15.2 What was built
+
+**The shared Pattern B strip, and no new CSS at all.** `org-tabs`, `org-tab`
+and `org-tab-active` already carry the browser-tab shape, the 44px touch
+target, the focus ring, the active fill and the wrap-instead-of-scroll
+behaviour below 640px that four earlier strips share. A fifth set of styles for
+this one feature is how two screens come to disagree about what a selected tab
+looks like.
+
+| | |
+| --- | --- |
+| `/console/integrations` | **Microsoft Entra ID** — summary and link, no form |
+| `/console/integrations/email` | **Email & Notifications** |
+| `/console/integrations/ai` | **AI Provider** |
+| `/console/integrations/fabric` | **Microsoft Fabric** |
+
+The first tab is the bare path, exactly as Company Profile is
+`/console/organisation` and Microsoft Entra ID is `/console/identity`. It also
+means `integrations.show` — the name `ApprovedMenu` already points the menu leaf
+at — keeps working with the navigation unchanged.
+
+**THE LABELS ARE D-148'S, RESTORED.** The ruling named the four integrations
+"Identity/SSO, Email & Notifications, AI Provider, Microsoft Fabric". The
+implementation had drifted to **"Email delivery"** and **"AI service"** — close
+enough to look deliberate, different enough that the screen, the decision
+record and the body of the test message SemantIQ sends all disagreed about what
+the feature is called. `TestEmailSender::BODY` already said *"Email &
+Notifications connection"*, which is how the drift was noticed.
+
+They now come from `IntegrationFamily::inWords()`, and the tab strip is given
+them by the server rather than holding a copy. That is the one deliberate
+difference from `OrganisationTabs`, which hard-codes its six: Organisation's
+sections are not an enum, and these four are.
+
+### 15.3 What was NOT done, and one thing that was undone
+
+**No functional or security behaviour changed.** Six-table schema, identity
+authority, `.env`, cutover state, Bootstrap, step-up, Audit, the email, AI and
+Fabric boundaries, `ALLOWED_KEYS`, session driver, `APP_KEY` and every carried
+gate are untouched. The correction adds **one GET route** and changes which
+props one screen receives.
+
+**A `/console/integrations/identity` redirect was written and then removed.**
+It is the obvious address to guess and the Product Owner named it, so it went
+in first. Its cost showed up in a guard rather than in review:
+`PostInstallSsoChange` asserts that `PUT /console/integrations/identity` is
+**NOT FOUND**, and once any verb answered on that URI the same request became a
+**405**. Neither status writes anything, so the guarantee survived either way —
+but *"that route does not exist"* is a stronger sentence than *"that method is
+not allowed there"*, and it is the sentence D-148 is written in. A convenience
+URL is not worth trading it for. Company Profile has no
+`/console/organisation/profile` either.
+
+### 15.4 The section head, and why two components gained a prop
+
+Every Pattern B feature puts the section name in an `org-section-head` between
+the strip and the content. The integration cards carried their own heading
+because they used to be four stacked on a page with no section level at all,
+and two headings saying the same thing is worse than either.
+
+`IntegrationForm` and `IntegrationSummaryCard` now take `showHeading`, which
+**defaults to true**: First-Run has no strip and no section head, so there the
+card *is* the section and dropping its heading would leave a setup step with no
+name. Only the console turns it off.
+
+`IntegrationFamily::describedAs()` supplies the section description — what the
+integration is **for**. It is kept distinct from `explanation`, which is what
+the last connection test **said**, so a stale test result can never be rendered
+where a description belongs. `IntegrationView` gaining that field had to answer
+the S1 shape guard, and the answer is a case proving it comes only from the
+enum.
+
+### 15.5 Automated guards — the nine the Product Owner asked for
+
+`tests/Feature/Setup/IntegrationsFollowTheSharedTabLayoutTest.php`, eleven
+cases, plus the existing guards narrowed rather than relaxed.
+
+| Asked for | Case |
+| --- | --- |
+| 1. Exactly four tabs | `test_there_are_exactly_four_tabs` |
+| 2. The four exact labels | `test_the_tab_labels_are_exactly_the_approved_names`, `test_the_labels_are_the_family_names_and_not_a_second_copy` |
+| 3. Identity summary/link only | `test_the_identity_tab_is_a_summary_and_a_link` |
+| 4. Email/AI/Fabric keep their forms | `test_the_writable_tabs_keep_their_forms`, `test_each_writable_tab_still_receives_its_own_editable_configuration` |
+| 5. The active tab follows the route | `test_the_active_tab_follows_the_route`, `test_every_tab_href_is_a_real_route` |
+| 6. No duplicate write path | `test_the_tabs_add_no_write_route`, and the console route set as an equality |
+| 7. Authorisation still `PlatformAdmin` | `test_every_tab_route_requires_platform_administration` |
+| 8. No secret in navigation or props | `test_the_tab_props_carry_no_value_at_all` |
+| 9. Existing security tests green | the whole suite, below |
+
+**Four existing guards were updated, and each got stronger rather than
+weaker:**
+
+- `IdentityIsNotWritableOnTheConsole` — the console route set is still an
+  equality, now seven entries; the props case reads `integration`/`summary`
+  and can now say identity has **no** editable shape at all rather than that it
+  is absent from a list.
+- `PostInstallSsoChange` — the no-edit-form case walks **all four tabs** rather
+  than one page, so it also catches identity reappearing on somebody else's tab.
+- `NoSecretReachesTheBrowser` S1 — walks all four tabs and requires **each** to
+  prove it rendered its own configuration first. The old version could have
+  passed with three integrations rendering nothing.
+- The `IntegrationView` shape guard — answered for `describedAs` with a case
+  proving it comes only from the enum.
+
+### 15.6 Browser verification — twenty measurements against Organisation
+
+Five screens — Organisation and all four Integrations tabs — at **1440 light,
+1440 dark, 390 light and 390 dark**. Every property below was read from the
+rendered page, not asserted about.
+
+| Measured | Organisation | Integrations | 
+| --- | --- | --- |
+| Tab radius, 1440 | `10px` | `10px` |
+| Tab radius, 390 | `999px` (pill) | `999px` (pill) |
+| Tab height | 44px | 44px |
+| Active background, light | `rgb(255,255,255)` | `rgb(255,255,255)` |
+| Active background, dark | `rgb(37,62,93)` | `rgb(37,62,93)` |
+| Inactive background, light | `rgba(25,62,107,0.06)` | `rgba(25,62,107,0.06)` |
+| Inactive background, dark | `rgba(255,255,255,0.07)` | `rgba(255,255,255,0.07)` |
+| Strip bottom rule | `1px` | `1px` |
+| Focus ring | `2px solid` | `2px solid` |
+| Content below the tab boundary | yes | yes |
+| Page-level horizontal overflow | none | none |
+| Mid-word breaking on a tab | none | none |
+
+**In all four views:** four tabs, the labels
+`Microsoft Entra ID / Email & Notifications / AI Provider / Microsoft Fabric`,
+exactly one active with `aria-current="page"`, the section heading matching the
+active tab, and **no secret in any page source**. The Microsoft Entra ID tab
+renders **0 inputs**; Email renders 7 with 1 password box; AI and Fabric render
+4 with 1 each.
+
+**One console error appears on every page, Organisation included:**
+`ERR_CERT_AUTHORITY_INVALID` for the Google Fonts stylesheet. It is this
+environment's inspecting proxy, not the application, and it is why the sweep
+blocks the font request — the same block on both sides, so the comparison
+holds.
+
+**Two things the measurements cannot settle and a person had to look at:** the
+screens were read at all four sizes. The first tab carries a focus outline in
+the 1440 screenshots because the sweep focuses it to measure the ring; that is
+the instrument, not the screen.
+
+### 15.7 Mutations
+
+**Eleven run. Nine killed first time. Two survived**, and both were the same
+flaw — a guard whose premise was never established — rather than a gap in the
+rule. One was an assertion satisfied by a *comment about* the rule it checks;
+the other fell through to the correct answer because the fixture had never been
+tested. Both are recorded in full in `P1-10-MUTATIONS.md` and both are killed
+after the tests were strengthened.

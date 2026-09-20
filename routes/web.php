@@ -671,6 +671,47 @@ Route::prefix('console')
                 Route::get('/', [IntegrationController::class, 'index'])->name('show');
 
                 /*
+                 * GATE D UI CORRECTION. ONE ROUTE PER TAB, Pattern B.
+                 *
+                 * The four integrations were four cards stacked on one URL.
+                 * They are now four tabs, and a tab in this product is a real
+                 * link to a real URL - so browser Back works, a refresh keeps
+                 * the section, and a section can be linked to directly. A
+                 * client-only switch hiding four screens behind one URL breaks
+                 * every one of those.
+                 *
+                 * MICROSOFT ENTRA ID IS THE BARE PATH, exactly as Company
+                 * Profile is /console/organisation. `integrations.show` is the
+                 * name ApprovedMenu already points the menu leaf at, so the
+                 * first tab keeps working without the navigation knowing
+                 * anything changed.
+                 *
+                 * THERE IS DELIBERATELY NO /console/integrations/identity.
+                 *
+                 * A redirect there was written first, because it is the obvious
+                 * address to guess. It was removed when its cost showed up in a
+                 * guard rather than in review: PostInstallSsoChange asserts that
+                 * PUT /console/integrations/identity is NOT FOUND, and once any
+                 * verb answered on that URI the same request became a 405. The
+                 * claim survives either way - neither status writes anything -
+                 * but "that route does not exist" is a stronger sentence than
+                 * "that method is not allowed there", and it is the sentence
+                 * D-148 is written in.
+                 *
+                 * A convenience URL is not worth trading it for. Company
+                 * Profile has no /console/organisation/profile either.
+                 *
+                 * NO NEW WRITE VERB. This is a GET. The PUT, POST and DELETE
+                 * constraints below are untouched, and identity still has none
+                 * of them: IdentityIsNotWritableOnTheConsole asserts the whole
+                 * console set as an equality, so it had to be justified there
+                 * before it could be added here.
+                 */
+                Route::get('{family}', [IntegrationController::class, 'show'])
+                    ->where('family', 'email|ai|fabric')
+                    ->name('family');
+
+                /*
                  * D-148. THE WRITABLE SET EXCLUDES IDENTITY, IN THE ROUTE
                  * CONSTRAINT.
                  *

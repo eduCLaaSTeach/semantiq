@@ -77,24 +77,72 @@ final class IntegrationController
      */
     public function index(Request $request): Response
     {
-        $writable = [];
-        $summaries = [];
+        return $this->renderTab($request, IntegrationFamily::Identity);
+    }
+
+    /**
+     * One writable family's tab.
+     *
+     * GATE D UI CORRECTION. FOUR CARDS STACKED ON ONE PAGE BECOME FOUR TABS.
+     *
+     * The Product Owner compared this screen with Organisation and found it
+     * was the only System Administration feature that had invented its own
+     * information architecture: a column of detached cards where every other
+     * feature has FEATURE -> TAB -> CONTENT. It now uses the same strip, the
+     * same classes and the same route-backed Pattern B links as Organisation,
+     * Users and groups, Identity & SSO, Security Status and Audit.
+     *
+     * THIS IS A SECOND ENTRY POINT, NOT A SECOND IMPLEMENTATION. It and
+     * index() both call renderTab(), which is the only place that builds these
+     * props - so a tab cannot come to disagree with the landing page about what
+     * an integration looks like. No write path is added by any of this: the
+     * PUT, POST and DELETE verbs are untouched, and identity has none of them.
+     */
+    public function show(Request $request, string $family): Response
+    {
+        return $this->renderTab($request, $this->family($family));
+    }
+
+    /**
+     * The props every Platform Integrations tab is built from.
+     *
+     * THE SPLIT IS SERVER-SIDE, not a component that chooses to render fewer
+     * inputs. IntegrationFamily::writableOnTheConsole() decides, the same list
+     * the routes are constrained to, so the props and the routes cannot come to
+     * disagree - and the identity props do not contain the directory and
+     * application identifiers at all.
+     *
+     * ONLY THE ACTIVE TAB'S CONFIGURATION IS SENT. The other three are not in
+     * the page source, which is a smaller improvement than it sounds like but a
+     * real one: a screen that shipped every integration's settings to the
+     * browser on every visit had three times the surface for a future edit to
+     * leak something through.
+     *
+     * THE TAB LABELS COME FROM IntegrationFamily, not from a list in the React
+     * component. Organisation hard-codes its six because its sections are not
+     * an enum; these four are, and a hard-coded copy here would be a second
+     * place the product's name for a family could drift - which is exactly the
+     * drift D-148's words were just restored from.
+     */
+    private function renderTab(Request $request, IntegrationFamily $active): Response
+    {
+        $tabs = [];
 
         foreach (IntegrationFamily::cases() as $family) {
-            $view = $this->projection->forFamily($family);
-
-            if ($family->isWritableOnTheConsole()) {
-                $writable[] = $view->toArray();
-
-                continue;
-            }
-
-            $summaries[] = $view->toSummaryArray();
+            $tabs[] = [
+                'family' => $family->value,
+                'label' => $family->inWords(),
+                'href' => $family->consolePath(),
+            ];
         }
 
+        $view = $this->projection->forFamily($active);
+
         return Inertia::render('Platform/Integrations', [
-            'integrations' => $writable,
-            'summaries' => $summaries,
+            'tabs' => $tabs,
+            'active' => $active->value,
+            'integration' => $active->isWritableOnTheConsole() ? $view->toArray() : null,
+            'summary' => $active->isWritableOnTheConsole() ? null : $view->toSummaryArray(),
         ])->toResponse($request);
     }
 

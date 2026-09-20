@@ -6,6 +6,13 @@ This is the script to use for acceptance. It is not a shortened version of the
 Gate C script for convenience — it is a *different* script, because the Gate C
 one asks for things that must never be done to production.
 
+> **REGENERATED after the Gate D UI correction.** The first version of this
+> script was written against a screen that showed four stacked cards on one
+> URL. The Product Owner held Gate D because that was the only System
+> Administration feature not following the Organisation layout. Integrations
+> now uses the same tab pattern, so **CHECK 1 verifies that first**, and the
+> four integrations have a check each rather than sharing two.
+
 ---
 
 ## 1. Feature being tested
@@ -19,8 +26,8 @@ Three things, which are really one:
 2. A **First-Run setup flow** where that person enters Microsoft sign-in and,
    optionally, email, AI and Fabric details.
 3. An **Integrations screen** inside System Administration where those same
-   details are managed afterwards — including, now, **changing Microsoft
-   sign-in after installation**.
+   details are managed afterwards — four tabs, one per integration — including,
+   now, **changing Microsoft sign-in after installation**.
 
 Checks 1 to 7 look at the third. Check 8 confirms nothing else moved.
 
@@ -35,7 +42,7 @@ Checks 1 to 7 look at the third. Check 8 confirms nothing else moved.
 | Post-merge CI | run **341** — SUCCESS |
 | Deployment | **Deploy to cPanel (SSH)** run **154** — SUCCESS |
 | Suite at merge | **1176 tests, 1170 passed, 0 failures** |
-| Suite now | **1186 tests, 1180 passed, 0 failures** — ten cases added for the defect in §9.6 |
+| Suite now | **1198 tests, 1192 passed, 0 failures** — ten cases for the defect in §9.6, twelve for the tab correction |
 | Follow-up merge | `27904cc` — PR #132: the §9.6 defect, the read-only production verification, and this script |
 | Follow-up CI / deploy | CI run **343**, deploy run **155** — SUCCESS, first attempt |
 | Production state verified | `Verify P1-10 Platform Setup state` run 1 and `Verify P1-02 identity state` run 4 — both SUCCESS |
@@ -81,6 +88,9 @@ save nothing.**
 | **Audit entries** | Every save and every test writes a permanent audit entry. There is no delete |
 | **Microsoft sign-in** | Changing it is the one setting whose failure locks *everybody* out, including whoever changed it. This script does not ask you to change it |
 
+**Every tab in CHECKS 4, 5 and 6 is opened and left without saving.** Reading a
+tab writes nothing. Pressing Save on one does.
+
 **CHECK 3 opens the Microsoft sign-in change screen and stops there.** Do not
 press Save on it. If you do, SemantIQ will send you to Microsoft to
 re-authenticate and will verify the details before anything is activated — but
@@ -94,30 +104,37 @@ the controlled cutover is a separate, scheduled exercise and this is not it.
 
 ---
 
-### CHECK 1 — Navigation, and the four integrations
+### CHECK 1 — Platform Integrations follows the Organisation layout
 
-**Open:** System Administration → **Integrations**
+**This is the check the previous version of this script was held for.** Open
+Organisation first so you have it to compare against.
+
+**Open:** System Administration → **Organisation**, then System Administration
+→ **Integrations**
 
 | # | Step | Expected | P/F |
 | --- | --- | --- | --- |
-| 1.1 | Find Integrations from the main navigation, without a typed address | It is reachable by clicking, and you can tell from the label what it is | |
-| 1.2 | Count the cards | **Four**: Microsoft Entra ID, Email delivery, AI service, Microsoft Fabric | |
-| 1.3 | Read each card's name and description | Business wording. **No** raw key, enum, route name or class name — nothing like `fabric`, `staged_integration_changes`, `console.integrations`. A status reading **Not checked**, in words with a capital and a space, is the product wording and is correct; `not_checked` would not be | |
-| 1.4 | Read each status | You can tell what it means without asking anybody | |
-| 1.5 | Look for anything that reads like an error dump | There is none — no stack trace, no exception text, no provider error body | |
+| 1.1 | On Integrations, read the top of the page | A title, **Integrations**, with a short business sentence under it saying what the feature is for — the same shape as Organisation's | |
+| 1.2 | Look directly below that | A **horizontal row of tabs**, in the same place, at the same height, with the same shape as Organisation's | |
+| 1.3 | Count and read the tabs | **Four**, reading exactly: **Microsoft Entra ID**, **Email & Notifications**, **AI Provider**, **Microsoft Fabric** | |
+| 1.4 | Look at which tab is selected | **Exactly one.** It is filled, outlined and attached to the line below the row — the same treatment as Company Profile on Organisation | |
+| 1.5 | Click each tab in turn | The selection moves, the address bar changes, and the content below changes with it | |
+| 1.6 | Look below the tabs on each one | A **section heading naming that tab**, a sentence saying what the integration is for, its **status on the right**, and then the content — the same order as Organisation | |
+| 1.7 | Put the two screens side by side | They look like the same product: same heading sizes, same spacing, same line under the tabs, same card treatment | |
 
 ---
 
-### CHECK 2 — Who owns Microsoft sign-in
+### CHECK 2 — Microsoft Entra ID is a summary, not a form
 
-**Stay on:** System Administration → Integrations
+**Open:** Integrations → **Microsoft Entra ID** tab
 
 | # | Step | Expected | P/F |
 | --- | --- | --- | --- |
-| 2.1 | Look at the **Microsoft Entra ID** card | A status is shown, and it is **not** "Not configured" — sign-in works, so the card must not say otherwise. It reads **Not checked**: configured, and nobody has tested it from this screen yet | |
-| 2.2 | Try to type into it | **There is nothing to type into.** No field, no dropdown | |
-| 2.3 | Look for a **Test connection** button on that card | **There is none.** The other three have one; this one does not | |
-| 2.4 | Click **Manage Identity & SSO** | You arrive at the Identity & SSO area — a different screen, owned by a different part of the product | |
+| 2.1 | Read the status | It is shown, and it is **not** "Not configured" — sign-in works, so the screen must not say otherwise. It reads **Not checked**: configured, and nobody has tested it from here | |
+| 2.2 | Try to type anything | **There is nothing to type into.** No field, no dropdown | |
+| 2.3 | Look for a **Test connection** button | **There is none.** The other three tabs have one; this one does not | |
+| 2.4 | Click **Manage Identity & SSO** | You arrive at Identity & SSO — a different screen, owned by a different part of the product | |
+| 2.5 | Come back and re-read the tab | It still says sign-in settings are managed and checked on the Identity & SSO screen, not here | |
 
 > Why this matters: Microsoft sign-in is managed in exactly one place. If it
 > could also be edited here, two screens could disagree about how people sign
@@ -125,85 +142,89 @@ the controlled cutover is a separate, scheduled exercise and this is not it.
 
 ---
 
-### CHECK 3 — The change screen, opened and not saved
+### CHECK 3 — The Identity & SSO change screen, opened and not saved
 
 **Open:** Identity & SSO → Microsoft Entra ID → **Change configuration**
 
 | # | Step | Expected | P/F |
 | --- | --- | --- | --- |
-| 3.1 | Read the page heading and description | It says this is where Microsoft sign-in is changed. It does **not** say the settings are read-only or server-only — that wording was removed | |
+| 3.1 | Read the heading and description | It says this is where Microsoft sign-in is changed. It does **not** say the settings are read-only or server-only | |
 | 3.2 | Look at the directory, application and return-address fields | Each shows the current value, so you can see what you are changing from | |
 | 3.3 | Look at the **client secret** box | It is **empty**, and says the saved one is kept if you leave it blank. The saved secret is **not** shown | |
 | 3.4 | Read the explanation above the fields | It tells you, before you type: SemantIQ will ask Microsoft to confirm it is you, then check the new details actually work, and only then switch over | |
-| 3.5 | Use your browser's **View source** and search for the secret | It is not there. Nor is it in the page in any other form | |
-| 3.6 | Press **Back** / **Cancel** — **do not save** | You return to the Microsoft Entra ID screen and **nothing has changed** | |
+| 3.5 | Use **View source** and search for the secret | It is not there, in any form | |
+| 3.6 | Press **Back** / **Cancel** — **do not save** | You return, and **nothing has changed** | |
 
 ---
 
-### CHECK 4 — "Not configured" means not configured
+### CHECK 4 — Email & Notifications
 
-**Open:** System Administration → Integrations
-
-| # | Step | Expected | P/F |
-| --- | --- | --- | --- |
-| 4.1 | Look at Email delivery, AI service and Microsoft Fabric | Each reads **Not configured** | |
-| 4.2 | Confirm none of them claims to be working | None says Available, Connected, Healthy or anything green. **Deploying the application did not make them work** | |
-| 4.3 | Read each card's supporting line | It agrees with the badge. You never see "Not configured" beside a sentence implying it was tested | |
-| 4.4 | Now look back at **Microsoft Entra ID** | It does **not** say Not configured. It is configured — from the server environment, where there is no row for this screen to find. See §9.6 | |
-
-> Why this matters: a status that is optimistic by default is worse than no
-> status. "Not configured" and "configured but never checked" are different
-> facts, and this screen must not blur them.
-
----
-
-### CHECK 5 — How a secret behaves
-
-**Open:** any optional integration — **Email delivery** is the clearest
+**Open:** Integrations → **Email & Notifications** tab
 
 | # | Step | Expected | P/F |
 | --- | --- | --- | --- |
-| 5.1 | Look at the password / key / secret box | It is **empty** | |
-| 5.2 | Read the wording next to it | It explains that a saved secret is never shown again, and that leaving the box blank keeps whatever is saved | |
-| 5.3 | Use **View source** and search for anything resembling a stored secret | There is none | |
-| 5.4 | Leave the screen **without saving** | Nothing changed | |
+| 4.1 | Read the status | **Not configured** — there is no mail server on this deployment, and deploying the application did not invent one | |
+| 4.2 | Read the fields | Mail server address, Port, Connection security, Username, Send from address, Send from name, Password. Business words, no raw keys | |
+| 4.3 | Look at **Connection security** | It is a **list to choose from**, not a box to type into | |
+| 4.4 | Look at the **Password** box | It is **empty** and says no value is saved yet. Use View source: nothing resembling a secret is there | |
+| 4.5 | Find the actions | **Two**, named differently: **Test connection** and **Send test email** | |
+| 4.6 | Read what each says it does | Test connection checks the server accepts the details **and sends nothing**. Send test email sends one | |
+| 4.7 | Look for somewhere to type who the test email goes to | **There is none.** No recipient box, no CC, no BCC, no subject, no message body | |
+| 4.8 | Read who it says it will go to | It says so on the screen: one short message to **your own email address**, using the send-from address above, and **you cannot send it anywhere else** | |
+| 4.9 | Leave the tab **without saving** | Nothing changed | |
 
-> **Do not type a placeholder secret to see what happens.** Saving one is a
+> **Do not type a placeholder mail server or password.** Saving one is a
 > permanent write, and a made-up credential in a live system is worse than an
-> untested screen.
+> untested screen. **Do not press Send test email** unless real, approved SMTP
+> settings are already saved — there are none today, so the honest outcome
+> would be a refusal.
 
 ---
 
-### CHECK 6 — The two email actions are not the same action
+### CHECK 5 — AI Provider
 
-**Open:** System Administration → Integrations → **Email delivery**
+**Open:** Integrations → **AI Provider** tab
 
 | # | Step | Expected | P/F |
 | --- | --- | --- | --- |
-| 6.1 | Find the actions | There are **two**, named differently: **Test connection** and **Send test email** | |
-| 6.2 | Read what each one says it does | Test connection checks the mail server accepts the details **and sends nothing**. Send test email actually sends one | |
-| 6.3 | Look for somewhere to type who the test email goes to | **There is none.** No recipient box, no CC, no BCC, no subject, no message body | |
-| 6.4 | Read who it says it will go to | It says so on the screen, in words: it sends one short message to **your own email address**, using the send-from address above, and **you cannot send it anywhere else** | |
-| 6.5 | Check the other integration cards | **Send test email appears on Email delivery only.** AI service and Microsoft Fabric have Test connection and nothing else; Microsoft Entra ID has neither | |
+| 5.1 | Read the status | **Not configured** | |
+| 5.2 | Read the section description | It says what this is for, and that saving stores and checks the details — and that **no request for a generated answer is ever made here** | |
+| 5.3 | Look at **Provider** | A **list to choose from**, reading **Azure OpenAI** and **OpenAI**. Not a text box, and no raw value like `azure_openai` anywhere on screen | |
+| 5.4 | Look at the remaining fields | A service address and a deployment name, plus an **API key** box that is empty | |
+| 5.5 | Find the actions | **Test connection** only. **No Send test email** | |
+| 5.6 | Leave without saving | Nothing changed | |
 
-> **Do not press Send test email** unless real, approved SMTP settings are
-> already saved. There are none on production today, so the honest outcome of
-> pressing it would be a refusal — which proves nothing you cannot see above.
+---
+
+### CHECK 6 — Microsoft Fabric
+
+**Open:** Integrations → **Microsoft Fabric** tab
+
+| # | Step | Expected | P/F |
+| --- | --- | --- | --- |
+| 6.1 | Read the status | **Not configured** | |
+| 6.2 | Read the section description | It says what this is for, and that **nothing is read from Fabric on this screen** | |
+| 6.3 | Read the fields | Directory (tenant) ID, Application (client) ID, Workspace ID, Client secret | |
+| 6.4 | Look at the **Client secret** box | Empty, and says no value is saved yet | |
+| 6.5 | Look for anything that browses, imports or previews Fabric data | **There is none.** This screen stores a connection; it does not use one | |
+| 6.6 | Find the actions | **Test connection** only | |
+| 6.7 | Leave without saving | Nothing changed | |
 
 ---
 
 ### CHECK 7 — Does this look like a product
 
-**Do this on every screen you opened above.**
+**Do this on all four tabs.**
 
 | # | Step | Expected | P/F |
 | --- | --- | --- | --- |
-| 7.1 | Look at a normal desktop window | Nothing overlaps, nothing is cut off, headings and cards line up | |
-| 7.2 | Narrow the window to about phone width (~390px) | The layout reflows. **Nothing scrolls sideways.** No word is broken mid-word | |
-| 7.3 | Switch to dark mode, then back to light | Both are readable. Nothing disappears into its own background | |
-| 7.4 | Press **Tab** through the screen | Every control you land on is visibly outlined. Nothing is focusable but invisible | |
-| 7.5 | Read every label and button out loud | They are sentences a customer would accept. No developer shorthand | |
-| 7.6 | Open the browser console (F12) | **No red errors** | |
+| 7.1 | A normal desktop window | Nothing overlaps, nothing is cut off, headings and cards line up | |
+| 7.2 | Narrow to about phone width (~390px) | The tabs **reflow into a readable set** — the same way Organisation's do. **Nothing scrolls sideways**, no tab label is cut in half and no word is broken mid-word | |
+| 7.3 | At phone width, check the selected tab | Still obviously selected | |
+| 7.4 | Switch to dark mode, then back | Both readable. Nothing disappears into its own background | |
+| 7.5 | Press **Tab** through the strip | Every tab you land on is visibly outlined | |
+| 7.6 | Read every label and button out loud | Sentences a customer would accept. No developer shorthand, no raw key | |
+| 7.7 | Open the browser console (F12) | **No red errors from SemantIQ** | |
 
 Then answer, honestly:
 
@@ -212,35 +233,37 @@ Then answer, honestly:
 
 | | Answer | |
 | --- | --- | --- |
-| 7.7 | Yes / No — and if No, which screen and why | | |
+| 7.8 | Yes / No — and if No, which screen and why | | |
 
 ---
 
-### CHECK 8 — Nothing else moved
+### CHECK 8 — Sign-in, System Health, and nothing else moved
 
 | # | Step | Expected | P/F |
 | --- | --- | --- | --- |
-| 8.1 | Sign out and sign in again with Microsoft | It works exactly as it did before this deployment | |
+| 8.1 | Sign out and sign in again with Microsoft | It works exactly as it did before | |
 | 8.2 | Open **System Health** | It opens and reports as it did before | |
 | 8.3 | Open two or three System Administration screens you have already accepted — People, Business Domains, Roles & Access, Audit | Each opens and looks unchanged | |
-| 8.4 | Use the browser **Back** button several times | You go back through the screens you visited. Nothing breaks and nothing logs you out | |
-| 8.5 | Confirm you were never asked to sign in locally, with a password | You were not. SemantIQ signs you in through Microsoft, as before | |
+| 8.4 | On Integrations, open a tab, then press browser **Back** | You return to the tab you came from. The selection follows | |
+| 8.5 | Open a tab, **refresh** the page | The **same tab** reopens, not the first one | |
+| 8.6 | Copy a tab's address, open it in a new window | It opens **that tab**, selected | |
+| 8.7 | Confirm you were never asked to sign in locally, with a password | You were not | |
 
 ---
 
 ## 7. Evidence to capture
 
-Keep it light — a screenshot is enough for most of these.
+A screenshot is enough for most of these.
 
-1. The Integrations screen, desktop, showing all four cards (CHECK 1, 4).
-2. The Microsoft Entra ID card, showing no fields and no Test connection
-   button (CHECK 2).
-3. The Change configuration screen with the empty secret box and the
-   explanation above the fields (CHECK 3).
-4. The Email delivery section showing both actions and no recipient box
-   (CHECK 6).
-5. One narrow-width screenshot and one dark-mode screenshot (CHECK 7).
-6. Your written answer to 7.7.
+1. Organisation and Integrations side by side, desktop (CHECK 1).
+2. The Microsoft Entra ID tab, showing no fields and no Test connection button
+   (CHECK 2).
+3. The Change configuration screen with the empty secret box (CHECK 3).
+4. The Email & Notifications tab showing both actions and no recipient box
+   (CHECK 4).
+5. One narrow-width screenshot showing the reflowed tabs, and one dark-mode
+   screenshot (CHECK 7).
+6. Your written answer to 7.8.
 
 ---
 
@@ -253,15 +276,18 @@ a guarantee rather than a convenience:
 
 | Step | What it protects |
 | --- | --- |
-| 2.1, 4.4 | A working sign-in is never reported as unconfigured — the defect in §9.6 |
+| 1.3 | The four integrations are named as the decision record names them |
+| 1.4, 1.5 | One section at a time, and the address follows it |
+| 2.1 | A working sign-in is never reported as unconfigured |
 | 2.2, 2.3 | Microsoft sign-in has exactly one owner |
 | 3.3, 3.5 | A saved secret is never shown back to anybody |
 | 3.6 | Opening the change screen changes nothing |
-| 4.1, 4.2 | A status is never optimistic by default |
-| 5.1, 5.3 | The same secret rule on every integration |
-| 6.3 | The test email cannot be pointed at an address |
-| 6.5 | Sending is an email capability, not a general one |
+| 4.1, 5.1, 6.1 | A status is never optimistic by default |
+| 4.7 | The test email cannot be pointed at an address |
+| 5.5, 6.5 | Sending is an email capability, not a general one |
+| 6.5 | Fabric business data is not reachable from here |
 | 8.1 | Sign-in still works |
+| 8.5, 8.6 | A tab is a real address, so refresh and sharing behave |
 
 A FAIL anywhere else is a defect to raise, not necessarily a block.
 

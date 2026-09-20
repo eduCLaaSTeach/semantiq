@@ -17,6 +17,7 @@ use App\Modules\Platform\Setup\Models\IntegrationConfiguration;
 use App\Modules\Platform\Setup\Models\IntegrationSecret;
 use App\Modules\Platform\Setup\Support\IntegrationView;
 use App\Modules\Platform\Setup\Support\SetupProjection;
+use App\Modules\SystemHealth\Report\HealthStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use ReflectionClass;
@@ -94,31 +95,56 @@ final class NoSecretReachesTheBrowserTest extends TestCase
     }
 
     /**
-     * S1. THE RENDERED INTEGRATIONS PAGE CARRIES NO SECRET.
+     * S1. NO RENDERED INTEGRATIONS TAB CARRIES A SECRET.
+     *
+     * GATE D. The four cards became four tabs, so this walks all four rather
+     * than one page that held everything. It gets STRONGER by doing so: the
+     * old version proved the page had rendered by finding the mail server
+     * address, which meant three of the four integrations could have rendered
+     * nothing at all and the case would still have passed.
+     *
+     * Each tab now has to prove it rendered ITS OWN configuration before its
+     * absence of a secret counts for anything.
      *
      * Mutation: add a value field to IntegrationView and populate it.
      */
-    public function test_s1_no_secret_appears_in_the_rendered_integrations_page(): void
+    public function test_s1_no_secret_appears_in_any_rendered_integrations_tab(): void
     {
         $this->givenEverySecretIsStored();
 
-        $response = $this->withSession([
-            EnsureSessionIsCurrent::SESSION_USER_ID => $this->administrator()->id,
-            EnsureSessionIsCurrent::SESSION_AUTHENTICATED_AT => now()->toIso8601String(),
-        ])->get('/console/integrations');
+        $administrator = $this->administrator();
 
-        $response->assertOk();
+        // The marker that proves the tab rendered its own settings. Identity
+        // has none by design - it is a summary - so its marker is the words it
+        // must show instead.
+        $tabs = [
+            '/console/integrations' => 'Microsoft Entra ID',
+            '/console/integrations/email' => 'smtp.example.test',
+            // No slashes: the props are JSON-encoded into the page, so a URL
+            // arrives as `https:\/\/ai.example.test` and a literal match on the
+            // unescaped form fails on correct output.
+            '/console/integrations/ai' => 'ai.example.test',
+            '/console/integrations/fabric' => 'aaaa',
+        ];
 
-        $body = (string) $response->getContent();
+        foreach ($tabs as $path => $marker) {
+            $response = $this->withSession([
+                EnsureSessionIsCurrent::SESSION_USER_ID => $administrator->id,
+                EnsureSessionIsCurrent::SESSION_AUTHENTICATED_AT => now()->toIso8601String(),
+            ])->get($path);
 
-        // The page really did render the integrations, so the absence below
-        // means something.
-        $this->assertStringContainsString('smtp.example.test', $body,
-            'The page did not render the configuration at all, so finding no secret proves nothing.');
+            $response->assertOk();
 
-        foreach ($this->secrets() as $secret) {
-            $this->assertStringNotContainsString($secret, $body,
-                "A stored secret was rendered into the Integrations page: [{$secret}].");
+            $body = (string) $response->getContent();
+
+            $this->assertStringContainsString($marker, $body,
+                "[{$path}] did not render its own configuration, so finding no secret there "
+                .'proves nothing.');
+
+            foreach ($this->secrets() as $secret) {
+                $this->assertStringNotContainsString($secret, $body,
+                    "A stored secret was rendered into [{$path}]: [{$secret}].");
+            }
         }
     }
 
@@ -157,15 +183,72 @@ final class NoSecretReachesTheBrowserTest extends TestCase
         sort($properties);
 
         $this->assertSame(
-            ['choices', 'explanation', 'family', 'fields', 'lastChangedAt', 'lastTestedAt', 'name',
-                'required', 'secrets', 'status', 'statusInWords'],
+            ['choices', 'describedAs', 'explanation', 'family', 'fields', 'lastChangedAt',
+                'lastTestedAt', 'name', 'required', 'secrets', 'status', 'statusInWords'],
             $properties,
             'IntegrationView has grown a field. The leak is unrepresentable only while there is '
-            .'nowhere to put it. `choices` was added for the AI-provider and mail-security '
-            .'selects and is asserted below to come only from the enum.',
+            .'nowhere to put it. Two have been added and each had to answer this guard: '
+            .'`choices` for the AI-provider and mail-security selects, and `describedAs` for the '
+            .'Gate D section heading. Both are asserted below to come only from the enum.',
         );
 
         $this->assertTrue((new ReflectionClass(IntegrationView::class))->isReadOnly());
+    }
+
+    /**
+     * `describedAs` CANNOT CARRY A STORED VALUE EITHER. Gate D.
+     *
+     * The guard above caught it being added, which is the guard working. This
+     * is the answer it demanded.
+     *
+     * It is what an integration is FOR, and it is a match expression over the
+     * enum - the same shape as `choices` and for the same reason. Nothing an
+     * administrator typed can reach it, and the field it might have been
+     * confused with, `explanation`, is the stored result of the last connection
+     * test and is kept separate precisely so a test result can never be
+     * rendered where a description belongs.
+     *
+     * Mutation: build it from the stored row instead.
+     */
+    public function test_the_description_comes_only_from_the_enum(): void
+    {
+        $this->givenEverySecretIsStored();
+
+        /*
+         * EVERY ROW IS GIVEN AN EXPLANATION FIRST, and without this the case is
+         * vacuous.
+         *
+         * It survived the mutation `$row?->explanation ?? $family->describedAs()`
+         * on its first run, because nothing in the fixture had been tested, so
+         * every explanation was null and the mutant fell through to the enum.
+         * The test passed for a reason unrelated to the rule it claims to
+         * check - so the stored field it could be confused with is now
+         * populated, with a value no description would ever contain.
+         */
+        IntegrationConfiguration::query()->update([
+            'status' => HealthStatus::Unavailable->value,
+            'explanation' => 'STORED EXPLANATION FROM THE LAST CONNECTION TEST',
+        ]);
+
+        foreach (IntegrationFamily::cases() as $family) {
+            $view = app(SetupProjection::class)->forFamily($family);
+
+            $this->assertSame($family->describedAs(), $view->describedAs,
+                "[{$family->value}] is described by something other than the enum, so stored "
+                .'data is reaching a heading.');
+
+            $this->assertStringNotContainsString('STORED EXPLANATION', $view->describedAs,
+                "[{$family->value}] renders the last connection test's words where the "
+                .'description belongs.');
+
+            // The stored explanation is still carried - on `explanation`, beside
+            // the status, which is where a test result belongs.
+            $this->assertStringContainsString('STORED EXPLANATION', (string) $view->explanation);
+
+            foreach ($this->secrets() as $secret) {
+                $this->assertStringNotContainsString($secret, $view->describedAs);
+            }
+        }
     }
 
     /**

@@ -118,13 +118,26 @@ final class IdentityIsNotWritableOnTheConsoleTest extends TestCase
     /**
      * The console route set is exactly this, so a new verb has to be justified.
      *
-     * THE FIFTH IS D-153's SEND, added at Gate C round 3. It is the only route
-     * here that causes something to leave the deployment, and it is deliberately
-     * the narrowest shape in the table: no `{family}` - Email is the only family
+     * THE SEND IS D-153's, added at Gate C round 3. It is the only route here
+     * that causes something to leave the deployment, and it is deliberately the
+     * narrowest shape in the table: no `{family}` - Email is the only family
      * that can send anything, so a parameter would have one legal value - and no
      * recipient, because the address comes from the signed-in principal.
      *
-     * NONE OF THEM ACCEPTS `identity`, which is the claim the rest of this file
+     * THE EXTRA READ IS THE GATE D TAB CORRECTION. Four integrations that were
+     * four cards on one URL became four tabs, and a tab in this product is a
+     * real link to a real URL. Microsoft Entra ID is the bare path - as Company
+     * Profile is /console/organisation - so only the three writable families
+     * needed a route, and the constraint on it excludes identity.
+     *
+     * IT IS A READ, and the equality is what makes that checkable: a PUT or
+     * POST smuggled in beside it fails here rather than being noticed on a
+     * screen. test_no_console_write_route_accepts_identity separately proves
+     * the constraint on every non-GET route still rejects `identity`, and
+     * PostInstallSsoChange proves PUT /console/integrations/identity is still
+     * NOT FOUND rather than merely not allowed.
+     *
+     * NONE OF THEM WRITES IDENTITY, which is the claim the rest of this file
      * makes. The send route does not even have a family segment to accept it
      * with.
      */
@@ -134,36 +147,46 @@ final class IdentityIsNotWritableOnTheConsoleTest extends TestCase
             [
                 'DELETE console/integrations/{family}/secret/{name}',
                 'GET console/integrations',
+                'GET console/integrations/{family}',
                 'POST console/integrations/email/send-test',
                 'POST console/integrations/{family}/test',
                 'PUT console/integrations/{family}',
             ],
             $this->consoleIntegrationRoutes(),
-            'The Platform Integrations route set changed. One read, one write, one connection '
-            .'test, one explicit removal and one send - and no reveal verb for any secret.',
+            'The Platform Integrations route set changed. Two reads - the landing tab and the '
+            .'three writable tabs - one write, one connection test, one explicit removal and '
+            .'one send, and no reveal verb for any secret.',
         );
     }
 
-    /** FIRST-RUN KEEPS ITS IDENTITY SETUP FORM. The exception is real. */
-    public function test_first_run_can_still_set_up_identity(): void
+    /**
+     * A signed-in System Administrator, which several cases below need.
+     *
+     * @return $this
+     */
+    private function signedInAsSystemAdministrator(): self
     {
-        $identityRoutes = [];
+        $admin = User::query()->firstOrCreate(
+            ['external_subject' => 'oid-console-admin'],
+            [
+                'provider' => 'microsoft',
+                'tenant_id' => 'tenant-1',
+                'email' => 'admin@example.test',
+                'display_name' => 'The Administrator',
+                'status' => UserStatus::Active,
+            ],
+        );
 
-        foreach (Route::getRoutes() as $route) {
-            if (! str_starts_with($route->uri(), 'first-run/integration')) {
-                continue;
-            }
+        RoleAssignment::query()->firstOrCreate([
+            'user_id' => $admin->id,
+            'organisation_id' => null,
+            'role_code' => RoleCode::SystemAdministrator,
+        ], ['assigned_at' => now()]);
 
-            $pattern = $route->wheres['family'] ?? '';
-
-            if ($pattern !== '' && preg_match('/^'.$pattern.'$/', 'identity') === 1) {
-                $identityRoutes[] = implode('|', array_diff($route->methods(), ['HEAD'])).' '.$route->uri();
-            }
-        }
-
-        $this->assertNotEmpty($identityRoutes,
-            'First-Run can no longer set up identity. The Bootstrap principal cannot reach P1-02 '
-            .'console screens at all, so removing this makes a fresh installation impossible.');
+        return $this->withSession([
+            EnsureSessionIsCurrent::SESSION_USER_ID => $admin->id,
+            EnsureSessionIsCurrent::SESSION_AUTHENTICATED_AT => now()->toIso8601String(),
+        ]);
     }
 
     /**
@@ -176,50 +199,37 @@ final class IdentityIsNotWritableOnTheConsoleTest extends TestCase
      * person reading it, exactly like a second Identity administration surface
      * that happens to be broken.
      *
-     * Mutation: return $this->projection->all() from index() again. The
-     * identity entry then arrives in `integrations` carrying `fields` and
-     * `secrets`, and all three assertions below fail.
+     * GATE D. THE LANDING TAB IS THE IDENTITY TAB, so this case reads the same
+     * URL it always did and gets `summary` where it used to get `summaries`.
+     * The claim is unchanged and is if anything narrower: the screen now sends
+     * ONE integration's props, so `integration` being null here says identity
+     * has no editable shape on this surface at all.
+     *
+     * Mutation: send $view->toArray() for identity from renderTab(). The
+     * directory and application identifiers arrive in `fields` and every
+     * assertion below fails.
      */
     public function test_the_console_sends_identity_as_a_summary_with_no_fields_or_secrets(): void
     {
-        $admin = User::query()->create([
-            'provider' => 'microsoft',
-            'external_subject' => 'oid-console-admin',
-            'tenant_id' => 'tenant-1',
-            'email' => 'admin@example.test',
-            'display_name' => 'The Administrator',
-            'status' => UserStatus::Active,
-        ]);
-
-        RoleAssignment::query()->create([
-            'user_id' => $admin->id,
-            'organisation_id' => null,
-            'role_code' => RoleCode::SystemAdministrator,
-            'assigned_at' => now(),
-        ]);
-
-        $response = $this->withSession([
-            EnsureSessionIsCurrent::SESSION_USER_ID => $admin->id,
-            EnsureSessionIsCurrent::SESSION_AUTHENTICATED_AT => now()->toIso8601String(),
-        ])->get('/console/integrations');
+        $response = $this->signedInAsSystemAdministrator()->get('/console/integrations');
 
         $response->assertOk();
 
         $props = $response->viewData('page')['props'];
 
-        $writable = array_column($props['integrations'], 'family');
+        $this->assertSame('identity', $props['active'],
+            'The landing tab is no longer Microsoft Entra ID, so the menu leaf opens a different '
+            .'screen from the one this file makes its claims about.');
 
-        $this->assertSame(['email', 'ai', 'fabric'], $writable,
-            'The editable card set on Platform Integrations is no longer exactly the three '
-            .'families the console owns.');
+        $this->assertNull($props['integration'],
+            'Microsoft sign-in arrived as an EDITABLE integration on the console. That is the '
+            .'second Identity administration surface D-148 removed.');
 
-        $summaries = array_column($props['summaries'], 'family');
+        $identity = $props['summary'];
 
-        $this->assertSame(['identity'], $summaries,
-            'Microsoft sign-in is not rendered as a summary card, so the screen either edits it '
-            .'or does not mention it at all.');
-
-        $identity = $props['summaries'][0];
+        $this->assertSame('identity', $identity['family'],
+            'Microsoft sign-in is not rendered as a summary, so the screen either edits it or '
+            .'does not mention it at all.');
 
         // THE KEYS ARE ABSENT, not empty. An editor cannot render a field it
         // was never given, and a future edit cannot un-hide one.
@@ -233,6 +243,39 @@ final class IdentityIsNotWritableOnTheConsoleTest extends TestCase
         // It must still SAY something, or it is not a summary.
         $this->assertArrayHasKey('status', $identity);
         $this->assertArrayHasKey('statusInWords', $identity);
+    }
+
+    /**
+     * THE THREE WRITABLE TABS STILL CARRY THEIR FORMS. Gate D.
+     *
+     * The correction moved four cards onto four tabs. The risk it introduces is
+     * the opposite of the one this file usually guards: not that identity
+     * gained an editor, but that email, AI or Fabric quietly LOST theirs and
+     * nobody noticed, because each now lives on a URL of its own that nothing
+     * else renders.
+     *
+     * Mutation: send null for `integration` from renderTab().
+     */
+    public function test_each_writable_tab_still_receives_its_own_editable_configuration(): void
+    {
+        foreach (['email', 'ai', 'fabric'] as $family) {
+            $response = $this->signedInAsSystemAdministrator()
+                ->get("/console/integrations/{$family}");
+
+            $response->assertOk();
+
+            $props = $response->viewData('page')['props'];
+
+            $this->assertSame($family, $props['active']);
+            $this->assertNull($props['summary'], "[{$family}] arrived as a read-only summary.");
+
+            $integration = $props['integration'];
+
+            $this->assertSame($family, $integration['family']);
+            $this->assertNotSame([], $integration['fields'],
+                "[{$family}] lost its editable fields when it moved onto its own tab.");
+            $this->assertArrayHasKey('secrets', $integration);
+        }
     }
 
     /** First-Run still writes through P1-02's owning writer, not a second model. */

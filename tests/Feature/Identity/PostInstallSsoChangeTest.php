@@ -555,28 +555,48 @@ final class PostInstallSsoChangeTest extends TestCase
         );
     }
 
-    /** PLATFORM INTEGRATIONS STILL HAS NO IDENTITY EDIT FORM. */
+    /**
+     * PLATFORM INTEGRATIONS STILL HAS NO IDENTITY EDIT FORM.
+     *
+     * GATE D. The four cards became four tabs, so this asks the same question
+     * of every one of them rather than of one page carrying all four. It is a
+     * stronger check than it was: identity has to be a summary on its own tab,
+     * AND it must not have reappeared as an editable configuration on one of
+     * the other three.
+     */
     public function test_platform_integrations_still_contains_no_identity_edit_form(): void
     {
         $this->givenSsoIsConfigured();
 
-        $response = $this->actingAsAdministrator()->get('/console/integrations');
+        $identityProps = $this->actingAsAdministrator()
+            ->get('/console/integrations')
+            ->assertOk()
+            ->viewData('page')['props'];
 
-        $response->assertOk();
-
-        $props = $response->viewData('page')['props'];
-
-        $this->assertSame(
-            ['email', 'ai', 'fabric'],
-            array_column($props['integrations'], 'family'),
-            'Identity came back as an editable card on Platform Integrations, so there are two '
-            .'places that write one configuration again.',
+        $this->assertNull(
+            $identityProps['integration'],
+            'Identity came back as an editable configuration on Platform Integrations, so there '
+            .'are two places that write one configuration again.',
         );
 
-        $identity = $props['summaries'][0];
+        $identity = $identityProps['summary'];
 
+        $this->assertSame('identity', $identity['family']);
         $this->assertArrayNotHasKey('fields', $identity);
         $this->assertArrayNotHasKey('secrets', $identity);
+
+        foreach (['email', 'ai', 'fabric'] as $family) {
+            $props = $this->actingAsAdministrator()
+                ->get("/console/integrations/{$family}")
+                ->assertOk()
+                ->viewData('page')['props'];
+
+            $this->assertSame(
+                $family,
+                $props['integration']['family'],
+                "The [{$family}] tab is rendering somebody else's configuration.",
+            );
+        }
     }
 
     /** ...and no console integrations route accepts identity, still. */
