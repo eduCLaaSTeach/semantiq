@@ -823,8 +823,17 @@ identity tables, no role or domain or scope or sensitivity schema, no admin
 screens. The navigation registry is an empty structure with no nodes.
 
 **The single deliberate exception** is the `database` session driver (§1), which
-creates a Laravel framework table so that P1-00 can revoke sessions. It is
-recorded here rather than left for a reviewer to discover.
+creates a Laravel framework table **so that a later unit can revoke sessions
+server-side by user**. It is recorded here rather than left for a reviewer to
+discover.
+
+> **Clarified 20 September 2026 — the design decision is unchanged.** This said
+> the table exists *"so that P1-00 can revoke sessions"*, which reads as a
+> delivered capability. **It is not one.** The table and its `user_id` index
+> were PREPARED for that control; as of P1-09 no code revokes another person's
+> session, and the only invalidations are the viewer's own. `database` remains
+> the approved target store for exactly this reason. Production currently runs
+> `file` — drift, carried in `PHASE-1-PLAN.md` §10, not an approval of `file`.
 
 ---
 

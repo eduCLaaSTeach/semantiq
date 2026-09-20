@@ -385,12 +385,26 @@ suite. Fixed by anchoring on the closing quote; breaking it again now fails, and
 restoring it passes. The shell pre-flight was already exact.
 
 **2. `/up` returned 500 with a stack trace when the database was down.** It was
-registered inside the `web` middleware group, which starts a session; the
-session driver is `database`. A liveness route that cannot answer when the
-database is down is useless precisely when it matters. Found by running a real
-server with no database reachable. Fixed by registering it outside the group;
-two tests hold it there, one asserting 503 rather than 500 and one asserting no
-cookie is set.
+registered inside the `web` middleware group, **which starts a session**. A
+liveness route that cannot answer while its session backing store is impaired
+is useless precisely when it matters. Found by running a real server with no
+database reachable. Fixed by registering it outside the group; two tests hold
+it there, one asserting 503 rather than 500 and one asserting no cookie is set.
+
+> **Corrected 20 September 2026, wording only — the fix and the tests are
+> unchanged.** This sentence continued *"the session driver is `database`"*.
+> **Two things are worth keeping apart:**
+>
+> - the **approved baseline target** is `database` sessions, decided in the
+>   P1-BASE design and unchanged;
+> - the **currently deployed environment** runs `file`, established by
+>   read-only production verification during P1-09.
+>
+> `file` was **never** approved as the design, and nothing here is rewritten to
+> suggest it was. The premise was simply unnecessary: the rule is
+> driver-independent, and it is the driver-independent form that is now
+> recorded in `routes/health.php`. The drift itself is carried in
+> `PHASE-1-PLAN.md` §10.
 
 **3. Six architecture tests had never run.** `phpunit.xml` declared only the
 Unit and Feature suites, so `tests/Architecture` was silently skipped — the

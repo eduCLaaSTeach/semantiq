@@ -13,7 +13,8 @@ observed in this environment. Where something was not observed, it says so.
 | Mutations | **54 run, 54 killed.** Six survived first — `P1-09-MUTATIONS.md` §1 |
 | Gate C review | Three corrections — §1b |
 | Gate C approval | Two authority/documentation corrections — §1c |
-| Status | **GATE C APPROVED. Merged and deployed; awaiting Gate D** |
+| Gate D | **Product Owner ACCEPTED.** One carried finding — §5c |
+| Status | **P1-09 CLOSED** |
 
 ---
 
@@ -343,8 +344,15 @@ around:**
 ## 5. Browser verification — observed, not expected
 
 Local deployment, one organisation, one System Administrator, a real session
-written through Laravel's own session store. `SESSION_DRIVER=database` and
-`CACHE_STORE=file`, the shapes production runs.
+written through Laravel's own session store, with `SESSION_DRIVER=database`
+and `CACHE_STORE=file`.
+
+> **Corrected.** This said those were *"the shapes production runs"*. The cache
+> shape matches; **the session shape does not** — production runs `file`. See
+> §5c. The local deployment therefore exercised the database round trip that
+> production does not currently reach, which is why the row reads **Not
+> checked** there and **Available** here. Both are correct for their own
+> configuration.
 
 **Five areas × 1440px and 390px × light and dark = 4 full renders**, plus the
 *Check sign-in now* round trip, its rate-limited second press, the sidebar
@@ -426,11 +434,69 @@ to simulate here.
 
 ---
 
+## 5c. The session driver — a claim I made that was not verified
+
+**The Product Owner's Gate D screenshot showed *Staying signed in → Not
+checked*, and it was right to.**
+
+`SessionStoreCheck` returns that only when `config('session.driver')` is not
+`database`. Read-only verification over SSH — workflow `verify-session-store`,
+run `35453840140` — established:
+
+| Fact | Value |
+| --- | --- |
+| **Effective production `session.driver`** | **`file`** |
+| Configuration currently cached | **No** — so the value is live, not a stale compiled config |
+| Session table name / existence | **Not reported** — the checker reads them only when the driver is `database`, and reporting them otherwise would be inventing a fact |
+| The same `SessionStoreCheck` the screen runs | **`not_checked`** — the screen and the server agree |
+
+### How the wrong claim was made
+
+I wrote *"`SESSION_DRIVER=database` on this deployment (verified)"* in the
+DESIGN. **I read `.env.example` — a repository file — and reported it as
+deployment reality.** Nothing was verified. The word "verified" beside it made
+an unchecked assumption look like an observation, which is exactly the failure
+CLAUDE.md §6 forbids, and it then propagated into the PLAN and this document.
+
+The deploy excludes `.env` from rsync, deliberately, so a production value
+predating the repository baseline stays in force indefinitely. That is why
+nothing ever corrected it.
+
+### The ruling, and what is and is not a defect
+
+**`database` remains the approved target.** `.env.example` is unchanged, and the
+P1-BASE design intent stands: the `sessions` table carries `user_id` precisely
+so Phase 1 *can* support server-side per-user revocation. **Production running
+`file` is deployment drift from that target, not a new decision.**
+
+**P1-09 is not defective, and the row must not be made green.** With a `file`
+driver the honest answer is **Not checked**, because no approved safe
+file-session round-trip checker exists. The Product Owner accepted this
+explicitly.
+
+**Production was NOT changed.** Switching drivers terminates every existing
+session; that is a controlled deployment correction with its own gate, not a
+P1-09 UI fix.
+
+### What the `file` driver does and does not break, established from code
+
+| | |
+| --- | --- |
+| **Breaks no delivered control today** | The only two session invalidations in the application are `$request->session()->invalidate()` — sign-out, and the expiry middleware. **Both act on the viewer's own session and work on any driver.** |
+| **Nothing revokes another person's session** | No code reads `sessions.user_id`. **This is stated from the code, not assumed**, and the corrected migration comment no longer claims otherwise |
+| **It will matter when that control is built** | On `file` a per-user revocation would silently fail rather than error, which is the worst of the three outcomes |
+| **It survives deploys** | `storage/` is excluded from rsync, so file sessions are not wiped on release |
+
+Carried as **Production session-driver alignment — OPEN / CARRIED** in
+`PHASE-1-PLAN.md` §10.
+
+---
+
 ## 6. What is NOT verified, and why
 
 | Not verified | Why |
 | --- | --- |
-| **The rendered screen in production** | It needs a System Administrator session. The browser evidence in §5 is a local deployment with the same `SESSION_DRIVER=database` and `CACHE_STORE=file` shapes; the production screen is **Gate D's first check** |
+| **The rendered screen in production** | It needs a System Administrator session. The browser evidence in §5 is a **local** deployment; its cache shape matches production, its session driver does **not** (§5c). The production screen was **Gate D's first check**, and the Product Owner has now run it |
 | **MySQL, locally** | No MySQL server in this environment. **CI now runs the System Health suite against MySQL 8.4 as a required step** — see below |
 | **A real Microsoft Entra outage** | Would mean breaking sign-in on purpose. The *Unavailable* and *Needs attention* states were rendered from stored P1-02 state, which is what the screen reads in production too |
 | **A real database, cache, session-store or filesystem outage in production** | Same. Every failure state is proven against a broken dependency in tests and rendered in a browser; none was induced on a running system |

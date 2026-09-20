@@ -34,10 +34,16 @@ Read from the repository and the deployed configuration, not assumed.
 ### 1.1 `/up` — public liveness
 
 `routes/health.php`, registered **outside the web middleware group**, and the
-reason is recorded in the file: the session driver is `database`, so a liveness
-route inside that group **cannot answer when the database is down** — which is
-exactly when a monitor needs an answer. It was observed returning a 500 with a
-stack trace before it was moved.
+reason is recorded in the file: the web group **starts a session**, so a
+liveness route inside it cannot answer whenever the session backing store is
+impaired — which is exactly when a monitor needs an answer. It was observed
+returning a 500 with a stack trace before it was moved.
+
+> **Corrected.** This said *"the session driver is `database`"*. That premise
+> was unnecessary and, as production verification later established, untrue of
+> this deployment — it runs `file`. The rule is **driver-independent** and holds
+> either way; a rationale that names a driver rots the moment the driver
+> changes.
 
 It holds no session, sets no cookie, reads no CSRF token, is exempt from
 maintenance mode, and its body is **one of exactly two words** (`ok` /

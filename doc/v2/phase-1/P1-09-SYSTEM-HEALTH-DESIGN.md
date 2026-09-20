@@ -351,9 +351,30 @@ render** — from a screen whose only purpose is to be trustworthy.
 
 #### What Phase 1 implements
 
-**The deployed store, and only that.** `SESSION_DRIVER=database` on this
-deployment (verified), `config('session.table')` is `sessions`, and
-`config('session.connection')` selects the connection.
+**The approved target store, and only that.**
+
+> **CORRECTED AFTER PRODUCTION VERIFICATION.** This paragraph said
+> *"`SESSION_DRIVER=database` on this deployment (verified)"*. **It was not
+> verified.** The value was read from `.env.example` — a repository file — and
+> reported as deployment reality. Asking the server gave a different answer:
+>
+> | | |
+> | --- | --- |
+> | **Effective production driver** | **`file`** (configuration not cached, so this is live) |
+> | **Repository / architectural target** | **`database`** — unchanged, and `.env.example` still declares it |
+>
+> Production running `file` is **deployment drift from the intended target**,
+> not a new architectural decision. It is recorded as a carried Phase 1
+> alignment finding in `PHASE-1-PLAN.md` §10, to be resolved before final Phase
+> 1 acceptance together with the privilege-change/revocation behaviour.
+
+**P1-09 supports a database-session round trip only**, so on the current
+deployment the *Staying signed in* row correctly reads **Not checked**. That is
+the honest answer, not a health failure — and the Product Owner accepted it as
+such rather than requiring the row to go green.
+
+`config('session.table')` is `sessions` and `config('session.connection')`
+selects the connection, **when the driver is `database`**.
 
 ```php
 if (config('session.driver') !== 'database') {
