@@ -28,7 +28,23 @@ from SemantIQ v1.
 
 | Concern | Decision | Why |
 | --- | --- | --- |
-| Starter kit | **None.** No Breeze, Jetstream or Fortify | Every starter kit ships password authentication, registration and reset. SemantIQ has no local passwords and no self-registration; P1-00 is SSO-only. Removing scaffolding later leaves routes and views behind, which is exactly the accidental surface the blueprint forbids |
+| Starter kit | **None.** No Breeze, Jetstream or Fortify | Every starter kit ships password authentication, registration and reset. SemantIQ has **no self-registration**, and **no password authentication for normal users**; P1-00 is SSO-only. Removing scaffolding later leaves routes and views behind, which is exactly the accidental surface the blueprint forbids. *(Amended 20 Sep 2026 — see below.)* |
+
+> **AMENDED 20 September 2026 — the decision to ship no starter kit is
+> UNCHANGED and is now better founded, not worse.**
+>
+> This row said *"SemantIQ has no local passwords."* The Product Owner
+> amendment introduces **exactly one** local credential: the **Bootstrap
+> Administrator**, an installation principal that exists to make SSO
+> configurable in the first place.
+>
+> **That strengthens the no-starter-kit decision.** A starter kit would have
+> supplied registration, password reset, a `users` password column and a login
+> view — a **general-purpose** credential system, permanently enabled, reachable
+> by anyone. What the amendment authorises is the opposite: one
+> operator-created principal, no self-registration, no reset screen, no
+> business access, and automatic shutdown. Those are not the same thing, and a
+> starter kit would have made the difference impossible to hold.
 | PHP | 8.5, matching the runner and the cPanel runtime | Divergence between CI and production hides failures until deploy |
 | Auth scaffolding | Laravel's `auth` config and session guard retained, **no driver wired** | P1-00 supplies the identity provider. The guard exists and denies from day one |
 | Queue | `sync` | No worker on cPanel today. A real driver is a Phase 1 Gate 6 concern, not P1-BASE |
