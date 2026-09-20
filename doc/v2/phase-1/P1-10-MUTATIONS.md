@@ -624,3 +624,61 @@ right first time. They were not.
 | **Reading `IdentityPage`** | It renders a refusal from `errors.identity` only. A **flashed** `refusal` — which is what a rejected Entra candidate produces — would have gone to a blank page on every Identity screen. `HandleInertiaRequests` already carries a note about exactly this happening to Access Reviews, where no automated test caught it either: `assertSessionHas('refusal')` passes on a message that reaches the session and never reaches the screen |
 | **Reading the rendered change screen** | Every Identity page carried the header *"Everything here is read-only: identity settings are held on the server and are not changed from this screen."* After correction 1 that is false — and it was being shown at the top of the change screen itself, contradicting the form two inches below it |
 | **Reading the rendered Integrations card** | *"Testing checks that SemantIQ can reach this service… It does not send anything"* sat two inches above a new button that sends an email. The sentence is now tied to **Test connection** by name, and the sending action carries its own |
+
+---
+
+## GATE D — deployment round
+
+Eight mutations. Eight killed on the first attempt.
+
+### The identity card (§14 of the verification document)
+
+The defect these guard was found by **deploying**, not by testing: the
+Integrations screen would have told production that its working Microsoft
+sign-in was Not configured. Every case below therefore begins by establishing
+an *authority* rather than by establishing a *row* — which is exactly what the
+three Gate C rounds never did, and why the local browser verification agreed
+with a defect.
+
+| # | Mutation | Result | Killed by |
+| --- | --- | --- | --- |
+| M-GD-1 | Remove the `IntegrationFamily::Identity` branch from `SetupProjection::isConfigured()` — i.e. restore the code that shipped | **KILLED** | `test_an_environment_backed_deployment_is_not_reported_as_unconfigured`, `test_the_setup_step_list_agrees` |
+| M-GD-2 | `return true` for Identity | **KILLED** | `test_a_fresh_deployment_with_no_authority_is_still_unconfigured` |
+| M-GD-3 | Ask `resolve()` alone, dropping `storedCandidate()` | **KILLED** | `test_a_saved_candidate_counts_before_the_cutover` |
+| M-GD-4 | Add a `forFamily()` match arm making a configured identity report `Available` | **KILLED** | `test_an_environment_backed_deployment_is_not_reported_as_unconfigured`, `test_a_working_deployment_is_not_reported_as_tested` |
+| M-GD-5 | Change the branch condition to `if (true)`, so every family asks the identity authority | **KILLED** | `test_the_optional_integrations_are_unaffected`, `test_the_setup_step_list_agrees` |
+
+**M-GD-3 is the one worth reading.** The obvious fix — "ask the resolver, it is
+the authority" — is wrong, and wrong in a way that would only appear during
+First-Run on a fresh installation, which is the flow nobody can exercise on
+production. It would have told an administrator that the Microsoft details they
+had just saved were not configured, because the environment they are replacing
+is still empty. The mutation exists because that was the first fix written.
+
+**M-GD-4 pins the direction.** A fix for a false red that overshoots into a
+false green is a worse defect than the one it replaced, and the mutation that
+would produce it is the one a person in a hurry would write.
+
+### The production verification workflows
+
+These do not run in CI — they are dispatched by hand — so nothing would have
+reported them wrong until somebody ran one against a healthy deployment and got
+a red.
+
+| # | Mutation | Result | Killed by |
+| --- | --- | --- | --- |
+| M-GD-6 | Empty `APPROVED_IDENTITY_WRITES` in `verify-identity.yml` | **KILLED** | `test_the_identity_verification_names_exactly_the_write_routes_that_exist` |
+| M-GD-7 | Rename a table in `verify-platform-setup.yml`'s six-table list | **KILLED** | `test_the_setup_verification_names_six_tables_that_all_exist` |
+| M-GD-8 | Move the expected Audit key count from 15 to 16 | **KILLED** | `test_the_setup_verification_expects_the_real_audit_key_count` |
+
+**The pre-existing guard was also run as a mutation of itself.** Rather than
+reasoning about whether the old `verify-identity.yml` rule still held, its
+Python was executed against the route set the deployed application actually
+registers:
+
+```
+OLD GUARD VERDICT: FAIL - "A write route exists under console/identity."
+```
+
+That is the evidence the correction was necessary, rather than a claim that it
+was.

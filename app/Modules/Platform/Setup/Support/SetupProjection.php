@@ -188,6 +188,55 @@ final class SetupProjection
 
     private function isConfigured(IntegrationFamily $family): bool
     {
+        /*
+         * IDENTITY IS ASKED OF THE AUTHORITY, NOT OF A ROW - AND THIS WAS A
+         * DEFECT FOUND BY DEPLOYING.
+         *
+         * Every other family is configured exactly when its row holds every
+         * meaningful field and its secret exists. Identity is not, because
+         * identity has TWO possible authorities and the row is only one of
+         * them. Until the controlled cutover a deployment reads Microsoft
+         * sign-in from the environment, where there is no row at all.
+         *
+         * So the row test said NOT CONFIGURED for the one deployment whose
+         * sign-in demonstrably works - production - while people were signing
+         * in through it. A false red on a working system is worse than no
+         * status: it sends an administrator to re-enter a configuration that
+         * was correct, on the single screen where doing that locks everybody
+         * out. ProviderProbe carries the same warning about the same class of
+         * mistake.
+         *
+         * It survived Gate C because the local server used for the browser
+         * verification had no Microsoft configuration either, so "Not
+         * configured" was the right answer there for the wrong reason - the
+         * exact shape CLAUDE.md section 2 names: a test that passes for a
+         * reason unrelated to what it claims to check.
+         *
+         * EITHER AUTHORITY COUNTS, and both are needed:
+         *
+         *   resolve()          what is IN FORCE. Production, pre-cutover, and
+         *                      any deployment after it.
+         *   storedCandidate()  what has been TYPED AND SAVED. First-Run, where
+         *                      the administrator has just entered Microsoft
+         *                      details and the environment is still empty
+         *                      because the cutover has not happened yet.
+         *
+         * Using resolve() alone would tell an administrator mid-setup that the
+         * details they just saved are not configured. Using the row alone is
+         * the defect above. IdentityConfigurationSource's own docblock draws
+         * this distinction; this is the one caller that needs both sides of it.
+         *
+         * THIS DOES NOT MAKE ANYTHING REPORT A POSITIVE RESULT. It only stops
+         * a complete configuration being called incomplete. Whether sign-in
+         * actually WORKS is still the stored status - Not checked until
+         * somebody checks - and forFamily() still forces Not configured
+         * whenever this returns false.
+         */
+        if ($family === IntegrationFamily::Identity) {
+            return $this->identityConfiguration->resolve()->isComplete()
+                || $this->identityConfiguration->storedCandidate()->isComplete();
+        }
+
         $row = IntegrationConfiguration::query()->where('family', $family->value)->first();
 
         if ($row === null) {

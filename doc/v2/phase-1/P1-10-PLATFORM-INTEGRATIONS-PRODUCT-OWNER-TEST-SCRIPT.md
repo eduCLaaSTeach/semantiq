@@ -1,4 +1,27 @@
-# P1-10 — Platform Integrations & Setup: PRODUCT OWNER TEST SCRIPT
+# P1-10 — Platform Integrations & Setup: GATE C TEST SCRIPT (ENGINEERING EVIDENCE)
+
+> ## THIS IS NOT THE ACCEPTANCE SCRIPT. DO NOT RUN THIS ON PRODUCTION.
+>
+> **For acceptance, use
+> [`P1-10-PLATFORM-INTEGRATIONS-GATE-D-TEST-SCRIPT.md`](P1-10-PLATFORM-INTEGRATIONS-GATE-D-TEST-SCRIPT.md)
+> — eight checks, all of them safe on the live system.**
+>
+> This script grew to **seventeen** checks across three Gate C rounds, and nine
+> of them cannot be run on a live deployment without doing something that
+> should never be done to one: creating a setup administrator, issuing a
+> recovery token, deactivating the only System Administrator, deleting a saved
+> credential, typing a fake SMTP password or a placeholder endpoint, waiting
+> four hours for a session to expire, or changing production sign-in.
+>
+> It is kept, complete and unedited below, for two reasons. It is the
+> **engineering record** of what each Gate C round delivered and what was
+> checked. And it is the **script for a test environment**, where First-Run,
+> recovery and the setup session limits can be exercised honestly.
+>
+> Nothing here is abandoned. The automated evidence for every destructive case
+> stands — the B, C, T and H cases and the mutations in
+> `P1-10-MUTATIONS.md` — and the cases that need a live observation are carried
+> as gates rather than marked done.
 
 **Written for you, not for a developer.** Your words, your screens, your
 decisions.

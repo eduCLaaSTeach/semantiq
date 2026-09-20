@@ -1,0 +1,288 @@
+# Read-only P1-10 Platform Integrations & Setup state verification.
+#
+# MANUAL DISPATCH ONLY, AND IT WRITES NOTHING. Every statement below comes from
+# a SELECT or a schema read. There is deliberately no sibling that writes: the
+# whole subject of this unit is that changing a connection destination or a
+# credential requires a person to prove who they are, and a workflow that could
+# do it from CI would be the hole this unit exists to close.
+#
+# IT REPORTS SHAPE, BOOLEANS, COUNTS AND FIELD NAMES. Not a tenant, not a
+# client identifier, not an endpoint, not a mail server, not one byte of any
+# stored secret. A report about a secret store must not become the leak it is
+# checking for.
+#
+# IT MAKES NO OUTBOUND CALL. No connection test, no Microsoft discovery, no
+# SMTP conversation, no AI request, no Fabric query. Those are actions a person
+# takes on a screen, and several of them cost money or send a message.
+#
+# WHY IT EXISTS. Deployment validation asks questions nobody can answer from
+# outside: did the migrations create exactly the six tables and alter nothing
+# else, is the identity authority still the environment, did the deployment
+# quietly manufacture a setup administrator or a recovery token, and is a
+# privileged change left staged and unconsumed.
+#
+# It mirrors verify-identity.yml for the ssh-agent and askpass handling the
+# deploy key needs: the key is passphrase-protected, and writing the key file
+# alone produces "Permission denied (publickey)".
+
+name: Verify P1-10 Platform Setup state (read-only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_identity_source:
+        description: >-
+          Which identity authority this run expects to find in force. Production
+          stays on `env` until the separate controlled cutover is approved; pass
+          `store` only after that cutover has been performed deliberately.
+        required: false
+        default: env
+        type: choice
+        options:
+          - env
+          - store
+      expect_bootstrap_administrator:
+        description: >-
+          Whether a local setup administrator is expected to exist at all. A
+          production deployment that already has a permanent System
+          Administrator should have none.
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Report Platform Setup state over SSH
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+    steps:
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      - name: Report Platform Setup state
+        env:
+          EXPECTED_IDENTITY_SOURCE: ${{ inputs.expected_identity_source || 'env' }}
+          EXPECT_BOOTSTRAP_ADMINISTRATOR: ${{ inputs.expect_bootstrap_administrator || 'false' }}
+        run: |
+          set -euo pipefail
+
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
+              // THE SIX TABLES, NAMED HERE RATHER THAN COUNTED.
+              //
+              // A count would pass for the wrong six. The DESIGN named five and
+              // the implementation has six - staged_integration_changes was
+              // added so that a whole privileged change lives in one row - so
+              // the set is written out and compared as a set.
+              \$tables = [];
+              foreach ([
+                \"platform_settings\",
+                \"integration_configurations\",
+                \"integration_secrets\",
+                \"bootstrap_administrators\",
+                \"bootstrap_recovery_tokens\",
+                \"staged_integration_changes\",
+              ] as \$t) {
+                \$tables[\$t] = \Illuminate\Support\Facades\Schema::hasTable(\$t);
+              }
+
+              // THE AUTHORITY, FROM THE RESOLVER THE SIGN-IN PATH USES.
+              \$identity = app(\App\Modules\Platform\Setup\Identity\IdentityConfigurationSource::class)->resolve();
+              \$settings = \App\Modules\Platform\Setup\Models\PlatformSetting::current();
+
+              // BOOTSTRAP OPENNESS THROUGH THE REAL PREDICATE, NOT A COPY OF IT.
+              //
+              // A workflow that re-implemented \"is local sign-in open\" would be
+              // a second source of truth for the one question this unit most
+              // needs a single answer to. BootstrapAccess::isOpen() needs a
+              // Request, so it is given a real one with a session attached; the
+              // store is never started, so nothing is read or written.
+              \$probe = \Illuminate\Http\Request::create(\"/first-run/sign-in\", \"GET\");
+              \$probe->setLaravelSession(app(\"session.store\"));
+              \$bootstrapOpen = app(\App\Modules\Platform\Setup\Bootstrap\BootstrapAccess::class)->isOpen(\$probe);
+
+              \$principal = \App\Modules\Platform\Setup\Bootstrap\Models\BootstrapAdministrator::current();
+
+              \$state = app(\App\Modules\Platform\Bootstrap\BootstrapState::class);
+
+              // PER FAMILY: CONFIGURED OR NOT, AND THE PROJECTED STATUS. No
+              // field VALUE is read into anything printed; secrets are reported
+              // as a count of rows, never as names paired with content.
+              \$projection = app(\App\Modules\Platform\Setup\Support\SetupProjection::class);
+
+              \$families = [];
+              foreach (\App\Modules\Platform\Setup\IntegrationFamily::cases() as \$family) {
+                \$view = \$projection->forFamily(\$family);
+                \$families[\$family->value] = [
+                  \"status\" => \$view->status,
+                  \"secrets_configured\" => \$view->secrets,
+                  \"has_been_tested\" => \$view->lastTestedAt !== null,
+                  \"required\" => \$view->required,
+                ];
+              }
+
+              \$secretRows = [];
+              foreach (\App\Modules\Platform\Setup\Models\IntegrationSecret::query()->get([\"family\"]) as \$row) {
+                \$secretRows[\$row->family] = (\$secretRows[\$row->family] ?? 0) + 1;
+              }
+
+              // LOCAL HEALTH ONLY, AND THE STORED IDENTITY ANSWER.
+              //
+              // NOT semantiq:health. That command calls inspect(), whose
+              // identity() reaches IdentityHealthCheck::report(), which on a
+              // cold discovery cache asks Microsoft over the network - so a
+              // workflow that promised to contact nobody would have contacted
+              // somebody. P1-09 built inspectLocal() and storedReport() for
+              // exactly this: the same five checks with no network path, and
+              // the identity answer as last MEASURED rather than re-measured.
+              //
+              // The consequence is stated rather than hidden: this is not the
+              // /up verdict. Sign-in can be down and every row here still
+              // green. The deployment workflow runs the real semantiq:health
+              // and that is where a live identity verdict comes from.
+              \$local = app(\App\Modules\Platform\Health\HealthInspector::class)->inspectLocal();
+              \$storedIdentity = app(\App\Modules\Identity\Health\IdentityHealthCheck::class)->storedReport();
+
+              \$now = now();
+
+              echo json_encode([
+                \"tables_present\"              => \$tables,
+                \"identity_source\"             => \$identity->source,
+                \"identity_config_revision\"    => \$identity->revision,
+                \"identity_configuration_complete\" => \$identity->isComplete(),
+                \"identity_missing_keys\"       => \$identity->missingKeys(),
+                \"identity_imported_recorded\"  => \$settings->identity_imported_at !== null,
+                \"identity_committed_recorded\" => \$settings->identity_committed_at !== null,
+                \"permanent_administrator_exists\" => \$state->isConfigured(),
+                \"bootstrap_local_login_open\"  => \$bootstrapOpen,
+                \"bootstrap_administrator_exists\" => \$principal !== null,
+                \"bootstrap_administrator_closed\" => \$principal?->isClosed(),
+                \"recovery_tokens_total\"       => \App\Modules\Platform\Setup\Bootstrap\Models\BootstrapRecoveryToken::query()->count(),
+                \"recovery_tokens_live\"        => \App\Modules\Platform\Setup\Bootstrap\Models\BootstrapRecoveryToken::query()
+                                                    ->whereNull(\"consumed_at\")->where(\"expires_at\", \">\", \$now)->count(),
+                \"staged_changes_total\"        => \App\Modules\Platform\Setup\Secrets\StagedIntegrationChange::query()->count(),
+                \"staged_changes_live\"         => \App\Modules\Platform\Setup\Secrets\StagedIntegrationChange::query()
+                                                    ->whereNull(\"consumed_at\")->where(\"expires_at\", \">\", \$now)->count(),
+                \"local_health_ok\"            => \$local->isHealthy(),
+                \"local_health_failing\"       => array_keys(\$local->failing()),
+                \"identity_health_stored\"     => \$storedIdentity->state,
+                \"identity_health_checked_at\" => \$storedIdentity->checkedAt,
+                \"integration_families\"        => \$families,
+                \"secret_row_counts\"           => \$secretRows,
+                \"audit_allowed_keys\"          => count((new \ReflectionClass(
+                                                    \App\Modules\Platform\Security\SecurityEventLogger::class
+                                                  ))->getConstant(\"ALLOWED_KEYS\")),
+              ], JSON_PRETTY_PRINT);
+            '")"
+
+          echo "$out"
+
+          # A guard, not just a report.
+          python3 - "$out" <<'PYEOF'
+          import json, os, sys
+          raw = sys.argv[1]
+          data = json.loads(raw[raw.index('{'):raw.rindex('}') + 1])
+
+          expected_source = os.environ.get('EXPECTED_IDENTITY_SOURCE') or 'env'
+          expect_bootstrap = (os.environ.get('EXPECT_BOOTSTRAP_ADMINISTRATOR') or 'false') == 'true'
+
+          # D-160. The closed key catalogue. A unit that quietly widens it has
+          # widened what any future event may carry into Audit.
+          ALLOWED_KEYS = 15
+
+          problems = []
+
+          missing_tables = [t for t, present in data.get('tables_present', {}).items() if not present]
+          if missing_tables:
+              problems.append(f'These P1-10 tables are absent: {missing_tables}.')
+
+          source = data.get('identity_source')
+          if source != expected_source:
+              problems.append(
+                  f'The effective identity authority is {source!r}, not the expected {expected_source!r}. '
+                  'A cutover this run did not expect has happened, or one that was expected has not.'
+              )
+
+          if not data.get('identity_configuration_complete'):
+              problems.append(
+                  f'The resolved identity configuration is incomplete: {data.get("identity_missing_keys")}.'
+              )
+
+          if source == 'env' and (data.get('identity_imported_recorded') or data.get('identity_committed_recorded')):
+              problems.append('Cutover timestamps are recorded while the authority is still the environment.')
+
+          # THE ONE THAT MATTERS MOST. A deployment that has a working
+          # administrator must not be accepting a local password, whatever else
+          # is true.
+          if data.get('permanent_administrator_exists') and data.get('bootstrap_local_login_open'):
+              problems.append('Local setup sign-in is OPEN on a deployment that already has a System Administrator.')
+
+          if data.get('bootstrap_administrator_exists') != expect_bootstrap:
+              problems.append(
+                  f'bootstrap_administrator_exists is {data.get("bootstrap_administrator_exists")!r}, '
+                  f'expected {expect_bootstrap!r}. A deployment must never create one by itself.'
+              )
+
+          if data.get('recovery_tokens_live'):
+              problems.append('A live, unconsumed recovery token exists.')
+
+          if data.get('staged_changes_live'):
+              problems.append(
+                  'A privileged integration change is staged and unconsumed. It expires by itself, '
+                  'but until it does somebody has a confirmation waiting.'
+              )
+
+          if not data.get('local_health_ok'):
+              problems.append(
+                  f'Local health is failing: {data.get("local_health_failing")}.'
+              )
+
+          if data.get('audit_allowed_keys') != ALLOWED_KEYS:
+              problems.append(
+                  f'The Audit key catalogue holds {data.get("audit_allowed_keys")} keys, not {ALLOWED_KEYS}.'
+              )
+
+          for p in problems:
+              print(f'::error::{p}')
+
+          sys.exit(1 if problems else 0)
+          PYEOF

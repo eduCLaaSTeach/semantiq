@@ -7,13 +7,15 @@ claim as an observed production result, and nothing below is presented as one.
 | --- | --- |
 | Unit | **P1-10 — Platform Integrations & Setup** (delivery order 12) |
 | DESIGN | merge `a7aef47` — the six Product Owner corrections applied |
-| Suite | **1176 tests, 1170 passed, 0 failed, 0 errors** (6 skipped, 1 risky — all pre-existing) |
+| Suite | **1186 tests, 1180 passed, 0 failed, 0 errors** (6 skipped, 1 risky — all pre-existing) — 1176/1170 at Gate C, plus the ten cases §14 added |
 | P1-10 cases | **105** under `tests/Feature/Setup`, plus **nine** architecture files — `FirstRunRoutesDoNotCollide`, `BootstrapIsNotAUser`, `ConnectionTestsAreNotCapabilities`, `EveryCssTokenIsDeclared`, `OneStatusVocabulary`, `NoKeyRotationTooling`, `IdentityHasOneSource`, `IdentityIsNotWritableOnTheConsole`, `OneSecretPerFamily` |
-| Status | **NOT DEPLOYED — awaiting Product Owner Gate C review** |
+| Merge | `1a4068b` — squash of PR #131 into `main`, after Gate C approval at `020de16` |
+| Status | **DEPLOYED. Gate C approved; awaiting Product Owner Gate D acceptance** |
 
 **§8 records Gate C round 2's four corrections; §10–§12 record round 3's three,
-and the six-table schema amendment.** Sections 1–7 describe the state at the
-first Gate C submission and are left as written.
+and the six-table schema amendment. §13 records the deployment and the
+production verification, and §14 the defect that deployment found.** Sections
+1–7 describe the state at the first Gate C submission and are left as written.
 
 ---
 
@@ -642,3 +644,231 @@ reachable control without a focus indicator.
 | A real test email from production | explicitly held; the send path is exercised against a faked transport, so what is proven is **which address SemantIQ would send to**, not that SMTP works |
 | Real AI or Fabric credentials | explicitly held |
 | The completed Microsoft step-up round trip | needs a live Entra tenant. The redirect, the staging, the single-use consumption, the verification and every refusal path are covered automatically; **the live round trip is carried forward** |
+
+---
+
+## 13. Deployment, and what was verified on production
+
+### 13.1 The deployment itself
+
+| | |
+| --- | --- |
+| Gate C head approved | `020de1603be02707aed67fe6220cdda40c3e3838` |
+| Merge | **`1a4068b8814577282f4133fff9bec4aa361b29b4`** — squash of PR #131, the repository's normal strategy |
+| Post-merge CI | run **341** — SUCCESS |
+| Deployment | **Deploy to cPanel (SSH)** run **154** — SUCCESS, on attempt **2** |
+
+**THE FIRST ATTEMPT FAILED, AND IT IS RECORDED RATHER THAN RE-RUN QUIETLY.**
+
+Attempt 1 stopped at step 15, the pre-flight check that the four Microsoft
+settings are present on the server:
+
+```
+ssh: connect to host *** port ***: Connection timed out
+Process completed with exit code 255
+```
+
+Three earlier steps in the same job had used the same SSH connection
+successfully, seconds before, and the failure is in the connection layer rather
+than in anything the step did. **Production was not touched**: steps 16 to 29
+were all skipped, so the maintenance window never opened, no file was synced
+and no migration ran. `/up` was confirmed still serving `200 ok` while the
+deployment was in its failed state.
+
+That is the one case where a re-run is a diagnosis rather than a hope, and it
+was spent there. Attempt 2 ran all 29 steps.
+
+**What the deployment did:** synced the application and built assets, verified
+the deployed `.htaccess` and front controller against the repository copies,
+ran `php artisan migrate --force`, ran `php artisan optimize:clear`, ran
+`php artisan semantiq:health`, closed the maintenance window, verified the site
+over HTTPS and ran the web-exposure negative tests.
+
+**What it did not do, structurally rather than by intention:** `.env` is
+excluded from the rsync, so no Microsoft setting on the server was read,
+written or moved. The only `.env` key the workflow touches is
+`SESSION_LIFETIME`, which is the existing approved D-31 behaviour and is
+unrelated to identity. `SESSION_DRIVER` appears nowhere in the workflow.
+
+**Every P1-10 migration is additive.** Six `Schema::create` calls on tables
+that did not exist, and one `Schema::table` adding a nullable column to a table
+the same set creates. No existing table is altered, renamed or dropped. The
+**only** data write in the whole set is the `platform_settings` singleton, and
+it is inserted with `identity_source = 'env'` — so an existing deployment keeps
+the environment-backed authority it already had. There is no import, no
+fallback combination and no automatic store activation anywhere in the path.
+
+### 13.2 Observed directly on production
+
+| What | How | Result |
+| --- | --- | --- |
+| Site root | `GET /` | **200** |
+| Health endpoint | `GET /up` | **200**, body `ok` |
+| Deployment health | `php artisan semantiq:health`, deploy step 26 | **passed** — and on a cache cleared by step 25, so its identity check was a genuine cold-cache round trip to Microsoft |
+| Site over HTTPS | deploy step 28 | **passed** — root 200, `/up` ok, built assets served from the deployment root, no legacy `public/` layer |
+| Web-exposure negatives | deploy step 29 | **passed** — every protected path 403 from Apache, denial body 9 bytes, ACME challenge path intact |
+| Local setup sign-in | `GET /first-run/sign-in` | **302 → `/first-run/closed`** |
+| The closed page | `GET /first-run/closed` | **200**, and its source contains **no password input and no secret marker** |
+
+**Bootstrap is closed on production, and was not opened by the deployment.**
+The redirect above is the observable proof: `BootstrapAccess::isOpen()` returns
+false first of all when a deployment has an active System Administrator, which
+production has. No Bootstrap Administrator row and no recovery token can have
+been created, because nothing in the migration set or the deployment workflow
+creates one — the only paths that do are two artisan commands nobody ran.
+
+### 13.3 No outbound action was caused by the deployment
+
+| | |
+| --- | --- |
+| SMTP test message | none — no mail configuration exists on production, and nothing in the deployment sends |
+| AI provider call | none |
+| Fabric connection test | none |
+| New integration credential | none — `integration_secrets` is created empty and nothing writes to it without an administrator on a screen |
+
+The one outbound call the deployment does make is Microsoft **discovery**,
+inside `semantiq:health`, which is the existing pre-P1-10 behaviour of that
+command and is how the identity row in its report is produced.
+
+### 13.4 What could NOT be verified from the delivery environment
+
+**Stated plainly, and not inferred from anything that passed.**
+
+**The console screens were not opened on production.** Signing in requires
+Microsoft credentials the delivery environment does not have, and cannot
+obtain. Separately, this environment reaches the internet through an inspecting
+proxy whose certificate authority the bundled Chromium does not trust, and
+`certutil` is not installed to add it — so even the unauthenticated surfaces
+could not be rendered in a browser here.
+
+**So Gate D CHECKS 1, 2, 3, 4, 5, 6 and 7 are genuinely the Product Owner's
+first look at these screens on the live system.** That is the honest position
+and it is why the Gate D script is written the way it is.
+
+---
+
+## 14. THE DEFECT THIS DEPLOYMENT FOUND
+
+**A false red on the one screen where acting on it locks everybody out.**
+
+### What it was
+
+`SetupProjection::isConfigured()` asked one question of all four integrations:
+is there a saved row holding every meaningful field, and does its secret exist?
+
+For Email, AI and Fabric that is the whole question. **For Microsoft Entra ID
+it is not**, because identity has two possible authorities and the row is only
+one of them. Until the controlled cutover, a deployment reads its Microsoft
+configuration from the **environment**, where there is no row at all.
+
+So production — the deployment whose sign-in demonstrably works, because people
+are signing in through it — would have been told:
+
+> **Microsoft Entra ID — Not configured**
+
+on a **required** integration, on the screen whose only remedy is to re-enter a
+configuration that was already correct.
+
+`ProviderProbe` already carries a comment about precisely this class of
+mistake: *"A false red on a working system is worse than no check."* This was
+the same mistake, one screen away.
+
+### Why three Gate C rounds did not catch it
+
+**Because the local server used for every browser verification had no Microsoft
+configuration either.** "Not configured" was the correct answer there — for a
+reason entirely unrelated to the rule being checked. That is the failure
+`CLAUDE.md` §2 names in as many words, and it is worth recording that it was
+found by deploying rather than by testing.
+
+It was not visible in the automated suite for the same reason: no case
+established an environment-backed authority and then asked what the card said.
+
+### The correction
+
+`isConfigured()` now has an explicit Identity branch that asks the same
+authority the sign-in path asks:
+
+```php
+if ($family === IntegrationFamily::Identity) {
+    return $this->identityConfiguration->resolve()->isComplete()
+        || $this->identityConfiguration->storedCandidate()->isComplete();
+}
+```
+
+**Both sides are needed, and each one alone is wrong.**
+
+| | Answers | Needed for |
+| --- | --- | --- |
+| `resolve()` | what is **in force** | production before the cutover, and any deployment after it |
+| `storedCandidate()` | what has been **typed and saved** | First-Run, where the administrator has just entered the details and the environment is still empty |
+
+`resolve()` alone would tell an administrator mid-setup that the configuration
+they had just saved was not configured. The row alone is the defect above.
+`IdentityConfigurationSource` draws exactly this distinction in its own
+docblock; this is the one caller that needs both halves of it.
+
+### The direction of the fix, pinned
+
+**Nothing here makes the card report a positive result.** Configured and
+known-to-work remain different facts. With no test result the card reads **Not
+checked** — "configured, and nobody has tested it from this screen" — which is
+the Gate C round 2 correction 4A semantics applied correctly for the first
+time.
+
+`tests/Feature/Setup/IdentityCardReflectsTheAuthorityTest.php`, seven cases:
+
+| Case | Pins |
+| --- | --- |
+| `test_an_environment_backed_deployment_is_not_reported_as_unconfigured` | the production shape, and that it reads **Not checked** |
+| `test_a_fresh_deployment_with_no_authority_is_still_unconfigured` | the fix did not make identity always configured |
+| `test_a_saved_candidate_counts_before_the_cutover` | First-Run is not broken by asking `resolve()` alone |
+| `test_a_store_backed_deployment_is_configured` | after the cutover |
+| `test_a_working_deployment_is_not_reported_as_tested` | it never becomes a fake green |
+| `test_the_optional_integrations_are_unaffected` | Email, AI and Fabric still answer from their row |
+| `test_the_setup_step_list_agrees` | the card and the First-Run step list cannot disagree |
+
+**Five mutations, five killed, each by the case its docblock names:**
+
+| # | Mutation | Killed by |
+| --- | --- | --- |
+| M-GD-1 | remove the Identity branch — the pre-fix code | the production-shape case, and the step-list case |
+| M-GD-2 | Identity is always configured | the fresh-deployment case |
+| M-GD-3 | ask `resolve()` alone | the saved-candidate case |
+| M-GD-4 | a configured identity reports `Available` | the production-shape case, and the not-tested case |
+| M-GD-5 | every family asks the identity authority | the optional-integrations case, and the step-list case |
+
+### And the guard that P1-10 had already invalidated
+
+Separately, and found by reading the verification tooling rather than by
+running it: **Gate C round 3 broke `verify-identity.yml` and nothing would have
+said so.**
+
+That workflow held `if 'PUT' in identity_route_methods … problem`. Round 3 added
+`PUT console/identity/entra` — the approved post-install sign-in change. The
+old guard's verdict was **run** against the deployed route set rather than
+reasoned about:
+
+```
+OLD GUARD VERDICT: FAIL - "A write route exists under console/identity."
+```
+
+It is dispatched by hand and never runs in CI, so the first sign would have been
+a red run against a healthy deployment — and a gate that fails on a healthy
+system is a gate people learn to ignore.
+
+The guard is **narrowed, not relaxed**: "no write route" becomes "exactly the
+one write route that was approved", as an equality, so a second one added
+anywhere under the prefix still fails it.
+
+The same workflow was also reading the **wrong authority** — `config
+("identity.microsoft.*")`, straight out of `.env`. After the cutover the store
+is the authority and `.env` is not read at all, so that report would have said
+PRESENT for a deployment that was not configured. It now asks
+`IdentityConfigurationSource`.
+
+**`ProductionVerificationMatchesTheApplicationTest` makes this class of drift a
+CI failure** rather than a discovery. It pins each hard-coded expectation in
+both verification workflows to the thing it is a copy of: the approved identity
+write set to the registered routes, the six table names to tables that exist,
+and the Audit key count to the catalogue. Three mutations, three killed.
