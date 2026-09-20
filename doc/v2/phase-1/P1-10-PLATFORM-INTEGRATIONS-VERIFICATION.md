@@ -112,7 +112,7 @@ local server with a seeded setup administrator.** Not production.
 
 | | |
 | --- | --- |
-| Screens rendered | **8** — sign-in, overview, the four integration steps, first administrator, complete, **and recovery** |
+| Screens rendered | **9** — sign-in, overview, the four integration steps, first administrator, complete, and recovery |
 | Also rendered | the **first-administrator screen carrying a live handover link**, driven end to end: sign in, enter Entra details, nominate, and read the one-time link off the page |
 | **NOT browser-rendered** | **`/console/integrations`.** See below — this is stated rather than glossed |
 | Widths | **1440px and 390px** |
