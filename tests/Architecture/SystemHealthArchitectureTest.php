@@ -226,8 +226,31 @@ final class SystemHealthArchitectureTest extends TestCase
      */
     public function test_the_unit_adds_no_security_event_key(): void
     {
-        $this->assertSame(77, count(SecurityEventLogger::events()),
-            'The event catalogue changed size. P1-09 adds no event key.');
+        /*
+         * THE ASSERTION THAT IS ACTUALLY ABOUT P1-09 IS THIS ONE: no event
+         * belongs to this unit's subject at all.
+         *
+         * The count below is a tripwire, not the guarantee. It was 77 and is
+         * now 87 because P1-10 declared ten events, which is a legitimate
+         * addition by a different unit - and that is exactly the weakness of a
+         * global count standing in for a per-unit claim: it fails for reasons
+         * that have nothing to do with the unit it names, and the temptation
+         * each time is to bump the number without reading why it moved.
+         *
+         * So the number stays, as a deliberate stop-and-look on ANY event
+         * addition, and the sentence beside it no longer claims to be evidence
+         * about P1-09. The two assertions that are evidence about P1-09 are
+         * the namespace check here and the source scan below.
+         */
+        foreach (SecurityEventLogger::events() as $event) {
+            $this->assertStringStartsNotWith('system_health.', $event,
+                "[{$event}] instruments the System Health screen. Reading a health page is not a security event.");
+            $this->assertStringStartsNotWith('health.', $event,
+                "[{$event}] instruments the System Health screen. Reading a health page is not a security event.");
+        }
+
+        $this->assertSame(87, count(SecurityEventLogger::events()),
+            'The event catalogue changed size. Read why before changing this number.');
 
         foreach ($this->moduleSources() as $path => $source) {
             $this->assertStringNotContainsString('SecurityEventLogger', $source,

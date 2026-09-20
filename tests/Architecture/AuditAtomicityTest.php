@@ -243,6 +243,32 @@ final class AuditAtomicityTest extends TestCase
             return true;
         }
 
+        /*
+         * REQUIRING THE CALLER'S TRANSACTION IS STRICTER THAN OPENING ONE, and
+         * is the second legitimate mechanism.
+         *
+         * A method that opens DB::transaction() is atomic with ITSELF. A method
+         * that REFUSES TO RUN outside a transaction is atomic with whatever its
+         * caller is doing - which is the stronger property, and sometimes the
+         * only correct one. P1-10's BootstrapCloser is the case: closing the
+         * local bootstrap password must commit with the role assignment that
+         * makes it unnecessary, so opening its own transaction would create
+         * exactly the window it exists to remove.
+         *
+         * BOTH HALVES ARE REQUIRED. Reading transactionLevel() is not enough -
+         * the method must throw on zero, or it merely knows it is unprotected
+         * and proceeds anyway. That distinction is the whole difference between
+         * a guard and a comment.
+         *
+         * This is a MECHANISM, not an exemption list: any method that adopts it
+         * qualifies, and BootstrapCloser loses the recognition the moment the
+         * throw is removed.
+         */
+        if (str_contains($body, 'DB::transactionLevel() === 0')
+            && preg_match('/DB::transactionLevel\(\) === 0\s*\)\s*\{[^}]*throw /s', $body) === 1) {
+            return true;
+        }
+
         if ($method['visibility'] === 'public' || $depth >= 2) {
             return false;
         }

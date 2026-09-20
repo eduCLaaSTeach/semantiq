@@ -12,6 +12,7 @@ use App\Modules\Platform\Models\BootstrapGrant;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
 use App\Modules\Platform\Security\SecurityEventLogger;
+use App\Modules\Platform\Setup\Bootstrap\BootstrapCloser;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -28,10 +29,19 @@ use Illuminate\Support\Facades\DB;
  * D-03.1: tid is matched exactly and UPN case-insensitively, then the verified
  * oid is captured. From that point on the user's identity key is oid + tid, and
  * email is never an identity key again.
+ *
+ * P1-10 ADDED ONE THING AND CHANGED NOTHING ELSE. The transaction below now
+ * also CLOSES the local Bootstrap Administrator, because this is the one moment
+ * at which closing it can be atomic with the administrator that replaces it.
+ * The order of the checks, the refusal-without-consumption rule, the
+ * conditional UPDATE and the identity key are all untouched.
  */
 final class GrantRedeemer
 {
-    public function __construct(private readonly SecurityEventLogger $events) {}
+    public function __construct(
+        private readonly SecurityEventLogger $events,
+        private readonly BootstrapCloser $closer,
+    ) {}
 
     public function redeem(string $grant, VerifiedIdentity $identity): User
     {
@@ -103,6 +113,33 @@ final class GrantRedeemer
             if ($consumed !== 1) {
                 throw AuthenticationFailed::protocol('grant_already_consumed');
             }
+
+            /*
+             * P1-10 CORRECTION 3. CLOSE THE LOCAL BOOTSTRAP PASSWORD, HERE,
+             * INSIDE THIS TRANSACTION.
+             *
+             * This is the moment a deployment gains its first permanent System
+             * Administrator, so it is the moment the pre-SSO local credential
+             * stops being needed - and the only moment at which closing it can
+             * be made atomic with the thing that replaces it.
+             *
+             * Doing it one line later, outside, would leave a window in which
+             * an administrator exists AND the local password still works. Doing
+             * it on a computed predicate instead - which the first draft did -
+             * leaves a permanent backdoor: deactivate every System
+             * Administrator and the deployment is UNCONFIGURED again, so the
+             * original bootstrap password starts working.
+             *
+             * If this throws, the user and the role assignment above roll back
+             * with it and the grant stays unconsumed. That is the correct
+             * direction to fail in: an installation with no administrator can
+             * be retried, and one with an administrator and an open local
+             * password cannot be un-shipped.
+             *
+             * It is a no-op on a deployment that has no local principal, which
+             * is every deployment bootstrapped the P1-00 way over SSH.
+             */
+            $this->closer->close('first_administrator_established');
 
             $this->events->record(SecurityEventLogger::BOOTSTRAP_COMPLETED, [
                 'provider' => $identity->provider,

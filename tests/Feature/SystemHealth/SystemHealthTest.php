@@ -20,6 +20,7 @@ use App\Modules\SystemHealth\Checks\SessionStoreCheck;
 use App\Modules\SystemHealth\Report\HealthStatus;
 use App\Modules\SystemHealth\Report\SystemHealthReport;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -105,7 +106,13 @@ final class SystemHealthTest extends TestCase
                 $broken,
                 app(Migrator::class),
                 app(ConfigurationValidator::class),
-                app(IdentityHealthCheck::class),
+                // THE CONTAINER, not a pre-built check. HealthInspector builds
+                // the identity check inside its own try/catch so that a failure
+                // while CONSTRUCTING the check, the provider or the discovery
+                // client cannot escape the guard written to contain it. Passing
+                // one in here would resolve it eagerly and put the hole back
+                // for this test alone.
+                app(Container::class),
             ),
             app(IdentityHealthCheck::class),
             new SessionStoreCheck($broken),

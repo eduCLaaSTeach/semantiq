@@ -165,9 +165,17 @@ final class P1BoundaryTest extends TestCase
         $this->assertNotEmpty($declared);
 
         // P1-01 adds the structural event families, P1-02 identity health,
-        // P1-03 the user and group families, P1-04 business_domain and P1-05
-        // access. Anything outside this list is an event nobody reviewed.
-        $families = 'auth|bootstrap|organisation|legal_entity|business_unit|department|team|management|identity|user|group|business_domain|access';
+        // P1-03 the user and group families, P1-04 business_domain, P1-05
+        // access and P1-10 integration. Anything outside this list is an event
+        // nobody reviewed.
+        //
+        // P1-10's other seven events are `bootstrap.*`, which was already
+        // listed and is deliberately reused: the local setup administrator and
+        // the SSH grant channel are two routes into the same first-run
+        // episode, and a reader reviewing how a deployment was first
+        // administered should find both under one family rather than have to
+        // know there are two.
+        $families = 'auth|bootstrap|organisation|legal_entity|business_unit|department|team|management|identity|user|group|business_domain|access|integration';
 
         foreach ($declared as $event) {
             $this->assertMatchesRegularExpression('/^('.$families.')\./', $event);
