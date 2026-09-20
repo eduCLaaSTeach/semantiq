@@ -135,7 +135,7 @@ final class NetworkBoundaryTest extends TestCase
     /** And it does not touch EntraDiscovery even when a result IS stored. */
     public function test_stored_report_makes_no_outbound_call_when_a_result_is_stored(): void
     {
-        Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, [
+        Cache::put(app(IdentityHealthCheck::class)->resultKey(), [
             'state' => IdentityHealthReport::DEGRADED,
             'at' => now()->subHour()->toIso8601String(),
         ], now()->addDay());
@@ -197,7 +197,7 @@ final class NetworkBoundaryTest extends TestCase
 
         foreach ($rubbish as $description => $stored) {
             Cache::flush();
-            Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, $stored, now()->addDay());
+            Cache::put(app(IdentityHealthCheck::class)->resultKey(), $stored, now()->addDay());
 
             $state = app(IdentityHealthCheck::class)->storedReport()->state;
 
@@ -245,7 +245,7 @@ final class NetworkBoundaryTest extends TestCase
 
         foreach ($withoutATime as $description => $stored) {
             Cache::flush();
-            Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, $stored, now()->addDay());
+            Cache::put(app(IdentityHealthCheck::class)->resultKey(), $stored, now()->addDay());
 
             $reported = app(IdentityHealthCheck::class)->storedReport();
 
@@ -267,7 +267,7 @@ final class NetworkBoundaryTest extends TestCase
     /** Garbage state plus a perfectly good time is still Not checked. */
     public function test_a_garbage_state_with_a_valid_time_is_not_checked(): void
     {
-        Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, [
+        Cache::put(app(IdentityHealthCheck::class)->resultKey(), [
             'state' => 'probably_fine',
             'at' => now()->subHour()->toIso8601String(),
         ], now()->addDay());
@@ -289,7 +289,7 @@ final class NetworkBoundaryTest extends TestCase
      */
     public function test_the_screen_never_shows_a_state_without_its_age(): void
     {
-        Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, [
+        Cache::put(app(IdentityHealthCheck::class)->resultKey(), [
             'state' => IdentityHealthReport::HEALTHY,
         ], now()->addDay());
 
@@ -342,7 +342,7 @@ final class NetworkBoundaryTest extends TestCase
             IdentityHealthReport::FAILED,
         ] as $state) {
             Cache::flush();
-            Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, [
+            Cache::put(app(IdentityHealthCheck::class)->resultKey(), [
                 'state' => $state,
                 'at' => now()->subHour()->toIso8601String(),
             ], now()->addDay());

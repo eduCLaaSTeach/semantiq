@@ -6,6 +6,7 @@ namespace App\Modules\Platform\Health;
 
 use App\Modules\Identity\Health\IdentityHealthCheck;
 use App\Modules\Platform\Support\ConfigurationValidator;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Migrations\Migrator;
 use Throwable;
@@ -29,7 +30,25 @@ final class HealthInspector
         private readonly DatabaseManager $db,
         private readonly Migrator $migrator,
         private readonly ConfigurationValidator $configuration,
-        private readonly IdentityHealthCheck $identity,
+        /**
+         * THE CONTAINER, SO THE IDENTITY CHECK IS BUILT LATE AND INSIDE THE
+         * try/catch BELOW.
+         *
+         * It used to be `private readonly IdentityHealthCheck $identity`, and
+         * identity() already wrapped the call in a try/catch - which looked
+         * complete and was not. Constructor injection builds the check, the
+         * provider and the discovery client BEFORE the method body runs, so
+         * anything that fails while constructing them escaped the very guard
+         * written to contain it.
+         *
+         * That became reachable the moment the identity configuration started
+         * resolving through the database: with the database down, /up returned
+         * 500 with a stack trace instead of the plain 503 a monitor needs. A
+         * health inspector must remain constructible when the thing it
+         * inspects is broken, or it cannot report the breakage - which is the
+         * one job it has.
+         */
+        private readonly Container $container,
     ) {}
 
     /**
@@ -149,7 +168,7 @@ final class HealthInspector
     private function identity(): array
     {
         try {
-            return $this->identity->forInspector();
+            return $this->container->make(IdentityHealthCheck::class)->forInspector();
         } catch (Throwable) {
             return ['ok' => false, 'detail' => 'Could not determine identity health.'];
         }

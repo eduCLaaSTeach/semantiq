@@ -13,6 +13,7 @@ use App\Modules\People\Support\PeopleViolation;
 use App\Modules\Platform\Models\User;
 use App\Modules\Platform\Models\UserStatus;
 use App\Modules\Platform\Security\SecurityEventLogger;
+use App\Modules\Platform\Setup\Identity\IdentityConfigurationSource;
 use App\Shared\Lifecycle\PurgeDependencies;
 use Illuminate\Support\Facades\DB;
 
@@ -33,6 +34,7 @@ final class UserDirectoryService
     public function __construct(
         private readonly SecurityEventLogger $events,
         private readonly AdministratorSetGuard $administrators,
+        private readonly IdentityConfigurationSource $identityConfiguration,
     ) {}
 
     /**
@@ -51,7 +53,11 @@ final class UserDirectoryService
         $email = trim($attributes['email']);
         $displayName = trim((string) ($attributes['display_name'] ?? '')) ?: $email;
 
-        $tenant = (string) config('identity.microsoft.tenant_id');
+        // The RESOLVED tenant, because it becomes half of this user's identity
+        // key (oid + tid) and is matched at every subsequent sign-in. Writing
+        // .env's tenant onto a user whom the store-backed provider will present
+        // under a different one creates an account that can never sign in.
+        $tenant = $this->identityConfiguration->resolve()->tenantId;
 
         return DB::transaction(function () use ($organisation, $objectId, $email, $displayName, $tenant, $actor): User {
             /*

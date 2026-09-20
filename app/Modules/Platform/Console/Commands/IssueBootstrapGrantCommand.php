@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Platform\Console\Commands;
 
 use App\Modules\Platform\Bootstrap\GrantIssuer;
+use App\Modules\Platform\Setup\Identity\IdentityConfigurationSource;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -23,7 +24,7 @@ final class IssueBootstrapGrantCommand extends Command
 
     protected $description = 'Issue a single-use grant for the first System Administrator';
 
-    public function handle(GrantIssuer $issuer): int
+    public function handle(GrantIssuer $issuer, IdentityConfigurationSource $identityConfiguration): int
     {
         $subject = (string) $this->option('subject');
 
@@ -33,13 +34,19 @@ final class IssueBootstrapGrantCommand extends Command
             return self::FAILURE;
         }
 
-        $tenant = (string) config('identity.microsoft.tenant_id');
+        // The RESOLVED tenant. A grant is bound to the tenant it was issued
+        // for and checked against that binding at redemption, so issuing
+        // against .env on a deployment that signs in from the store would
+        // produce a grant that can never be redeemed.
+        $identity = $identityConfiguration->resolve();
 
-        if ($tenant === '') {
-            $this->error('MICROSOFT_TENANT_ID is not configured on this server.');
+        if ($identity->tenantId === '') {
+            $this->error('No Microsoft directory is configured on this server.');
 
             return self::FAILURE;
         }
+
+        $tenant = $identity->tenantId;
 
         try {
             $grant = $issuer->issue($subject, $tenant, 'ssh-operator');

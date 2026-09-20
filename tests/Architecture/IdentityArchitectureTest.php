@@ -94,33 +94,46 @@ final class IdentityArchitectureTest extends TestCase
     }
 
     /**
-     * A3. client_secret is referenced in exactly ONE place in the module.
+     * A3. client_secret is read from configuration in exactly ONE place in the
+     * whole application.
      *
      * PHP cannot make reading a config value impossible - any class can call
      * config(). So this does not claim to be a structural guarantee. It narrows
      * the surface to one line and fails when a second appears.
      *
-     * Mutation: read it a second time anywhere under app/Modules/Identity.
+     * THE SCAN IS app/, NOT app/Modules/Identity. P1-10 moved the read out of
+     * the Identity module into IdentityConfigurationSource, which resolves
+     * .env or the store depending on which authority the deployment is on. Had
+     * this test kept scanning only the old directory it would have found zero
+     * readers and passed - a guard reporting a safety that had simply moved
+     * out of its field of view. Widening the scan is what keeps the assertion
+     * about the application rather than about one folder.
+     *
+     * IT STILL MATCHES THE CALL SHAPE AND NOT THE BARE KEY. IdentityHealthCheck
+     * names a row 'client_secret' and SecretPresence's docblock names the key;
+     * both are labels rather than disclosures, and flagging them would teach
+     * the next person to loosen this guard instead of fixing the code. The
+     * dotted-key-in-a-variable case - a read that no call-shape match would
+     * see - is covered separately by NoDirectIdentityConfigRead, which scans
+     * for the key itself across all four identity values.
+     *
+     * Mutation: read it a second time anywhere under app/.
      */
     public function test_the_client_secret_is_read_in_exactly_one_place(): void
     {
         $readers = [];
 
-        foreach ($this->phpFiles(app_path('Modules/Identity')) as $file) {
-            // The CONFIG READ specifically. IdentityHealthCheck names a row
-            // 'client_secret', which is a label and not a disclosure - matching
-            // the bare string flagged it and would have taught the next person
-            // to loosen this guard rather than the code.
+        foreach ($this->phpFiles(app_path()) as $file) {
             if (str_contains((string) file_get_contents($file), "config('identity.microsoft.client_secret')")) {
                 $readers[] = basename($file);
             }
         }
 
         $this->assertSame(
-            ['IdentityConfigurationReport.php'],
+            ['IdentityConfigurationSource.php'],
             $readers,
-            'The client secret is read somewhere new. It becomes a SecretPresence at one line, and '
-            .'what leaves there cannot be turned back into the value.'
+            'The client secret is read somewhere new. It is resolved at one line, becomes a '
+            .'SecretPresence for every screen, and what leaves there cannot be turned back into the value.'
         );
     }
 

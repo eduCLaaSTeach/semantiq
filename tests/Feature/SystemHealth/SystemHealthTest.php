@@ -139,7 +139,7 @@ final class SystemHealthTest extends TestCase
 
     private function storeIdentityState(string $state): void
     {
-        Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, [
+        Cache::put(app(IdentityHealthCheck::class)->resultKey(), [
             'state' => $state,
             'at' => now()->subHours(2)->toIso8601String(),
         ], now()->addDays(7));
@@ -290,7 +290,7 @@ final class SystemHealthTest extends TestCase
             Cache::flush();
 
             if ($stored !== null) {
-                Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, $stored, now()->addDay());
+                Cache::put(app(IdentityHealthCheck::class)->resultKey(), $stored, now()->addDay());
             }
 
             $this->assertSame(

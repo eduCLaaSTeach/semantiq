@@ -7,6 +7,7 @@ namespace App\Modules\Identity\Http\Controllers;
 use App\Modules\Identity\Health\IdentityHealthCheck;
 use App\Modules\Identity\Support\IdentityConfigurationReport;
 use App\Modules\Platform\Identity\IdentityProvider;
+use App\Modules\Platform\Setup\Identity\IdentityConfigurationSource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -25,6 +26,7 @@ final class EntraController
     public function __construct(
         private readonly IdentityProvider $provider,
         private readonly IdentityHealthCheck $health,
+        private readonly IdentityConfigurationSource $identityConfiguration,
     ) {}
 
     public function show(): Response
@@ -32,7 +34,7 @@ final class EntraController
         $report = $this->health->report();
 
         return Inertia::render('Identity/Entra', [
-            'configuration' => IdentityConfigurationReport::build($this->provider)->toArray(),
+            'configuration' => IdentityConfigurationReport::build($this->provider, $this->identityConfiguration)->toArray(),
             'healthSummary' => [
                 'state' => $report->state(),
                 'stateInWords' => $report->stateInWords(),
@@ -55,9 +57,15 @@ final class EntraController
     {
         $field = $request->input('field');
 
+        // The RESOLVED source, so a reveal cannot show a directory identifier
+        // that sign-in is not using. Revealing .env's value on a store-backed
+        // deployment would be an administrator reading, and then trusting, an
+        // identifier no longer in play.
+        $identity = $this->identityConfiguration->resolve();
+
         $value = match ($field) {
-            'directory' => (string) config('identity.microsoft.tenant_id'),
-            'application' => (string) config('identity.microsoft.client_id'),
+            'directory' => $identity->tenantId,
+            'application' => $identity->clientId,
             default => null,
         };
 

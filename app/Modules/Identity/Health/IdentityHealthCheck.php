@@ -10,6 +10,7 @@ use App\Modules\Identity\Support\SecretPresence;
 use App\Modules\Identity\Support\SessionPolicy;
 use App\Modules\Platform\Identity\IdentityProvider;
 use App\Modules\Platform\Identity\Microsoft\EntraDiscovery;
+use App\Modules\Platform\Setup\Identity\IdentityConfigurationSource;
 use App\Modules\Platform\Support\ConfigurationValidator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -76,9 +77,17 @@ use Throwable;
  */
 final class IdentityHealthCheck
 {
-    public const LAST_RESULT_KEY = 'semantiq:identity:health:last';
+    /**
+     * PREFIXES, NOT KEYS. The revision is appended - see resultKey().
+     *
+     * They were plain keys until P1-10. Renaming them rather than quietly
+     * changing what the old names meant is deliberate: a caller still holding
+     * `LAST_RESULT_KEY` now fails to compile instead of silently reading and
+     * writing an unbound key that nothing else would ever look at.
+     */
+    public const LAST_RESULT_KEY_PREFIX = 'semantiq:identity:health:last';
 
-    public const LAST_PROBE_KEY = 'semantiq:identity:probe:last';
+    public const LAST_PROBE_KEY_PREFIX = 'semantiq:identity:probe:last';
 
     private const REMEMBER_DAYS = 7;
 
@@ -88,7 +97,39 @@ final class IdentityHealthCheck
         private readonly ConfigurationValidator $configuration,
         private readonly ProviderInventory $inventory,
         private readonly SessionPolicy $sessionPolicy,
+        private readonly IdentityConfigurationSource $identityConfiguration,
     ) {}
+
+    /**
+     * THE STORED RESULT IS BOUND TO THE CONFIGURATION IT DESCRIBES.
+     *
+     * A stored health result is evidence about ONE identity configuration.
+     * When the tenant changes, the old result stops being evidence about
+     * anything - but it was still sitting under a fixed key, so
+     * storedReport() would have shown the PREVIOUS tenant's state as the
+     * current one, with an accurate timestamp making it look trustworthy.
+     *
+     * Appending the configuration revision makes the stale entry UNREADABLE
+     * rather than merely unwanted: after a change the lookup is for a key that
+     * has never been written, and storedReport() returns Not checked, which is
+     * exactly what P1-09 built it to do for an absent entry.
+     *
+     * THIS IS DELIBERATELY NOT A Cache::forget() ON WRITE. forget() is
+     * best-effort: it can fail silently, and production runs a file cache
+     * where a missed unlink leaves the old entry perfectly readable. The
+     * writer does forget the old key as housekeeping, but NOTHING DEPENDS ON
+     * THAT SUCCEEDING - a cache that ignores forget() entirely still cannot
+     * serve a stale result through a key nobody asks for.
+     */
+    public function resultKey(): string
+    {
+        return self::LAST_RESULT_KEY_PREFIX.':'.$this->identityConfiguration->resolve()->revision;
+    }
+
+    public function probeKey(): string
+    {
+        return self::LAST_PROBE_KEY_PREFIX.':'.$this->identityConfiguration->resolve()->revision;
+    }
 
     /**
      * Evaluate everything. MAY CONTACT MICROSOFT - see the class comment.
@@ -105,7 +146,7 @@ final class IdentityHealthCheck
      */
     public function report(): IdentityHealthReport
     {
-        $report = IdentityConfigurationReport::build($this->provider);
+        $report = IdentityConfigurationReport::build($this->provider, $this->identityConfiguration);
         $probe = $this->lastProbe();
 
         $trust = $this->trustAvailability();
@@ -141,7 +182,7 @@ final class IdentityHealthCheck
         $probe = $this->discovery->probe();
 
         if ($probe['ran']) {
-            Cache::put(self::LAST_PROBE_KEY, [
+            Cache::put($this->probeKey(), [
                 'reachable' => $probe['reachable'],
                 'reason' => $probe['reason'],
                 'at' => Carbon::now()->toIso8601String(),
@@ -150,7 +191,7 @@ final class IdentityHealthCheck
 
         $report = $this->report();
 
-        Cache::put(self::LAST_RESULT_KEY, [
+        Cache::put($this->resultKey(), [
             'state' => $report->state(),
             'at' => Carbon::now()->toIso8601String(),
         ], now()->addDays(self::REMEMBER_DAYS));
@@ -214,7 +255,7 @@ final class IdentityHealthCheck
      */
     public function storedReport(): StoredIdentityHealth
     {
-        $stored = Cache::get(self::LAST_RESULT_KEY);
+        $stored = Cache::get($this->resultKey());
         $probe = $this->lastProbe();
         $probeAt = is_array($probe) ? ($probe['at'] ?? null) : null;
 
@@ -451,7 +492,10 @@ final class IdentityHealthCheck
      */
     private function directoryIdentityConsistent(array $trust): array
     {
-        $tenant = (string) config('identity.microsoft.tenant_id');
+        // THE RESOLVED SOURCE, not config(). A health screen that reports on
+        // .env while /auth/microsoft reads the store is confidently wrong at
+        // exactly the moment somebody is debugging a sign-in.
+        $tenant = $this->identityConfiguration->resolve()->tenantId;
         $issuer = is_array($trust['metadata']) ? (string) ($trust['metadata']['issuer'] ?? '') : '';
 
         if ($tenant === '' || $issuer === '') {
@@ -557,21 +601,21 @@ final class IdentityHealthCheck
     /** @return array<string, mixed>|null */
     private function lastProbe(): ?array
     {
-        $stored = Cache::get(self::LAST_PROBE_KEY);
+        $stored = Cache::get($this->probeKey());
 
         return is_array($stored) ? $stored : null;
     }
 
     private function rememberedState(): ?string
     {
-        $stored = Cache::get(self::LAST_RESULT_KEY);
+        $stored = Cache::get($this->resultKey());
 
         return is_array($stored) ? ($stored['state'] ?? null) : null;
     }
 
     private function establishedAt(): ?string
     {
-        $stored = Cache::get(self::LAST_RESULT_KEY);
+        $stored = Cache::get($this->resultKey());
 
         return is_array($stored) ? ($stored['at'] ?? null) : null;
     }
