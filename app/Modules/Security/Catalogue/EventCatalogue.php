@@ -71,6 +71,24 @@ final class EventCatalogue
         'bootstrap.grant.issued' => ['First-run setup', 'First-run setup grant issued'],
         'bootstrap.completed' => ['First-run setup', 'First-run setup completed'],
         'bootstrap.refused' => ['First-run setup', 'First-run setup refused'],
+
+        // P1-10. THE LOCAL BOOTSTRAP ADMINISTRATOR, in the words a reader
+        // needs. "Setup administrator" rather than "bootstrap principal":
+        // the second is what the code calls it, and nobody reading a security
+        // trail should have to know that.
+        'bootstrap.signin.succeeded' => ['First-run setup', 'Setup administrator signed in'],
+        'bootstrap.signin.refused' => ['First-run setup', 'Setup administrator sign-in refused'],
+        'bootstrap.signout' => ['First-run setup', 'Setup administrator signed out'],
+        'bootstrap.session.expired' => ['First-run setup', 'Setup session timed out'],
+        'bootstrap.administrator.created' => ['First-run setup', 'Setup administrator created'],
+        'bootstrap.closed' => ['First-run setup', 'First-run setup closed'],
+        'bootstrap.recovery.issued' => ['First-run setup', 'Setup recovery token issued'],
+        'bootstrap.recovery.consumed' => ['First-run setup', 'Setup recovery token used'],
+
+        // P1-10. Platform integrations.
+        'integration.configuration.changed' => ['Sign-in configuration', 'Integration settings changed'],
+        'integration.connection.tested' => ['Sign-in configuration', 'Integration connection tested'],
+        'identity.configuration.cutover' => ['Sign-in configuration', 'Sign-in configuration moved into SemantIQ'],
         // ---- Sign-in — 7 ------------------------------------------------
         'auth.login.succeeded' => ['Sign-in', 'Signed in'],
         'auth.login.refused.unknown_identity' => ['Sign-in', 'Sign-in refused — account not recognised'],
@@ -178,6 +196,59 @@ final class EventCatalogue
         'bootstrap.grant.issued' => [AuditCategory::UserAccess, ActorSource::System, SubjectSource::ExternalSubject, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
         'bootstrap.completed' => [AuditCategory::UserAccess, ActorSource::UserId, SubjectSource::UserId, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
         'bootstrap.refused' => [AuditCategory::SecurityEvents, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::Refusal],
+
+        // ---- P1-10. The LOCAL Bootstrap Administrator: the pre-SSO principal
+        //      that exists only while no System Administrator does.
+        //
+        // NO user_id ANYWHERE IN THIS BLOCK, and that is the boundary rather
+        // than an omission. The bootstrap principal is not a User, has no row
+        // in users, and never enters RoleCatalogue - so ActorSource::System is
+        // the honest answer. Putting an id here would require inventing one,
+        // and an invented id in an audit trail is worse than none.
+        //
+        // SIGN-IN IS StateChangeRecordedFirst, THE SAME CLASS AS ORDINARY
+        // LOGIN. The session is not in the database, so the invariant is kept
+        // by ORDER: evidence commits, then the privileged session is issued.
+        // If the evidence cannot be written, no session exists. The first
+        // draft had this as BestEffort, which would have allowed a silent
+        // sign-in to the most privileged local credential in the deployment.
+        'bootstrap.signin.succeeded' => [AuditCategory::UserAccess, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChangeRecordedFirst],
+        // A refusal that cannot be recorded must still refuse. Hardening this
+        // into a failure would let a broken audit store lock out recovery
+        // while granting nothing.
+        'bootstrap.signin.refused' => [AuditCategory::SecurityEvents, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::Refusal],
+        // Failing a sign-out on an audit error keeps a privileged session
+        // alive, which is the wrong direction to fail in.
+        'bootstrap.signout' => [AuditCategory::UserAccess, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::BestEffort],
+        // BestEffort, like auth.session.expired above it and for the same
+        // reason: failing to end an expired privileged session because its
+        // note could not be filed would KEEP that session alive, which is the
+        // wrong direction to fail in.
+        'bootstrap.session.expired' => [AuditCategory::SecurityEvents, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::BestEffort],
+        'bootstrap.administrator.created' => [AuditCategory::AdminChanges, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
+        // THE EVIDENCE THAT BOOTSTRAP WAS CLOSED. StateChange, so it commits
+        // inside the same transaction as the closure and the first permanent
+        // System Administrator, or none of the three happen.
+        'bootstrap.closed' => [AuditCategory::AdminChanges, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
+        // Issued over SSH by a trusted operator. This is the ONLY thing that
+        // reopens local password login once bootstrap has closed, so it is
+        // evidence rather than a note.
+        'bootstrap.recovery.issued' => [AuditCategory::AdminChanges, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
+        'bootstrap.recovery.consumed' => [AuditCategory::AdminChanges, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
+
+        // ---- P1-10. Platform integrations.
+        //
+        // The actor is the administrator when there is one and the system when
+        // the change came from First-Run, where there is no User yet. provider
+        // carries the family name - an existing ALLOWED_KEY, so no key is
+        // added and a host, endpoint or credential has nowhere to go.
+        'integration.configuration.changed' => [AuditCategory::ConfigurationChanges, ActorSource::UserId, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
+        // A test changes nothing. Failing the test because its note could not
+        // be written would turn a diagnostic into an outage.
+        'integration.connection.tested' => [AuditCategory::ConfigurationChanges, ActorSource::UserId, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::BestEffort],
+        // The moment .env stops being the identity authority. There is no
+        // larger configuration change this deployment can make.
+        'identity.configuration.cutover' => [AuditCategory::ConfigurationChanges, ActorSource::System, SubjectSource::None, TargetSource::None, OrganisationSource::None, OutcomeClass::StateChange],
 
         // ---- Sign-in. user_id is the person signing in - the ACTOR, not a
         //      subject somebody else acted upon.

@@ -31,6 +31,9 @@ use App\Modules\Platform\Http\Controllers\ConsoleController;
 use App\Modules\Platform\Http\Controllers\EntryController;
 use App\Modules\Platform\Http\Controllers\FirstRun\BeginController;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
+use App\Modules\Platform\Setup\Http\Controllers\FirstRunController;
+use App\Modules\Platform\Setup\Http\Controllers\IntegrationController;
+use App\Modules\Platform\Setup\Http\Middleware\RequireBootstrapSession;
 use App\Modules\Reviews\Http\Controllers\AccessReviewDecisionController;
 use App\Modules\Reviews\Http\Controllers\AccessReviewsController;
 use App\Modules\Security\Http\Controllers\BaselineController;
@@ -102,7 +105,119 @@ Route::prefix('auth')->name('auth.')->group(function (): void {
  */
 Route::prefix('first-run')->name('first_run.')->group(function (): void {
     Route::get('closed', fn () => (new StateController)('bootstrap-closed'))->name('closed');
-    Route::get('{grant}', BeginController::class)->name('begin');
+
+    /*
+     * THE GRANT ROUTE IS CONSTRAINED TO THE SHAPE A GRANT ACTUALLY HAS.
+     *
+     * It used to be Route::get('{grant}', ...) with no constraint, and `closed`
+     * above survived only because it is declared FIRST. Declaration order is a
+     * habit, not a guarantee: it is invisible at the call site, it is lost by
+     * any refactor that sorts or regroups these lines, and it silently stops
+     * protecting anything the moment a static route is added below.
+     *
+     * P1-10 adds eight static routes at this same depth - sign-in, identity,
+     * email, ai, fabric, first-administrator, complete, sign-out - so
+     * /first-run/sign-in would have been swallowed as a grant token. That is
+     * the collision class P1-03 correction 1 and P1-04 were written against,
+     * arriving a third time.
+     *
+     * GrantIssuer generates Str::random(64), so this is the token's real shape.
+     * No static route can match it: every one of the eight is far shorter than
+     * 64 characters and several contain a hyphen, which the character class
+     * excludes. The constraint does not make the ambiguity unlikely - it makes
+     * it UNREPRESENTABLE, which is the only version that survives a reorder.
+     *
+     * FirstRunRoutesDoNotCollide asserts this with the route collection
+     * re-registered in REVERSE declaration order, so a test that passes only
+     * because of ordering fails.
+     */
+    /*
+     * P1-10. THE LOCAL SETUP SURFACE.
+     *
+     * Outside the `console` prefix and outside EnsureSessionIsCurrent, because
+     * that middleware resolves a User and the bootstrap principal is not one
+     * (D-166). RequireBootstrapSession sets `semantiq_bootstrap` instead, and
+     * the two attributes are disjoint: every console route reads
+     * `semantiq_user`, which a bootstrap request never carries.
+     *
+     * SIGN-IN AND RECOVERY SIT OUTSIDE THE GUARD, necessarily - they are how a
+     * bootstrap session is obtained in the first place.
+     */
+    Route::get('sign-in', [FirstRunController::class, 'signInForm'])->name('sign_in');
+    Route::post('sign-in', [FirstRunController::class, 'signIn'])->name('sign_in.submit');
+    Route::get('recover', [FirstRunController::class, 'recoverForm'])->name('recover');
+    Route::post('recover', [FirstRunController::class, 'recover'])->name('recover.submit');
+
+    Route::middleware(RequireBootstrapSession::class)->group(function (): void {
+        Route::post('sign-out', [FirstRunController::class, 'signOut'])->name('sign_out');
+
+        Route::get('/', [FirstRunController::class, 'overview'])->name('overview');
+
+        Route::get('first-administrator', [FirstRunController::class, 'nominateForm'])
+            ->name('first_administrator');
+        Route::post('first-administrator', [FirstRunController::class, 'nominate'])
+            ->name('first_administrator.submit');
+
+        Route::get('complete', [FirstRunController::class, 'complete'])->name('complete');
+
+        /*
+         * The four integration screens, by family.
+         *
+         * `{family}` is constrained to the four names IntegrationFamily
+         * declares. Without the constraint this would match `sign-in`,
+         * `recover`, `complete` and `first-administrator` too - the same
+         * collision class as the grant route above, one level down, and the
+         * reason FirstRunRoutesDoNotCollide reverses the declaration order
+         * rather than trusting it.
+         */
+        Route::get('integration/{family}', [FirstRunController::class, 'family'])
+            ->where('family', 'identity|email|ai|fabric')
+            ->name('integration');
+
+        Route::put('integration/{family}', [IntegrationController::class, 'update'])
+            ->where('family', 'identity|email|ai|fabric')
+            ->name('integration.update');
+
+        Route::post('integration/{family}/test', [IntegrationController::class, 'test'])
+            ->where('family', 'identity|email|ai|fabric')
+            ->name('integration.test');
+
+        /*
+         * Explicit credential removal during setup - Gate C correction 4B.
+         *
+         * IDENTITY IS NOT IN THE CONSTRAINT, unlike the three routes above.
+         * First-Run may ESTABLISH and REPLACE Microsoft sign-in, because the
+         * Bootstrap principal cannot reach P1-02's console screens and setup
+         * would otherwise be unsatisfiable. Removing it is a different matter:
+         * it is the one required family, removal mid-setup only makes the
+         * deployment less finishable, and P1-02 owns taking it away once there
+         * is anybody who can sign in to do so.
+         *
+         * Like the console route, this is a SEPARATE VERB and never inferred
+         * from a blank password field.
+         */
+        Route::delete('integration/{family}/secret/{name}', [IntegrationController::class, 'removeSecret'])
+            ->where('family', 'email|ai|fabric')
+            ->where('name', '[a-z_]{1,64}')
+            ->name('integration.secret.remove');
+
+        /*
+         * D-153 during setup. The recipient is the BOOTSTRAP ADMINISTRATOR'S
+         * configured address - the one the operator typed when the local
+         * account was created - resolved server-side exactly as on the console.
+         *
+         * It matters most here: setup is where the mail configuration is first
+         * entered, and where "it authenticates but it cannot send" is most
+         * likely to be discovered months later by somebody who never gets a
+         * password reset.
+         */
+        Route::post('integration/email/send-test', [IntegrationController::class, 'sendTestEmail'])
+            ->name('integration.email.send_test');
+    });
+
+    Route::get('{grant}', BeginController::class)
+        ->where('grant', '[A-Za-z0-9]{64}')
+        ->name('begin');
 });
 
 /*
@@ -530,12 +645,112 @@ Route::prefix('console')
                 Route::get('/', [SystemHealthController::class, 'show'])->name('show');
             });
 
+        /*
+         * P1-10. PLATFORM INTEGRATIONS - the same settings First-Run writes,
+         * after setup is over.
+         *
+         * PlatformAdmin, like System Health and Identity, and for the same
+         * reason: these are deployment-wide facts and credentials, not one
+         * organisation's. RequireOrganisation is deliberately absent - a
+         * deployment whose organisation is not configured yet is exactly when
+         * somebody needs this screen.
+         *
+         * It shares IntegrationController with First-Run on purpose. Two
+         * controllers would be two validation rules, two invalidation paths
+         * and two chances to forget one - and "saving" would come to mean
+         * something slightly different depending on which screen you were on.
+         *
+         * THERE IS NO REVEAL VERB HERE FOR ANY SECRET, and none anywhere in
+         * the route table. NoSecretRevealRouteExists asserts that as an
+         * equality rather than by naming the routes that do exist.
+         */
+        Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)
+            ->prefix('integrations')
+            ->name('integrations.')
+            ->group(function (): void {
+                Route::get('/', [IntegrationController::class, 'index'])->name('show');
+
+                /*
+                 * D-148. THE WRITABLE SET EXCLUDES IDENTITY, IN THE ROUTE
+                 * CONSTRAINT.
+                 *
+                 * Not in the controller, and not by a check inside update() -
+                 * in the constraint, so PUT /console/integrations/identity
+                 * does not resolve to a route at all. A controller-level
+                 * refusal is a refusal somebody can weaken; a route that does
+                 * not exist has nothing to weaken.
+                 *
+                 * P1-02 owns Microsoft Entra configuration after installation.
+                 * The card on this screen is a SUMMARY AND A LINK to it.
+                 *
+                 * First-Run keeps its identity form, because the Bootstrap
+                 * principal cannot reach P1-02's console screens - see
+                 * IntegrationFamily::writableOnTheConsole().
+                 */
+                Route::put('{family}', [IntegrationController::class, 'update'])
+                    ->where('family', 'email|ai|fabric')
+                    ->name('update');
+
+                Route::post('{family}/test', [IntegrationController::class, 'test'])
+                    ->where('family', 'email|ai|fabric')
+                    ->name('test');
+
+                /*
+                 * Explicit credential removal - Gate C correction 4B.
+                 *
+                 * A SEPARATE ROUTE, never inferred from a blank password
+                 * field. A blank field means "keep what is saved", which is
+                 * what the form says it means; making it also mean "delete the
+                 * credential" would destroy a working integration for anybody
+                 * who opened the page to change a port.
+                 */
+                Route::delete('{family}/secret/{name}', [IntegrationController::class, 'removeSecret'])
+                    ->where('family', 'email|ai|fabric')
+                    ->where('name', '[a-z_]{1,64}')
+                    ->name('secret.remove');
+
+                /*
+                 * D-153. SEND ONE TEST MESSAGE - Gate C round 3.
+                 *
+                 * NO {family} AND NO RECIPIENT, and neither is an omission.
+                 * Email is the only family that can send anything, so a family
+                 * parameter would be a parameter with one legal value; and the
+                 * recipient is the signed-in administrator's own address,
+                 * resolved server-side, because a test that can be pointed at
+                 * an address is an open relay with a diagnostic's name on it.
+                 *
+                 * Test connection proves the server accepts the credentials.
+                 * This proves it accepts a MESSAGE from the configured From
+                 * address, which is a different permission and the one that
+                 * actually fails in production.
+                 */
+                Route::post('email/send-test', [IntegrationController::class, 'sendTestEmail'])
+                    ->name('email.send_test');
+            });
+
         Route::middleware(RequireActionClass::class.':'.ActionClass::PlatformAdmin->value)
             ->prefix('identity')
             ->name('identity.')
             ->group(function (): void {
                 Route::get('/', [EntraController::class, 'show'])->name('entra');
                 Route::post('entra/reveal', [EntraController::class, 'reveal'])->name('entra.reveal');
+
+                /*
+                 * GATE C ROUND 3. MICROSOFT SIGN-IN IS CONFIGURABLE AFTER
+                 * INSTALLATION, AND ONLY FROM HERE.
+                 *
+                 * P1-02 owns identity. Platform Integrations shows a summary
+                 * and links to this screen, and has no identity write route at
+                 * all - IdentityIsNotWritableOnTheConsole asserts that as an
+                 * equality, so this pair cannot be quietly duplicated there.
+                 *
+                 * The PUT stages a candidate and redirects to Microsoft. It
+                 * writes nothing: the live configuration is the only way
+                 * anybody signs in, and it is not touched until a confirmation
+                 * comes back AND the candidate answers a discovery round trip.
+                 */
+                Route::get('entra/change', [EntraController::class, 'edit'])->name('entra.edit');
+                Route::put('entra', [EntraController::class, 'update'])->name('entra.update');
 
                 Route::get('providers', [ProvidersController::class, 'show'])->name('providers');
                 Route::get('login-experience', [LoginExperienceController::class, 'show'])->name('login-experience');

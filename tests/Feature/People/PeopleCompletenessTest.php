@@ -125,12 +125,12 @@ final class PeopleCompletenessTest extends TestCase
     }
 
     /**
-     * Negative case 16. THE APPLICATION'S DELETE ROUTES ARE EXACTLY SEVEN.
+     * Negative case 16. THE APPLICATION'S DELETE ROUTES ARE EXACTLY NINE.
      *
      * Four are D-24's master types; P1-03 added two, and P1-04 adds one - the
      * guarded purge of a custom domain nobody has ever been accountable for.
      * The whole set is asserted as an EQUALITY. A subset check would pass while
-     * an eighth appeared - on a membership or an ownership period, say, whose
+     * a tenth appeared - on a membership or an ownership period, say, whose
      * history the units exist to keep.
      *
      * This is also why clearing a domain's owner is a PATCH and not a DELETE:
@@ -138,10 +138,23 @@ final class PeopleCompletenessTest extends TestCase
      * clearing an owner ends a period and destroys nothing. Spelling it as a
      * DELETE would both misdescribe it and weaken this assertion.
      *
+     * P1-10 ADDS TWO, AND THEY MEET THAT TEST RATHER THAN BENDING IT. Gate C
+     * correction 4B gives an administrator a way to remove a saved integration
+     * credential, and removing one DOES permanently destroy a record: the
+     * `integration_secrets` row is deleted outright, because a credential that
+     * is merely marked inactive is still a credential sitting in the database.
+     * So they are DELETEs by the same definition as the seven above, and they
+     * are listed here rather than exempted.
+     *
+     * Neither is a record with history. An integration secret has no audit
+     * trail of its own to lose - the SecurityEvent recording the change is
+     * written separately and survives the removal, carrying the family and
+     * nothing else.
+     *
      * Mutation: add a DELETE for a membership, an ownership period, or an
      * organisation.
      */
-    public function test_the_application_has_exactly_seven_delete_routes(): void
+    public function test_the_application_has_exactly_nine_delete_routes(): void
     {
         $registered = collect(Route::getRoutes())
             ->filter(fn ($route): bool => in_array('DELETE', $route->methods(), true))
@@ -153,17 +166,20 @@ final class PeopleCompletenessTest extends TestCase
         $this->assertSame(
             [
                 'console/domains/{domain}',
+                'console/integrations/{family}/secret/{name}',
                 'console/organisation/business-units/{businessUnit}',
                 'console/organisation/departments/{department}',
                 'console/organisation/legal-entities/{legalEntity}',
                 'console/organisation/teams/{team}',
                 'console/people/groups/{group}',
                 'console/people/users/{user}',
+                'first-run/integration/{family}/secret/{name}',
             ],
             $registered,
-            'The set of DELETE routes is not the seven the design permits. Permanent deletion reaches '
+            'The set of DELETE routes is not the nine the design permits. Permanent deletion reaches '
             .'four D-24 master types, a group with no membership history, a person who has never '
-            .'signed in, and a custom domain nobody has ever been accountable for - and nothing '
+            .'signed in, a custom domain nobody has ever been accountable for, and a saved '
+            .'integration credential on each of the two surfaces that may remove one - and nothing '
             .'else, ever.'
         );
     }

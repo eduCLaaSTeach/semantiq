@@ -151,11 +151,25 @@ final class RouteAuthorizationMatrixTest extends TestCase
             $this->assertArrayHasKey($prefix, $seen, "No routes were found under [{$prefix}].");
         }
 
+        /*
+         * NINE SINCE GATE C ROUND 3, and the count is asserted rather than
+         * inferred so that a tenth is a decision rather than an accident.
+         *
+         * Seven were the read-only screens and their two actions. The two added
+         * are P1-02's post-install change path - a form and the single PUT that
+         * stages a candidate - which closed the gap where a customer whose
+         * Entra client secret expired had no route back except SSH.
+         *
+         * WHAT THIS ASSERTION IS ACTUALLY ABOUT is the line above it: every one
+         * of them is PLATFORM_ADMIN. The change path is the most privileged
+         * thing in Identity & SSO and it must not have arrived on a weaker
+         * gate, which is exactly what a count alone would not notice.
+         */
         $this->assertSame(
-            7,
+            9,
             $seen['console/identity'],
-            'Identity & SSO no longer has exactly seven routes. All seven are PLATFORM_ADMIN, and '
-            .'the count is asserted so that adding an eighth is a decision rather than an accident.'
+            'Identity & SSO no longer has exactly nine routes. All nine are PLATFORM_ADMIN, and '
+            .'the count is asserted so that adding a tenth is a decision rather than an accident.'
         );
     }
 

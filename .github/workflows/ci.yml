@@ -231,6 +231,48 @@ jobs:
           echo "${passed} People tests passed against MySQL 8.4."
 
 
+      # P1-10. The Setup suite on MySQL, and this one is not optional either.
+      #
+      # THIS UNIT WRITES, AND IT WRITES FIVE NEW TABLES. P1-08 and P1-09 both
+      # found engine-specific failures that were green on SQLite, so a P1-10
+      # suite that had only ever run on SQLite would be reporting safety it had
+      # not checked on the engine production uses.
+      #
+      # Three things here are engine-sensitive in particular:
+      #
+      #   - the SINGLETON UNIQUE CONSTRAINTS on platform_settings and
+      #     bootstrap_administrators, which are what make "exactly one" true
+      #     rather than a count-then-insert race;
+      #   - the ATOMIC CLOSING WRITE inside GrantRedeemer's transaction, where
+      #     a rollback has to take the role assignment, the grant consumption
+      #     and the bootstrap closure with it;
+      #   - the CONDITIONAL UPDATE that consumes a recovery token, whose guard
+      #     is in the WHERE clause precisely so the database decides the race.
+      - name: Run the Setup suite against MySQL
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: semantiq_ci
+          DB_USERNAME: root
+          DB_PASSWORD: ci-root
+        run: |
+          set -eo pipefail
+
+          php artisan test tests/Feature/Setup | tee setup-mysql.log
+
+          # A PATH THAT MATCHES NOTHING EXITS 0 - the same trap the People step
+          # documents. The count is asserted, not assumed.
+          passed=$(grep -oE '[0-9]+ passed' setup-mysql.log | head -1 | grep -oE '[0-9]+' || echo 0)
+
+          if [ "${passed:-0}" -lt 30 ]; then
+            echo "::error::Only ${passed:-0} Setup tests ran against MySQL. The suite is larger than that, so the path matched little or nothing."
+            exit 1
+          fi
+
+          echo "${passed} Setup tests passed against MySQL 8.4."
+
+
       # The Domains suite on MySQL, and this one is not optional.
       #
       # P1-04's serialisation boundary is a row lock on business_domains, and

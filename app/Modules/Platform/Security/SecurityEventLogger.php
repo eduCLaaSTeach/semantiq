@@ -36,6 +36,65 @@ class SecurityEventLogger
 
     public const BOOTSTRAP_REFUSED = 'bootstrap.refused';
 
+    /*
+     * P1-10. The LOCAL Bootstrap Administrator, which is a different thing from
+     * the SSH grant channel above and deliberately reads that way in the trail.
+     *
+     * BOOTSTRAP_SIGNIN_SUCCEEDED CARRIES THE SAME SEMANTIC CLASS AS ORDINARY
+     * SUCCESSFUL LOGIN - StateChangeRecordedFirst, declared in EventCatalogue.
+     * The first draft made it BestEffort, which in this codebase means exactly
+     * one thing: if the write fails, carry on. Carrying on here means issuing a
+     * session for the most privileged local credential in the deployment with
+     * no record that it was ever used, so anyone able to make audit writes fail
+     * would get a silent sign-in. A successful login is a state change, not a
+     * courtesy note.
+     *
+     * THE REFUSAL STAYS A REFUSAL AND THE SIGN-OUT STAYS BEST-EFFORT. Failing
+     * a refusal that cannot be recorded would let a broken audit store lock
+     * somebody out while granting nothing; failing a sign-out would keep a
+     * privileged session alive. Both are the wrong failure direction.
+     */
+    public const BOOTSTRAP_SIGNIN_SUCCEEDED = 'bootstrap.signin.succeeded';
+
+    public const BOOTSTRAP_SIGNIN_REFUSED = 'bootstrap.signin.refused';
+
+    public const BOOTSTRAP_SIGNOUT = 'bootstrap.signout';
+
+    /*
+     * D-165. The setup session ran out of one of its two clocks.
+     *
+     * ITS OWN EVENT rather than bootstrap.signout, because they are different
+     * facts: a sign-out is somebody leaving, an expiry is the deployment
+     * ending a privileged session on its own. Reading a trail where both said
+     * "signed out" would make an abandoned session indistinguishable from a
+     * closed one, and the abandoned one is the one worth noticing.
+     *
+     * `reason` carries which clock - an existing ALLOWED_KEY with a fixed
+     * vocabulary. NO KEY IS ADDED.
+     */
+    public const BOOTSTRAP_SESSION_EXPIRED = 'bootstrap.session.expired';
+
+    public const BOOTSTRAP_ADMINISTRATOR_CREATED = 'bootstrap.administrator.created';
+
+    /*
+     * The durable evidence that bootstrap was closed - the write the first
+     * draft of the design lacked entirely, which is what left the original
+     * local password usable again the moment every System Administrator was
+     * deactivated. It is a StateChange, so it commits with the closure or
+     * neither happens.
+     */
+    public const BOOTSTRAP_CLOSED = 'bootstrap.closed';
+
+    public const BOOTSTRAP_RECOVERY_ISSUED = 'bootstrap.recovery.issued';
+
+    public const BOOTSTRAP_RECOVERY_CONSUMED = 'bootstrap.recovery.consumed';
+
+    public const INTEGRATION_CONFIGURATION_CHANGED = 'integration.configuration.changed';
+
+    public const INTEGRATION_CONNECTION_TESTED = 'integration.connection.tested';
+
+    public const IDENTITY_CONFIGURATION_CUTOVER = 'identity.configuration.cutover';
+
     public const LOGIN_SUCCEEDED = 'auth.login.succeeded';
 
     public const LOGIN_REFUSED_UNKNOWN = 'auth.login.refused.unknown_identity';
@@ -277,6 +336,17 @@ class SecurityEventLogger
         self::BOOTSTRAP_GRANT_ISSUED,
         self::BOOTSTRAP_COMPLETED,
         self::BOOTSTRAP_REFUSED,
+        self::BOOTSTRAP_SIGNIN_SUCCEEDED,
+        self::BOOTSTRAP_SIGNIN_REFUSED,
+        self::BOOTSTRAP_SIGNOUT,
+        self::BOOTSTRAP_SESSION_EXPIRED,
+        self::BOOTSTRAP_ADMINISTRATOR_CREATED,
+        self::BOOTSTRAP_CLOSED,
+        self::BOOTSTRAP_RECOVERY_ISSUED,
+        self::BOOTSTRAP_RECOVERY_CONSUMED,
+        self::INTEGRATION_CONFIGURATION_CHANGED,
+        self::INTEGRATION_CONNECTION_TESTED,
+        self::IDENTITY_CONFIGURATION_CUTOVER,
         self::LOGIN_SUCCEEDED,
         self::LOGIN_REFUSED_UNKNOWN,
         self::LOGIN_REFUSED_INACTIVE,

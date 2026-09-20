@@ -285,7 +285,7 @@ final class IdentityHealthTest extends TestCase
     {
         $this->givenTrustIsCached();
 
-        Cache::put(IdentityHealthCheck::LAST_PROBE_KEY, [
+        Cache::put(app(IdentityHealthCheck::class)->probeKey(), [
             'reachable' => false,
             'reason' => 'directory_unreachable',
             'at' => now()->toIso8601String(),
@@ -309,7 +309,7 @@ final class IdentityHealthTest extends TestCase
     {
         Http::fake(['*' => Http::response('', 503)]);
 
-        Cache::put(IdentityHealthCheck::LAST_PROBE_KEY, [
+        Cache::put(app(IdentityHealthCheck::class)->probeKey(), [
             'reachable' => false,
             'reason' => 'directory_unreachable',
             'at' => now()->toIso8601String(),

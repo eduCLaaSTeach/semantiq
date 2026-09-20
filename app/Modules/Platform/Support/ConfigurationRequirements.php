@@ -53,29 +53,34 @@ final class ConfigurationRequirements
     }
 
     /**
-     * Identity keys, required in production only.
+     * Configuration keys required in production, read from config().
      *
-     * P1-00 promotes these from declared to required, so a production
-     * deployment missing them fails loudly at boot rather than at a user's
-     * first sign-in attempt.
+     * THE MICROSOFT IDENTITY KEYS ARE NO LONGER LISTED HERE, and their absence
+     * is the point rather than an oversight.
      *
-     * They are NOT required outside production, and that is deliberate. CI and
-     * developer machines have no Entra tenant, and the alternative - inventing
-     * placeholder values to satisfy the validator - is exactly what this class
-     * already warns against: it moves the failure from boot, where it is
-     * obvious, to the identity provider, where it is not. The provider's own
-     * isConfigured() handles the unconfigured case gracefully.
+     * P1-00 put them here because .env was the only identity authority. P1-10
+     * makes that one of two: a deployment whose identity_source is `store`
+     * reads the store, and its .env identity keys are EXPECTED to be empty -
+     * they are retired by an operator once the store is proven, and a genuinely
+     * fresh installation never had them at all.
+     *
+     * Listing them as production requirements would have made the health
+     * screens report a correctly configured store-backed deployment as
+     * misconfigured, naming four environment variables it is right not to have.
+     * A false red on a working system is worse than no check, and it is the
+     * same failure the identity screens were corrected for: reporting on a
+     * source the sign-in path does not use.
+     *
+     * THE REQUIREMENT ITSELF HAS NOT BEEN DROPPED. ConfigurationValidator now
+     * asks IdentityConfigurationSource whether the RESOLVED identity
+     * configuration is complete, which is the same question asked of whichever
+     * authority is actually in force.
      *
      * @return list<string>
      */
     public static function requiredInProduction(): array
     {
-        return [
-            'identity.microsoft.tenant_id',
-            'identity.microsoft.client_id',
-            'identity.microsoft.client_secret',
-            'identity.microsoft.redirect_uri',
-        ];
+        return [];
     }
 
     /**

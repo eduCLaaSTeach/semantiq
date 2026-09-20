@@ -958,7 +958,9 @@ button.shell-link:hover .icon { color: var(--accent); }
 /* The grant path a simulated decision came through. Indented under the answer
    because it is evidence FOR the answer, not a second answer. */
 .org-path {
-  border: 1px solid var(--edge);
+  /* CARRIED-IN DEFECT. See the note on .aud-filters: var(--edge) is declared
+     nowhere, so this evidence panel has been rendering with no border. */
+  border: 1px solid var(--card-border);
   border-radius: var(--radius-control);
   background: var(--card);
   padding: var(--space-3);
@@ -2194,6 +2196,48 @@ button.shell-link:hover .icon { color: var(--accent); }
   color: var(--text);
 }
 
+/* CHANGING MICROSOFT SIGN-IN - Gate C round 3.
+
+   The notice is bordered and sits ABOVE the fields, because it is the thing
+   that makes this screen safe to try: nothing is written until the change is
+   confirmed and checked. A hint under the button would be read after the
+   decision it informs. */
+.idn-notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  background: var(--canvas);
+}
+
+.idn-notice p {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+}
+
+.idn-notice p:last-child { margin-bottom: 0; }
+
+.idn-steps {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* Separated from the rows above by a rule: everything above it describes the
+   configuration, and this changes it. */
+.idn-actions {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--card-border);
+}
+
+.idn-actions .org-hint-plain {
+  margin: var(--space-2) 0 0;
+  max-width: 60ch;
+}
+
 /* A state. Colour is NEVER the only signal - every one carries its word, and
    the word is what a screen reader announces. */
 .idn-state {
@@ -2829,7 +2873,14 @@ button.shell-link:hover .icon { color: var(--accent); }
   text-overflow: ellipsis;
   width: 100%;
   padding: var(--space-2);
-  border: 1px solid var(--edge);
+  /* CARRIED-IN DEFECT, found by EveryCssTokenIsDeclaredTest and fixed here.
+     This said var(--edge), which is declared nowhere. An undefined custom
+     property invalidates the WHOLE declaration at computed-value time, so
+     `border` fell back to its initial value - `medium none currentcolor` - and
+     these Audit filter controls have been rendering with NO BORDER at all. An
+     input with no border on a light card is close to invisible. It failed no
+     build, no test and no render, which is exactly why the guard exists. */
+  border: 1px solid var(--card-border);
   border-radius: var(--radius-control);
   background: var(--card);
   color: var(--text);
@@ -2852,7 +2903,10 @@ button.shell-link:hover .icon { color: var(--accent); }
 }
 
 .aud-row {
-  border: 1px solid var(--edge);
+  /* CARRIED-IN DEFECT. See the note on .aud-filters: this token is declared
+     nowhere, so every Audit row has been rendering with no border - the rows
+     run together as one block of text. */
+  border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
   background: var(--card);
   padding: var(--space-4);
@@ -3019,4 +3073,362 @@ button.shell-link:hover .icon { color: var(--accent); }
   background: transparent;
   color: var(--text-muted);
   border: 1px dashed var(--card-border-strong);
+}
+
+/* ---- P1-10 First-Run setup chrome ----------------------------------------
+   DELIBERATELY NOT THE APPLICATION SHELL. No rail, no product areas, no
+   organisation switcher. A setup surface that looks like the console invites
+   the assumption that the console is reachable from it - and the bootstrap
+   principal can reach no console route at all.
+
+   It is also deliberately not the .entry card: setup is a task with steps and
+   forms, and a 420px centred card would make every field a scroll. The two
+   share the brand mark and nothing else. */
+
+.setup {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+}
+
+.setup-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--divider);
+  background: var(--chrome);
+}
+
+.setup-mark { display: inline-flex; flex: 0 0 auto; }
+
+.setup-head-text { flex: 1 1 auto; min-width: 0; }
+
+.setup-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.setup-head h1 { font-size: 20px; margin: var(--space-1) 0 0; }
+
+.setup-lead {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.setup-head-actions { flex: 0 0 auto; }
+
+.setup-body {
+  flex: 1 1 auto;
+  display: flex;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  align-items: flex-start;
+}
+
+.setup-steps {
+  flex: 0 0 240px;
+  position: sticky;
+  top: var(--space-6);
+}
+
+.setup-steps-title {
+  margin: 0 0 var(--space-2);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.setup-steps ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.setup-step a {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  text-decoration: none;
+  color: inherit;
+}
+
+.setup-step a:hover { background: var(--surface-hover); }
+
+.setup-step a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.setup-step-current a {
+  background: var(--surface-hover);
+  border-color: var(--card-border);
+}
+
+.setup-step-name { display: block; font-size: 13px; font-weight: 500; }
+
+.setup-step-meta { display: block; font-size: 12px; color: var(--text-muted); }
+
+.setup-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 720px;
+}
+
+.setup-panel {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+}
+
+.setup-panel-emphasis { border-color: var(--accent); }
+
+.setup-panel h2 {
+  font-size: 16px;
+  margin: 0 0 var(--space-2);
+  /* A NOMINATED ADDRESS IS ONE UNBREAKABLE WORD.
+     "Send this link to the.new.administrator@example.test" is a heading
+     containing a 33-character token with no space in it, and at 390px it made
+     .setup-main 402px wide - the whole column overflowed the phone. Found by
+     measuring at 390 with a realistic address; a short one fits and hides it,
+     which is why the sweep uses a long one.
+
+     break-word, NOT anywhere. `anywhere` also shrinks the element's intrinsic
+     MIN-CONTENT width to one character, and beside the status badge in the
+     flex row below that let the browser squeeze an ordinary heading until it
+     broke mid-word: "Microso / ft Fabric" and "AI / service" on a customer's
+     screen at 390px. `break-word` still breaks the unbreakable address - it
+     just will not volunteer to break "Microsoft". The overflow it was added
+     for is held by min-width: 0 and the wrap below, which is where that
+     belonged in the first place. */
+  overflow-wrap: break-word;
+}
+
+.setup-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  /* THE BADGE DROPS BELOW THE HEADING BEFORE THE HEADING IS CRUSHED. On a
+     phone there is not room for both, and a readable title with the status
+     underneath beats a title broken across a syllable. */
+  flex-wrap: wrap;
+}
+
+/* Lets the heading block shrink below its min-content width instead of
+   pushing the column wider than the viewport - the actual cause of the 402px
+   overflow, rather than the character-level breaking that was standing in
+   for it. */
+.setup-panel-head > div {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+/* An identifier that has no spaces in it and must be allowed to break anywhere
+   rather than widen the column: a nominated email address in a heading, and
+   nothing else. Scoped to the token instead of to every heading, because
+   `anywhere` on a heading also lets the browser break ordinary words. */
+.setup-breakable {
+  overflow-wrap: anywhere;
+}
+
+.setup-panel-head h2 { margin-bottom: var(--space-1); }
+
+.setup-description {
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: 13px;
+  /* Same reason: these carry addresses and identifiers. */
+  overflow-wrap: anywhere;
+}
+
+.setup-meta, .setup-hint {
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.setup-note, .setup-confirmation {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  font-size: 13px;
+}
+
+.setup-warning {
+  margin: var(--space-3) 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.setup-error {
+  margin: var(--space-1) 0 0;
+  font-size: 12px;
+  color: var(--danger-fg);
+}
+
+.setup-list { list-style: none; margin: 0; padding: 0; }
+
+.setup-list-link {
+  display: block;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--divider);
+  text-decoration: none;
+  color: inherit;
+}
+
+.setup-list li:first-child .setup-list-link { border-top: 0; }
+
+.setup-list-link:hover .setup-list-name { text-decoration: underline; }
+
+.setup-list-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.setup-list-name { display: block; font-size: 14px; font-weight: 500; }
+
+.setup-list-meta { display: block; font-size: 12px; color: var(--text-muted); }
+
+.setup-form { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.setup-field { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.setup-field label { font-size: 13px; font-weight: 500; }
+
+/* THE HOUSE INPUT, NOT A SECOND ONE.
+   These deviated from .org-form input in four ways - a weaker border, the
+   canvas colour instead of the chrome colour, a different height and a
+   different focus offset - so a customer moving between setup and the console
+   would have seen two different treatments of the same control. The canvas
+   background in particular read as "disabled" on a white card. Matched
+   exactly; only the full width differs, because these fields sit in a
+   single-column form rather than a filter row. */
+.setup-field input,
+.setup-field select {
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--card-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--chrome);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.setup-field input:focus-visible,
+.setup-field select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.setup-form-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+.setup-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* SAVED CREDENTIALS AND THEIR REMOVAL — Gate C correction 4B.
+
+   SEPARATED FROM THE FORM BY A RULE, not just by a gap. Everything above this
+   line is reversible by typing something else and saving again; removal is not,
+   and the boundary has to be visible before the button is read rather than
+   after it is pressed. */
+.setup-removal {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--card-border);
+}
+
+.setup-removal h3 {
+  font-size: 13px;
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+  text-transform: none;
+}
+
+.setup-removal-item + .setup-removal-item {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--card-border);
+}
+
+.setup-removal-name {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  /* These carry field names and, in the confirmation below, service names. */
+  overflow-wrap: anywhere;
+}
+
+.setup-removal-state { color: var(--text-muted); }
+
+.setup-removal-confirm {
+  padding: var(--space-3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+}
+
+.setup-removal-confirm .setup-field:last-of-type { margin-bottom: var(--space-3); }
+
+/* SEND TEST EMAIL - D-153. Separated from the form by a rule, like the removal
+   block: everything above it describes or changes the configuration, and this
+   actually sends something out of the deployment. */
+.setup-send-test {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--card-border);
+}
+
+.setup-send-test h3 {
+  font-size: 13px;
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+}
+
+/* The one-time handover link. It must be readable and selectable in full, and
+   it must WRAP: a 64-character token in a fixed-width box would be truncated
+   on a phone, and the administrator would copy a link that does not work. */
+.setup-handoff {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  user-select: all;
+}
+
+@media (max-width: 860px) {
+  .setup-body { flex-direction: column; padding: var(--space-4); gap: var(--space-4); }
+
+  .setup-steps { position: static; flex: 1 1 auto; width: 100%; }
+
+  .setup-steps ol { flex-direction: row; flex-wrap: wrap; }
+
+  .setup-step a { padding: var(--space-2); }
+
+  .setup-head { flex-wrap: wrap; padding: var(--space-4); gap: var(--space-3); }
+
+  .setup-main { max-width: none; }
 }

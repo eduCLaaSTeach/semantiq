@@ -20,6 +20,7 @@ use App\Modules\SystemHealth\Checks\SessionStoreCheck;
 use App\Modules\SystemHealth\Report\HealthStatus;
 use App\Modules\SystemHealth\Report\SystemHealthReport;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -105,7 +106,13 @@ final class SystemHealthTest extends TestCase
                 $broken,
                 app(Migrator::class),
                 app(ConfigurationValidator::class),
-                app(IdentityHealthCheck::class),
+                // THE CONTAINER, not a pre-built check. HealthInspector builds
+                // the identity check inside its own try/catch so that a failure
+                // while CONSTRUCTING the check, the provider or the discovery
+                // client cannot escape the guard written to contain it. Passing
+                // one in here would resolve it eagerly and put the hole back
+                // for this test alone.
+                app(Container::class),
             ),
             app(IdentityHealthCheck::class),
             new SessionStoreCheck($broken),
@@ -139,7 +146,7 @@ final class SystemHealthTest extends TestCase
 
     private function storeIdentityState(string $state): void
     {
-        Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, [
+        Cache::put(app(IdentityHealthCheck::class)->resultKey(), [
             'state' => $state,
             'at' => now()->subHours(2)->toIso8601String(),
         ], now()->addDays(7));
@@ -290,7 +297,7 @@ final class SystemHealthTest extends TestCase
             Cache::flush();
 
             if ($stored !== null) {
-                Cache::put(IdentityHealthCheck::LAST_RESULT_KEY, $stored, now()->addDay());
+                Cache::put(app(IdentityHealthCheck::class)->resultKey(), $stored, now()->addDay());
             }
 
             $this->assertSame(

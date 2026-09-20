@@ -175,8 +175,11 @@ final class CacheStoreCheckTest extends TestCase
         $key = $store->forgotten[0];
 
         foreach ([
-            IdentityHealthCheck::LAST_RESULT_KEY,
-            IdentityHealthCheck::LAST_PROBE_KEY,
+            // The PREFIXES, which is what this assertion always meant: the
+            // probe key must not fall anywhere inside the namespace another
+            // unit owns, whichever revision that unit's keys are bound to.
+            IdentityHealthCheck::LAST_RESULT_KEY_PREFIX,
+            IdentityHealthCheck::LAST_PROBE_KEY_PREFIX,
             'semantiq:entra:',
         ] as $owned) {
             $this->assertStringStartsNotWith($owned, $key,

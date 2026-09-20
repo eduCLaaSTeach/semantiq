@@ -1,10 +1,17 @@
 import { useState } from 'react'
-import { usePage } from '@inertiajs/react'
+import { Link, usePage } from '@inertiajs/react'
 import IdentityPage from '../../Components/IdentityPage'
 import { IdentityRow, IdentityRows, IdentityState } from '../../Components/IdentityRows'
 
 /**
- * Microsoft Entra ID - read only.
+ * Microsoft Entra ID.
+ *
+ * READING IS READ-ONLY; CHANGING HAS ITS OWN SCREEN. Until Gate C round 3 this
+ * page said the values were "set on the server" and "cannot be changed from
+ * this screen", which was true and was the gap: a customer whose client secret
+ * expired had no route back except SSH. Change configuration now leads to a
+ * screen that stages a candidate, confirms with Microsoft and verifies it
+ * before anything takes effect.
  *
  * REVEAL IS A SERVER ROUND-TRIP, not a client toggle, and that is the decision
  * that makes the mask real rather than cosmetic. If the full identifier shipped
@@ -19,7 +26,7 @@ import { IdentityRow, IdentityRows, IdentityState } from '../../Components/Ident
  * The client secret has no Reveal, no Copy and no mask. It is Present or
  * Missing, and there is no field name the endpoint would accept for it.
  */
-export default function Entra({ configuration, healthSummary }) {
+export default function Entra({ configuration, healthSummary, isConfigured }) {
     const { productAreas, errors } = usePage().props
     const [revealed, setRevealed] = useState({})
     const [copied, setCopied] = useState(null)
@@ -97,7 +104,11 @@ export default function Entra({ configuration, healthSummary }) {
                             {revealed[field] ? 'Hide' : 'Reveal'}
                         </button>
                         {revealed[field] ? (
-                            <button type="button" className="org-action" onClick={() => copy(field)}>
+                            <button
+                                type="button"
+                                className="org-action"
+                                onClick={() => copy(field)}
+                            >
                                 {copied === field ? 'Copied' : 'Copy'}
                             </button>
                         ) : null}
@@ -120,6 +131,19 @@ export default function Entra({ configuration, healthSummary }) {
                 </div>
             ) : null}
 
+            {/*
+             * THE OUTCOME OF A CONFIRMED CHANGE IS RENDERED BY IdentityPage.
+             *
+             * A refusal here means the administrator went to Microsoft, came
+             * back, and the details they entered did not check out - and the
+             * sentence is ProviderProbe's own, never a caught provider error
+             * body. It is flashed as `refusal` and IdentityPage reads it,
+             * along with `confirmation`, for every Identity screen at once.
+             *
+             * A first draft of this file rendered both again here, which would
+             * have shown each of them twice.
+             */}
+
             {configuration.missingKeys.length > 0 ? (
                 <div className="org-empty">
                     <p>
@@ -132,7 +156,7 @@ export default function Entra({ configuration, healthSummary }) {
                         ))}
                     </ul>
                     <p className="org-hint-plain">
-                        These are set on the server. They cannot be changed from this screen.
+                        Enter them with <strong>Change configuration</strong> below.
                     </p>
                 </div>
             ) : null}
@@ -150,7 +174,7 @@ export default function Entra({ configuration, healthSummary }) {
                     label="Directory (tenant)"
                     note={
                         configuration.directoryMasked === 'Not set'
-                            ? 'Set on the server. It cannot be changed from this screen.'
+                            ? 'Not entered yet. Use Change configuration below.'
                             : 'Shown in part. Reveal it to check it against the directory in Microsoft Entra.'
                     }
                 >
@@ -161,7 +185,7 @@ export default function Entra({ configuration, healthSummary }) {
                     label="Application (client) ID"
                     note={
                         configuration.applicationMasked === 'Not set'
-                            ? 'Set on the server. It cannot be changed from this screen.'
+                            ? 'Not entered yet. Use Change configuration below.'
                             : 'Shown in part. Reveal it to check it against the application in Microsoft Entra.'
                     }
                 >
@@ -172,7 +196,9 @@ export default function Entra({ configuration, healthSummary }) {
                     label="Client secret"
                     note="A secret is never shown here, in whole or in part. Only whether one is set."
                 >
-                    <IdentityState state={configuration.secret === 'Present' ? 'healthy' : 'failed'}>
+                    <IdentityState
+                        state={configuration.secret === 'Present' ? 'healthy' : 'failed'}
+                    >
                         {configuration.secret}
                     </IdentityState>
                 </IdentityRow>
@@ -185,7 +211,9 @@ export default function Entra({ configuration, healthSummary }) {
                 </IdentityRow>
 
                 <IdentityRow label="Return address matches this deployment">
-                    <IdentityState state={configuration.redirectUriMatchesDeployment ? 'healthy' : 'degraded'}>
+                    <IdentityState
+                        state={configuration.redirectUriMatchesDeployment ? 'healthy' : 'degraded'}
+                    >
                         {configuration.redirectUriMatchesDeployment
                             ? 'Matches this deployment'
                             : 'Does not match'}
@@ -200,7 +228,9 @@ export default function Entra({ configuration, healthSummary }) {
                 </IdentityRow>
 
                 <IdentityRow label="Configuration health">
-                    <IdentityState state={healthSummary.state}>{healthSummary.stateInWords}</IdentityState>
+                    <IdentityState state={healthSummary.state}>
+                        {healthSummary.stateInWords}
+                    </IdentityState>
                     <span className="idn-value-actions">
                         <a className="org-action" href="/console/identity/health">
                             Open SSO Health
@@ -208,6 +238,28 @@ export default function Entra({ configuration, healthSummary }) {
                     </span>
                 </IdentityRow>
             </IdentityRows>
+
+            {/*
+             * THE ACTION THAT CLOSES THE GAP.
+             *
+             * It is a LINK to a screen of its own rather than an inline form,
+             * for the same reason removal is: this is the one configuration
+             * whose failure locks everybody out, and the screen it leads to
+             * spends its first paragraph saying what will and will not happen.
+             * An inline field set would put that warning below the fold of the
+             * thing it warns about.
+             */}
+            <div className="idn-actions">
+                <Link className="org-action" href="/console/identity/entra/change">
+                    Change configuration
+                </Link>
+
+                <p className="org-hint-plain">
+                    {isConfigured
+                        ? 'You will be asked to sign in with Microsoft again, and the new details are checked before they take effect.'
+                        : 'Enter the directory, application and secret SemantIQ should use to sign people in.'}
+                </p>
+            </div>
         </IdentityPage>
     )
 }

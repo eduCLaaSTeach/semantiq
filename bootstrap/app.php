@@ -4,6 +4,7 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Modules\Access\Http\Middleware\RequireActionClass;
 use App\Modules\Audit\Providers\AuditServiceProvider;
 use App\Modules\Domains\Console\InitialiseBusinessDomains;
+use App\Modules\Identity\Providers\IdentityServiceProvider;
 use App\Modules\Organisation\Http\Middleware\RequireOrganisation;
 use App\Modules\Organisation\Providers\OrganisationServiceProvider;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
@@ -38,6 +39,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
     ])
     ->withProviders([
         PlatformServiceProvider::class,
+        IdentityServiceProvider::class,
 
         // P1-01. Registered after Platform because its navigation node points at
         // a route, and the registry refuses a node whose route does not resolve.

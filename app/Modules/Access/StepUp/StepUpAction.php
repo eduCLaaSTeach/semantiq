@@ -55,6 +55,63 @@ enum StepUpAction: string
     case RevokeRestrictedEntitlement = 'revoke_restricted_entitlement';
     case SelfReview = 'self_review';
 
+    /*
+     * P1-10 - D-159. TWO ACTIONS, AND THEY ARE ABOUT A CREDENTIAL RATHER THAN
+     * A ROLE.
+     *
+     * Every action above changes who holds privileged authority. These change
+     * a stored credential the deployment authenticates WITH - the mail
+     * password, the AI key, the Fabric client secret - which is the same class
+     * of thing from the other direction: somebody who can silently replace the
+     * mail credential can redirect the deployment's outbound mail, and somebody
+     * who can replace the Fabric secret can point it at a directory they
+     * control.
+     *
+     * REPLACING AND REMOVING ARE SEPARATE, not one "change" action, because the
+     * completion handler must not have to infer which it is from whether a
+     * payload happens to be present. An absent payload would then mean
+     * "removal" - and an absent payload is also what a failed decrypt looks
+     * like.
+     *
+     * ESTABLISHING a credential for the first time does NOT require step-up.
+     * There is nothing to take away, the administrator already holds
+     * PlatformAdmin, and requiring it would make First-Run unsatisfiable on a
+     * deployment that has no Microsoft yet.
+     *
+     * IDENTITY IS NOT IN THESE TWO. The normal console has no identity write
+     * path at all - P1-02 owns it - so neither of these could authorise one.
+     * First-Run's identity writes are the Bootstrap principal's, and those
+     * reconfirm the local password instead, because Microsoft step-up cannot
+     * exist before Microsoft does.
+     */
+    case ReplaceIntegrationSecret = 'replace_integration_secret';
+    case RemoveIntegrationSecret = 'remove_integration_secret';
+
+    /*
+     * P1-02, GATE C ROUND 3. CHANGING MICROSOFT SIGN-IN AFTER INSTALLATION.
+     *
+     * It has an action of its own rather than reusing ReplaceIntegrationSecret,
+     * for the reason P1-07 established when it refused to reuse the revoke
+     * actions: the completion handler must do something the others do not.
+     * Confirming a credential change APPLIES it. Confirming an identity change
+     * must VERIFY the candidate against Microsoft first and apply it only if
+     * that answers - because the thing being changed is the only way anybody
+     * signs in, and a configuration that does not work locks every
+     * administrator out of the deployment that holds it.
+     *
+     * Routing that through the integration performer would apply an unverified
+     * directory and leave the deployment unreachable, with the evidence saying
+     * it succeeded.
+     *
+     * THE CIRCULARITY IS DELIBERATE AND IT IS SAFE. Changing sign-in requires
+     * signing in, which means the CURRENT configuration must still work to
+     * authorise replacing it - so a broken configuration cannot be "fixed" from
+     * here by somebody who cannot already get in. That is the correct
+     * direction: recovery from a broken directory is the Bootstrap
+     * administrator's job, not a console screen's.
+     */
+    case ReconfigureIdentity = 'reconfigure_identity';
+
     /** The P1-07 review actions, named once so nothing has to list them twice. */
     public function isReviewDecision(): bool
     {
@@ -78,6 +135,9 @@ enum StepUpAction: string
             self::ReviewRevokePrivileged => 'remove privileged access after review',
             self::RevokeRestrictedEntitlement => 'remove access to restricted information after review',
             self::SelfReview => 'review your own access',
+            self::ReplaceIntegrationSecret => 'replace a saved connection credential',
+            self::RemoveIntegrationSecret => 'remove a saved connection credential',
+            self::ReconfigureIdentity => 'change how people sign in with Microsoft',
         };
     }
 }

@@ -29,6 +29,19 @@ enum SecretPresence: string
         return is_string($value) && $value !== '' ? self::Present : self::Missing;
     }
 
+    /**
+     * Whether one is set, as a boolean.
+     *
+     * The change form needs to word its secret box differently when a secret
+     * already exists ("leave blank to keep it") from when none does. That is a
+     * question about presence, which this type already answers - asking it as
+     * `inWords() === 'Present'` would make a display string load-bearing.
+     */
+    public function isPresent(): bool
+    {
+        return $this === self::Present;
+    }
+
     /** What a person reads. Never a length, never a fragment. */
     public function inWords(): string
     {

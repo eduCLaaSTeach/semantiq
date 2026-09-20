@@ -43,7 +43,29 @@ final class EntraDiscovery
 
     private const REFETCH_LOCK_SECONDS = 300;
 
-    public function __construct(private readonly string $tenant) {}
+    /**
+     * $cacheNamespace EXISTS SO A PROBE CANNOT TOUCH LIVE TRUST.
+     *
+     * The cache key below is namespaced by tenant, which already separates two
+     * different directories. It does NOT separate a PROBE of a tenant from the
+     * LIVE trust for that same tenant - and re-testing the current directory
+     * with a new client secret is the commonest thing an administrator does on
+     * the integrations screen.
+     *
+     * Without this, a probe against an endpoint that answered wrongly would
+     * write its answer into the cache the sign-in path reads: a test would be
+     * able to break authentication for everyone, which is the opposite of what
+     * a test is for. It could also PASS by reading trust that a previous
+     * successful sign-in had cached, and report a broken configuration as
+     * working.
+     *
+     * Default 'entra' is the live namespace, so every existing caller is
+     * unchanged.
+     */
+    public function __construct(
+        private readonly string $tenant,
+        private readonly string $cacheNamespace = 'entra',
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -272,6 +294,6 @@ final class EntraDiscovery
 
     private function cacheKey(string $suffix): string
     {
-        return "semantiq:entra:{$this->tenant}:{$suffix}";
+        return "semantiq:{$this->cacheNamespace}:{$this->tenant}:{$suffix}";
     }
 }
