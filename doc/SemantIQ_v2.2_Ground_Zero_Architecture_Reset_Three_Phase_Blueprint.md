@@ -278,6 +278,19 @@ The following menu baseline is authoritative for v2 planning. Phase-specific scr
 | Access Reviews      | Privileged Reviews; Domain Reviews; Overdue Reviews                                             | Periodic owner review of privileged and sensitive-domain access.                             |
 | Audit               | User Access; Admin Changes; Security Events; Configuration Changes                              | Searchable, immutable evidence appropriate to the viewer.                                    |
 | System Health       | Application; Integrations; Jobs; Connections; Service Health                                    | Operational health without exposing business data.                                           |
+| Platform Integrations | Identity / SSO; Email & Notifications; AI Provider; Microsoft Fabric                          | Establish and verify the external services SemantIQ depends on. Platform configuration, not business-domain data. **Added by Product Owner amendment, 20 September 2026.** |
+
+> **AMENDED 20 September 2026** — `doc/v2/phase-1/PRODUCT-OWNER-AMENDMENT-PLATFORM-SETUP-AND-BOOTSTRAP.md`.
+>
+> **Platform Integrations is added to System Administration.** It does **not**
+> take ownership of anything already owned: Identity / SSO remains P1-02's, and
+> Platform Integrations surfaces setup and readiness and **navigates** to the
+> owning screens. **There must be no second Entra configuration model.**
+>
+> Email & Notifications, AI Provider and Microsoft Fabric establish **reusable
+> platform connections only**. No notification system is built because an email
+> connection exists; no Phase 3 AI business functionality and no Phase 2 Fabric
+> functionality is brought forward.
 
 **ADMIN MENTAL MODEL**
 
@@ -389,7 +402,7 @@ Authenticated Identity + Active Organisation + Platform Role + Business Domain +
 | **Product area**                       | **Primary menus**                                                                                                                                                                                                      | **Delivery phase** |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
 | Pre-authentication / Application Entry | Login; First-Run Bootstrap; Authentication Callback; Access Not Assigned; Access Denied; Session Expired; Signed Out                                                                                                   | Phase 1            |
-| System Administration                  | Administration Home; Organisation; Users & Groups; Roles & Access; Business Domains; Identity & SSO; Security Status; Access Reviews; Audit; System Health                                                             | Phase 1            |
+| System Administration                  | Administration Home; Organisation; Users & Groups; Roles & Access; Business Domains; Identity & SSO; Security Status; Access Reviews; Audit; System Health; **Platform Integrations** *(added 20 Sep 2026)*                                                             | Phase 1            |
 | Fabric Configuration                   | Overview; Data Sources; Connect Source; Discovery; Data Classification; Ingestion; Data Quality; Business Model; Security Mapping; Semantic Model; AI Readiness; Pipelines & Refresh; Power BI Publication; Monitoring | Phase 2            |
 | SemantIQ Workplace                     | Home; My Intelligence; Ask SemantIQ; Explore; Insights; Risks & Opportunities; Recommendations; Decisions & Alerts; Reports & Dashboards; My Workspace; Help                                                           | Phase 3            |
 
@@ -470,7 +483,9 @@ The Phase 1 experience should be a guided setup, not a collection of security pa
 | **Screen**              | **Purpose**                                                                                                                |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | **Login**               | Ground-zero branded sign-in page with Microsoft SSO as the primary action and only explicitly configured alternative IdPs. |
-| **Administration Home** | Organisation readiness, users, domains, security posture, exceptions and action queue.                                     |
+| **Platform Integrations** | Establish and verify SSO, email, AI provider and Microsoft Fabric connections. **Added 20 September 2026** — delivered by **P1-10**, ahead of Administration Home |
+| **First-Run / Platform Setup** | The limited experience through which the local **Bootstrap Administrator** configures the platform before SSO exists, and nominates the first permanent System Administrator. **Added 20 September 2026** — delivered by **P1-10**. Zero business-domain access |
+| **Administration Home** | Organisation readiness, users, domains, security posture, exceptions and action queue. **Delivered by P1-11** — renumbered from P1-10 on 20 September 2026 so it projects the integration facts P1-10 delivers rather than inventing them |
 | **Organisation**        | Organisation details, business units, departments, teams, legal entities.                                                  |
 | **Users & Groups**      | Identity, status, manager, team, role/domain/scope assignments.                                                            |
 | **Roles & Access**      | Business-friendly assignment and access simulation; no low-level ACL complexity exposed.                                   |

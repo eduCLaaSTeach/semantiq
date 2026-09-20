@@ -88,7 +88,19 @@ Unit design: `P1-BASE-APPLICATION-BASELINE-DESIGN.md` — drafted, awaiting appr
 | 9 | **P1-07** | Access Reviews | Sensitive access has a review lifecycle |
 | 10 | **P1-08** | Audit | Phase 1 activity evidenced |
 | 11 | **P1-09** | System Health | Operational failures visible safely |
-| 12 | **P1-10** | Administration Home | One accurate roll-up, built last from real sources |
+| 12 | **P1-10** | **Platform Integrations & Setup** | Customer-configurable SSO, email, AI and Fabric connections, and the local Bootstrap Administrator that makes first-run setup possible |
+| 13 | **P1-11** | Administration Home | One accurate roll-up, built last from real sources |
+
+> **AMENDED by Product Owner amendment, 20 September 2026** —
+> `PRODUCT-OWNER-AMENDMENT-PLATFORM-SETUP-AND-BOOTSTRAP.md`.
+>
+> **Order 12 was P1-10 Administration Home.** A new unit is inserted at 12 and
+> Administration Home becomes **P1-11**. Administration Home stays last for the
+> same reason it always was — it projects facts other units own — and that
+> reason is now stronger, because P1-10 delivers integration and readiness
+> facts it would otherwise have had to invent.
+>
+> **P1-11 must not be implemented before P1-10 is accepted.**
 
 The order follows the Phase 1 document exactly, with P1-BASE inserted ahead of it.
 Each unit runs PLAN → approve → DESIGN → approve → EXECUTE → TEST → VERIFY →
@@ -196,10 +208,24 @@ future-phase schema.
 
 The static page must never shadow Laravel's `public/index.php`.
 
-### D-03 — First-administrator bootstrap — **DEFERRED TO P1-00**
+### D-03 — First-administrator bootstrap — **DEFERRED TO P1-00** · **partly superseded 20 September 2026**
 
 Does not block P1-BASE and is not solved there. Recorded as a P1-00 blocker, to
 be brought back for explicit decision at P1-00 planning.
+
+> **D-03 — superseded in part by Product Owner amendment, 20 September 2026.**
+> The deferral itself stands and was honoured; what is amended is the **ruling
+> it produced in P1-00 §20**. That ruling required the first administrator to
+> pass Entra SSO before privileged application access, **which is circular on a
+> fresh installation**: SSO cannot be configured until somebody privileged can
+> sign in.
+>
+> **Superseded:** a narrowly scoped local **Bootstrap Administrator** may
+> perform First-Run Platform Setup before SSO is configured.
+> **Unchanged:** the first *permanent* System Administrator still authenticates
+> through the approved normal identity path, and the single-use grant
+> mechanism — its hashing, its atomic consumption, its operator-only issuance —
+> all stand and are to be reused rather than replaced.
 
 ### D-04 — Microsoft Entra ID registration — **DEFERRED TO P1-00**
 
@@ -295,13 +321,28 @@ contradicts an approved decision; both are recorded in
 
 ## 7. Phase-level acceptance
 
-Phase 1 is accepted only when P1-BASE and P1-00 through P1-10 are each
+Phase 1 is accepted only when P1-BASE and **P1-00 through P1-11** are each
 individually accepted **and** the cross-unit proofs in the Phase 1 document §6
 pass:
 
 - Login and Microsoft SSO work end to end.
 - Unknown, unassigned, inactive and session-expired cases fail closed.
 - First-admin bootstrap is secure and restricted after use.
+
+> **AMENDED 20 September 2026.** Two further phase-level conditions are added by
+> the Product Owner amendment:
+>
+> - **Platform Integrations (P1-10)** establishes SSO, email, AI and Fabric
+>   connections through the product rather than by hand-editing `.env`, with
+>   secrets encrypted at rest and never returned to the browser;
+> - **the local Bootstrap Administrator is disabled** once SSO is verified and
+>   a permanent System Administrator has authenticated. *"Restricted after use"*
+>   now covers **both** the single-use grant and the local bootstrap principal.
+>
+> The existing blocking items are unchanged and still stand: the **P1-02
+> provider-wide SSO re-check**, the **production session-driver alignment**, the
+> **privilege-change / session-revocation verification**, and the carried
+> P1-07 / P1-08 / P1-09 items per their recorded disposition.
 - Organisation and team hierarchy work.
 - The role / domain / scope / sensitivity matrix works.
 - Salesperson, manager, executive and System Admin isolation scenarios pass.

@@ -148,3 +148,30 @@ admits no second value — P1-05 owns replacing it.
 ## 5. Unresolved issues
 
 **None.**
+
+---
+
+## 6. Amended after acceptance — 20 September 2026
+
+> **Nothing in §§1–5 is withdrawn.** Everything recorded above was built,
+> verified and accepted, and **every statement about what was built remains
+> true**. The amendment changes a **rule**, not a result.
+>
+> **What is superseded:** D-03's requirement that no privileged access of any
+> kind occurs before Entra SSO is configured. That is circular on a fresh
+> installation, and P1-00 could not have discovered it — the deployment it was
+> verified against already had Entra configured in `.env`.
+>
+> **The amendment:** a narrowly scoped local **Bootstrap Administrator** may
+> perform First-Run Platform Setup before SSO exists. It is an installation
+> principal, not a role; it holds zero business-domain access; and it is
+> disabled automatically once SSO is verified and a permanent System
+> Administrator has authenticated.
+>
+> **Unchanged:** the grant mechanism verified here — single-use, hashed,
+> atomically consumed, operator-issued, refusing a wrong identity without
+> consuming — stands in full, and **P1-10 is directed to reuse it rather than
+> build a second bootstrap system.** The first permanent System Administrator
+> still authenticates through the approved normal identity path.
+>
+> Authority: `PRODUCT-OWNER-AMENDMENT-PLATFORM-SETUP-AND-BOOTSTRAP.md`.
