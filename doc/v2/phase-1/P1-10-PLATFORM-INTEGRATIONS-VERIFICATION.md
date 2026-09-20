@@ -140,7 +140,21 @@ local server with a seeded setup administrator.** Not production.
    `.org-form input` in four ways, including a canvas background on a white
    card that reads as *disabled*.
 
-### The one screen that was not browser-rendered
+### The one screen that was not browser-rendered — RESOLVED AT GATE C
+
+> **This section is kept as written, and is now superseded by §9.**
+>
+> `/console/integrations` HAS since been opened in a real browser, at 1440px
+> light and 390px dark. The obstacle below was real but was diagnosed wrongly:
+> minting a session by hand failed because this deployment serialises sessions
+> as **JSON**, not PHP — not because it required a Microsoft round trip or a
+> test-only route. Once that was found, a valid session could be created
+> through the framework's own session store with nothing added to the product.
+>
+> **Looking at the screen immediately found two defects no test had caught** —
+> a status badge contradicting the sentence beside it, and headings breaking
+> mid-word at 390px. That is the cost of the paragraph below having been
+> accepted rather than pushed on.
 
 **`/console/integrations` was verified by rendered HTTP response, not by a
 browser.** Reaching it needs an authenticated System Administrator session, and
@@ -163,6 +177,7 @@ path the application does not use is not verified.
 
 **What is NOT proven: how that specific page looks in a browser.** It is carried
 as a check on the Product Owner script (CHECK 1) rather than claimed here.
+*(Superseded — see the note at the head of this section and §9.)*
 
 **Two things were fixed from reading the rendered screens rather than from a
 test:** the overview rendered the step rail **and** a list of the same four
