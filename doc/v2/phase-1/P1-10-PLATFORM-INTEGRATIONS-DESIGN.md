@@ -688,12 +688,20 @@ test request has no recipient field).
 >
 > ```text
 > IdentityConfigurationReport.php   lines 42, 43, 44, 56   ← the health/config screen
+>                                   AND the missingKeys() array, read as
+>                                   config($key) — four more, in a shape a
+>                                   naive grep for config('identity… misses
 > IdentityHealthCheck.php           line 454               ← the health check itself
 > EntraController.php               lines 59, 60           ← the Entra screen
 > PlatformServiceProvider.php       lines 77, 82-83, 89-92 ← the runtime provider
 > IssueBootstrapGrantCommand.php    line 36
 > UserDirectoryService.php          line 54
 > ```
+>
+> **`missingKeys()` also stops being a `config()` question.** It reports which
+> identity values are absent, and after this correction "absent" means absent
+> **from the resolved source** — otherwise the unconfigured empty state would
+> describe `.env` on a deployment running from the store.
 >
 > **Two requirements follow, and the draft stated neither.**
 >
@@ -702,10 +710,16 @@ test request has no recipient field).
 >    resolver. **Do not leave direct `config('identity.microsoft.*')` reads
 >    that bypass the new resolver** — otherwise the screen reports on `.env`
 >    while sign-in uses the store, which is worse than no screen.
->    **Guard: `NoDirectIdentityConfigRead`** — outside `config/identity.php`
->    and the resolver itself, **zero** occurrences of
->    `config('identity.microsoft.` in `app/`. The mutation is restoring any one
->    of the six.
+>    **Guard: `NoDirectIdentityConfigRead`** — outside the resolver itself,
+>    **zero** occurrences of the string **`identity.microsoft.`** anywhere in
+>    `app/`. **The dotted key, not the `config('…` call**, because
+>    `IdentityConfigurationReport::missingKeys()` holds the four keys in an
+>    array and reads them as `config($key)`: a guard written against the call
+>    shape would score that file clean while four reads bypassed the resolver.
+>    **That is the vacuous-guard failure CLAUDE.md §2 describes**, and it is
+>    avoidable here by choosing the string the mistake actually contains. The
+>    mutation is restoring any one of the six sites, **including the array
+>    one**.
 >
 > 2. **An identity configuration change must invalidate or revision-bind
 >    `LAST_RESULT_KEY` and `LAST_PROBE_KEY`**, so **P1-09's `storedReport()`
