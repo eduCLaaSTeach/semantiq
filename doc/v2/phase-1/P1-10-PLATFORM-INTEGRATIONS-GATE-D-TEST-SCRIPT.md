@@ -102,7 +102,7 @@ the controlled cutover is a separate, scheduled exercise and this is not it.
 | --- | --- | --- | --- |
 | 1.1 | Find Integrations from the main navigation, without a typed address | It is reachable by clicking, and you can tell from the label what it is | |
 | 1.2 | Count the cards | **Four**: Microsoft Entra ID, Email delivery, AI service, Microsoft Fabric | |
-| 1.3 | Read each card's name and description | Business wording. **No** raw key, enum, route name or class name — nothing like `not_checked`, `fabric`, `console.integrations` | |
+| 1.3 | Read each card's name and description | Business wording. **No** raw key, enum, route name or class name — nothing like `fabric`, `staged_integration_changes`, `console.integrations`. A status reading **Not checked**, in words with a capital and a space, is the product wording and is correct; `not_checked` would not be | |
 | 1.4 | Read each status | You can tell what it means without asking anybody | |
 | 1.5 | Look for anything that reads like an error dump | There is none — no stack trace, no exception text, no provider error body | |
 
@@ -184,7 +184,7 @@ the controlled cutover is a separate, scheduled exercise and this is not it.
 | 6.2 | Read what each one says it does | Test connection checks the mail server accepts the details **and sends nothing**. Send test email actually sends one | |
 | 6.3 | Look for somewhere to type who the test email goes to | **There is none.** No recipient box, no CC, no BCC, no subject, no message body | |
 | 6.4 | Read who it says it will go to | It says so on the screen, in words: it sends one short message to **your own email address**, using the send-from address above, and **you cannot send it anywhere else** | |
-| 6.5 | Check the other three integrations | **Send test email appears on Email delivery only** | |
+| 6.5 | Check the other integration cards | **Send test email appears on Email delivery only.** AI service and Microsoft Fabric have Test connection and nothing else; Microsoft Entra ID has neither | |
 
 > **Do not press Send test email** unless real, approved SMTP settings are
 > already saved. There are none on production today, so the honest outcome of
@@ -253,6 +253,7 @@ a guarantee rather than a convenience:
 
 | Step | What it protects |
 | --- | --- |
+| 2.1, 4.4 | A working sign-in is never reported as unconfigured — the defect in §9.6 |
 | 2.2, 2.3 | Microsoft sign-in has exactly one owner |
 | 3.3, 3.5 | A saved secret is never shown back to anybody |
 | 3.6 | Opening the change screen changes nothing |
