@@ -8,8 +8,8 @@ claim as an observed production result, and nothing below is presented as one.
 | Unit | **P1-10 — Platform Integrations & Setup** (delivery order 12) |
 | DESIGN | merge `a7aef47` — the six Product Owner corrections applied |
 | Suite | **1082 tests, 1076 passed, 0 failed, 0 errors** |
-| P1-10 cases | **62** under `tests/Feature/Setup`, plus five architecture files |
-| Diff | 89 files, +8,695 / −133 |
+| P1-10 cases | **62** under `tests/Feature/Setup`, plus **six** architecture files — `FirstRunRoutesDoNotCollide`, `BootstrapIsNotAUser`, `ConnectionTestsAreNotCapabilities`, `EveryCssTokenIsDeclared`, `OneStatusVocabulary`, `NoKeyRotationTooling` |
+| Diff | 90 files, ~+8,900 / −133 |
 | Status | **NOT DEPLOYED — awaiting Product Owner Gate C review** |
 
 ---
@@ -18,7 +18,7 @@ claim as an observed production result, and nothing below is presented as one.
 
 | # | What it required | How it is proven | Mutation |
 | --- | --- | --- | --- |
-| **1** | Constrain the grant route structurally; prove it under a challenged route order | `FirstRunRoutesDoNotCollide` re-registers the First-Run routes **in reverse declaration order** and resolves every static URI. It also asserts the constraint **accepts** twenty real `Str::random(64)` tokens | **M-P10-4 KILLED.** The forward case still passes without the constraint; the reversed case fails |
+| **1** | Constrain the grant route structurally; prove it under a challenged route order | `FirstRunRoutesDoNotCollide` re-registers the First-Run routes **in reverse declaration order** and resolves **all ten** static method+URI pairs — one before this unit, so the guard is now materially stronger than when it was written. It also asserts the constraint **accepts** twenty real `Str::random(64)` tokens | **M-P10-4 KILLED.** The forward case still passes without the constraint; the reversed case fails |
 | **2** | Route step 7 through the existing `GrantIssuer` / `GrantRedeemer`, no email dependency | `FirstAdministratorHandoffTest` — 7 cases. Ordinary grant, 30-minute TTL, tenant from the **stored** configuration, wrong identity refuses **without consuming**, the plaintext appears in no column and no audit event, and a source guard asserts the class names no mail path | — |
 | **3** | Close bootstrap by a write, atomically; UNCONFIGURED alone must not reopen it | `BootstrapDoesNotReopenTest` — 11 cases, B10–B14 plus **B11b** | **M-P10-1 SURVIVED** and is recorded. **M-P10-2 KILLED** |
 | **4** | A fresh installation reaches `store` with no SSH step, verified-first | `FreshInstallationReachesTheStoreTest` — 7 cases, run with an **empty identity `.env`** | **M-P10-5 KILLED** |
