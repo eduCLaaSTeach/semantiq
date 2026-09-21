@@ -378,7 +378,10 @@ argument for projecting it rather than querying posture again.
   control, which re-authorises on arrival — P1-06's rule, unchanged.
 - **No schema** unless §8 is overturned.
 - **No new `SecurityEventLogger` key.** Rendering a summary records nothing.
-- **No change to `/up`, `semantiq:health`, D-19, or any carried item.**
+- **No change to `/up`, `semantiq:health` or any carried item.** **D-19 is
+  narrowly superseded for ONE policy key by D-182** — `administration.view` is
+  visible to System Administrator **and** Organisation Administrator. It is
+  unchanged for every other System Administration node.
 
 ---
 
@@ -623,7 +626,7 @@ would be tempting, because a roll-up is exactly where somebody would think to
 | **Real SMTP send test**, when genuine SMTP becomes available | **OPEN / CARRIED** |
 | Production **session-driver alignment**, `file` → `database` | **OPEN / CARRIED. NOT P1-11's to fix**, and not to be attempted inside it — it terminates every existing session and is a controlled deployment correction with its own gate |
 | Privilege-change / **per-user session revocation** | **OPEN / PHASE 1 GATE.** The control does not exist; nothing reads `sessions.user_id` |
-| **D-19** | **Unchanged.** P1-11 widens no navigation |
+| **D-19** | **NARROWLY SUPERSEDED by D-182, and otherwise unchanged.** *"D-19 remains in force for System Administration navigation generally, except that D-182 explicitly makes `Administration Home` visible to Organisation Administrator because the route itself is `OrgAdmin` and the screen is their authorised administration landing point."* The other four `OrgAdmin` System Administration screens stay hidden from an Organisation Administrator and **remain a carried navigation item** |
 
 **A tile may SHOW a carried gate's state. Showing it closes nothing.** If
 Administration Home ever renders something that reads like *"session storage:
@@ -657,7 +660,7 @@ memory.**
 | **Both administrator kinds** | The DESIGN documents **System Administrator and Organisation Administrator behaviour explicitly**, not by implication |
 | **Performance — D-140** | Zero external network calls · **no P1-11 cache** · bounded aggregates · **no N+1** · one source failing does not fail the page · **a failed source is never a zero** · target ≤ 2 s |
 | **Query budget** | The DESIGN states one, and states how a source consumed by several tiles is **evaluated once** — P1-06 for posture *and* exceptions; P1-10 preferably one `all()` rather than four traversals |
-| **Navigation** | First in System Administration · `locked` → **`leaf`** · its own route · **`/console` unchanged** · **D-19 unchanged** · no other sidebar reorder |
+| **Navigation** | First in System Administration · `locked` → **`leaf`** · its own route · **`/console` unchanged** · **D-182: `administration.view` visible to System Administrator AND Organisation Administrator, D-19 otherwise unchanged** · no other node exposed · no sidebar reorder |
 | **Visual language** | **A dashboard, not another configuration form.** The existing shared shell, typography, spacing, cards, badges, light and dark tokens, responsive behaviour and focus treatment. **No new CSS where the shared UI already supports the requirement.** Tabs are **not** to be forced onto a dashboard |
 
 > **The last row is there because of what Gate D cost.** P1-10 invented its own
@@ -683,7 +686,8 @@ ACCEPTED**, 21 September 2026.
 administrator re-check, the Microsoft step-up round trip, First-Run on a fresh
 installation, the 30-minute and 4-hour Bootstrap expiries, the recovery flow,
 the real SMTP send, the production session-driver alignment and per-user
-session revocation. **D-19 unchanged.**
+session revocation. **D-19 is unchanged except for the one narrow D-182
+exception above.**
 
 **P1-11 acceptance will close P1-11 only.** Phase 1 acceptance additionally
 requires explicit disposition of the phase-level gates — `PHASE-1-PLAN.md` §7
