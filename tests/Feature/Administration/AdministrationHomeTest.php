@@ -19,6 +19,7 @@ use App\Modules\Platform\Setup\IntegrationFamily;
 use App\Modules\Platform\Setup\Models\PlatformSetting;
 use App\Modules\Platform\Setup\Secrets\IntegrationSecretStore;
 use App\Modules\Platform\Setup\Support\SetupProjection;
+use App\Modules\Reviews\Projection\ReviewSummaryProjection;
 use App\Modules\Security\Posture\PostureEvaluator;
 use App\Modules\SystemHealth\Checks\BackgroundWorkCheck;
 use App\Modules\SystemHealth\Checks\CacheStoreCheck;
@@ -498,7 +499,20 @@ final class AdministrationHomeTest extends TestCase
      * unavailable, every OTHER tile must still be valued, the page must be 200,
      * and the failed source must contribute NO action row.
      *
-     * ONE APPLICATION, ONE FIXTURE, FIVE REQUESTS - and that is a correction
+     * THE ISOLATED SET IS SIX, AND REVIEWS WAS THE ONE MISSING. Product Owner
+     * Gate C review found this matrix covered People, Domains, Platform
+     * Integrations, System Health and Security Posture, but not Access Reviews -
+     * although ReviewSummaryProjection is resolved and caught in exactly the
+     * same shape as the other five. A source that is caught but never made to
+     * throw is an isolation claim nobody has tested. It is here now.
+     *
+     * ORGANISATIONSERVICE IS DELIBERATELY NOT IN THIS SET, and that is a
+     * boundary rather than an omission. The other six answer questions ABOUT a
+     * scope; OrganisationService IS the scope, so its failure is not a tile
+     * losing its number - it is the page having no subject. It follows a
+     * different failure boundary and is not claimed to be isolable here.
+     *
+     * ONE APPLICATION, ONE FIXTURE, SIX REQUESTS - and that is a correction
      * MySQL forced. The first version rebuilt the application and ran
      * migrate:fresh between cases. On SQLite that is cheap and harmless; on
      * MySQL the CI step HUNG, because refreshApplication() abandons the
@@ -520,6 +534,7 @@ final class AdministrationHomeTest extends TestCase
         $cases = [
             'people' => PeopleSummaryProjection::class,
             'domains' => DomainSummaryProjection::class,
+            'reviews' => ReviewSummaryProjection::class,
             'integrations' => SetupProjection::class,
             'health' => SystemHealthReport::class,
             'posture' => PostureEvaluator::class,

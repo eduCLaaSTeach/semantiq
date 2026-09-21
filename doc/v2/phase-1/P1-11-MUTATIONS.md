@@ -13,7 +13,7 @@ mutation record nobody ran.
 | Unit | **P1-11 — Administration Home** |
 | DESIGN | Gate B approved — `P1-11-ADMINISTRATION-HOME-DESIGN.md`, merged as `59a3f73` |
 | Harness | Apply one change, run the named filter, restore. One mutation live at a time |
-| Total | **37 runs · 34 killed first time · 3 survived and were closed** |
+| Total | **39 runs · 36 killed first time · 3 survived and were closed** |
 
 ---
 
@@ -110,11 +110,33 @@ counted when it is not. Against an empty database both mutants pass.
 | **M14** | `0 active groups` raises an Action Queue row | `AdministrationHomeTest` | **KILLED** |
 | **M30** | The required-and-not-configured integration branch is deleted | `AdministrationHomeTest` | **SURVIVED → closed, see §7** |
 | **M31** | The queue drops the `required` condition — any `not_configured` family raises a row | `AdministrationHomeTest` | **KILLED** |
+| **M35** | The **Access Reviews** catch returns `ReviewSummary(true, 0, 0)` — the reassuring zero | `AdministrationHomeTest` | **KILLED** |
+| **M36** | The **Access Reviews** queue rule also fires when the tile is not valued | `AdministrationHomeTest` | **KILLED** |
 
 **M13 is G12** — an Organisation Administrator must never receive a row pointing
 at a screen they cannot open. It is caught because the platform-only source was
 never evaluated for them, so the row's condition is not suppressed: it is never
 asked.
+
+**M35 AND M36 CLOSE AN EVIDENCE GAP THE PRODUCT OWNER FOUND AT GATE C.** The
+isolation matrix covered five sources; `ReviewSummaryProjection` was **caught
+but never made to throw**, which is an isolation claim nobody had tested. The
+implementation was already correct and **was not changed** — the new case passed
+on it unmodified — so the two mutations are what make the new case worth having.
+
+**THEY ARE TWO BECAUSE ONE PROVES HALF THE CLAIM.** M35 is the shape someone who
+misunderstood the rule would write, and it dies at the *state* assertion:
+
+> `[reviews] did not report Not available when its own source threw.`
+
+which means the *no action row* assertion is never reached and would still be
+unproven. M36 keeps the tile unavailable and produces a row anyway — *"if we
+could not tell, flag it for attention"*, a genuinely plausible misreading — and
+dies on the other assertion:
+
+> `[reviews] could not answer and still produced an action.`
+
+Only both together establish the whole of what the case claims.
 
 ---
 

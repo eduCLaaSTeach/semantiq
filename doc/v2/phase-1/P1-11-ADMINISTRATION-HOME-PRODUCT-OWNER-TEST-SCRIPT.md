@@ -222,7 +222,7 @@ previously accepted screen works exactly as it did. Administration Home is
 | --- | --- |
 | **Check 6, if you have no Organisation Administrator** | **NOT OBSERVABLE WITH REAL PRODUCTION DATA.** Creating one would put a role assignment into your real access records to satisfy a test. The behaviour is proved automatically — a System Administrator sees the item, an Organisation Administrator sees it, no other role does, and they see nothing else in that area — and removing the rule makes those tests fail. **The live observation is carried** |
 | **A genuinely empty deployment** | **NOT OBSERVABLE.** Your organisation exists and cannot be removed to see what a day-one deployment looks like. The rule — Organisation reads *Not configured*, the queue leads with setting it up, and **no other tile is rewritten as `0` or `Not configured`** — is proved automatically, including by breaking it deliberately |
-| **A source failing** | **NOT OBSERVABLE.** It would mean breaking your database, your cache or your audit chain on purpose. Proved automatically by forcing each of the five sources to fail in turn: its own tile reads **Not available**, every other tile is unaffected, and it contributes no Action Queue row |
+| **A source failing** | **NOT OBSERVABLE.** It would mean breaking your database, your cache or your audit chain on purpose. Proved automatically by forcing **each of the six sources** to fail in turn — People, Business Domains, Access Reviews, Platform Integrations, System Health and Security Posture: its own tile reads **Not available**, every other tile is unaffected, and it contributes no Action Queue row |
 | **The screen with a large number of business domains** | Not observable today — you have a handful. **And there is a finding here you should know about:** Security Status already asks five questions per business domain, and Administration Home shows that summary, so it inherits the cost. At 20 domains the page took about 0.6 s locally, comfortably inside target. **It is P1-06's, it is already live on Security Status, and it is raised for your decision rather than changed here** |
 | **MySQL** | The application runs on MySQL in production and on SQLite locally. **The MySQL run was not observed by me** — there is no MySQL server in the environment I work in. It runs in the build, and a build step was added specifically for this unit |
 | **Production rendering** | **Not seen by me.** The browser available here does not trust this environment's certificate authority, and I did not disable certificate checking to work around it. Production observation happens after deployment |
@@ -241,3 +241,17 @@ Each is explained in full in `P1-11-ADMINISTRATION-HOME-VERIFICATION.md`.
 | **A small Access Reviews change beyond the agreed scope** | The approved DESIGN asked for two new read seams and then, elsewhere, forbade the way it described reading Access Reviews. One more small seam was added to Access Reviews rather than weakening the rule. **§7.1** |
 | **An Organisation Administrator's sidebar has one item in it** | D-182 was granted narrowly and on purpose. The consequence is a sidebar showing only Administration Home. **You should see that before testing, not during it. §7.2** |
 | **The System Health tile does not show one overall status** | The DESIGN said it would. System Health itself refuses to roll its rows into one verdict, for a reason that applies here too, so the tile shows two plain counts instead — what needs attention, and what nobody has checked yet. **§7.3** |
+
+### All three have since been ruled on — **you have already decided these**
+
+| | Your ruling |
+| --- | --- |
+| The Access Reviews seam | **PO-R1 — APPROVED.** Kept, and it stays owned by Access Reviews rather than moving into Administration. Review visibility is still decided by Access Reviews' own authority, and Administration Home is still forbidden to read review records directly |
+| The one-item sidebar | **PO-R2 — ACCEPTED.** An Organisation Administrator sees **Administration Home and nothing else** in System Administration. Nothing was widened, and nothing needed changing |
+| The System Health tile | **PO-R3 — APPROVED.** The two plain counts are kept. **No single overall System Health status is to be created.** The old "one overall state" wording is superseded, and System Health itself was not changed |
+
+**Check 3 and Check 6 below still stand as written** — they are how you confirm
+on the real screen that these rulings are what actually shipped: **Check 3** that
+the System Health tile's two counts agree with the System Health screen itself
+(PO-R3), and **Check 6** that an Organisation Administrator's sidebar holds
+Administration Home and nothing else (PO-R2).

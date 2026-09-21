@@ -140,7 +140,7 @@ raised in §7.2**, not presented as a finished experience.
 | P1-11's own cases | **37 tests · 475 assertions** across four files |
 | Pint | **passed** |
 | Prettier (the three files this unit touches) | **passed**, house style `--single-quote --no-semi --tab-width 4 --print-width 100` |
-| Mutations | **37 runs · 34 killed first time · 3 survived and were closed** — `P1-11-MUTATIONS.md` |
+| Mutations | **39 runs · 36 killed first time · 3 survived and were closed** — `P1-11-MUTATIONS.md` |
 | MySQL | **NOT RUN LOCALLY — no MySQL server exists in this environment.** A CI step was added (§4.1) and runs on the pull request |
 
 ### 4.1 MySQL — the step caught a defect on its first run
@@ -166,7 +166,7 @@ next `migrate:fresh` waits on a metadata lock nothing ever releases.
 
 - the failure-isolation case now binds each source **once**, to a closure that
   throws only while a flag selects it and calls `$app->build()` otherwise. One
-  application, one fixture, five requests;
+  application, one fixture, **six requests** — one per isolated source;
 - the growth case **grows the same deployment in place** from 2 of everything to
   20, rather than rebuilding. That is also the better measurement — there is one
   organisation, so a second could never have been the scope, and the comparison
@@ -176,7 +176,63 @@ next `migrate:fresh` waits on a metadata lock nothing ever releases.
 both found engine-specific failures that were green on SQLite" — arriving on the
 first run of the third such step.
 
-### 4.2 The guards, and what each would catch
+### 4.2 Source-failure isolation — the set is SIX
+
+**Corrected at Gate C on Product Owner review.** The matrix in
+`AdministrationHomeTest::test_each_source_can_fail_alone_without_becoming_a_zero()`
+covered five sources and not the sixth:
+
+| Isolated source | In the matrix |
+| --- | --- |
+| People — `PeopleSummaryProjection` | yes |
+| Domains — `DomainSummaryProjection` | yes |
+| **Access Reviews — `ReviewSummaryProjection`** | **ADDED AT GATE C** |
+| Platform Integrations — `SetupProjection` | yes |
+| System Health — `SystemHealthReport` | yes |
+| Security Posture — `PostureEvaluator` | yes |
+
+**The gap was in the evidence, not in the behaviour.** `ReviewSummaryProjection`
+was already resolved from the container inside its own `try`/`catch`, in exactly
+the shape of the other five — so the code was right and **nothing had ever made
+it throw**. A source that is caught but never broken is an isolation claim
+nobody has tested, which is precisely what `CLAUDE.md` §2 exists to catch.
+
+**No production change was required**, and none was made: the new case passed on
+the unmodified implementation. What it now proves, for a failing
+`ReviewSummaryProjection`:
+
+- `/console/administration` still returns **HTTP 200**;
+- the Access Reviews tile state is **`unavailable`**;
+- it carries **no metric and no count**;
+- it carries **no positive or status badge**;
+- **no `reviews` Action Queue row** is produced;
+- **every unrelated tile continues operating normally.**
+
+Both halves were mutation-tested rather than assumed:
+
+| Mutation | Change | Result |
+| --- | --- | --- |
+| **M35** | The reviews `catch` returns `ReviewSummary(true, 0, 0)` — the reassuring zero someone who misunderstood the rule would write | **KILLED** — *"[reviews] did not report Not available when its own source threw"* |
+| **M36** | The reviews Action Queue rule also fires when the tile is not valued — *"if we could not tell, flag it for attention anyway"* | **KILLED** — *"[reviews] could not answer and still produced an action"* |
+
+M36 exists because **M35 dies at the state assertion and never reaches the
+action assertion**, so it proves only half the claim. M36 keeps the tile
+unavailable and produces a row anyway, which is the only way the second half is
+independently established.
+
+#### `OrganisationService` is deliberately NOT in this set
+
+It is a **mandatory scope dependency and follows a different failure boundary**,
+and it is excluded on purpose rather than overlooked. The six above answer
+questions **about** a scope; `OrganisationService` **is** the scope. Its failure
+is not a tile losing its number — it is the page having no subject — and it is
+resolved before any tile is built, alongside `AccessEngine`, for the reason
+already recorded in `AdministrationHomeProjection`'s docblock: if the database
+is unreachable the request has already failed in the session middleware, so
+there is no partial page to render. **This unit makes no claim that it is
+isolable, and does not test one.**
+
+### 4.3 The guards, and what each would catch
 
 | Guard | Lives in | Proved by |
 | --- | --- | --- |
@@ -386,6 +442,23 @@ the only thing deciding visibility; the seam asks it.
 it is raised rather than absorbed. The alternative was to weaken G3, which would
 have meant a dashboard holding another unit's query.
 
+> #### PO-R1 — APPROVED (Product Owner ruling, Gate C)
+>
+> **The Access Reviews read seam is approved**, and this is the amendment that
+> resolves the DESIGN contradiction recorded above.
+>
+> - `App\Modules\Reviews\Projection\ReviewSummaryProjection` is **kept**;
+> - it remains **owned by P1-07 / Reviews**, not by Administration, and **is not
+>   to be moved into the Administration module**;
+> - **`ReviewerAuthority::scopeVisible()` remains the authority** for review
+>   visibility — the seam asks it and re-decides nothing;
+> - **P1-11 must not directly query or reference `AccessReviewItem`**, which is
+>   guard G3 and stays enforced.
+>
+> DESIGN §4.6's scoped-`AccessReviewItem`-builder wording is **superseded by this
+> ruling**. The historical wording is preserved in the DESIGN record; it is no
+> longer the instruction.
+
 ### 7.2 D-182 is narrow, and an Organisation Administrator's sidebar shows one item
 
 **Observed, not inferred.** An Organisation Administrator now sees:
@@ -406,6 +479,16 @@ here because **a sidebar with one item in it is a thing the Product Owner should
 see before testing, not discover during it.** The four hidden screens remain a
 carried navigation item.
 
+> #### PO-R2 — ACCEPTED (Product Owner ruling, Gate C)
+>
+> **The consequence is accepted as delivered.** An Organisation Administrator's
+> System Administration navigation must remain **exactly** `['Administration
+> Home']`. Organisation, Users & Groups, Roles & Access, Business Domains and
+> every other System Administration node **stay unexposed as part of P1-11**.
+>
+> **No implementation change is required for D-182**, and none was made: the
+> equality assertion in G18/V4 is already the rule this ruling describes.
+
 ### 7.3 System Health is not collapsed into one state, and the DESIGN said it would be
 
 **DESIGN §4.7 says the area states are "collapsed to one overall state and a
@@ -425,6 +508,19 @@ as "everything is fine".
 
 **This is a departure from an approved DESIGN and is put to the Product
 Owner**, not presented as compliance.
+
+> #### PO-R3 — APPROVED (Product Owner ruling, Gate C)
+>
+> **The neutral metrics are approved and are kept**: `Needing attention` and
+> `Not checked yet`.
+>
+> - **No single aggregate System Health status is to be created.**
+> - DESIGN §4.7's "collapsed to one overall state" requirement is **SUPERSEDED by
+>   Product Owner ruling**. The original wording is preserved historically in the
+>   DESIGN record and is no longer the requirement.
+> - **P1-11 derives only neutral counts from P1-09 System Health rows.** It adds
+>   no verdict of its own, and it does not ask P1-09 for one.
+> - **P1-09 is not changed by this ruling**, and was not changed by this unit.
 
 ### 7.4 Three mutations survived and were closed
 
