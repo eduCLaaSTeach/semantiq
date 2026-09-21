@@ -586,8 +586,21 @@ closes nothing.**
 **The implementation pull request is UNMERGED and UNDEPLOYED**, per the
 Product Owner's instruction.
 
-**Three things are put to the Product Owner rather than decided here:** §7.1 the
-Reviews seam beyond the stated scope, §7.2 the one-item sidebar D-182 produces,
-§7.3 the System Health tile that does not collapse to one state. **And one
-finding is raised:** §6.1, P1-06's per-domain evaluation cost, which is
-pre-existing, already in production, and not P1-11's to fix.
+**All three things put to the Product Owner have been ruled on**, and each
+ruling is recorded where the question was asked:
+
+| | Ruling | Recorded in |
+| --- | --- | --- |
+| The Access Reviews seam beyond the stated scope | **PO-R1 — APPROVED** | §7.1 here, and DESIGN §4.6 where the superseded wording is marked |
+| The one-item Organisation Administrator sidebar | **PO-R2 — ACCEPTED** | §7.2 here, and `PHASE-1-PLAN.md` §7 |
+| The System Health tile that does not collapse to one state | **PO-R3 — APPROVED** | §7.3 here, and DESIGN §4.7 where the superseded wording is marked |
+
+**The one finding raised — §6.1, P1-06's per-domain evaluation cost — is CARRIED
+FORWARD and is NOT a Gate C blocker.** `PostureEvaluator` / `DomainAdapter` is
+not refactored in this pull request: P1-11 evaluates P1-06 once per render and
+measured performance stays inside D-140. It is pre-existing, already live on
+Security Status, and P1-06's to dispose of.
+
+**One evidence gap was closed at Gate C** — Access Reviews joined the
+source-failure isolation set, §4.2. **No production change was required, and
+none was made**: `app/` is byte-identical to the previous head.
