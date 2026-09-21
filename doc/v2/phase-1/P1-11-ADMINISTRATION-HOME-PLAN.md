@@ -19,8 +19,11 @@ deployment — until this PLAN is approved.
 > - **D-130 – D-147 are Product Owner APPROVED** and are recorded as decisions,
 >   not questions. §6 states each as a ruling.
 >
-> **Still PLAN only.** No DESIGN, no implementation, no schema, and nothing
-> deployed on the strength of this document.
+> **PLAN APPROVED 21 September 2026**, with **D-179, D-180 and D-181** deciding
+> the three seams — §6a. **All three PLAN issues are RESOLVED.**
+>
+> **Nothing in this document is open.** The next stage is **DESIGN**, and this
+> document authorises no implementation, no schema and no deployment.
 
 | | |
 | --- | --- |
@@ -30,8 +33,8 @@ deployment — until this PLAN is approved.
 | Sidebar | `ApprovedMenu` carries **Administration Home** in first position, `locked`, `i-grid`. It becomes a `leaf` when this unit ships — **D-142** |
 | Blocked by | **NOTHING. P1-10 — CLOSED / ACCEPTED**, 21 September 2026 |
 | Schema | **NONE proposed.** See §8 |
-| Decisions | **D-130 – D-147 — APPROVED.** §6. P1-10's D-148 – D-178 are approved and closed with that unit; **D-178 is this unit's contract** |
-| Status | **ACTIVE / PLAN.** Awaiting Product Owner PLAN approval |
+| Decisions | **D-130 – D-147 and D-179 – D-181 — ALL APPROVED.** §6 and §6a. P1-10's D-148 – D-178 closed with that unit; **D-178 is this unit's contract** |
+| Status | **PLAN APPROVED**, 21 September 2026. **Next stage: DESIGN.** No implementation, no schema, no deployment |
 
 ---
 
@@ -129,11 +132,13 @@ P1-11 **does not**:
 > acting on that advice locks everybody out. **P1-11 must read
 > `SetupProjection`, which now asks the authority the sign-in path asks.**
 
-### 1.1b The three PLAN issues, stated as issues
+### 1.1b The three PLAN issues — **ALL THREE RESOLVED**, §6a
 
-**These are not blockers to writing the DESIGN. They are decisions the DESIGN
-must not make on its own**, because each one ends either in a new seam owned by
-the source unit or in P1-11 querying another unit's tables.
+**These were decisions the DESIGN must not make on its own**, because each one
+ends either in a new seam owned by the source unit or in P1-11 querying another
+unit's tables. **The Product Owner decided all three on 21 September 2026 —
+D-179, D-180 and D-181, §6a.** They are kept here with their reasoning, and each
+now carries its resolution.
 
 **PLAN ISSUE 1 — P1-01 has no structure-count seam.**
 `OrganisationService` exposes `current()` and two writes. Every count on the
@@ -143,25 +148,34 @@ P1-11 calls; **(b)** readiness asks only *"does an organisation profile
 exist"*, which `current()` already answers, and no count is shown; **(c)**
 P1-11 writes the counts itself. **(c) is the one to refuse** — it puts the
 definition of *"how many teams"* in two places.
-*Recommendation:* **(b) for the first delivery**, with (a) raised as its own
-small unit if the Product Owner wants counts.
+**RESOLVED — D-179: (b).** Use `current()`. **No structure-count projection in
+Release 1**, and no structure counts on the screen. If counts become a
+requirement later, **P1-01 owns that projection.**
 
 **PLAN ISSUE 2 — P1-03 has no read seam at all.**
 Same shape, less ambiguity: there is nothing to call. D-137 permits bounded
 administrative counts, so if a Users & Groups count ships, **a seam has to be
 built and P1-03 has to own it**.
 
+**RESOLVED — D-180: build it, and P1-03 owns it.** Active users, inactive
+users, active groups. Scope applied inside the seam; no person-level row ever
+leaves it.
+
 **PLAN ISSUE 3 — P1-04 has no read seam for domains.**
 `DomainService` is write-side. *"Enabled domains"* and *"domains with an
 accountable owner"* are real readiness facts and there is no class that answers
 either.
 
-> **Why this matters more than it looks.** Three of the four **Readiness**
-> tiles in the approved composition (§1.1c) sit on sources with no seam. A
-> DESIGN that does not resolve this will either quietly write three queries
-> into P1-11 — the failure §0 exists to prevent — or discover at EXECUTE that
-> half the readiness area cannot be built. **It is raised now, at PLAN, which
-> is the point of a PLAN.**
+**RESOLVED — D-181: build it, and P1-04 owns it.** It returns **facts** —
+enabled count, unowned-enabled count — and **P1-11 derives the three-way
+verdict**, because D-130 made that interpretation this unit's to own.
+
+> **Why this mattered more than it looked.** Three of the four **Readiness**
+> tiles in the approved composition (§1.1c) sat on sources with no seam. A
+> DESIGN that did not resolve it would either have written three queries into
+> P1-11 — the failure §0 exists to prevent — or discovered at EXECUTE that half
+> the readiness area could not be built. **It was raised at PLAN, which is the
+> point of a PLAN, and decided at PLAN, which is the point of raising it.**
 
 ### 1.1c The eight authoritative responsibilities, and the approved composition
 
@@ -180,14 +194,52 @@ replace any of the eight**.
 | 7 | System health | P1-09 — seam |
 | 8 | Action queue | derived from 1–7 and from P1-10; **no model of its own** — D-135 |
 
-**Proposed visual composition:**
+**FINAL composition — approved 21 September 2026**, with each tile's source
+named. Nothing on this screen has a source that is not in this table.
 
-| Area | Contents |
+| Area | Tile | Source | Shows |
+| --- | --- | --- | --- |
+| **A. Readiness** | Organisation | `OrganisationService::current()` — D-179 | **Configured / Not configured**, and an authorised link. **No structure counts in Release 1** |
+| | Users & Groups | **New P1-03-owned projection** — D-180 | Neutral bounded counts: active users, inactive users, active groups |
+| | Business Domains | **New P1-04-owned projection** — D-181 | **Ready / Needs attention / Not configured**; enabled count and unowned-enabled count **only where authorised** |
+| | Platform Integrations | P1-10 `SetupProjection` — D-178 | Microsoft Entra ID · Email & Notifications · AI Provider · Microsoft Fabric. **No external test runs** |
+| **B. Security** | Security posture | **P1-06, evaluated once** | The aggregate |
+| | Open exceptions | **the same P1-06 evaluation** | The count |
+| **C. Reviews & Operations** | Access Reviews | P1-07 visibility / overdue seam | Overdue and pending, in the viewer's scope |
+| | System Health | P1-09 | **Network-free on this screen** |
+| **D. Action Queue** | — | derived from A, B and C | **Authorised links only** |
+
+**B is one evaluation, not two.** Posture and exceptions come from a single
+`PostureEvaluator::evaluate()` → `PostureProjection::for()`; `ViewerReport`'s
+own docblock already states that `exceptions()` is *"the single source of the
+list, the tab count and the heading count"*. Calling it twice would be two
+answers to one question.
+
+**C must not contact anybody.** No `semantiq:health`, no Entra discovery, no
+integration check, no provider call during render — D-140.
+
+### 1.1d The Action Queue — what it may and may not contain
+
+**Derived authorised links. It owns no task.**
+
+| Condition | Link to |
 | --- | --- |
-| **A. Readiness** | Organisation · Users & Groups · Domains · **Platform Integrations** |
-| **B. Security** | Security posture · Open exceptions |
-| **C. Reviews & Operations** | Access reviews · System health |
-| **D. Action Queue** | Authorised derived attention links only |
+| Organisation not configured | Organisation |
+| An enabled domain has no current accountable owner | Business Domains |
+| Open security exceptions | Security Status |
+| An overdue review | Access Reviews |
+| An authorised operational issue | System Health |
+| An integration needing attention | Platform Integrations |
+
+**It must NOT gain:** assignment · due date · completion · acknowledgement ·
+notifications · an action-queue table.
+
+**Every destination re-authorises on arrival.** A link is a suggestion, not a
+grant — and D-145 forbids rendering one the viewer cannot open.
+
+> **`0 groups` is not an action.** D-180 says so explicitly. An action queue
+> that fires on an empty count is an action queue people learn to ignore, and
+> then the one row that mattered is ignored with it.
 
 ### 1.2 What does NOT exist, and must not be assumed
 
@@ -410,20 +462,143 @@ closes **P1-11 only — not Phase 1**. §7 and `PHASE-1-PLAN.md` §7.
 
 ---
 
-## 6a. What is genuinely open at PLAN
+## 6a. D-179 to D-181 — the three source seams, **PRODUCT OWNER APPROVED**
 
-**Three items, and all three are §1.1b.** Nothing else in this document is
-waiting on a decision.
+**21 September 2026. All three PLAN issues are RESOLVED.** Nothing in this
+document is now waiting on a decision.
 
-| # | Open | Why it is a PLAN matter |
+**The rule these three share, and it is the important part.** Two of them add a
+read projection; **neither transfers ownership to P1-11.** The code lives in the
+module that owns the fact. P1-11 consumes a contract. The purpose is that the
+next screen — and Phase 2 — reuse the same source facts rather than copying
+P1-11's queries out of a dashboard.
+
+| | Owns the fact | Owns the query |
 | --- | --- | --- |
-| 1 | **P1-01 structure-count seam** | D-137 permits bounded administrative counts; P1-01 has no class that answers one. Either P1-01 gains a read projection it owns, or readiness asks only whether an organisation profile exists |
-| 2 | **P1-03 Users & Groups read seam** | There is nothing to call. If a count ships, **P1-03 must own the seam** |
-| 3 | **P1-04 Domains read seam** | *"Enabled domains"* and *"domains with an owner"* are real readiness facts with no class answering either |
+| People summary facts | **P1-03 / People** | **P1-03 / People** |
+| Domain summary facts | **P1-04 / Domains** | **P1-04 / Domains** |
+| Organisation existence | **P1-01 / Organisation** | **P1-01 / Organisation** |
+| The composition of all of them | **P1-11** | — |
 
-**None of the three is a reason to delay the DESIGN.** Each is a reason the
-DESIGN must say which option it takes, and must not take the third one — P1-11
-writing another unit's query.
+---
+
+### D-179 — Organisation readiness — **APPROVED. PLAN ISSUE 1 RESOLVED.**
+
+**Use the existing `OrganisationService::current()` seam. Add no
+structure-count projection for Release 1.**
+
+Administration Home answers exactly one question:
+
+| Condition | State |
+| --- | --- |
+| No active or current Organisation | **Not configured** |
+| An active or current Organisation exists | **Configured** |
+
+**Legal Entities, Business Units, Departments and Teams are NOT mandatory for a
+complete Organisation state**, and **their counts are not shown on
+Administration Home in Release 1**. They remain visible and manageable on the
+Organisation feature itself.
+
+> **This resolves the issue without creating a seam purely to decorate a
+> dashboard.** The seam already exists and already answers the question that was
+> actually being asked. If structure counts become a requirement later, **P1-01
+> must own that read projection** — not P1-11, and not a query copied into a
+> tile.
+
+---
+
+### D-180 — Users & Groups status — **APPROVED. PLAN ISSUE 2 RESOLVED.**
+
+**Add a small read projection owned by P1-03 / People. P1-11 must NOT query
+People tables directly.**
+
+The class name is a **DESIGN decision**. The contract exposes only **bounded
+administrative facts**, at minimum:
+
+- active users;
+- inactive users;
+- active groups.
+
+**Requirements, all of them binding:**
+
+| | |
+| --- | --- |
+| Ownership | The **source module owns the queries** |
+| Scope | Organisation and viewer scope applied **inside the source-owned seam**, not by the caller |
+| Null organisation | **Never becomes "all organisations"** |
+| Contents | **No names, emails, memberships or person-level rows.** No business payload |
+| Storage | **No new table. No cached snapshot** |
+| Access | **No duplicated access logic** |
+
+**Users & Groups is factual status, not a readiness score.** Neutral counts
+carry neutral presentation — D-138. **`0 users`, `0 groups`, `Withheld` and
+`Not available` remain four different states** — D-139.
+
+> **Do not create an Action Queue item merely because a group count is zero.** A
+> deployment with no groups is not a deployment with a problem, and an action
+> queue that says otherwise teaches people to ignore it.
+
+---
+
+### D-181 — Business Domain readiness — **APPROVED. PLAN ISSUE 3 RESOLVED.**
+
+**Add a small read projection owned by P1-04 / Domains. P1-11 must NOT query
+Business Domain or ownership tables directly.**
+
+**The seam exposes FACTS. P1-11 derives the interpretation.** At minimum:
+
+- enabled domain count;
+- enabled domains **without a current accountable owner** count.
+
+P1-11 derives, and **this derivation lives in P1-11 because D-130 made the
+interpretation a Product Owner decision this unit owns**:
+
+```text
+enabled domains = 0
+    → Not configured
+
+enabled domains > 0
+AND one or more enabled domains lack a current accountable owner
+    → Needs attention
+
+enabled domains > 0
+AND every enabled domain has a current accountable owner
+    → Ready
+```
+
+> **Facts in the source, interpretation in the consumer.** Putting the
+> three-way verdict inside P1-04 would make P1-04 own a judgement about its own
+> data that only Administration Home asked for — and the next screen that wants
+> the same facts with a different reading would have to work around it.
+
+**Requirements:**
+
+| | |
+| --- | --- |
+| Ownership semantics | **Reuse P1-04's accepted ownership model.** No second definition of *"current accountable owner"* |
+| Access | **Domain ownership continues to grant zero access by itself.** Do **not** couple this projection to entitlements |
+| Source | The **source module owns the read** |
+| Storage | **No schema. No cache** |
+| Contents | **No business records** |
+
+---
+
+### The architecture guards these three require
+
+**DESIGN must specify, and EXECUTE must add, tests proving Administration Home
+does not directly query:**
+
+- `User`;
+- `Group`;
+- `BusinessDomain`;
+- domain ownership tables;
+- Organisation structure tables — `LegalEntity`, `BusinessUnit`, `Department`,
+  `Team`.
+
+> **A rule stated in a docblock is a rule that lasts until the next person is in
+> a hurry.** P1-10 proved it twice: a guard that had been invalidated by a route
+> nobody re-read, and a projection that asked the wrong authority for two
+> rounds. These guards are the reason the seams stay seams.
 
 ---
 
@@ -470,19 +645,39 @@ be raised, not a table to be added.**
 
 ---
 
+## 8a. What the DESIGN must carry forward
+
+**Stated here so the DESIGN is checked against the PLAN rather than against
+memory.**
+
+| | |
+| --- | --- |
+| **Route and access** | Its own route. `ActionClass::OrgAdmin`. **No `RequireOrganisation`** — D-131, D-132, D-133 |
+| **Null organisation** | **Always fails narrow.** Never *"all organisations"*, never a global People or Domain count, never a silently invented global-data privilege for a System Administrator. `Withheld`, `Not configured` or another already-approved honest state, **per the source contract** |
+| **Both administrator kinds** | The DESIGN documents **System Administrator and Organisation Administrator behaviour explicitly**, not by implication |
+| **Performance — D-140** | Zero external network calls · **no P1-11 cache** · bounded aggregates · **no N+1** · one source failing does not fail the page · **a failed source is never a zero** · target ≤ 2 s |
+| **Query budget** | The DESIGN states one, and states how a source consumed by several tiles is **evaluated once** — P1-06 for posture *and* exceptions; P1-10 preferably one `all()` rather than four traversals |
+| **Navigation** | First in System Administration · `locked` → **`leaf`** · its own route · **`/console` unchanged** · **D-19 unchanged** · no other sidebar reorder |
+| **Visual language** | **A dashboard, not another configuration form.** The existing shared shell, typography, spacing, cards, badges, light and dark tokens, responsive behaviour and focus treatment. **No new CSS where the shared UI already supports the requirement.** Tabs are **not** to be forced onto a dashboard |
+
+> **The last row is there because of what Gate D cost.** P1-10 invented its own
+> information architecture, passed three Gate C rounds looking only at itself,
+> and was held at Gate D the moment it was put beside Organisation. **This unit
+> must not discover the same inconsistency at the same gate.**
+
+---
+
 ## 9. Status
 
-**PLAN ONLY. ACTIVE UNIT. AWAITING PRODUCT OWNER PLAN APPROVAL.**
+**PLAN APPROVED — 21 September 2026. NEXT STAGE: DESIGN.**
 
 **Blocker: NONE.** P1-10 — Platform Integrations & Setup is **CLOSED /
 ACCEPTED**, 21 September 2026.
 
-**No design. No implementation. No schema. No deployment.**
+**No implementation. No schema. No deployment.**
 
-**D-130 – D-147 are Product Owner APPROVED** and are recorded as rulings in
-§6. **Three items are genuinely open**, and all three are the missing
-projection seams in §1.1b / §6a — P1-01 structure counts, P1-03 Users & Groups,
-P1-04 Domains.
+**D-130 – D-147 and D-179 – D-181 are all Product Owner APPROVED** — §6 and
+§6a. **All three PLAN issues are RESOLVED.** Nothing in this document is open.
 
 **Every carried item in §7 remains open**: the P1-02 second-permanent-
 administrator re-check, the Microsoft step-up round trip, First-Run on a fresh
