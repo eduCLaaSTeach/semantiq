@@ -595,7 +595,18 @@ Administrator receives one accurate operational overview.
 
 # 6. Phase 1 Phase-Level Acceptance
 
-Phase 1 is accepted only when every unit P1-00 through P1-10 has been individually accepted and all cross-unit tests pass.
+Phase 1 is accepted only when every unit P1-00 through P1-11 has been individually accepted and all cross-unit tests pass.
+
+> **CORRECTED 21 September 2026.** This sentence read *"P1-00 through P1-10"*,
+> which was true until the Product Owner amendment of 20 September 2026 inserted
+> **Platform Integrations & Setup** at delivery order 12 as P1-10 and renumbered
+> Administration Home to **P1-11**. The range was left behind by that
+> renumbering, so it excluded the final delivery unit. `PHASE-1-PLAN.md` §7 was
+> already correct; this is the same statement in the phase document.
+>
+> **Individual unit acceptance is necessary and not sufficient.** The
+> phase-level gates below, and the carried register in `PHASE-1-PLAN.md` §10,
+> must each be explicitly disposed of — not carried quietly into Phase 2.
 
 Required end-state proof:
 - Login + Microsoft SSO works end-to-end;
