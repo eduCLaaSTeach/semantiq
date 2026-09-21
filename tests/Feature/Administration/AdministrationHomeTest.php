@@ -498,6 +498,20 @@ final class AdministrationHomeTest extends TestCase
      * unavailable, every OTHER tile must still be valued, the page must be 200,
      * and the failed source must contribute NO action row.
      *
+     * ONE APPLICATION, ONE FIXTURE, FIVE REQUESTS - and that is a correction
+     * MySQL forced. The first version rebuilt the application and ran
+     * migrate:fresh between cases. On SQLite that is cheap and harmless; on
+     * MySQL the CI step HUNG, because refreshApplication() abandons the
+     * RefreshDatabase transaction still holding locks and the next
+     * migrate:fresh waits on a metadata lock that is never released. Every
+     * other suite in that job finished in under a minute; this one ran for
+     * twenty-two before it was stopped.
+     *
+     * So the failure is selected by a FLAG instead. Each source is bound once
+     * to a closure that throws only while it is the chosen one, and
+     * $app->build() constructs the real class the rest of the time - bypassing
+     * the binding rather than recursing into it.
+     *
      * Mutation: return a zeroed summary from the catch. The tile reads valued
      * with three zeroes, and this fails.
      */
@@ -511,17 +525,36 @@ final class AdministrationHomeTest extends TestCase
             'posture' => PostureEvaluator::class,
         ];
 
-        foreach ($cases as $tileKey => $class) {
-            $this->refreshApplication();
-            $this->setUpTheDatabaseForAFreshApplication();
+        $failing = null;
 
-            $this->app->bind($class, function () use ($class): object {
-                throw new RuntimeException("[{$class}] is deliberately unavailable.");
+        foreach ($cases as $class) {
+            $this->app->bind($class, function ($app) use ($class, &$failing): object {
+                if ($failing === $class) {
+                    throw new RuntimeException("[{$class}] is deliberately unavailable.");
+                }
+
+                return $app->build($class);
             });
+        }
 
-            $organisation = $this->make->organisation();
-            $user = $this->make->user($organisation);
-            $this->access->assignment($user, RoleCode::SystemAdministrator, $organisation);
+        $organisation = $this->make->organisation();
+        $user = $this->make->user($organisation);
+        $this->access->assignment($user, RoleCode::SystemAdministrator, $organisation);
+
+        // THE PREMISE: with nothing failing, every tile is valued. Without this
+        // the assertions below could all pass against a page that was already
+        // broken.
+        $this->assertSame(
+            [],
+            array_keys(array_filter(
+                $this->tiles($this->actingAsUser($user)->get('/console/administration')),
+                static fn (array $tile): bool => $tile['state'] !== 'valued',
+            )),
+            'A tile was already unavailable before anything was made to fail.'
+        );
+
+        foreach ($cases as $tileKey => $class) {
+            $failing = $class;
 
             $response = $this->actingAsUser($user)->get('/console/administration');
 
@@ -562,14 +595,6 @@ final class AdministrationHomeTest extends TestCase
                 );
             }
         }
-    }
-
-    private function setUpTheDatabaseForAFreshApplication(): void
-    {
-        $this->artisan('migrate:fresh');
-
-        $this->make = new OrganisationFactory;
-        $this->access = new AccessFactory;
     }
 
     // -----------------------------------------------------------------------

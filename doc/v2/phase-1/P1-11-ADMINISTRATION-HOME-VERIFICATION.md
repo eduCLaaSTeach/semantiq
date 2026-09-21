@@ -140,20 +140,41 @@ raised in §7.2**, not presented as a finished experience.
 | P1-11's own cases | **37 tests · 475 assertions** across four files |
 | Pint | **passed** |
 | Prettier (the three files this unit touches) | **passed**, house style `--single-quote --no-semi --tab-width 4 --print-width 100` |
-| Mutations | **36 runs · 33 killed first time · 3 survived and were closed** — `P1-11-MUTATIONS.md` |
+| Mutations | **37 runs · 34 killed first time · 3 survived and were closed** — `P1-11-MUTATIONS.md` |
 | MySQL | **NOT RUN LOCALLY — no MySQL server exists in this environment.** A CI step was added (§4.1) and runs on the pull request |
 
-### 4.1 MySQL
+### 4.1 MySQL — the step caught a defect on its first run
 
-**Stated plainly: the MySQL run has not been observed by me.** There is no
-MySQL server in this environment, so the claim rests on the CI job.
+**Stated plainly: I still have not watched a MySQL run to completion.** There
+is no MySQL server in this environment, so the claim rests on the CI job.
 
 A step was added — *"Run the Administration suite against MySQL"* — with the
 same count assertion every other engine step carries, because **a path that
-matches nothing exits 0**. It is not ceremonial: `whereDoesntHave(
-'currentOwnership')` is a correlated subquery, the two engines compile it
-differently, and it is the single query on this screen that is not a flat
-count. Its answer is what the Action Queue asks somebody to act on.
+matches nothing exits 0**. It was not ceremonial, and it proved that
+immediately.
+
+**IT HUNG.** Every other suite in that job finished in under a minute; this one
+ran for **twenty-two minutes** and was still going when the run was superseded.
+
+**The cause was mine, and it was invisible on SQLite.** Two of my tests called
+`refreshApplication()` and `artisan('migrate:fresh')` MID-TEST to reset between
+cases. On SQLite that is cheap and harmless. On MySQL `refreshApplication()`
+abandons the `RefreshDatabase` transaction while it still holds locks, and the
+next `migrate:fresh` waits on a metadata lock nothing ever releases.
+
+**Both were rewritten to need neither:**
+
+- the failure-isolation case now binds each source **once**, to a closure that
+  throws only while a flag selects it and calls `$app->build()` otherwise. One
+  application, one fixture, five requests;
+- the growth case **grows the same deployment in place** from 2 of everything to
+  20, rather than rebuilding. That is also the better measurement — there is one
+  organisation, so a second could never have been the scope, and the comparison
+  is now one deployment before and after it got ten times bigger.
+
+**This is exactly the failure the step was added to find** — "P1-08 and P1-09
+both found engine-specific failures that were green on SQLite" — arriving on the
+first run of the third such step.
 
 ### 4.2 The guards, and what each would catch
 

@@ -13,7 +13,7 @@ mutation record nobody ran.
 | Unit | **P1-11 — Administration Home** |
 | DESIGN | Gate B approved — `P1-11-ADMINISTRATION-HOME-DESIGN.md`, merged as `59a3f73` |
 | Harness | Apply one change, run the named filter, restore. One mutation live at a time |
-| Total | **36 runs · 33 killed first time · 3 survived and were closed** |
+| Total | **37 runs · 34 killed first time · 3 survived and were closed** |
 
 ---
 
@@ -124,12 +124,18 @@ asked.
 | --- | --- | --- | --- |
 | **M9** | `DomainSummaryProjection` counts against `ownerships()` instead of `currentOwnership()` | `PeopleAndDomainSummarySeamsTest` | **KILLED** |
 | **M10** | Count disabled domains among the unowned | `PeopleAndDomainSummarySeamsTest`, `AdministrationHomeTest` | **KILLED** |
+| **M34** | Replace `whereDoesntHave('currentOwnership')` with a **loop** over enabled domains asking each one who owns it | `AdministrationHomeBudgetTest` | **KILLED** |
 | **M16** | `Group::query()->count()` added to `AdministrationHomeProjection` | `AdministrationHomeIsAProjectionTest`, `PeopleBoundaryTest` | **KILLED** |
 | **M17** | `BusinessDomain::query()->count()` added to `AdministrationHomeProjection` | `AdministrationHomeIsAProjectionTest`, `DomainsBoundaryTest` | **KILLED** |
 | **M20** | A summary class declared inside the Administration module | `AdministrationHomeIsAProjectionTest` | **KILLED** |
 | **M25** | `public array $userNames = []` added to `PeopleSummary` | `PeopleAndDomainSummarySeamsTest` | **KILLED** |
 | **M27** | Widen the **Domains** seam exemption to strip the Models namespace too | `DomainsBoundaryTest` | **SURVIVED → closed, see §7** |
 | **M28** | Widen the **People** seam exemption to strip the Models namespace too | `PeopleBoundaryTest` | **KILLED** |
+
+**M34 IS THE N+1 THE BUDGET CASE EXISTS FOR.** It is invisible at a fixture of
+one and invisible in the rendered output at any size - the numbers are
+identical, only the query count moves. It is caught because the same page is
+measured at two data sizes and the counts must match exactly.
 
 **M9 IS WHY THE SEAM REUSES `currentOwnership()`.** The fixture holds a domain
 whose only ownership period has **ended**, so a projection asking the wrong

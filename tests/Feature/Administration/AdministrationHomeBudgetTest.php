@@ -6,6 +6,7 @@ namespace Tests\Feature\Administration;
 
 use App\Modules\Access\Support\RoleCode;
 use App\Modules\Domains\Models\DomainOwnership;
+use App\Modules\Organisation\Models\Organisation;
 use App\Modules\People\Models\Group;
 use App\Modules\People\Models\GroupStatus;
 use App\Modules\Platform\Http\Middleware\EnsureSessionIsCurrent;
@@ -86,7 +87,28 @@ final class AdministrationHomeBudgetTest extends TestCase
         $admin = $this->make->user($organisation);
         $this->access->assignment($admin, RoleCode::SystemAdministrator, $organisation);
 
-        for ($i = 0; $i < $size; $i++) {
+        $this->growTheDeploymentTo($admin, 0, $size);
+
+        return $admin;
+    }
+
+    /**
+     * Adds people, groups and business domains to the deployment the given
+     * administrator belongs to, between two sizes.
+     *
+     * THE FIXTURE IS GROWN, NOT REBUILT, because migrate:fresh mid-test hangs
+     * on MySQL - see the growth case's note. It also makes the comparison
+     * honest: the same organisation before and after, rather than two
+     * deployments that merely resemble each other.
+     *
+     * HALF THE DOMAINS ARE OWNED AND HALF ARE NOT, so whereDoesntHave has real
+     * work to do at both sizes.
+     */
+    private function growTheDeploymentTo(User $admin, int $from, int $to): void
+    {
+        $organisation = Organisation::query()->findOrFail($admin->organisation_id);
+
+        for ($i = $from; $i < $to; $i++) {
             $this->make->user($organisation);
 
             Group::query()->create([
@@ -97,7 +119,6 @@ final class AdministrationHomeBudgetTest extends TestCase
 
             $domain = $this->access->domain($organisation, "domain-{$i}", "Domain {$i}");
 
-            // Half owned, half not, so whereDoesntHave has real work to do.
             if ($i % 2 === 0) {
                 DomainOwnership::query()->create([
                     'business_domain_id' => $domain->id,
@@ -107,8 +128,6 @@ final class AdministrationHomeBudgetTest extends TestCase
                 ]);
             }
         }
-
-        return $admin;
     }
 
     /** @return array{queries: int, ms: float} */
@@ -144,28 +163,36 @@ final class AdministrationHomeBudgetTest extends TestCase
      * against Security Status. It is how this case asks ONLY about the part
      * P1-11 wrote.
      *
+     * THE SECOND MEASUREMENT GROWS THE SAME DEPLOYMENT, and that is a
+     * correction MySQL forced. The first version rebuilt the application and
+     * ran migrate:fresh between the two sizes; on SQLite that is cheap, and on
+     * MySQL the CI step HUNG - refreshApplication() abandons the
+     * RefreshDatabase transaction still holding locks, and the next
+     * migrate:fresh waits on a metadata lock nothing releases.
+     *
+     * Growing the fixture in place is also the better measurement. There is
+     * one organisation, so a second one could not have been the scope anyway,
+     * and the comparison is now the same deployment before and after it got
+     * ten times bigger.
+     *
      * Mutation: replace whereDoesntHave('currentOwnership') with a loop over
      * enabled domains calling currentOwnership on each. The small render is
-     * unchanged; this fails with twenty extra queries at the larger size.
+     * unchanged; this fails with eighteen extra queries at the larger size.
      */
     public function test_p1_11s_own_composition_does_not_grow_with_the_data(): void
     {
-        $withoutPosture = function (int $size): int {
-            $this->app->bind(PostureEvaluator::class, function (): object {
-                throw new RuntimeException('Posture is out of scope for this measurement.');
-            });
+        $this->app->bind(PostureEvaluator::class, function (): object {
+            throw new RuntimeException('Posture is measured separately, in the case below.');
+        });
 
-            return $this->render($this->deploymentOf($size))['queries'];
-        };
+        $admin = $this->deploymentOf(2);
 
-        $small = $withoutPosture(2);
+        $small = $this->render($admin)['queries'];
 
-        $this->refreshApplication();
-        $this->artisan('migrate:fresh');
-        $this->make = new OrganisationFactory;
-        $this->access = new AccessFactory;
+        // The SAME deployment, ten times the size.
+        $this->growTheDeploymentTo($admin, 2, 20);
 
-        $large = $withoutPosture(20);
+        $large = $this->render($admin)['queries'];
 
         $this->assertSame(
             $small,
