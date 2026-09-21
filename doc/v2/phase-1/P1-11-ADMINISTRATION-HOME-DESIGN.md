@@ -1,15 +1,20 @@
 # P1-11 — Administration Home: DESIGN
 
-**DESIGN ONLY. No implementation. No schema. No deployment.**
+**GATE B — DESIGN APPROVED 21 September 2026**, subject to **D-182** (§2) and
+**three corrections**, all applied: **Correction 1** the projection class names
+(§3); **Correction 2** the empty-deployment rendering, D-144 (§10.4);
+**Correction 3** authorise **before** evaluating a platform-only source (§4.8).
+
+**No schema. No deployment.**
 
 | | |
 | --- | --- |
 | Unit | **P1-11 — Administration Home** (delivery order 13). The last Phase 1 delivery unit |
 | PLAN | **APPROVED** 21 September 2026 — `P1-11-ADMINISTRATION-HOME-PLAN.md` |
-| Decisions in force | **D-130 – D-147** (§6 of the PLAN) and **D-179 – D-181** (§6a). **D-178** is P1-10's contract to this unit |
+| Decisions in force | **D-130 – D-147** (§6 of the PLAN), **D-179 – D-181** (§6a) and **D-182** (§2, navigation). **D-178** is P1-10's contract to this unit |
 | Schema | **NONE.** §12 |
 | New code outside this unit | **Two read projections**, owned by P1-03 and P1-04 — §5, §6 |
-| Blockers | **One, and it is real** — §14.1 |
+| Blockers | **NONE.** The one real blocker — §14.1 — is **RESOLVED by D-182** |
 
 ---
 
@@ -67,9 +72,12 @@ NavigationNode::leaf($area, 'Administration Home', 'i-grid', 'administration.hom
 it for the locked node today, so the leaf reuses it rather than inventing one.
 
 **First in System Administration, unchanged.** No other node moves, no other
-label changes, no area is reordered. **D-19 is unchanged**: the node already
-sits inside System Administration, so nothing is widened by making it
-navigable.
+label changes, no area is reordered.
+
+**D-182 adds one explicit exception to D-19, and exactly one.** The leaf's
+policy key `administration.view` is visible to **System Administrator *and*
+Organisation Administrator**. Every other System Administration node keeps the
+D-19 behaviour it has today. §2 is the full ruling.
 
 > **One stale sentence to correct while here.** `ApprovedMenu`'s docblock reads
 > *"stays locked until P1-10, which is deliberately built last"* — written
@@ -80,10 +88,16 @@ navigable.
 
 ---
 
-## 2. THE ONE REAL BLOCKER — navigation authority and D-132 disagree
+## 2. D-182 — navigation authority and D-132 — **RESOLVED**
 
-**This is a genuine finding, established by reading the code, and it needs a
-Product Owner ruling before EXECUTE.**
+> **PRODUCT OWNER RULING, 21 September 2026 — D-182 APPROVED.**
+> **"Organisation Administrator must see Administration Home in the System
+> Administration navigation."**
+
+**The finding below was established by reading the code. It is no longer a
+blocker: §2.4 is the approved correction and EXECUTE is authorised.**
+
+### 2.1 The finding
 
 `SystemAdministratorNavigationAuthorizer::allows()` — the only real
 `NavigationAuthorizer` in the application — is, in full:
@@ -113,8 +127,77 @@ home page that an Organisation Administrator is authorised for and cannot find
 is the discoverability failure the professional-polish gate names last and this
 project has already missed once.
 
-**§14.1 states the three options and the recommendation. It is not resolved
-here.**
+### 2.2 What D-182 refuses
+
+The ruling names four things explicitly, and each is refused for its own
+reason:
+
+| Refused | Why the Product Owner refused it |
+| --- | --- |
+| Change P1-11's route to `PlatformAdmin` | It would reverse **D-132**, an approved decision, to match an implementation detail. The audience the blueprint names is *"platform/organisation administrator"* |
+| Carry the invisible-home defect | A home screen the viewer is authorised for and cannot find is the discoverability failure the professional-polish gate names last. It is tolerable on a sub-screen and not on the landing point |
+| Redesign the navigation permission model | Out of scope for a dashboard, and a change of that size does not get smuggled into a delivery unit |
+| Expose every System Administration node to an Organisation Administrator | **A widening nobody asked for.** The other four nodes' visibility is a separate question with its own evidence |
+
+### 2.3 What D-19 now says — the narrow supersession
+
+**This wording is the current authority and replaces every "D-19 is unchanged"
+statement about P1-11:**
+
+> **D-19 remains in force for System Administration navigation generally,
+> except that D-182 explicitly makes `Administration Home` visible to
+> Organisation Administrator because the route itself is `OrgAdmin` and the
+> screen is their authorised administration landing point.**
+
+**Narrow, and deliberately so.** The exception is granted to one policy key for
+one reason — that the route behind it already admits the viewer. It is not a
+principle that generalises itself to the next node; the next node needs its own
+ruling.
+
+### 2.4 The smallest correction that delivers it
+
+`SystemAdministratorNavigationAuthorizer::allows()` gains **one explicit
+exception and no other change**:
+
+```php
+public function allows(string $policyKey): bool
+{
+    $user = request()->attributes->get('semantiq_user');
+
+    if (! $user instanceof User || ! $user->isActive()) {
+        return false;
+    }
+
+    if ($this->engine->holdsRole($user, RoleCode::SystemAdministrator)) {
+        return true;
+    }
+
+    // D-182, and ONLY D-182. One key, because the route behind it is OrgAdmin
+    // and this is where an Organisation Administrator starts. Every other
+    // System Administration node keeps its D-19 behaviour.
+    return $policyKey === self::ORGANISATION_ADMINISTRATOR_EXCEPTION
+        && $this->engine->holdsRole($user, RoleCode::OrganisationAdministrator);
+}
+```
+
+**The default branch still returns `false`.** An Organisation Administrator
+gains exactly one node; a viewer holding neither role gains nothing; an
+inactive user is refused before either role is consulted.
+
+### 2.5 What must be proven — the tests D-182 requires
+
+| # | Case | Expected |
+| --- | --- | --- |
+| **V1** | System Administrator | **Sees** Administration Home |
+| **V2** | Organisation Administrator | **Sees** Administration Home |
+| **V3** | An unrelated role — Auditor, a business role, no role at all | **Does not see** Administration Home |
+| **V4** | Organisation Administrator, the rest of System Administration | **Sees no other node.** Asserted as an equality on the rendered node set, not as four separate absences |
+| **V5** | The route, independently | `GET /console/administration` **authorises on its own**. Navigation visibility is not the control — removing the node from the menu must not change who gets a 200 |
+| **V6** | **Mutation** | **Removing the D-182 exception kills the navigation test.** V2 must fail, and V1, V3, V4, V5 must still pass — otherwise V2 was passing for another reason |
+
+**V6 is the one that matters.** A visibility test that passes because the
+fixture happened to hold `SystemAdministrator` as well proves nothing; §11's
+mutation record carries the run.
 
 ---
 
@@ -127,9 +210,10 @@ AdministrationHomeController::show(Request)
         │        │
         │        ├── A. Readiness
         │        │      ├── OrganisationService::current()                 P1-01, exists
-        │        │      ├── PeopleSummary::for(...)                        P1-03, NEW
-        │        │      ├── DomainSummary::for(...)                        P1-04, NEW
-        │        │      └── SetupProjection::all()                         P1-10, exists
+        │        │      ├── PeopleSummaryProjection::for(...)              P1-03, NEW
+        │        │      ├── DomainSummaryProjection::for(...)              P1-04, NEW
+        │        │      └── SetupProjection::all()          P1-10, exists — PLATFORM-ONLY,
+        │        │                                          called ONLY when authorised (§4.8)
         │        │
         │        ├── B. Security
         │        │      └── PostureEvaluator::evaluate()                   P1-06, exists
@@ -138,7 +222,8 @@ AdministrationHomeController::show(Request)
         │        ├── C. Reviews & Operations
         │        │      ├── ReviewerAuthority::scopeVisible(...)           P1-07, exists
         │        │      │     + AccessReviewItem::scopeOverdue()           P1-07, exists
-        │        │      └── SystemHealthReport::areas()                    P1-09, exists
+        │        │      └── SystemHealthReport::areas()  P1-09, exists — PLATFORM-ONLY,
+        │        │                                    called ONLY when authorised (§4.8)
         │        │
         │        └── D. Action Queue
         │               └── derived from A, B and C. No source of its own
@@ -150,6 +235,14 @@ AdministrationHomeController::show(Request)
 logic.** It composes; it does not query. **It has no Eloquent import at all**,
 and §11's guard asserts that as a property of the file rather than as an
 intention.
+
+> **DESIGN CORRECTION 1 — the class names above are the contract names.** An
+> earlier draft of this diagram wrote `PeopleSummary::for(...)` and
+> `DomainSummary::for(...)`. `PeopleSummary` and `DomainSummary` are the
+> **immutable result shapes**; `PeopleSummaryProjection` and
+> `DomainSummaryProjection` are the **classes that hold `for()`**. §4.2, §4.3
+> and §6 were already correct and are the authority. **No ambiguity reaches
+> EXECUTE.**
 
 ---
 
@@ -274,7 +367,8 @@ scope.
 | Derives | Nothing. The status **is** the status |
 | Runs | **No connection test. No provider call. No decryption** |
 
-**`all()` once, not `forFamily()` four times** — §9's budget.
+**`all()` once, not `forFamily()` four times** — §9's budget. **And `all()`
+zero times for a viewer who may not receive a platform value** — §4.8.
 
 > **The identity row is the one to be careful with, and P1-10 proved why.**
 > Identity has two possible authorities — the environment before the controlled
@@ -323,6 +417,7 @@ than re-deciding it.
 | Seam | `SystemHealthReport::areas(): list<SystemHealthArea>` — **exists** |
 | Reads | The area states, collapsed to one overall state and a count of rows not healthy |
 | Derives | An Action Queue row when something is not healthy **and the viewer is authorised for System Health** |
+| Not authorised | **`areas()` is not called at all** — §4.8. The tile is **Withheld**, there is no row and no link |
 | Network | **NONE** |
 
 **The zero-network guarantee is structural, not a promise.**
@@ -334,6 +429,60 @@ so a screen could promise to contact nobody and mean it.
 
 **P1-11 must never call `inspect()`, `report()`, `semantiq:health`, a connection
 tester, or `EntraDiscovery`.** §11's guard asserts the absence of each by name.
+
+### 4.8 **DESIGN CORRECTION 3 — authorise BEFORE evaluating a platform-only source**
+
+> **PRODUCT OWNER CORRECTION.** *"Do not evaluate these platform-only sources
+> and then throw away the result."*
+
+Two of the eight sources are **platform-only**: **Platform Integrations**
+(§4.4, `SetupProjection::all()`) and **System Health** (§4.7,
+`SystemHealthReport::areas()`). §5.2 already says an Organisation Administrator
+receives **Withheld** for both. An earlier draft achieved that by evaluating
+the source and then declining to render it.
+
+**That is now forbidden.** The authorisation check comes **first**, and a
+viewer who cannot receive the value causes **no evaluation at all**:
+
+| For a viewer who may NOT receive a platform-only value | |
+| --- | --- |
+| `SetupProjection::all()` | **NOT CALLED** |
+| `SystemHealthReport::areas()` | **NOT CALLED** |
+| Tile | The approved **Withheld** state, rendered directly |
+| Action Queue | **No row.** Not a suppressed row — a row that was never derived |
+| Destination link | **None.** D-145 already forbids it; there is now also nothing to link from |
+
+```php
+// The shape. The guard is the CONDITION of the call, not a filter after it.
+$integrations = $this->authorises->platformValues($viewer)
+    ? $this->readIntegrations()          // calls SetupProjection::all()
+    : IntegrationsSummary::withheld();   // calls nothing
+
+$health = $this->authorises->platformValues($viewer)
+    ? $this->readHealth()                // calls SystemHealthReport::areas()
+    : HealthSummary::withheld();         // calls nothing
+```
+
+**Three reasons this is the right shape, not merely a tidier one:**
+
+- **A value that is never produced cannot leak.** Withholding after evaluation
+  puts a platform-wide answer in a local variable on a request that may not
+  receive it, one careless `compact()` away from the props;
+- **It is cheaper for the viewer who gains nothing from the cost.** An
+  Organisation Administrator currently pays up to three configuration queries
+  and a full local health inspection to be told *Withheld*;
+- **It is testable as an absence.** "Rendered Withheld" is satisfied by a dozen
+  implementations. **"Called zero times" is satisfied by one**, and §11's G16
+  asserts exactly that with a spy.
+
+**System Administrator behaviour is unchanged.** They are authorised, both
+sources are evaluated exactly once, and §9's budget is unaffected for them.
+
+**Which authorisation question is asked.** The same one P1-09 and P1-10 already
+answer — the `PlatformAdmin` action class the two screens are themselves
+protected by. **P1-11 does not invent a second definition of "may see platform
+values"**; it asks the existing one, so a future change to that rule moves this
+screen with it.
 
 ---
 
@@ -362,15 +511,16 @@ organisation'"* — and the two NEW projections adopt it verbatim.
 | **Organisation** | Configured / Not configured | Configured / Not configured |
 | **Users & Groups** | **Withheld** when no organisation is resolvable; counts for that organisation when one is | Counts for **their own** organisation |
 | **Business Domains** | **Withheld** when no organisation is resolvable; Ready / Needs attention / Not configured when one is | The verdict for **their own** organisation |
-| **Platform Integrations** | Full four-family status | **Withheld.** These are deployment-wide credentials, not one organisation's — the same reasoning that makes Integrations `PlatformAdmin` |
+| **Platform Integrations** | Full four-family status | **Withheld, and `SetupProjection::all()` is NOT CALLED** — §4.8. These are deployment-wide credentials, not one organisation's — the same reasoning that makes Integrations `PlatformAdmin` |
 | **Security posture** | Valued | **P1-06 decides.** `seesPlatformValues` already governs this and is not re-decided here |
 | **Open exceptions** | Valued | **P1-06 decides** |
 | **Access Reviews** | Their organisation's items | Their organisation's items |
-| **System Health** | Valued, with a link | **Withheld, and NO link.** System Health is `PlatformAdmin`; D-145 forbids rendering a destination the viewer cannot open |
+| **System Health** | Valued, with a link | **Withheld, NO link, and `SystemHealthReport::areas()` is NOT CALLED** — §4.8. System Health is `PlatformAdmin`; D-145 forbids rendering a destination the viewer cannot open |
 
 **No global-data privilege is invented for a System Administrator anywhere on
 this screen.** Where a platform-scoped viewer has no organisation, the honest
-answer is **Withheld**, not a global count.
+answer is **Withheld**, not a global count — and per **D-144 as corrected**,
+not *Not configured* either. A tile answers for **its own** source.
 
 ### 5.3 Three states that must never collapse — D-139
 
@@ -411,12 +561,17 @@ from the same objects the tiles above used. **No extra query.**
 
 | Condition | Row | Destination | Authorised for |
 | --- | --- | --- | --- |
-| `OrganisationService::current() === null` | Organisation is not set up yet | Organisation | OrgAdmin |
+| `OrganisationService::current() === null` | **Set up the Organisation** — **leads the queue**, D-144 | Organisation | OrgAdmin |
 | `DomainSummary::$enabledUnowned > 0` | Some enabled business domains have no accountable owner | Business Domains | OrgAdmin |
 | `ViewerReport::exceptions()` is not empty | Open security exceptions need review | Security Status | per P1-06 |
 | Overdue review count `> 0` | Access reviews are overdue | Access Reviews | per P1-07 |
-| System Health is not healthy | Something needs operational attention | System Health | **PlatformAdmin only** |
-| Any integration is `not_configured` **and** `required`, or is `degraded` / `unavailable` | An integration needs attention | Platform Integrations | **PlatformAdmin only** |
+| System Health is not healthy | Something needs operational attention | System Health | **PlatformAdmin only — and for anybody else the source was never evaluated, so the condition is never even asked** (§4.8) |
+| Any integration is `not_configured` **and** `required`, or is `degraded` / `unavailable` | An integration needs attention | Platform Integrations | **PlatformAdmin only — same, §4.8** |
+
+**The queue leads with Organisation on an unconfigured deployment, and that is
+the only ordering rule it has.** It is *"do this first"*, not *"everything else
+is unknown"* — the other tiles keep their own states beside it. **D-144 as
+corrected, §10.4.**
 
 **Never a row for:**
 
@@ -474,10 +629,10 @@ try {
 | Organisation | 1 | **1** | `current()` |
 | Users & Groups | 1 | **3** | active users, inactive users, active groups — three `count()`s, or one grouped aggregate. **No row is loaded** |
 | Business Domains | 1 | **2** | enabled count; enabled-without-current-owner count |
-| Platform Integrations | 1 | **≤ 3** | `SetupProjection::all()` — one configuration read, one secret-presence read, one platform-settings read. **`all()` once, not `forFamily()` four times** |
+| Platform Integrations | **1 authorised · 0 otherwise** | **≤ 3 · 0** | `SetupProjection::all()` — one configuration read, one secret-presence read, one platform-settings read. **`all()` once, not `forFamily()` four times — and not at all for a viewer who may not receive it**, §4.8 |
 | Security posture **and** exceptions | **1** | per `PostureEvaluator` | **One evaluation, two tiles** |
 | Access Reviews | 1 | **2** | visible count; visible-and-overdue count |
-| System Health | 1 | per `SystemHealthReport` | Local only |
+| System Health | **1 authorised · 0 otherwise** | per `SystemHealthReport` **· 0 otherwise** | Local only. **Not evaluated at all for a viewer who may not receive it**, §4.8 |
 | Action Queue | — | **0** | Derived from the objects above |
 
 **Target: ≤ 2 s normal production response — D-140.**
@@ -489,9 +644,12 @@ aggregate — `count()` — and **no model row is loaded to be counted**. The
 Domains figure uses `whereDoesntHave('currentOwnership')`, a single correlated
 subquery, not a loop over domains asking each one.
 
-**Evaluated once where several tiles consume it.** P1-06 is the case that
-matters: posture and exceptions are two tiles and **one** `evaluate()` →
-`for()`. P1-10 is the same shape at lower cost: `all()` once.
+**Evaluated once where several tiles consume it — and not at all where nobody
+may consume it.** P1-06 is the first case: posture and exceptions are two tiles
+and **one** `evaluate()` → `for()`. P1-10 is the same shape at lower cost:
+`all()` once. **§4.8 is the second half of the same rule** — for an
+Organisation Administrator the two platform-only sources are evaluated **zero**
+times, so the cheapest query is still the one that is never issued.
 
 **Zero external network calls.** No `semantiq:health`, no `EntraDiscovery`, no
 connection tester, no AI or Fabric provider, no SMTP. §11 asserts each absence
@@ -563,12 +721,46 @@ Action Queue
 
 ### 10.4 Empty and refusal states
 
+> **DESIGN CORRECTION 2 — the previous wording contradicted §4.**
+> It said *"Nothing configured at all → Every tile **Not configured**"*. That
+> is not compatible with the source contracts: with no organisation,
+> §5.2 requires People and Domains to read **Withheld**, and
+> §4.8 requires Platform Integrations to be **Withheld** for a viewer who may
+> not receive it and **its real four-family status** for one who may. Rewriting
+> either as *Not configured* would be the screen inventing a status for a
+> source that did not give it one.
+
+**D-144 as it now reads:**
+
+> **A genuine unconfigured deployment clearly tells the administrator that
+> Organisation setup is the first required action. Every other tile preserves
+> its own authoritative state; missing organisation scope is never rewritten as
+> `Not configured` or `0`.**
+
 | Situation | Shown |
 | --- | --- |
-| Nothing configured at all | Every tile **Not configured**, and the Action Queue leads with Organisation. **D-144** |
+| **Nothing configured at all** — no organisation resolvable | **Organisation: `Not configured`**, because that is what `OrganisationService::current() === null` genuinely means, and the Action Queue **leads with "Set up the Organisation"**. **Every other tile keeps its own state:** People and Domains **Withheld** (§5.2 — there is no scope to count within); Platform Integrations its real four-family status for an authorised viewer and **Withheld** for one who is not (§4.8); Security, Exceptions, Reviews and Health whatever their own sources say. **D-144** |
 | Every tile withheld | **The shell renders** with the areas and their withheld tiles. **D-143** — it does not refuse |
 | A source failed | That tile reads **Not available**. The rest of the page is unaffected |
 | Nothing needs attention | *"Nothing needs your attention."* — not an empty box |
+
+**The Action Queue may lead with "Set up the Organisation". It must not invent
+status values for other sources.** Leading the queue is a statement about
+*order of work*; a tile is a statement about *what is true*, and the first must
+never be implemented by falsifying the second.
+
+> **Why this is the dangerous direction.** *Not configured* and `0` are the two
+> most reassuring things this screen can say. A deployment that has **not been
+> asked** is not a deployment that **answered zero**, and a viewer who **may
+> not be told** has not been told **nothing is there**. §5.3's three states are
+> distinct precisely so that an empty deployment cannot flatten them — and an
+> empty deployment is the render most likely to try.
+
+**Required negative test — N13, §13.** With a **null organisation**, assert the
+People and Domain tiles are **`Withheld`** and that **no count is present at
+all**. The mutation: make the empty-deployment path substitute
+`PeopleSummary(valued: true, 0, 0, 0)` or a `Not configured` verdict for either
+tile, and the test must fail.
 
 ---
 
@@ -606,6 +798,9 @@ duplication this unit exists to avoid.
 | **G13** | **A failed source renders Not available, never `0` or a positive state** | **NEW**, feature test forcing each source to throw | Return `new PeopleSummary(true, 0, 0, 0)` from the catch |
 | **G14** | Every CSS token used is declared; both themes readable | **`EveryCssTokenIsDeclaredTest`, `ReadableInBothThemesTest`** — already exist | Use an undeclared token in any new grid |
 | **G15** | The navigation node is a leaf in first position and nothing else moved | **`NavigationPresentationTest`** — already exists | Reorder the area |
+| **G16** | **DESIGN CORRECTION 3.** An Organisation Administrator's request performs **ZERO** calls to `SetupProjection::all()` and **ZERO** calls to `SystemHealthReport::areas()` | **NEW — spy test, one per source.** Bind a spy in the container and assert a call count of **0**; the same test asserts **1** for a System Administrator, so the spy is proven to be wired | Evaluate the source and withhold the result afterwards — the exact shape §4.8 forbids. The call count becomes 1 and the test fails **while the rendered output is unchanged** |
+| **G17** | **DESIGN CORRECTION 2.** A **null organisation** does not convert People or Domains from **Withheld** into `0` or **Not configured** | **NEW — negative feature test, N13** | Return `new PeopleSummary(true, 0, 0, 0)` on the null path, or give the Domains tile a `Not configured` verdict because the organisation is missing |
+| **G18** | **D-182.** System Administrator **and** Organisation Administrator see `Administration Home`; unrelated roles do not; an Organisation Administrator's System Administration node set is **exactly** `['Administration Home']`; the route authorises independently of the menu | **NEW — `AdministrationHomeNavigationTest`**, V1–V5 of §2.5 | **V6 — delete the D-182 exception from the authorizer.** V2 must fail and V1, V3, V4, V5 must still pass |
 
 ### 11.2 Every guard is broken deliberately
 
@@ -629,6 +824,21 @@ project keeps producing:
   actually being held up by `ConvertEmptyStringsToNull`. G5's null-organisation
   case must be true because the projection decides it, not because something
   upstream never passes null.
+
+**And two more this unit introduces, which are the same failure in new
+clothing:**
+
+- **G16 is an absence, so its spy must be proven present.** A spy that was
+  never bound records zero calls for every viewer, and the test passes for
+  System Administrator and Organisation Administrator alike while asserting
+  nothing. **The same test asserts the System Administrator count is `1`** —
+  that is what makes the `0` mean something. **G16's mutation must move the
+  count without changing a pixel of output**, because if the rendered page
+  changes too, the test might be passing on the render;
+- **G18's V4 is an equality, not four absences.** *"Does not see Users &
+  Groups"* is satisfied by a menu that renders nothing at all. The assertion is
+  on the **whole node set**, so an authorizer that accidentally admitted a
+  fifth node would fail it.
 
 ---
 
@@ -655,7 +865,7 @@ to be raised — not a table to be added.**
 | --- | --- | --- |
 | **N1** | No session | Redirect to sign-in. No props |
 | **N2** | Signed in, no role at all | Refused to `auth.access-denied`, the shape every console route already uses |
-| **N3** | Organisation Administrator | **200.** Own organisation valued; Platform Integrations and System Health **Withheld**; **no System Health link** |
+| **N3** | Organisation Administrator | **200.** Own organisation valued; Platform Integrations and System Health **Withheld**; **no System Health link**; **and neither platform-only source is evaluated at all** — §4.8, G16 |
 | **N4** | System Administrator, no organisation resolvable | **200.** People and Domains **Withheld** — **never a global count** |
 | **N5** | Inactive user with a role | Refused. `isActive()` is checked by the existing middleware and by the projections |
 | **N6** | Every tile withheld | The shell renders — **D-143** |
@@ -665,14 +875,21 @@ to be raised — not a table to be added.**
 | **N10** | An enabled domain with no owner | **Needs attention**, and one Action Queue row |
 | **N11** | A deployment with 0 groups | **`0`**, neutral, **and no Action Queue row** — D-180 |
 | **N12** | A carried gate is open | A tile may reflect the underlying state. **No row asks anybody to close a carried gate** |
+| **N13** | **A genuinely empty deployment** — organisation null | Organisation **`Not configured`**; the Action Queue **leads with "Set up the Organisation"**; People and Domains **`Withheld` with no number at all** — **never `0`, never `Not configured`**. **D-144 as corrected, §10.4, G17** |
+| **N14** | **Organisation Administrator, call counts** | `SetupProjection::all()` **0 times**; `SystemHealthReport::areas()` **0 times**. The same run as a System Administrator: **1 and 1**. §4.8, G16 |
+| **N15** | **D-182 navigation** | System Administrator **sees** Administration Home; Organisation Administrator **sees** it; an Auditor, a business role and a roleless account **do not**; an Organisation Administrator's System Administration node set is **exactly** `['Administration Home']`. §2.5, G18 |
 
 ---
 
 ## 14. Blockers and decisions for the Product Owner
 
-### 14.1 **BLOCKER — Administration Home is invisible to an Organisation Administrator**
+### 14.1 **RESOLVED by D-182 — Administration Home is visible to an Organisation Administrator**
 
-**Established from the code, not assumed.** §2 has the full finding. In short:
+> **STATUS: RESOLVED, 21 September 2026. This is no longer a blocker and
+> EXECUTE is authorised.** The ruling and the approved correction are **§2**;
+> the tests it requires are **§2.5** and **G18**.
+
+**The finding, kept for the record.** Established from the code, not assumed:
 the route is `OrgAdmin` per D-132, and the only navigation authorizer in the
 application shows System Administration nodes **to System Administrators
 only**. An Organisation Administrator would be authorised for the home screen
@@ -689,12 +906,26 @@ page.
 | **(b)** Extend the navigation authorizer so an `OrgAdmin` sees the nodes they can actually reach | Correct, and **wider than P1-11** — it changes what four existing screens' menu entries do. It is a navigation change and **D-19 would need re-examination** |
 | **(c)** Ship `OrgAdmin` as D-132 says and accept that only System Administrators see the menu item this release | Honest, and leaves a known discoverability gap on the home screen — **recorded as a carried item rather than hidden** |
 
-**Recommendation: (c) for Release 1, with the gap recorded as a carried item**,
-and **(b) raised as its own small unit** rather than smuggled into a dashboard.
-**(a) is the one to refuse** — it would reverse an approved decision to match an
-implementation detail.
+**The DESIGN recommended (c).** **The Product Owner ruled otherwise, and the
+ruling is narrower than any of the three options as written.**
 
-**This is a Product Owner ruling. EXECUTE must not start without it.**
+> **D-182 — APPROVED.** Not (a): the route stays `OrgAdmin` and D-132 stands.
+> Not (c): the invisible-home defect is not carried. Not (b) as drafted
+> either — **the navigation permission model is not redesigned and the other
+> four nodes are not exposed.** Instead: **one explicit exception.**
+> `administration.view` is visible to **System Administrator and Organisation
+> Administrator**, and D-19 continues to govern System Administration
+> navigation generally.
+
+**§2.3 carries the supersession wording, and it is the current authority.**
+Every "D-19 is unchanged" statement about P1-11 elsewhere is superseded by it.
+
+**The four nodes an Organisation Administrator can reach but still cannot see —
+Organisation, Users & Groups, Business Domains, Roles & Access — remain a
+carried navigation item.** D-182 was granted to Administration Home for a
+reason that is specific to Administration Home. **G18's V4 asserts they stayed
+hidden**, so widening them later has to be a decision rather than a side
+effect.
 
 ### 14.2 Not blockers, but the DESIGN states its position
 
@@ -718,9 +949,9 @@ no fabricated exception, no invented overdue review, no placeholder credential.*
 | **3** | The dashboard agrees with the screens it summarises | Open each linked screen and confirm the number matches. **A roll-up that disagrees is worse than none** |
 | **4** | Security and Reviews & Operations | Posture aggregate, exception count, overdue reviews, System Health — each matching its own screen |
 | **5** | The Action Queue is real | Every row is something that genuinely needs attention, every link opens, and **nothing is listed that is merely zero** |
-| **6** | Nothing is invented | No count where a value is withheld; no `0` where the answer is *"not available"*; no link to a screen you cannot open |
+| **6** | Nothing is invented | No count where a value is withheld; no `0` where the answer is *"not available"*; **no `Not configured` where the answer is "withheld"** — D-144 as corrected; no link to a screen you cannot open |
 | **7** | Responsive, light and dark | Desktop and ~390px, both themes, keyboard focus, no sideways scroll, no console errors |
-| **8** | Nothing else moved | Sign-in, `/console`, and the previously accepted System Administration screens unchanged; Administration Home first in the sidebar |
+| **8** | Nothing else moved | Sign-in, `/console`, and the previously accepted System Administration screens unchanged; **Administration Home first in the sidebar for a System Administrator, and D-182 makes it the only System Administration item an Organisation Administrator sees** |
 
 **Expected to be carried, not run:** anything needing a second permanent
 administrator, a fresh installation, real SMTP, or the Entra cutover. **None of
@@ -730,14 +961,24 @@ the nine carried gates is closed by this unit.**
 
 ## 16. Status
 
-**DESIGN ONLY. AWAITING PRODUCT OWNER DESIGN REVIEW.**
+**DESIGN APPROVED — GATE B CLOSED, 21 September 2026**, subject to D-182 and
+the three corrections, all of which are applied above.
 
 **No implementation. No schema. No deployment.**
 
-**One blocker: §14.1**, the navigation-authority conflict with D-132. It needs a
-ruling before EXECUTE.
+**No blockers. §14.1 is RESOLVED by D-182** — §2. **EXECUTE is authorised.**
 
-**D-130 – D-147 and D-179 – D-181 are in force and none is reinterpreted here.**
+**D-130 – D-147, D-179 – D-181 and D-182 are in force.** **D-144's rendering
+rule is corrected in §10.4** and **D-19 is narrowly superseded for one policy
+key by §2.3**; nothing else is reinterpreted here.
+
+**The three DESIGN corrections applied:**
+
+| # | Correction | Where |
+| --- | --- | --- |
+| **1** | The composition diagram names the projection classes — `PeopleSummaryProjection::for(...)`, `DomainSummaryProjection::for(...)` — not the result shapes | **§3** |
+| **2** | A genuinely empty deployment leads the Action Queue with Organisation setup and **never rewrites another source's state as `Not configured` or `0`** | **§10.4**, N13, G17 |
+| **3** | A platform-only source is **not evaluated at all** for a viewer who may not receive its value | **§4.8**, N14, G16 |
 
 **All nine carried items remain OPEN.** P1-11 may display an already-
 authoritative state where appropriate and **must not treat display as
