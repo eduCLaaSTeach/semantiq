@@ -106,6 +106,33 @@ The order follows the Phase 1 document exactly, with P1-BASE inserted ahead of i
 Each unit runs PLAN → approve → DESIGN → approve → EXECUTE → TEST → VERIFY →
 ACCEPT. A green CI run does not unlock the next unit.
 
+### Delivery status — current, 21 September 2026
+
+**This is the authoritative status register.** §1 above is a snapshot of the
+repository on the day this plan was written and is kept as history; it is not
+where to look for what is delivered.
+
+| Order | Unit | Status |
+| --- | --- | --- |
+| 1 | P1-BASE | **ACCEPTED** |
+| 2 | P1-00 | **ACCEPTED** |
+| 3 | P1-01 | **ACCEPTED** — 2 Sep 2026 |
+| 4 | P1-02 | **ACCEPTED** — 2 Sep 2026. One carried gate remains open against Phase 1 orchestration, §10 |
+| 5 | P1-03 | **ACCEPTED** |
+| 6 | P1-04 | **ACCEPTED** — 3 Sep 2026 |
+| 7 | P1-05 | **ACCEPTED** — 15 Sep 2026 |
+| 8 | P1-06 | **ACCEPTED** |
+| 9 | P1-07 | **ACCEPTED** — Gate D closed |
+| 10 | P1-08 | **ACCEPTED** — Gate D closed |
+| 11 | P1-09 | **ACCEPTED** — 20 Sep 2026. Carried: production session-driver alignment, §10 |
+| 12 | **P1-10** | **PRODUCT OWNER ACCEPTED — GATE D CLOSED. P1-10 CLOSED.** 21 Sep 2026. `P1-10-PLATFORM-INTEGRATIONS-ACCEPTANCE.md`. Nine carried items remain **OPEN**, §10 and that record's §5 |
+| 13 | **P1-11** | **ACTIVE / PLAN.** Unblocked by P1-10 acceptance. **PLAN only** — no DESIGN, no implementation |
+
+**ACCEPTED IS NOT THE SAME AS NOTHING OUTSTANDING.** Several accepted units
+carry a live observation their delivered state could not execute. Those rows
+live in §10 and are the reason unit acceptance does not add up to phase
+acceptance on its own — see §7.
+
 ---
 
 ## 4. Decision register
@@ -352,6 +379,27 @@ pass:
 - Diagnostics expose no business data or secrets.
 - No critical or high security findings remain open.
 
+### PHASE 1 DOES NOT CLOSE WHEN P1-11 CLOSES — 21 September 2026
+
+**P1-11 is the final delivery unit. It is not the final gate.** With P1-10
+accepted, twelve of the thirteen units are closed and the temptation to treat
+"the last unit shipped" as "the phase is done" arrives with it.
+
+Final Phase 1 acceptance additionally requires **explicit disposition** — a
+decision recorded, not an omission — of every row in §10. Four of them cannot
+be closed by building anything in P1-11:
+
+| Gate | Why it is not P1-11's to close |
+| --- | --- |
+| **Production session-driver alignment**, `file` → `database` | A controlled deployment correction that terminates every existing session. **Not a P1-11 change, and not to be attempted inside it** |
+| **Privilege-change / per-user session revocation** | The control **does not exist**. Nothing reads `sessions.user_id`. It is a build-or-decide item, and it depends on the row above |
+| **P1-02 provider-wide SSO re-check** | Needs a genuine second **permanent** System Administrator, which no unit can manufacture |
+| **The P1-10 live-observation rows** | Need a fresh installation, real SMTP, or the deliberate Entra cutover |
+
+**Not one of these may be silently moved into Phase 2.** Moving one is a
+Product Owner decision, recorded here with its reason; a gate that quietly
+stops being mentioned is a gate that was lost.
+
 ---
 
 ## 8. What happens next
@@ -538,6 +586,27 @@ below carries its current status and, where it has moved, the date it moved.
 | **P1-02** *(ACCEPTED 2 Sep 2026)* | **P1-03** | A real non-administrator being refused at Identity & SSO | **CLOSED 3 Sep 2026** — `semantiq@educlaas.com`, a real user with no role, signed in and saw an empty System Administration area. No account was manufactured for it |
 | **P1-02** *(ACCEPTED 2 Sep 2026)* | **Phase 1 orchestration** — *reassigned 18 Sep 2026, see below* | The provider-wide Re-check limit, observed with two administrators | **OPEN / CARRIED / UNVERIFIED.** Needs a genuine second **permanent** System Administrator. **Do not create a fake privileged account to close it.** Automated evidence stands. It was carried to P1-05 and then to P1-06; both are now closed and the prerequisite still does not exist, so it belongs to no single unit |
 | **P1-04** *(ACCEPTED 3 Sep 2026)* | **P1-05** | **A DISABLED DOMAIN CAN NEVER BROADEN ACCESS** | **CLOSED 15 Sep 2026.** Observed by the Product Owner at section H of the P1-05 test script against real production data — `P1-05-ROLES-ACCESS-VERIFICATION.md` §10. P1-04 intentionally contained **no access engine**, so the failure was unreachable there and became reachable the moment P1-05 built effective access. All five cases below were run; they are kept as the historical required evidence |
+
+### P1-10 carried items — **eight OPEN**, recorded 21 September 2026
+
+**P1-10 was accepted and closed on 21 September 2026. None of these closed with
+it.** Each needs a prerequisite the deployment does not have, and **not one may
+be manufactured** — a fake second administrator, a fake installation or a fake
+mail server would close a row while proving nothing.
+
+| From | To | Gate | Status |
+| --- | --- | --- | --- |
+| **P1-10** *(ACCEPTED 21 Sep 2026)* | **Phase 1 orchestration** | A real completed **Microsoft step-up** for a privileged configuration change | **OPEN / CARRIED.** The redirect, the staging, the single-use consumption, the candidate verification and every refusal path are covered automatically. The live round trip needs a deliberate, scheduled cutover |
+| **P1-10** | **A fresh or test installation** | **Bootstrap First-Run**, end to end | **OPEN / CARRIED.** First-Run exists only while a deployment has no System Administrator. Production has one, so seeing it live would mean deactivating every administrator on a running system |
+| **P1-10** | **A fresh or test installation** | Bootstrap **30-minute idle** expiry, observed | **OPEN / CARRIED** |
+| **P1-10** | **A fresh or test installation** | Bootstrap **4-hour absolute** expiry, observed | **OPEN / CARRIED** |
+| **P1-10** | **A fresh or test installation** | **Recovery flow**, observed | **OPEN / CARRIED** |
+| **P1-10** | **Phase 1 orchestration** | A **real SMTP send test** | **OPEN / CARRIED.** No mail server exists on this deployment and none was created to satisfy a test. What is proven is *which address SemantIQ would send to*, structurally; not that SMTP works |
+| **P1-10** | **Phase 1 orchestration** | The **production Entra cutover**, `env` → store | **OPEN / CARRIED.** Explicitly withheld by the Product Owner at every gate. Production reads its Microsoft configuration from the environment and the cutover timestamps are absent |
+| **P1-10** | **Phase 1 orchestration** | Console screens opened **on production by the delivery team** | **OPEN / CARRIED.** Signing in needs Microsoft credentials the delivery environment does not have, and its browser does not trust the inspecting proxy's certificate authority. The Product Owner's Gate D review is the live observation; the delivery team's browser evidence is from a local server |
+
+**The P1-02 second-administrator gate above is the ninth**, and it is not
+repeated here because it already has a row of its own.
 
 ### Production session-driver alignment — **OPEN / CARRIED**, recorded 20 September 2026
 
