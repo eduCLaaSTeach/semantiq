@@ -78,8 +78,11 @@ final class NoBusinessSchemaTest extends TestCase
      * P1-08 delivered the evidence screens, SystemHealth when P1-09 delivered
      * System Health, and none of them before.
      *
-     * P1-10 Administration Home has NO directory here, and that is the entry
-     * this list is currently guarding.
+     * Administration joined when P1-11 delivered Administration Home, and it
+     * is the LAST one Phase 1 adds. Every Phase 1 unit now has its module, so
+     * from here the list is guarding against a PHASE 2 directory appearing -
+     * Fabric, Semantic, Ingestion or anything else - before its unit is
+     * approved.
      */
     public function test_only_delivered_modules_exist(): void
     {
@@ -88,7 +91,7 @@ final class NoBusinessSchemaTest extends TestCase
         sort($modules);
 
         $this->assertSame(
-            ['Access',
+            ['Access', 'Administration',
                 'Audit', 'Domains', 'Identity', 'Organisation', 'People', 'Platform', 'Reviews',
                 'Security', 'SystemHealth'],
             $modules,

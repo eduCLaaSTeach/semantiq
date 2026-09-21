@@ -273,6 +273,14 @@ final class AuthenticationFlowTest extends TestCase
 
         $this->assertSame(
             [
+                /*
+                 * P1-11. Administration Home is the ELEVENTH destination, and
+                 * it is the same kind of thing again: a read-only summary of
+                 * what the other ten already show. It names no business
+                 * record, and the decide() assertion above proves the boundary
+                 * rather than the menu.
+                 */
+                'Administration Home' => '/console/administration',
                 'Organisation' => '/console/organisation',
                 'Users & Groups' => '/console/people/users',
                 // P1-05 adds a THIRD, and it is the same kind of thing again:

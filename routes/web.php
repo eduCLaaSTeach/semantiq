@@ -7,6 +7,7 @@ use App\Modules\Access\Http\Controllers\SimulatorController;
 use App\Modules\Access\Http\Controllers\StepUpController;
 use App\Modules\Access\Http\Middleware\RequireActionClass;
 use App\Modules\Access\Support\ActionClass;
+use App\Modules\Administration\Http\Controllers\AdministrationHomeController;
 use App\Modules\Audit\Http\Controllers\AuditController;
 use App\Modules\Domains\Http\Controllers\DomainController;
 use App\Modules\Identity\Http\Controllers\EntraController;
@@ -231,6 +232,34 @@ Route::prefix('console')
     ->middleware(EnsureSessionIsCurrent::class)
     ->group(function (): void {
         Route::get('/', ConsoleController::class)->name('console.home');
+
+        /*
+         * P1-11 - ADMINISTRATION HOME. ONE GET, ONE VERB, NO PARAMETERS.
+         *
+         * Nothing on this screen changes anything, so there is nothing for a
+         * second verb to do. AdministrationHomeIsAProjectionTest asserts this
+         * as an EQUALITY over every route whose URI begins `console/
+         * administration`, so a second verb fails the build rather than being
+         * noticed in review.
+         *
+         * OrgAdmin - D-132. The blueprint names a "platform/organisation
+         * administrator" as this screen's audience, and narrowing the route to
+         * PlatformAdmin to match an implementation detail of the sidebar was
+         * the option D-182 explicitly refused.
+         *
+         * RequireOrganisation IS DELIBERATELY ABSENT - D-133. A deployment
+         * whose company profile has not been created is exactly the deployment
+         * that needs this screen, and bouncing it to Company Profile would make
+         * the page that exists to say "set up the Organisation first"
+         * unreachable until somebody had.
+         *
+         * /console IS UNCHANGED - D-131. It keeps its D-11 confirmation state
+         * and stays reachable by anybody with a session, including a person
+         * holding no role at all. This is not that page and must not become it.
+         */
+        Route::middleware(RequireActionClass::class.':'.ActionClass::OrgAdmin->value)
+            ->get('administration', [AdministrationHomeController::class, 'show'])
+            ->name('administration.home');
 
         /*
          * P1-01 - Organisation.

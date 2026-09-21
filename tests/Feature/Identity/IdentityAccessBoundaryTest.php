@@ -152,6 +152,9 @@ final class IdentityAccessBoundaryTest extends TestCase
 
         $this->assertSame(
             [
+                // P1-11. Administration Home summarises the other ten and
+                // grants nothing - reading a dashboard is not business access.
+                'Administration Home' => '/console/administration',
                 'Organisation' => '/console/organisation',
                 'Users & Groups' => '/console/people/users',
                 // P1-05 delivered Roles & Access. Reaching the screen that

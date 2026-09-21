@@ -126,7 +126,7 @@ where to look for what is delivered.
 | 10 | P1-08 | **ACCEPTED** — Gate D closed |
 | 11 | P1-09 | **ACCEPTED** — 20 Sep 2026. Carried: production session-driver alignment, §10 |
 | 12 | **P1-10** | **PRODUCT OWNER ACCEPTED — GATE D CLOSED. P1-10 CLOSED.** 21 Sep 2026. `P1-10-PLATFORM-INTEGRATIONS-ACCEPTANCE.md`. Nine carried items remain **OPEN**, §10 and that record's §5 |
-| 13 | **P1-11** | **ACTIVE / PLAN.** Unblocked by P1-10 acceptance. **PLAN only** — no DESIGN, no implementation |
+| 13 | **P1-11** | **ACTIVE / GATE C.** PLAN approved (`b98bba4`). **DESIGN approved, Gate B closed** — D-182 and three corrections, `59a3f73`. Implementation complete and **UNMERGED / UNDEPLOYED**, awaiting Product Owner Gate C review. `P1-11-ADMINISTRATION-HOME-VERIFICATION.md` |
 
 **ACCEPTED IS NOT THE SAME AS NOTHING OUTSTANDING.** Several accepted units
 carry a live observation their delivered state could not execute. Those rows
@@ -395,6 +395,13 @@ be closed by building anything in P1-11:
 | **Privilege-change / per-user session revocation** | The control **does not exist**. Nothing reads `sessions.user_id`. It is a build-or-decide item, and it depends on the row above |
 | **P1-02 provider-wide SSO re-check** | Needs a genuine second **permanent** System Administrator, which no unit can manufacture |
 | **The P1-10 live-observation rows** | Need a fresh installation, real SMTP, or the deliberate Entra cutover |
+
+**And P1-11 adds two of its own, both raised at Gate C rather than absorbed:**
+
+| Raised by P1-11 | Disposition needed |
+| --- | --- |
+| **The four System Administration screens an Organisation Administrator can reach and still cannot see** | D-182 deliberately exposed **one** node and no more. Organisation, Users & Groups, Roles & Access and Business Domains stay hidden from them. **A carried navigation item with its own evidence to gather**, not a defect P1-11 left behind |
+| **P1-06's per-domain evaluation cost** | `PostureEvaluator`'s `DomainAdapter` issues five aggregates per business domain. Security Status already pays it and has since P1-06; Administration Home shows that summary, so it inherits the cost and is the screen that will make it visible first. **Pre-existing, already live, and not P1-11's to re-engineer** |
 
 **Not one of these may be silently moved into Phase 2.** Moving one is a
 Product Owner decision, recorded here with its reason; a gate that quietly

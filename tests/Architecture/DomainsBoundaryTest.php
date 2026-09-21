@@ -271,9 +271,29 @@ final class DomainsBoundaryTest extends TestCase
      * in its own name and message so nobody later reads a passing run as a
      * claim it did not make.
      *
-     * Mutation: add a BusinessDomain reference to an unrelated service. And the
+     * P1-11 WIDENED THIS GUARD WITHOUT WEAKENING IT, and the distinction is the
+     * point. D-181 gave P1-04 a READ SEAM -
+     * App\Modules\Domains\Projection\DomainSummaryProjection - which exists so
+     * that a consumer can ask P1-04 a question instead of writing P1-04's
+     * queries somewhere else.
+     *
+     * The obvious way to admit its one consumer was to add
+     * AdministrationHomeProjection to ALLOWED_OUTSIDE_THE_MODULE. That would
+     * have been WRONG: the allowlist exempts a FILE from the whole guard, so
+     * the same file could then have reached past the seam for BusinessDomain,
+     * DomainOwnership or business_domains and nothing would have failed. The
+     * seam's entire purpose would have been unguarded in its only consumer.
+     *
+     * So the SEAM's fully-qualified names are removed from the source before
+     * the scan, and nothing else is. Naming the seam is free for any file;
+     * naming a model or a table is a finding for every file that is not on the
+     * allowlist, the seam's consumers included.
+     *
+     * Mutation: add a BusinessDomain reference to an unrelated service. The
      * second one, which is how a boundary is really lost: add the reference AND
-     * widen ALLOWED_OUTSIDE_THE_MODULE to admit it.
+     * widen ALLOWED_OUTSIDE_THE_MODULE to admit it. And the third, which is the
+     * one this widening created: add BusinessDomain::query() to
+     * AdministrationHomeProjection - the file that legitimately names the seam.
      */
     public function test_only_the_declared_integration_points_depend_on_domains(): void
     {
@@ -289,7 +309,7 @@ final class DomainsBoundaryTest extends TestCase
 
             $scanned++;
 
-            $source = (string) file_get_contents($file);
+            $source = $this->withoutTheReadSeam((string) file_get_contents($file));
 
             $mentions = str_contains($source, 'Modules\\Domains')
                 || str_contains($source, 'business_domains')
@@ -314,6 +334,90 @@ final class DomainsBoundaryTest extends TestCase
             .'approved Company Profile integration may. (Migrations, tests and resources/js are '
             .'deliberately outside this guard - see Guard B for what they may not do.)'
         );
+    }
+
+    /**
+     * The D-181 read seam, removed so a consumer may NAME it and still be
+     * caught reaching past it.
+     *
+     * Deliberately matched as a FULLY-QUALIFIED NAME under
+     * App\Modules\Domains\Projection. A looser pattern - say, anything
+     * containing "Projection" - would have let `Modules\Domains\Models`
+     * through, which is the whole thing being guarded.
+     */
+    private function withoutTheReadSeam(string $source): string
+    {
+        return (string) preg_replace(
+            '/App\\\\Modules\\\\Domains\\\\Projection\\\\\w+/',
+            '',
+            $source,
+        );
+    }
+
+    /**
+     * The seam exemption is NARROW: naming the projection is free, naming a
+     * model is not.
+     *
+     * This is the half that stops withoutTheReadSeam() from quietly becoming a
+     * hole. A stripper that removed too much would pass Guard A for a file that
+     * queries business_domains directly, and Guard A's own "no offenders"
+     * assertion could never tell.
+     *
+     * Mutation: widen the pattern to /App\\Modules\\Domains\\\w+/ - the seam
+     * still strips, and this fails because the models strip too.
+     */
+    public function test_the_seam_exemption_does_not_hide_a_model_or_a_table(): void
+    {
+        $consumer = <<<'PHP'
+        <?php
+        use App\Modules\Domains\Projection\DomainSummaryProjection;
+        use App\Modules\Domains\Projection\DomainSummary;
+        PHP;
+
+        $this->assertStringNotContainsString(
+            'Modules\Domains',
+            $this->withoutTheReadSeam($consumer),
+            'A file that names only the read seam is still reported as depending on Domains, so '
+            .'the seam cannot be consumed at all.'
+        );
+
+        /*
+         * THE MODEL NAMESPACE MUST SURVIVE THE STRIPPER INTACT, and that is
+         * asserted directly rather than as an OR over four needles.
+         *
+         * THIS CASE WAS REWRITTEN BECAUSE A MUTATION SURVIVED IT. Widening the
+         * pattern to App\Modules\Domains\\w+ - which strips the MODEL
+         * namespace as well as the seam's - passed the earlier version,
+         * because `use App\Modules\Domains\Models\BusinessDomain;` still left
+         * the bare word "BusinessDomain" behind and the OR was satisfied by
+         * that. The assertion was true and said nothing about the pattern.
+         *
+         * Mutation: widen the pattern to /App\\Modules\\Domains\\\w+/.
+         */
+        foreach ([
+            'use App\Modules\Domains\Models\BusinessDomain;',
+            'use App\Modules\Domains\Models\DomainOwnership;',
+            '\App\Modules\Domains\Models\BusinessDomain::query()->count();',
+        ] as $reachingPast) {
+            $this->assertStringContainsString(
+                'Modules\Domains\Models',
+                $this->withoutTheReadSeam($consumer."\n".$reachingPast),
+                "[{$reachingPast}] has its MODEL namespace stripped by the seam exemption. The "
+                .'exemption must remove the Projection namespace and nothing else, or a consumer '
+                .'could name the seam and then query the tables directly - which is exactly what '
+                .'the seam exists to prevent.'
+            );
+        }
+
+        // ...and the three needles Guard A scans for survive too, so a file
+        // reaching past the seam is caught by name as well as by namespace.
+        foreach (['BusinessDomain', 'DomainOwnership', 'business_domains'] as $needle) {
+            $this->assertStringContainsString(
+                $needle,
+                $this->withoutTheReadSeam($consumer."\nBusinessDomain DomainOwnership business_domains"),
+                "[{$needle}] is stripped by the seam exemption."
+            );
+        }
     }
 
     /**

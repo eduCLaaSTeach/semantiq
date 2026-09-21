@@ -508,6 +508,54 @@ jobs:
           echo "${passed} System Health tests passed against MySQL 8.4, the session round trip included."
 
 
+      # P1-11. The Administration suite on MySQL.
+      #
+      # THIS UNIT WRITES NOTHING AND ADDS NO SCHEMA, so there is no lock, no
+      # race and no migration here to check on the real engine. It is run
+      # anyway, for one reason that is specific to it:
+      #
+      #   whereDoesntHave('currentOwnership') IS A CORRELATED SUBQUERY, and the
+      #   two engines compile it differently. It is the single query on this
+      #   screen that is not a flat count, it decides whether a business domain
+      #   is reported as having nobody accountable for it, and that verdict is
+      #   what the Action Queue asks an administrator to act on. A wrong answer
+      #   here sends somebody to fix a domain that is already owned, or leaves
+      #   an unowned one unmentioned.
+      #
+      # P1-08 and P1-09 both found engine-specific failures that were green on
+      # SQLite. The query-budget cases also assert that the count does not grow
+      # with the data, which is a claim about what the engine actually issued.
+      - name: Run the Administration suite against MySQL
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: semantiq_ci
+          DB_USERNAME: root
+          DB_PASSWORD: ci-root
+        run: |
+          set -eo pipefail
+
+          php artisan test tests/Feature/Administration | tee administration-mysql.log
+
+          # A PATH THAT MATCHES NOTHING EXITS 0, so the count is asserted.
+          passed=$(grep -oE '[0-9]+ passed' administration-mysql.log | head -1 | grep -oE '[0-9]+' || echo 0)
+
+          if [ "${passed:-0}" -lt 25 ]; then
+            echo "::error::Only ${passed:-0} Administration tests ran against MySQL. The suite is larger than that, so the path matched little or nothing."
+            exit 1
+          fi
+
+          # NOTHING IS ENGINE-CONDITIONAL IN THIS SUITE, so a skip means a case
+          # did not run rather than that it did not apply.
+          if grep -qiE 'skipped' administration-mysql.log; then
+            echo "::error::An Administration test skipped on MySQL. Nothing in this suite is engine-conditional, so a skip means it did not run."
+            exit 1
+          fi
+
+          echo "${passed} Administration tests passed against MySQL 8.4, the ownership subquery included."
+
+
       # deploy.yml stages files that live outside the application tree, so
       # nothing in the test suite touches them. Deleting one is invisible until a
       # deployment fails - which is what happened when the repository was cleaned
