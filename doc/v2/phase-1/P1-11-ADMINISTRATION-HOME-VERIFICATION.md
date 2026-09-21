@@ -140,7 +140,7 @@ raised in §7.2**, not presented as a finished experience.
 | P1-11's own cases | **37 tests · 475 assertions** across four files |
 | Pint | **passed** |
 | Prettier (the three files this unit touches) | **passed**, house style `--single-quote --no-semi --tab-width 4 --print-width 100` |
-| Mutations | **34 runs · 31 killed first time · 3 survived and were closed** — `P1-11-MUTATIONS.md` |
+| Mutations | **36 runs · 33 killed first time · 3 survived and were closed** — `P1-11-MUTATIONS.md` |
 | MySQL | **NOT RUN LOCALLY — no MySQL server exists in this environment.** A CI step was added (§4.1) and runs on the pull request |
 
 ### 4.1 MySQL
@@ -170,6 +170,8 @@ count. Its answer is what the Action Queue asks somebody to act on.
 | **G9** The route set is exactly one GET | `AdministrationHomeIsAProjectionTest` | M18 |
 | **G10** No new `SecurityEventLogger` key | `NoSecretReachesTheBrowserTest` (existing) | catalogue unchanged at 15 |
 | **G11** No migration | `NoBusinessSchemaTest` (existing) | no migration added |
+| **D-136** No Audit feed | `AdministrationHomeIsAProjectionTest` | M32 |
+| **The Action Queue issues no query** | same — asserted as the queue's signature, since G3 already makes a query impossible anywhere in the module | M33 |
 | **G12** No row whose destination the viewer cannot open | `AdministrationHomeTest` | M13 |
 | **G13** A failed source is Not available, never `0` | same | M11, M12 |
 | **G14** Every CSS token declared, both themes | existing | sweep, §5 |

@@ -13,7 +13,7 @@ mutation record nobody ran.
 | Unit | **P1-11 — Administration Home** |
 | DESIGN | Gate B approved — `P1-11-ADMINISTRATION-HOME-DESIGN.md`, merged as `59a3f73` |
 | Harness | Apply one change, run the named filter, restore. One mutation live at a time |
-| Total | **34 runs · 31 killed first time · 3 survived and were closed** |
+| Total | **36 runs · 33 killed first time · 3 survived and were closed** |
 
 ---
 
@@ -153,11 +153,20 @@ file.
 | # | Mutation | Filter | Result |
 | --- | --- | --- | --- |
 | **M18** | Add `POST /console/administration` | `AdministrationHomeIsAProjectionTest` | **KILLED** |
+| **M32** | D-136 — an `AuditChainHead` reference added to the projection | `AdministrationHomeIsAProjectionTest` | **KILLED** |
+| **M33** | `actionQueue()` takes a viewer as well as the tiles | `AdministrationHomeIsAProjectionTest` | **KILLED** |
 | **M19** | Call `HealthInspector::inspect()` — the one that reaches Microsoft | `AdministrationHomeIsAProjectionTest` | **KILLED** |
 | **M21** | `Readiness::NotConfigured` reads *"Not set up"* | `AdministrationHomeIsAProjectionTest` | **KILLED** |
 | **M22** | `Readiness::Ready` wears a tone the stylesheet does not declare | `AdministrationHomeIsAProjectionTest` | **KILLED** |
 | **M23** | The screen derives its own verdict — renders `'healthy'` when a tile has no metrics | `AdministrationHomeIsAProjectionTest` | **KILLED** |
 | **M24** | The screen renders `{metric.count ?? 0}` | `AdministrationHomeIsAProjectionTest` | **KILLED** |
+
+**M33 IS HOW "THE ACTION QUEUE ISSUES NO QUERY" IS HELD.** The queue cannot
+query because nothing in the module can — G3 forbids every shape of it — so the
+property is asserted as the queue's SIGNATURE: it derives from tiles that were
+already built, and a queue that took a viewer or a scope would be something that
+can ask a question. Measuring queries around a private method would have tested
+the measurement rather than the property.
 
 **M22 IS THE `EveryCssTokenIsDeclared` FAILURE ONE LEVEL UP.** A tone naming a
 class the stylesheet does not declare renders as an **unstyled pill** — no build

@@ -216,6 +216,11 @@ final class AdministrationHomeIsAProjectionTest extends TestCase
         $forbidden = [
             'Cache::', 'cache(', 'remember(', 'SecurityEventLogger', 'Log::',
             '->save(', '->update(', '->create(', '->delete(', 'Schema::', 'Migration',
+            // D-136. NO AUDIT FEED. P1-08 owns reading the evidence and is
+            // gated on EvidenceRead for reasons this screen does not get to
+            // reopen; P1-09 already projects the chain VERDICT, which is the
+            // only thing a summary legitimately wants from it.
+            'Audit', 'audit_', 'AuditWriter', 'AuditChain',
         ];
 
         foreach ($this->moduleCode() as $name => $code) {
@@ -223,6 +228,23 @@ final class AdministrationHomeIsAProjectionTest extends TestCase
                 $this->assertStringNotContainsString($needle, $code, "[{$name}] contains [{$needle}].");
             }
         }
+
+        /*
+         * AND THE ACTION QUEUE ISSUES NO QUERY, which is a consequence of the
+         * list above rather than a separate claim: the queue is derived inside
+         * this module, from tiles that were already built, and nothing in this
+         * module can query at all.
+         *
+         * Asserted here because the alternative - measuring queries around a
+         * private method - would test the measurement rather than the
+         * property.
+         */
+        $this->assertStringContainsString(
+            'private function actionQueue(array $tiles): array',
+            $this->moduleCode()['AdministrationHomeProjection.php'],
+            'The Action Queue no longer derives from the tiles it was given. If it takes a '
+            .'viewer or a scope instead, it has become something that can ask a question.'
+        );
     }
 
     /**
