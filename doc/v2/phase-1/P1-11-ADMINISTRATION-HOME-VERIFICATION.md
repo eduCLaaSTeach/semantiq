@@ -1,6 +1,6 @@
 # P1-11 — Administration Home: VERIFICATION
 
-**GATE C. Implementation complete, UNMERGED and UNDEPLOYED.**
+**GATE D. Gate C approved; merged and deployed. P1-11 IS NOT CLOSED.**
 
 | | |
 | --- | --- |
@@ -10,7 +10,10 @@
 | Decisions in force | D-130 – D-147, D-178 – D-181, **D-182** |
 | Schema | **NONE.** No table, no column, no migration |
 | Writes | **NONE.** No write path, no cache, no new `SecurityEventLogger` key |
-| Status | **NOT MERGED. NOT DEPLOYED.** Awaiting Product Owner Gate C review |
+| Gate C | **APPROVED** by the Product Owner at `8f69569` — rulings PO-R1, PO-R2, PO-R3 |
+| Merged as | **`59cacedbc0e4fd099a1e0ad51cc2a963be68f7b1`** (#139), squashed to `main` |
+| Deployed | **`59caced`** — run 35587621169 SUCCESS. Build verified by asset hash, §10.1 |
+| Status | **HELD AT GATE D.** The remaining gate is Product Owner testing. **Not closed** |
 
 **What was executed and observed is stated below. Where something was not
 executed, it says so and says why.**
@@ -579,12 +582,74 @@ closes nothing.**
 
 ---
 
-## 10. Status
+## 10. Production deployment and read-only verification — Gate D
 
-**GATE C. READY FOR PRODUCT OWNER REVIEW.**
+| | |
+| --- | --- |
+| Gate C approved at | `8f69569` — CI run 35586681413 SUCCESS |
+| **Merge SHA** | **`59cacedbc0e4fd099a1e0ad51cc2a963be68f7b1`** — PR #139, squashed |
+| **`main` now** | **`59caced`** |
+| **Deploy run** | **35587621169 — SUCCESS**, 29/29 steps, 2 m 12 s |
+| Deployed to | `https://semantiq.claas2saas.com` |
 
-**The implementation pull request is UNMERGED and UNDEPLOYED**, per the
-Product Owner's instruction.
+### 10.1 The deployed build was verified, not assumed
+
+**A deployment reporting success is not the same claim as the right build being
+live**, so the deployed SHA was established independently of the workflow's own
+report. Vite asset names are content hashes:
+
+| | |
+| --- | --- |
+| Production's page references and serves | `app-BppKLV8o.js`, `app-D8VIisje.css` — both **200** |
+| Building `59caced` locally produces | `app-BppKLV8o.js`, `app-D8VIisje.css` |
+| Building the **previous** `main` (`59a3f73`) produces | `app-D4pobQzZ.js`, `app-KvceA1Ro.css` |
+
+**The previous release's hashes are different**, so this check discriminates: had
+the deployment not landed, production would still be serving `app-D4pobQzZ.js`.
+
+### 10.2 What was observed on production, read-only
+
+Every check below is a `GET`. Nothing was written, no account was created or
+altered, no configuration was changed and no outside service was contacted.
+
+| # | Check | Observed |
+| --- | --- | --- |
+| **P1** | Application health — `GET /up` | **`ok`** |
+| **P2** | Site root — `GET /` | **200** |
+| **P3** | `GET /console/administration` **exists on the deployed build** | **302 → sign-in.** The route is present and fails closed for an unauthenticated visitor |
+| **P4** | **The 302 is not a false pass** | `GET /console/this-route-does-not-exist` → **404**. A route that does not exist answers 404 on this deployment, so 302 genuinely distinguishes "exists" from "absent" |
+| **P5** | `/console` unchanged | **302 → sign-in**, exactly as before |
+| **P6** | Every accepted console route still available | `/console`, `/console/organisation`, `/console/people/users`, `/console/people/groups`, `/console/domains`, `/console/access`, `/console/security`, `/console/security/exceptions`, `/console/security/events`, `/console/access-reviews`, `/console/access-reviews/overdue`, `/console/system-health`, `/console/integrations`, `/console/audit` — **all 302 → sign-in**. None 404, none 500 |
+| **P7** | Deployment completed without error | All **29** steps green, including `php artisan migrate --force`, `optimize:clear`, `semantiq:health` over SSH, the HTTPS verification and the web-exposure negative tests |
+| **P8** | **No schema change** | P1-11 adds **no migration**: `git diff 59a3f73..59caced -- database/migrations/` is empty and the count stays at **35**. `migrate --force` ran and was a no-op |
+| **P9** | **No configuration change** | The deployment excludes `.env` from rsync; `APP_KEY` is bootstrapped only when absent, and this is not a first deployment. No Entra credential, no `identity_source`, no `SESSION_DRIVER` was touched |
+
+### 10.3 What could NOT be observed, and why
+
+**Never inferred from a passing test.**
+
+| | |
+| --- | --- |
+| **The rendered screen on production** | **NOT OBSERVED.** Reaching it requires signing in with Microsoft, and this environment's browser does not trust the inspecting proxy's certificate authority. **TLS verification was not disabled and no bypass was installed.** Every browser observation in §5 is from a local server |
+| **PO-R2 live** — the Organisation Administrator sidebar | **NOT OBSERVED.** Requires signing in as one. Automated evidence is the equality assertion in G18/V4 |
+| **PO-R3 live** — the two System Health counts | **NOT OBSERVED.** Same reason. Check 3 of the Product Owner script is where this is confirmed against the System Health screen itself |
+| **"Opening Administration Home contacts nobody"** | **NOT OBSERVED IN PRODUCTION**, because opening it requires a session. The guarantee is **structural and automated**: `SystemHealthReport` is built on `inspectLocal()` and `storedReport()`, and a guard fails the build if any P1-11 file names `inspect()`, `report()`, `semantiq:health`, a connection tester or `EntraDiscovery`. That is a strong claim about the code and **not** a live observation, and it is not presented as one |
+
+**These are the Product Owner's to observe**, through the eight checks in
+`P1-11-ADMINISTRATION-HOME-PRODUCT-OWNER-TEST-SCRIPT.md`.
+
+---
+
+## 11. Status
+
+**GATE D. MERGED, DEPLOYED, AND HELD FOR PRODUCT OWNER TESTING.**
+
+**P1-11 IS NOT CLOSED.** Gate C was approved, the implementation is merged as
+`59caced` and live on production. The remaining gate is the Product Owner's own
+observation, and nothing is accepted until they say so.
+
+**No carried Phase 1 item was closed or changed by this deployment**, and Phase 1
+closeout has not begun.
 
 **All three things put to the Product Owner have been ruled on**, and each
 ruling is recorded where the question was asked:

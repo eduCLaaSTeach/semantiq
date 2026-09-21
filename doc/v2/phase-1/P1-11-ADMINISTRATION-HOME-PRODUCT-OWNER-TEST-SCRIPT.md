@@ -16,12 +16,21 @@ starts a check or contacts an outside service.
 | | |
 | --- | --- |
 | DESIGN merged as | **`59a3f73`** — Gate B, D-182 and three corrections |
-| Implementation | **PULL REQUEST ONLY. NOT MERGED. NOT DEPLOYED.** |
+| Gate C approved at | **`8f69569`** — PR #139 head, CI run 35586681413 SUCCESS |
+| **Merge SHA** | **`59cacedbc0e4fd099a1e0ad51cc2a963be68f7b1`** — PR #139 squashed to `main` |
+| **Deployed build** | **`59caced`** — deploy run 35587621169, SUCCESS, 21 September 2026 |
+| Deployed to | `https://semantiq.claas2saas.com` |
+| Status | **LIVE. HELD AT GATE D — your testing is the remaining gate.** |
 
-> **YOU CANNOT RUN THIS SCRIPT YET.** The implementation is held at Gate C on
-> your instruction. **These checks are for after you approve the merge and the
-> deployment.** They are written now so you can see what will be asked of you
-> before you agree to it.
+> **THIS SCRIPT IS NOW RUNNABLE.** P1-11 is merged and deployed.
+>
+> **That the build is `59caced` was verified independently, not taken from the
+> deployment's own report.** The Vite asset hashes are derived from the bundle's
+> content: production serves `app-BppKLV8o.js`, which is what this commit builds,
+> and the previous release built `app-D4pobQzZ.js`. Had the deployment not
+> landed, production would still be serving the old file.
+>
+> **P1-11 is NOT closed.** Nothing here is accepted until you say so.
 
 ## 3. Before you start
 

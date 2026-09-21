@@ -126,7 +126,7 @@ where to look for what is delivered.
 | 10 | P1-08 | **ACCEPTED** — Gate D closed |
 | 11 | P1-09 | **ACCEPTED** — 20 Sep 2026. Carried: production session-driver alignment, §10 |
 | 12 | **P1-10** | **PRODUCT OWNER ACCEPTED — GATE D CLOSED. P1-10 CLOSED.** 21 Sep 2026. `P1-10-PLATFORM-INTEGRATIONS-ACCEPTANCE.md`. Nine carried items remain **OPEN**, §10 and that record's §5 |
-| 13 | **P1-11** | **ACTIVE / GATE C.** PLAN approved (`b98bba4`). **DESIGN approved, Gate B closed** — D-182 and three corrections, `59a3f73`. **Gate C rulings PO-R1 (Access Reviews seam APPROVED), PO-R2 (D-182 consequence ACCEPTED) and PO-R3 (System Health neutral counts APPROVED) recorded**; one evidence gap closed — Access Reviews added to the source-failure isolation set. Implementation **UNMERGED / UNDEPLOYED**, awaiting Product Owner Gate C review. `P1-11-ADMINISTRATION-HOME-VERIFICATION.md` |
+| 13 | **P1-11** | **ACTIVE / HELD AT GATE D — NOT CLOSED.** PLAN `b98bba4`. DESIGN / Gate B `59a3f73`. **Gate C APPROVED** at `8f69569` with rulings PO-R1 (Access Reviews seam APPROVED), PO-R2 (D-182 consequence ACCEPTED) and PO-R3 (System Health neutral counts APPROVED). **Merged as `59caced` (PR #139) and DEPLOYED** — run 35587621169 SUCCESS; the deployed build was verified by asset hash, not taken from the deployment's own report. **The remaining gate is Product Owner testing**, the eight checks in `P1-11-ADMINISTRATION-HOME-PRODUCT-OWNER-TEST-SCRIPT.md`. `P1-11-ADMINISTRATION-HOME-VERIFICATION.md` §10 |
 
 **ACCEPTED IS NOT THE SAME AS NOTHING OUTSTANDING.** Several accepted units
 carry a live observation their delivered state could not execute. Those rows
