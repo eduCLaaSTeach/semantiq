@@ -11,8 +11,13 @@ import AppShell from '../../Layouts/AppShell'
  * Administrator actually lands on.
  *
  * The canvas stays deliberately minimal. This is NOT Administration Home -
- * P1-10 owns that - and it is not a placeholder dashboard. It states who is
- * signed in, what access that does and does not confer, and offers sign-out.
+ * P1-11 owns that, at /console/administration - and it is not a placeholder
+ * dashboard. It states who is signed in, what access that does and does not
+ * confer, and offers sign-out.
+ *
+ * D-131: this page is UNCHANGED by P1-11. It stays reachable by anybody with a
+ * session, including a person holding no role at all, which is exactly why it
+ * cannot become the administration dashboard.
  *
  * The sidebar is presentation only. Every route inside /console re-authorises
  * on its own; if the navigation filter were wrong the request would still be

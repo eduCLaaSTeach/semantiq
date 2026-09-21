@@ -89,10 +89,14 @@ final class ApprovedMenu
     }
 
     /**
-     * Phase 1. Organisation is delivered (P1-01); everything else is locked.
+     * Phase 1. Every node here is now delivered.
      *
-     * Administration Home appears in its correct position and stays locked
-     * until P1-10, which is deliberately built last from real sources.
+     * Administration Home was the last, and it was deliberately built last
+     * from real sources: it summarises eleven other units and could not be
+     * honest about any of them until they existed. It said "stays locked until
+     * P1-10" here for months, which was written before the 20 September
+     * renumbering when Administration Home WAS P1-10 - a third document
+     * disagreeing about which unit is which.
      */
     private static function systemAdministration(): array
     {
@@ -100,7 +104,24 @@ final class ApprovedMenu
         $policy = 'administration.view';
 
         return [
-            NavigationNode::locked($area, 'Administration Home', 'i-grid', $policy),
+            /*
+             * P1-11. Delivered: ONE read-only GET over eleven units' own
+             * projections. It owns no source-of-record fact and writes nothing.
+             *
+             * OrgAdmin, not PlatformAdmin - D-132. The blueprint names a
+             * "platform/organisation administrator" as this screen's audience.
+             *
+             * D-182 IS THE ONE EXCEPTION TO D-19 IN THE WHOLE SIDEBAR. This
+             * policy key is visible to System Administrator AND Organisation
+             * Administrator, because the route behind it already admits both
+             * and this is where an Organisation Administrator starts. No other
+             * System Administration node is widened: the other four OrgAdmin
+             * screens stay hidden from them and remain a carried item.
+             *
+             * SystemAdministratorNavigationAuthorizer holds the exception, and
+             * names this same key rather than a second copy of the string.
+             */
+            NavigationNode::leaf($area, 'Administration Home', 'i-grid', 'administration.home', $policy),
 
             // The one delivered capability.
             NavigationNode::leaf($area, 'Organisation', 'i-sitemap', 'organisation.profile', 'organisation.view'),

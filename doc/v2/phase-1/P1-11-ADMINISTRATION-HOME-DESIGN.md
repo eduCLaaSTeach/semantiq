@@ -410,6 +410,27 @@ The DESIGN reuses it rather than assembling a second one.
 Administrator**, and says so in its own comment. P1-11 inherits that rather
 than re-deciding it.
 
+> ### PO-R1 — APPROVED, and the *Reads* row above is SUPERSEDED
+>
+> **The wording above is preserved as the historical DESIGN record. It is no
+> longer the instruction.**
+>
+> As written, §4.6 had Administration Home calling `->count()` on a scoped
+> `AccessReviewItem` builder — which guard **G3** forbids, since no P1-11 file
+> may reference `AccessReviewItem` or import `Illuminate\Database` at all. The
+> two could not both hold. The Product Owner resolved it at Gate C in favour of
+> the guard:
+>
+> - a read seam, **`App\Modules\Reviews\Projection\ReviewSummaryProjection`**,
+>   is **APPROVED and kept**;
+> - it is **owned by P1-07 / Reviews** and **must not be moved into the
+>   Administration module**;
+> - **`ReviewerAuthority::scopeVisible()` remains the authority** for review
+>   visibility — unchanged by this ruling, and asked by the seam;
+> - **P1-11 must not directly query or reference `AccessReviewItem`.** G3 stands.
+>
+> The *Visibility* and *Derives* rows above are unaffected and remain in force.
+
 ### 4.7 C · System Health
 
 | | |
@@ -429,6 +450,30 @@ so a screen could promise to contact nobody and mean it.
 
 **P1-11 must never call `inspect()`, `report()`, `semantiq:health`, a connection
 tester, or `EntraDiscovery`.** §11's guard asserts the absence of each by name.
+
+> ### PO-R3 — APPROVED, and *"collapsed to one overall state"* is SUPERSEDED
+>
+> **The *Reads* row above is preserved as the historical DESIGN record. The
+> "collapsed to one overall state" requirement is no longer in force.**
+>
+> `SystemHealthArea` refuses an area-level verdict in its own docblock — it
+> would be *"a SEVENTH status nothing measured"*, computed from rows whose
+> meanings do not combine. Rolling five areas into one badge is the same mistake
+> one level up. The Product Owner ruled at Gate C:
+>
+> - **the two neutral metrics are APPROVED and kept** — `Needing attention` and
+>   `Not checked yet`;
+> - **no single aggregate System Health status is to be created**;
+> - **P1-11 derives only neutral counts from P1-09 System Health rows.** It adds
+>   no verdict of its own and does not ask P1-09 for one;
+> - **P1-09 is not changed by this ruling**, and was not changed by this unit.
+>
+> *Not checked* is shown rather than hidden: it is the reason `HealthStatus` has
+> six cases rather than five, and a tile reporting only failures would let
+> "nobody has looked" read as "everything is fine".
+>
+> The *Not authorised* and *Network* rows above are unaffected and remain in
+> force — §4.8 still governs, and the zero-network guarantee is untouched.
 
 ### 4.8 **DESIGN CORRECTION 3 — authorise BEFORE evaluating a platform-only source**
 

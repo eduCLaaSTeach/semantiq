@@ -3432,3 +3432,154 @@ button.shell-link:hover .icon { color: var(--accent); }
 
   .setup-main { max-width: none; }
 }
+
+/* ---- P1-11 Administration Home ------------------------------------------- */
+
+/* THE ONLY NEW CSS THIS UNIT ADDS, and it is one responsive grid.
+   Everything else on the screen wears sys-area, sys-rows, sys-status,
+   sec-metric, org-page, org-feature and org-empty, already shipped and already
+   accepted. A dashboard is the one shape the existing column layouts genuinely
+   do not serve: four readiness tiles stacked vertically at 1440px is a list
+   pretending to be a summary.
+
+   auto-fit + minmax RATHER THAN A COLUMN COUNT. The number of columns follows
+   the width the tiles actually need, so 390px gets one column with no media
+   query to keep in step, and the Security and Reviews areas - which hold two
+   tiles, not four - lay out correctly without a second rule. Only declared
+   tokens are used; EveryCssTokenIsDeclaredTest is what makes that true rather
+   than intended. */
+.adm-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.adm-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  /* A long integration or domain name must WRAP, never break mid-word and
+     never widen the grid track past the viewport. */
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+/* WRAPS, like sys-row-head, so at 390px the badge drops under the tile name
+   instead of squeezing it. */
+.adm-tile-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.adm-tile-head h4 {
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+/* Withheld and Not available. Quiet and italic, the same treatment
+   sec-withheld already gives a value this viewer may not have - the tile's
+   appearance is one of the channels through which the value could otherwise be
+   inferred, so it must not look like a finding either. */
+.adm-tile-quiet {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* The counts sit tighter inside a tile than in the Security Status panel they
+   borrow their classes from, and the count reads on the same line as its label
+   because a tile has no room for the two-line arrangement. */
+.adm-tile-metrics {
+  gap: var(--space-1);
+}
+
+.adm-tile-metrics .sec-metric {
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.adm-tile-metrics .sec-metric-count {
+  font-size: 18px;
+  min-width: 2ch;
+}
+
+.adm-tile-metrics .sec-metric-label {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.adm-tile-rows {
+  gap: var(--space-2);
+}
+
+.adm-tile-rows .sys-row {
+  padding-top: var(--space-2);
+}
+
+.adm-tile-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* margin-top:auto keeps the link on the bottom edge of every tile in a row,
+   whatever each one's content height, so a grid row does not read as ragged. */
+.adm-tile-link {
+  margin-top: auto;
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.adm-tile-link:hover { text-decoration: underline; }
+
+.adm-tile-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+
+.adm-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* WRAPS at a narrow width: the sentence takes the full line and the link drops
+   beneath it, rather than the sentence being squeezed to a column of single
+   words. */
+.adm-queue-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--card-border);
+}
+
+.adm-queue-row:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.adm-queue-sentence {
+  flex: 1 1 260px;
+  overflow-wrap: break-word;
+}

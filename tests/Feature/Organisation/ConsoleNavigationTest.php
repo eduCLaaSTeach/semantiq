@@ -63,14 +63,16 @@ final class ConsoleNavigationTest extends TestCase
             'Organisation is not in the navigation offered on the landing page.'
         );
 
-        // D-19 shows the whole roadmap. Exactly FIVE entries are destinations
-        // now that P1-05 has delivered Roles & Access, and the guard is
-        // unchanged: nothing else is reachable.
+        // D-19 shows the whole roadmap, and the guard is unchanged: nothing
+        // outside the delivered set is reachable. P1-11 makes Administration
+        // Home the ELEVENTH and last, so every System Administration node is
+        // now a destination and nothing in that area is locked.
         //
         // The duplicated 'Business Domains' key in the earlier version of this
         // array was silently collapsed by PHP and asserted nothing twice.
         $this->assertSame(
             [
+                'Administration Home' => '/console/administration',
                 'Organisation' => '/console/organisation',
                 'Users & Groups' => '/console/people/users',
                 'Roles & Access' => '/console/access',
@@ -84,9 +86,10 @@ final class ConsoleNavigationTest extends TestCase
             ],
             $this->reachable($areas),
             'Something other than the ten delivered capabilities is reachable from the sidebar. '
-            .'Organisation, Users & Groups, Roles & Access, Business Domains, Identity & SSO, '
-            .'Security Status, Access Reviews, Audit, System Health and Integrations are what '
-            .'P1-01 to P1-10 delivered; every other entry is a roadmap label.'
+            .'Administration Home, Organisation, Users & Groups, Roles & Access, Business '
+            .'Domains, Identity & SSO, Security Status, Access Reviews, Audit, System Health '
+            .'and Integrations are what P1-01 to P1-11 delivered; every other entry is a '
+            .'roadmap label.'
         );
     }
 
@@ -101,6 +104,7 @@ final class ConsoleNavigationTest extends TestCase
         $reachable = $this->reachable($areas);
 
         $this->assertSame([
+            'Administration Home' => '/console/administration',
             'Organisation' => '/console/organisation',
             'Users & Groups' => '/console/people/users',
             'Roles & Access' => '/console/access',
@@ -181,11 +185,11 @@ final class ConsoleNavigationTest extends TestCase
 
         $inert = 0;
 
-        // P1-09 delivered System Health and P1-10 delivers Integrations, so
-        // neither is a roadmap entry any more. Every OTHER entry must still
-        // carry no route at all - Administration Home included, which is now
-        // P1-11 and stays locked.
+        // P1-11 delivers Administration Home, which was the last locked node
+        // in System Administration. Every OTHER entry - all of Workplace and
+        // all of Fabric Configuration - must still carry no route at all.
         $delivered = [
+            'Administration Home',
             'Organisation', 'Users & Groups', 'Roles & Access', 'Business Domains',
             'Identity & SSO', 'Security Status', 'Access Reviews', 'Audit',
             'System Health', 'Integrations',
@@ -202,15 +206,19 @@ final class ConsoleNavigationTest extends TestCase
         }
 
         /*
-         * AN EXACT COUNT, not a floor. 43 roadmap entries less the 9 delivered
-         * leaves 34, and a floor was the weaker assertion: it passed while the
-         * delivered set grew underneath it, and would have kept passing against
-         * a menu that had quietly lost entries.
+         * AN EXACT COUNT, not a floor. 44 roadmap entries less the 11
+         * delivered leaves 33, and a floor was the weaker assertion: it passed
+         * while the delivered set grew underneath it, and would have kept
+         * passing against a menu that had quietly lost entries.
+         *
+         * IT IS ALSO THE WHOLE OF SYSTEM ADMINISTRATION NOW. All 33 are
+         * Workplace and Fabric Configuration roadmap labels, so a System
+         * Administration node that went locked again would fail this.
          */
         $this->assertSame(
-            34,
+            33,
             $inert,
-            'The inert roadmap is not 34 entries. Either the menu changed or a delivered '
+            'The inert roadmap is not 33 entries. Either the menu changed or a delivered '
             .'capability was added to the exemption list without being delivered.'
         );
     }
