@@ -31,6 +31,7 @@ untouched and remains NOT AUTHORISED.**
 | | |
 | --- | --- |
 | **Branch** | `claude/phase-1-closeout-ws1-session-driver-tooling` |
+| **Review round** | **2** — three blockers raised in round 1 are corrected. The script is unchanged; all three were in the workflow |
 | **Base** | `main` = `9fe513e07683166d53469afe86ab1ade508622a7` — the merged WS-1 runbook |
 | **Deployed?** | **NO. This branch is not merged and not deployed.** The tooling exists only in the pull request |
 | **Production at the time of writing** | `SESSION_DRIVER=file` — `verify-session-store` run `35688043476` |
@@ -174,10 +175,10 @@ ever run, exercised for the first time under pressure.
 | Suite | Cases | What they do |
 | --- | --- | --- |
 | `SessionDriverDeploymentTest` | 32 | **Run the actual script** against throwaway `.env` fixtures containing a fake client secret and APP_KEY |
-| `SessionDriverAlignmentWorkflowTest` | 21 | Assert the workflow's safety contract with its comments stripped out first |
+| `SessionDriverAlignmentWorkflowTest` | 36 | The workflow's safety contract, comments stripped first — and for the decision logic, **the workflow's own shell executed** against a stubbed server |
 
-**The pull request body lists 25 deliberate mutations** — 10 against the script,
-15 against the workflow — **each one recorded with the test that caught it.**
+**The pull request body lists 38 deliberate mutations** — 10 against the script,
+28 against the workflow — **each one recorded with the test that caught it.**
 Ten of the script tests are paired: one half breaks the rewrite and proves the
 guard refuses; the other half **also removes the guard** and proves the damage
 actually lands. That second half is what shows the first half was the guard
@@ -199,6 +200,88 @@ reported only afterwards. With the check in place, `.env` was untouched and
 still `600`.
 
 **This is an observed result from a real run, not a claim about the code.**
+
+**PASS / FAIL:** ☐
+
+---
+
+### Step 10 — An already-aligned deployment is never taken down
+
+> **ROUND 2.** This is the second blocker you raised. The script was always
+> idempotent; the workflow was not.
+
+**Read the step named *"Establish the starting session driver and decide whether
+anything must change"*, then look at the `if:` line on each of *"Open the
+maintenance window"*, *"Align SESSION_DRIVER"* and *"Clear compiled caches"*.**
+
+**Expected:** the plan step reads the current driver off the server and sets
+`change_required` to `false` when it already equals what you asked for. Each of
+the three steps above carries
+`if: steps.plan.outputs.change_required == 'true'`.
+
+**So dispatching `database` at a deployment already on `database` opens no
+maintenance window, pipes no script, clears no cache and signs nobody out.** It
+reports *"no change required"* and stops.
+
+**The automated proof is not a reading of that logic — the test EXTRACTS the plan
+step's shell and RUNS it**, against a stubbed server, for all four combinations
+of starting driver and target. `file` → `file` and
+`database` → `database` must plan no change; the two mixed pairs must plan
+one.
+
+**PASS / FAIL:** ☐
+
+---
+
+### Step 11 — A failure after the site came back up puts it back down
+
+> **ROUND 2.** This is the first and most serious blocker you raised, and you
+> were right: the workflow claimed something it never did.
+
+**Read the step named *"Establish the exact state after a failure"*.**
+
+**Expected:** in the branch where the driver DID change, the step runs
+`php artisan down --retry=60` itself, then **reads the maintenance state back
+out of the application** and only reports maintenance if the application agrees.
+If `artisan down` failed, it reports a CRITICAL error saying maintenance could
+**not** be guaranteed and that production must be checked over SSH immediately.
+
+**Why this matters:** the normal *"Close the maintenance window"* step runs
+`artisan up` **before** the HTTPS verification and the reporting. A failure in
+either of those used to leave a changed, unverified deployment **serving users**
+while the log said it had been left in maintenance.
+
+**The automated proof runs the recovery step's own shell** with exactly that
+fixture — driver changed, `artisan up` already run, site live — and asserts on
+the commands it actually sent to the server. A paired case runs the same fixture
+against a copy of the workflow with only that `artisan down` removed, and
+requires production to be left **serving**. Without that second half, the first
+would prove nothing.
+
+**PASS / FAIL:** ☐
+
+---
+
+### Step 12 — It never closes a maintenance window it did not open
+
+> **ROUND 2.** Your third blocker.
+
+**Read the step named *"Refuse if production is already in maintenance"*, and
+the `if:` line on *"Close the maintenance window"*.**
+
+**Expected:**
+
+| | |
+| --- | --- |
+| **Before** opening its own window | The workflow asks the application `app()->isDownForMaintenance()`. If production is already down, it **refuses**: no driver change, and no `artisan up` on a window it does not own |
+| **Not from HTTP** | A 503 can come from a proxy or a cache without the application being down at all, and a custom maintenance page can return 200. The application is asked directly |
+| **Ownership** | *"Open the maintenance window"* records `opened=true` **only after** `artisan down` has actually succeeded |
+| **Closing** | Both the normal close step and the failure path act **only** when this run is the recorded owner |
+
+**Why this matters:** `php artisan up` ends whatever maintenance mode is in
+effect — including a deployment's, or a person's, mid-operation. This workflow
+must never end somebody else's outage on their behalf and put a half-finished
+operation in front of users.
 
 **PASS / FAIL:** ☐
 
@@ -235,7 +318,7 @@ professional-polish gate has nothing to inspect.
 
 | | |
 | --- | --- |
-| **1** | Your PASS / FAIL for steps 1 – 9 |
+| **1** | Your PASS / FAIL for steps 1 – 12 |
 | **2** | The CI run number and its result |
 | **3** | Anything in the script or workflow you want changed **before** the production GO is considered |
 
@@ -251,7 +334,8 @@ professional-polish gate has nothing to inspect.
 | **That the workflow successfully changes the production session driver** | **It has never been run, and must not be.** The production GO has not been granted | **Carried to the WS-1 execution window.** Runbook §6 step 5, §8 proof 5 |
 | **That the script behaves identically on the cPanel host** | The behavioural tests run on Linux in CI. The host's `stat`, `sed` and `wc` are handled by the script's BSD/GNU fallbacks, but **that is a design provision, not an observation** | **Carried to the execution window.** The script's own refusals are the safety net: an unreadable mode or a failed rewrite aborts with `.env` untouched |
 | **That the maintenance-window ordering behaves as intended live** | The step order is asserted in the repository; **the live behaviour of `artisan down` / `artisan up` around a driver change has not been observed** | **Carried to the execution window.** Runbook §6 |
-| **That the failure path leaves the correct state** | It would require deliberately failing a production run | **NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION DATA.** Manufacturing a production failure to watch the recovery is not a test worth its cost. The logic is asserted structurally and the failure message names the explicit rollback |
+| **That `php artisan down` is genuinely idempotent on this host** | Laravel reports *"Application is already down"* and exits 0, which is what the recovery step relies on when the window was never closed. **That is read from the framework, not observed on the server** | **Carried to the execution window.** If it were not idempotent the recovery would still not expose production — it verifies the state afterwards rather than assuming the command worked |
+| **That the failure path leaves the correct state ON THE REAL HOST** | It would require deliberately failing a production run | **NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION DATA.** Manufacturing a production failure to watch the recovery is not a test worth its cost. **What round 2 changed is how much is now observable WITHOUT it:** the recovery step's own shell is executed against a stubbed server, so the commands it sends — and does not send — are proven. What remains unobserved is only that the real host answers those commands as expected |
 | **That `sessions.user_id` is NULL on the production host specifically** | Established from source and corroborated only by a transient local probe that was **not retained** — see runbook §2A | **Already carried.** It is a CL-11 design constraint, recorded in runbook §9A |
 
 **None of the above is an implementation defect.** Each is a thing that a
