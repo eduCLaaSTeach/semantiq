@@ -621,10 +621,63 @@ altered, no configuration was changed and no outside service was contacted.
 | **P5** | `/console` unchanged | **302 → sign-in**, exactly as before |
 | **P6** | Every accepted console route still available | `/console`, `/console/organisation`, `/console/people/users`, `/console/people/groups`, `/console/domains`, `/console/access`, `/console/security`, `/console/security/exceptions`, `/console/security/events`, `/console/access-reviews`, `/console/access-reviews/overdue`, `/console/system-health`, `/console/integrations`, `/console/audit` — **all 302 → sign-in**. None 404, none 500 |
 | **P7** | Deployment completed without error | All **29** steps green, including `php artisan migrate --force`, `optimize:clear`, `semantiq:health` over SSH, the HTTPS verification and the web-exposure negative tests |
-| **P8** | **No schema change** | P1-11 adds **no migration**: `git diff 59a3f73..59caced -- database/migrations/` is empty and the count stays at **35**. `migrate --force` ran and was a no-op |
-| **P9** | **No configuration change** | The deployment excludes `.env` from rsync; `APP_KEY` is bootstrapped only when absent, and this is not a first deployment. No Entra credential, no `identity_source`, no `SESSION_DRIVER` was touched |
+| **P8** | **No schema change** | P1-11 adds **no migration**: `git diff 59a3f73..59caced -- database/migrations/` is empty and the count stays at **35**. `migrate --force` ran and reported **`INFO  Nothing to migrate.`** — observed in the deployment log, not inferred from the absence of a file |
+| **P9** | **No P1-11-specific configuration change** — see §10.3, which states this precisely rather than broadly | `.env` was not replaced, `APP_KEY` preserved, no Entra credential, no `identity_source`, no `SESSION_DRIVER`, no administrator assignment, no SMTP, no Bootstrap First-Run, no session revocation. **The standard workflow's already-approved D-31 `SESSION_LIFETIME` enforcement still runs, and is not a P1-11 change** |
 
-### 10.3 What could NOT be observed, and why
+### 10.3 "No configuration change" — stated precisely
+
+**The earlier wording of P9 read simply *"No configuration change"*, and that was
+too broad to be true.** The standard `deploy.yml` runs a previously approved
+step — *"Bring SESSION_LIFETIME to the approved session policy"*, **D-31** — and
+a blanket claim that nothing in configuration is ever touched would have quietly
+contradicted a step the Product Owner approved two units ago. **A sentence that
+is broader than the evidence is the same defect as a test that passes for the
+wrong reason**, so it is split into what was actually true of this deployment.
+
+**What P1-11 introduced:**
+
+| | |
+| --- | --- |
+| **P1-11-specific configuration change** | **NONE.** This unit introduced no environment key, no setting, no stored value and no configuration migration. It has no write path at all |
+
+**What the deployment did and did not do to the server:**
+
+| | |
+| --- | --- |
+| `.env` **was not replaced** by rsync | It is on the exclusion list, and the exclusion contract is asserted as its own step before any sync happens |
+| **Existing `APP_KEY` preserved** | It is bootstrapped only when absent. This was not a first deployment, so that branch was not taken |
+| **Microsoft Entra credentials not changed** | Not read for modification, not written. The identity step only asserts required keys are *present* |
+| **`identity_source` not changed** | The `env → encrypted store` cutover was not performed and remains explicitly withheld |
+| **`SESSION_DRIVER` not changed** | Production remains `file`. The `file → database` alignment was not attempted |
+| **No administrator assignment created or changed** | None was created, promoted or removed. `srikanth@lithan.com` was not altered |
+| **SMTP configuration not manufactured** | No mail configuration was created, and no send was attempted |
+| **Bootstrap First-Run not invoked** | Not reachable on a deployment that has a System Administrator, and not attempted |
+| **Per-user session revocation not implemented** | Nothing was built, simulated or stubbed |
+
+**And the one thing the standard workflow legitimately does:**
+
+| | |
+| --- | --- |
+| **D-31 — `SESSION_LIFETIME` enforcement** | The standard deployment **retains its already-approved D-31 step**, which brings the server's `SESSION_LIFETIME` to the policy the application itself reports. **This is existing approved deployment behaviour and is NOT a P1-11 change.** P1-11 neither added it, altered it nor depends on it |
+
+**On this run it changed nothing.** The step is idempotent and logged:
+
+> `SESSION_LIFETIME already matches the approved policy. Leaving .env untouched.`
+
+so the approved value was already in place and `.env` was not rewritten at all.
+That is what the deployment log says, rather than what the script is capable of
+doing.
+
+**`SESSION_DRIVER` and D-31 are different things and must not be conflated.**
+D-31 governs *how long* an idle session lives; the carried item governs *where*
+sessions are stored. **Both carried items stay OPEN:**
+
+| Carried item | Status |
+| --- | --- |
+| **`SESSION_DRIVER=file → database`** | **OPEN / CARRIED.** Untouched by this deployment |
+| **Privilege-change / per-user session revocation** | **OPEN / CARRIED.** The control still does not exist |
+
+### 10.4 What could NOT be observed, and why
 
 **Never inferred from a passing test.**
 
