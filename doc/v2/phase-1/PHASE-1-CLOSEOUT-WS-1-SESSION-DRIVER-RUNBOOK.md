@@ -2,7 +2,7 @@
 
 ## CL-10 · `SESSION_DRIVER=file` → `SESSION_DRIVER=database`
 
-> # ⛔ RUNBOOK READY — PRODUCTION CHANGE NOT AUTHORISED YET
+> # ✅ RUNBOOK APPROVED — ⛔ PRODUCTION CHANGE NOT AUTHORISED
 >
 > **Nothing in this document has been executed.** Production still runs
 > `SESSION_DRIVER=file`. The change requires an explicit Product Owner
@@ -14,10 +14,10 @@
 | Register item | **CL-10** only |
 | Baseline | `main` = **`43c280b25f58c98b898f817938063de4a02d1ca2`** |
 | Authority | `PHASE-1-CLOSEOUT-PLAN.md` §3 CL-10, §3A, §5 — Gate A approved |
-| Status | **RUNBOOK READY. NOT EXECUTED.** |
+| Status | **RUNBOOK APPROVED by the Product Owner. NOT EXECUTED.** |
 | **Tooling gap** | **Confirmed — §5.3. No existing mechanism can change `SESSION_DRIVER`. APPROVED TO BUILD, NOT APPROVED TO EXECUTE** |
-| Amendment | **Round 2** — §2A, §9 rewritten. Round 1's four `.env` safety findings all retained |
-| **Identity finding** | **`sessions.user_id` will be NULL for every SemantIQ session — §2A. OBSERVED, not inferred.** The previous §9 proof rested on it and was impossible. **CL-10's goal is unaffected; CL-11 gains a new design constraint — §9A** |
+| Amendment | **Round 3 — final** — two evidence-wording corrections: §2A probe reclassified as supporting corroboration; §9 B-0/B-2 restated as *observed absence of movement*, not proof of inertness. Rounds 1 and 2 fully retained |
+| **Identity finding** | **`sessions.user_id` will be NULL for every SemantIQ session — §2A. Established from source; corroborated by a transient local probe that was not retained.** The previous §9 proof rested on it and was impossible. **CL-10's goal is unaffected; CL-11 gains a new design constraint — §9A** |
 
 ---
 
@@ -124,12 +124,17 @@ protected function userId()
 **But `Guard::id()` has no authenticated user**, because nothing ever logged one
 in. It returns `null`, and `null` is written.
 
-### OBSERVED, not inferred
+### Established from source; corroborated by a transient local probe
 
-**Source analysis predicted this; a local run confirmed it.** A throwaway probe
-was written, executed and **deleted — nothing was committed**. It configured
-`session.driver=database`, issued a session exactly as `issueSession()` does,
-and read the row back:
+**The two classes of evidence are not equal, and this runbook does not pretend
+they are.**
+
+| Class | What it is | Status |
+| --- | --- | --- |
+| **Authoritative** | **The source analysis above** — the traced sign-in path, the zero-hit search, the `User` class declaration, `config/auth.php`, and Laravel's `DatabaseSessionHandler`. **Every line of it is in the repository and can be re-read, re-run and re-checked by anyone at any time** | **Reproducible. This is the evidence the finding rests on** |
+| **Supporting** | A **transient local probe** — written, executed once, and **deliberately deleted.** It configured `session.driver=database`, issued a session exactly as `issueSession()` does, and read the row back | **Local corroboration only. NOT retained as an artifact, therefore NOT reproducible or auditable from the repository** |
+
+The probe reported:
 
 ```
 session rows written: 1
@@ -137,6 +142,12 @@ user_id = NULL | last_activity set = yes
 Guard::id() = NULL
 Guard bound  = true
 ```
+
+> **A deleted, uncommitted probe is not durable acceptance evidence**, and must
+> not be cited as though it were. It agreed with the source analysis, which is
+> worth recording — but **the source analysis is what carries the finding.** If
+> this conclusion is ever challenged, it is re-established by re-reading the code,
+> not by trusting a transcript of a run nobody can repeat.
 
 ### The three conclusions
 
@@ -394,8 +405,8 @@ verification, is the failure `ensure-session-lifetime.sh` was written to prevent
 
 | # | State | Status |
 | --- | --- | --- |
-| **1** | **Runbook approval** — this document is correct and authoritative | **Pending final correction and CI** |
-| **2** | **Tooling implementation approval** — the §5.3 script and workflow may be written and tested | **AUTHORISED, effective after this runbook merges.** Repository code and automated tests only |
+| **1** | **Runbook approval** — this document is correct and authoritative | **APPROVED** — Product Owner, amendment round 3 |
+| **2** | **Tooling implementation approval** — the §5.3 script and workflow may be written and tested | **APPROVED TO BUILD.** Repository code and automated tests only |
 | **3** | **Production GO / NO-GO** — the change may actually be made | **NOT AUTHORISED** — §13 |
 
 **State 2 does not imply state 3.** Building the tool is not permission to run
@@ -519,9 +530,9 @@ moment when **no authenticated session exists at all**.
 
 | Step | Observation | What it establishes |
 | --- | --- | --- |
-| **B-0** | **Before the change:** `COUNT(*)` and `MAX(last_activity)`, taken **twice, minutes apart** | **The table is INERT on the `file` driver.** Two identical readings prove nothing is writing it — this is the baseline the rest is measured against, and it is the strongest single element here |
+| **B-0** | **Before the change:** `COUNT(*)` and `MAX(last_activity)`, taken **twice, minutes apart** | **Two identical readings establish that NO TABLE MOVEMENT WAS OBSERVED during the controlled pre-change interval.** This is the baseline the rest is measured against. **It does not mathematically prove that no write or delete could have occurred between the two samples** — a write and a compensating delete, or a write to an already-counted row, would not show. It is an observation over an interval, not a proof of inertness |
 | **B-1** | **General users are instructed not to sign back in yet.** The Product Owner is the **first** to sign in | Bounds the window |
-| **B-2** | **After A-1:** `COUNT(*)` and `MAX(last_activity)` again | **A table that was provably frozen is now being written.** The driver switch took effect in behaviour, not only in configuration |
+| **B-2** | **After A-1:** `COUNT(*)` and `MAX(last_activity)` again | **A table that showed no movement during the controlled pre-change interval now shows movement after the driver change and the controlled sign-in / request window.** The switch took effect in behaviour, not only in configuration |
 | **B-3** | Product Owner makes **one controlled authenticated request** at a noted time; `MAX(last_activity)` read immediately before and after | **The store is READ and UPDATED**, not written once. This is what distinguishes a live session store from a one-off insert |
 | **B-4** | Product Owner records **which screen and at what time** | Supplies the human half of the correlation |
 
@@ -535,8 +546,8 @@ moment when **no authenticated session exists at all**.
 
 **That gap is acceptable for CL-10 and it is named rather than hidden.** CL-10
 claims *"session persistence has moved to the database"* — a statement about the
-**store**, which B-0's frozen baseline followed by observed movement does
-establish. It never claimed *"this row belongs to this person"*, and after §2A
+**store**, which B-0's observed-no-movement baseline followed by observed movement
+does establish. It never claimed *"this row belongs to this person"*, and after §2A
 it could not.
 
 **Closing the residual gap would require a committed diagnostic** — an endpoint
@@ -621,7 +632,7 @@ roll back and investigate with production restored.
 | **Before** | `verify-session-store` output showing **`file`**; `verify-identity` showing **`env`**; the full P-1 … P-11 results |
 | **After** | `verify-session-store` showing **`database`**; `/up`; `/`; the console route sweep |
 | **Fact A** | The Product Owner's own statement that a real Microsoft sign-in succeeded and that `/console` plus one authenticated screen loaded |
-| **Fact B** | The **two identical B-0 baseline readings** taken before the change (proving the table was inert), the B-2 readings after sign-in, and the B-3 `MAX(last_activity)` either side of one controlled request, with B-4's note of which screen and when — **`COUNT(*)` and `MAX(last_activity)` only** |
+| **Fact B** | The **two identical B-0 baseline readings** taken before the change (establishing that no table movement was observed over that interval), the B-2 readings after sign-in, and the B-3 `MAX(last_activity)` either side of one controlled request, with B-4's note of which screen and when — **`COUNT(*)` and `MAX(last_activity)` only** |
 | **Stated limitation** | The evidence record must carry §9's residual gap: this is **a bounded correlation, not a unique identification**, because `sessions.user_id` is NULL and no identifier may be exposed |
 | **Product Owner** | **Their own statement that a real Microsoft sign-in succeeded**, and that the console behaved normally |
 | **Rollback** | If triggered: what was observed, when rollback ran, and the restored-state evidence |
@@ -635,8 +646,8 @@ roll back and investigate with production restored.
 
 ## 13. Product Owner GO / NO-GO
 
-> # RUNBOOK READY
-> # ⛔ PRODUCTION CHANGE NOT AUTHORISED YET
+> # ✅ RUNBOOK APPROVED · ✅ TOOLING APPROVED TO BUILD
+> # ⛔ PRODUCTION CHANGE NOT AUTHORISED
 
 **Nothing here has been executed.** Production still runs `SESSION_DRIVER=file`.
 No `.env` was read for modification or written. No session was affected. No
@@ -664,14 +675,14 @@ this authorisation, and neither is approval of this runbook.
 
 ## 14. Status
 
-**WS-1 PREPARATION COMPLETE. NOT EXECUTED.**
+**WS-1 RUNBOOK APPROVED. TOOLING APPROVED TO BUILD. NOT EXECUTED.**
 
 | | |
 | --- | --- |
 | `SESSION_DRIVER` | **still `file`** — confirmed live, `verify-session-store` run `35684301122` |
 | Production switch | **NOT performed.** No `.env` read for modification or written; no session affected; no window opened |
-| **State 1 — runbook** | **Amendment round 2 applied** — §2A identity finding, §9 rebuilt, §9A constraint added. Round 1's `.env` safety requirements all retained. Pending approval |
-| **State 2 — tooling** | **APPROVED TO BUILD.** `ensure-session-driver.sh` and `align-session-driver.yml` **do not exist yet** |
+| **State 1 — runbook** | **APPROVED** — Product Owner, after amendment round 3 (§2A evidence reclassification, §9 B-0/B-2 restatement). Rounds 1 and 2 fully retained |
+| **State 2 — tooling** | **APPROVED TO BUILD.** At the time this runbook was approved, `ensure-session-driver.sh` and `align-session-driver.yml` **did not exist** |
 | **State 3 — production change** | **NOT AUTHORISED** |
 | CL-11 | **Not started** |
 | CL-12 | **Not started** |
