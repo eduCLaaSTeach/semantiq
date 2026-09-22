@@ -31,7 +31,7 @@ untouched and remains NOT AUTHORISED.**
 | | |
 | --- | --- |
 | **Branch** | `claude/phase-1-closeout-ws1-session-driver-tooling` |
-| **Review round** | **2** — three blockers raised in round 1 are corrected. The script is unchanged; all three were in the workflow |
+| **Review round** | **3** — three further blockers raised in round 2 are corrected. The script is STILL unchanged; all six blockers so far have been in the workflow |
 | **Base** | `main` = `9fe513e07683166d53469afe86ab1ade508622a7` — the merged WS-1 runbook |
 | **Deployed?** | **NO. This branch is not merged and not deployed.** The tooling exists only in the pull request |
 | **Production at the time of writing** | `SESSION_DRIVER=file` — `verify-session-store` run `35688043476` |
@@ -128,10 +128,11 @@ straight onto the production server.
 
 **Read the whole `inputs:` block.**
 
-**Expected:** **exactly two inputs** — the driver `target` (a dropdown of
-`database` and `file` only) and the `confirmation` phrase. **No key field, no
-value field, no free-text setting name.** This is not an environment editor and
-there is nowhere for it to become one.
+**Expected:** **exactly three inputs** — the driver `target` (a dropdown of
+`database` and `file` only), the `confirmation` phrase, and the
+`rollback_takeover` phrase added in round 3 (step 12). **No key field, no value
+field, no free-text setting name.** All three are fixed phrases or a dropdown;
+this is not an environment editor and there is nowhere for it to become one.
 
 **PASS / FAIL:** ☐
 
@@ -175,10 +176,10 @@ ever run, exercised for the first time under pressure.
 | Suite | Cases | What they do |
 | --- | --- | --- |
 | `SessionDriverDeploymentTest` | 32 | **Run the actual script** against throwaway `.env` fixtures containing a fake client secret and APP_KEY |
-| `SessionDriverAlignmentWorkflowTest` | 36 | The workflow's safety contract, comments stripped first — and for the decision logic, **the workflow's own shell executed** against a stubbed server |
+| `SessionDriverAlignmentWorkflowTest` | 52 | The workflow's safety contract, comments stripped first — and for the orchestration, **whole sequences of the workflow's own steps executed** against a stubbed server, gates evaluated and outputs carried between them |
 
-**The pull request body lists 38 deliberate mutations** — 10 against the script,
-28 against the workflow — **each one recorded with the test that caught it.**
+**The pull request body lists 48 deliberate mutations** — 10 against the script,
+38 against the workflow — **each one recorded with the test that caught it.**
 Ten of the script tests are paired: one half breaks the rewrite and proves the
 guard refuses; the other half **also removes the guard** and proves the damage
 actually lands. That second half is what shows the first half was the guard
@@ -262,26 +263,120 @@ would prove nothing.
 
 ---
 
-### Step 12 — It never closes a maintenance window it did not open
+### Step 12 — Maintenance windows: whose it is, and who may take it
 
-> **ROUND 2.** Your third blocker.
+> **ROUND 2 raised this; ROUND 3 CORRECTED THE RULE ITSELF.** The round-2 answer
+> — *"pre-existing maintenance always refuses"* — was too blunt, and it created
+> a deadlock. See step 13.
 
-**Read the step named *"Refuse if production is already in maintenance"*, and
-the `if:` line on *"Close the maintenance window"*.**
+**Read the step named *"Take the maintenance window"*, and the `if:` line on
+*"Close the maintenance window"*.**
 
-**Expected:**
+**Expected — the workflow records WHERE its authority came from, in three
+distinct values rather than one vague flag:**
+
+| Origin | What it means | May it close the window? |
+| --- | --- | --- |
+| **`opened`** | Production was LIVE and this run took it down itself | **Yes** — on success, and on a failure that changed nothing |
+| **`takeover`** | Production was ALREADY down, the target is `file`, and the operator supplied the separate rollback confirmation | **On success only.** A failed rollback leaves it down |
+| **`none`** | This run holds no window | **Never.** It must not issue `php artisan up` at all |
+
+**And the rules that decide it:**
+
+| Situation | Outcome |
+| --- | --- |
+| Production LIVE | Take it down, origin `opened` |
+| Production in maintenance, target **`database`** | **Always refused.** A forward alignment never takes over a window, whatever is typed |
+| Production in maintenance, target **`file`**, exact rollback confirmation | **Permitted** — origin `takeover` |
+| Production in maintenance, target `file`, wrong or missing confirmation | **Refused**, production untouched |
+| Maintenance state unreadable | **Refused**, production untouched |
+
+**Established from the application** — `app()->isDownForMaintenance()` — not from
+an HTTP status. A proxy or cache can return 503 without the application being
+down, and a custom maintenance page can return 200.
+
+**Ownership is recorded only after the authority is real:** after `artisan down`
+actually succeeded, or after the takeover was authorised **and the window
+re-confirmed**.
+
+**PASS / FAIL:** ☐
+
+---
+
+### Step 13 — The advertised rollback can actually be run
+
+> **ROUND 3, blocker 5. This one was a genuine deadlock and it deserves
+> reading twice.**
+
+Round 2's workflow did all three of these at once:
+
+1. told the operator the rollback was *"dispatch this workflow with target
+   `file`"*;
+2. deliberately left production **in maintenance** after a failed forward
+   change;
+3. **refused any run that found production in maintenance.**
+
+**So the documented way out could not run.** The tooling would have stranded
+production down, with its own instructions pointing at a door it had locked.
+
+**Read, in the pull request body, the case
+`test_a_failed_forward_run_can_be_rolled_back_by_the_same_workflow`.**
+
+**Expected:** it runs **both dispatches against one stubbed server**, in
+sequence, as the runner would — gates evaluated, step outputs carried forward:
 
 | | |
 | --- | --- |
-| **Before** opening its own window | The workflow asks the application `app()->isDownForMaintenance()`. If production is already down, it **refuses**: no driver change, and no `artisan up` on a window it does not own |
-| **Not from HTTP** | A 503 can come from a proxy or a cache without the application being down at all, and a custom maintenance page can return 200. The application is asked directly |
-| **Ownership** | *"Open the maintenance window"* records `opened=true` **only after** `artisan down` has actually succeeded |
-| **Closing** | Both the normal close step and the failure path act **only** when this run is the recorded owner |
+| **Run 1** | `file` → `database`. The driver changes, the site comes back up, and the HTTPS verification then fails. Recovery must leave production **down**, on `database`, and its message must name the takeover confirmation |
+| **Run 2** | `database` → `file`, production already in maintenance, takeover confirmation supplied. It must be **accepted**, assume the window, run **the same script**, verify `file`, pass health, and **close the window** |
+| **Final state** | **`file`, and LIVE** |
 
-**Why this matters:** `php artisan up` ends whatever maintenance mode is in
-effect — including a deployment's, or a person's, mid-operation. This workflow
-must never end somebody else's outage on their behalf and put a half-finished
-operation in front of users.
+**That is the deliverable: a deployment an operator could actually recover.**
+
+**PASS / FAIL:** ☐
+
+---
+
+### Step 14 — A refusal that wrote nothing keeps writing nothing
+
+> **ROUND 3, blocker 4.**
+
+Round 2's recovery ran `php artisan optimize:clear` **before** it knew whether
+this run had mutated anything. A run that refused because production was in
+somebody else's maintenance window would therefore go on to clear compiled
+caches **inside that window** — so the workflow's own claim to *"refuse before
+any mutation"* was false.
+
+**Read the step named *"Record that the driver mutation is about to be
+attempted"*, and the `mutation_attempted` check in the recovery step.**
+
+**Expected:** the flag is written in **exactly one place**, in the step
+**immediately before** the driver script runs. Recovery clears caches **only**
+when that flag is set; otherwise it says so and its inspection is **read-only**.
+
+**The automated proof runs the whole refusal sequence** and asserts the recorded
+remote-command log contains **no** `artisan down`, **no** `artisan up`, **no**
+`optimize:clear` and **no** script invocation — an outcome, not a wording.
+
+**PASS / FAIL:** ☐
+
+---
+
+### Step 15 — Cancellation, and what it does not promise
+
+> **ROUND 3, blocker 6.**
+
+**Read the `if:` on the recovery step, and the top of the workflow file.**
+
+**Expected:** the condition is `failure() || cancelled()` — a cancelled run no
+longer bypasses every piece of recovery reasoning.
+
+**And the honest limit is stated rather than glossed:** GitHub can terminate a
+runner before any step executes, so the file says it **cannot promise** recovery
+in that case, tells you not to cancel once the maintenance sequence has begun,
+and names the two things an operator must establish over SSH before
+re-dispatching — **the effective session driver** and **the application
+maintenance state**.
 
 **PASS / FAIL:** ☐
 
@@ -318,7 +413,7 @@ professional-polish gate has nothing to inspect.
 
 | | |
 | --- | --- |
-| **1** | Your PASS / FAIL for steps 1 – 12 |
+| **1** | Your PASS / FAIL for steps 1 – 15 |
 | **2** | The CI run number and its result |
 | **3** | Anything in the script or workflow you want changed **before** the production GO is considered |
 
@@ -334,6 +429,7 @@ professional-polish gate has nothing to inspect.
 | **That the workflow successfully changes the production session driver** | **It has never been run, and must not be.** The production GO has not been granted | **Carried to the WS-1 execution window.** Runbook §6 step 5, §8 proof 5 |
 | **That the script behaves identically on the cPanel host** | The behavioural tests run on Linux in CI. The host's `stat`, `sed` and `wc` are handled by the script's BSD/GNU fallbacks, but **that is a design provision, not an observation** | **Carried to the execution window.** The script's own refusals are the safety net: an unreadable mode or a failed rewrite aborts with `.env` untouched |
 | **That the maintenance-window ordering behaves as intended live** | The step order is asserted in the repository; **the live behaviour of `artisan down` / `artisan up` around a driver change has not been observed** | **Carried to the execution window.** Runbook §6 |
+| **That a cancelled run's recovery actually completes** | GitHub can terminate a runner at any point, including before the recovery step starts. **The condition now covers cancellation; the runner surviving long enough to honour it is not something this repository can guarantee** | **NOT CURRENTLY OBSERVABLE, AND NOT CLAIMED.** The workflow says so at the top and names what an operator must establish over SSH if it happens |
 | **That `php artisan down` is genuinely idempotent on this host** | Laravel reports *"Application is already down"* and exits 0, which is what the recovery step relies on when the window was never closed. **That is read from the framework, not observed on the server** | **Carried to the execution window.** If it were not idempotent the recovery would still not expose production — it verifies the state afterwards rather than assuming the command worked |
 | **That the failure path leaves the correct state ON THE REAL HOST** | It would require deliberately failing a production run | **NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION DATA.** Manufacturing a production failure to watch the recovery is not a test worth its cost. **What round 2 changed is how much is now observable WITHOUT it:** the recovery step's own shell is executed against a stubbed server, so the commands it sends — and does not send — are proven. What remains unobserved is only that the real host answers those commands as expected |
 | **That `sessions.user_id` is NULL on the production host specifically** | Established from source and corroborated only by a transient local probe that was **not retained** — see runbook §2A | **Already carried.** It is a CL-11 design constraint, recorded in runbook §9A |

@@ -23,18 +23,22 @@ use PHPUnit\Framework\TestCase;
  *
  *   2. BLOCKS ARE EXTRACTED BY INDENTATION, not matched anywhere in the file.
  *      "There is no push trigger" asserted as a search for the word `push`
- *      across the whole file is satisfied by the word appearing in a step name,
- *      and broken by an unrelated `git push`. The `on:` block is isolated first
- *      and the question is asked of that block only.
+ *      across the whole file is satisfied by the word appearing in a step name.
+ *      The `on:` block is isolated first and the question is asked of it.
  *
- *   3. THE DECISION LOGIC IS RUN, NOT READ. The `plan` step and the failure
- *      recovery step carry the reasoning that matters, and round 1 of tooling
- *      review found the cost of only reading them: the recovery step ANNOUNCED
- *      that production had been "LEFT IN MAINTENANCE" and ran nothing that
- *      would make that true, and a test asserting the message passed. So those
- *      two steps' shell is extracted and EXECUTED here against a stubbed `ssh`,
- *      and the assertions are about what the script did - which commands it
- *      sent to the server - rather than about what it says.
+ *   3. THE ORCHESTRATION IS RUN, NOT READ. Round 1 of review found what only
+ *      reading it costs: the recovery step ANNOUNCED that production had been
+ *      "LEFT IN MAINTENANCE" and ran nothing that would make that true, and the
+ *      test asserting the message passed. Round 2 then found two more defects
+ *      that a reading missed - recovery clearing caches after a refusal that
+ *      had written nothing, and a rollback the workflow advertised but its own
+ *      guard would refuse.
+ *
+ *      So the steps that carry decisions are EXTRACTED AND EXECUTED here,
+ *      against a stub `ssh` that records every remote command and holds the
+ *      driver and maintenance state as real files. Whole SEQUENCES of steps are
+ *      run - gates evaluated, outputs carried between steps, exactly as the
+ *      runner would - and the assertions are about what the workflow DID.
  *
  * What none of this can prove is that the workflow works against the real host;
  * only dispatching it could, and that is precisely what must not happen. The
@@ -48,10 +52,39 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
 
     private const PLAN_STEP = 'Establish the starting session driver and decide whether anything must change';
 
-    private const RECOVERY_STEP = 'Establish the exact state after a failure';
+    private const MAINTENANCE_STEP = 'Take the maintenance window';
+
+    private const MUTATION_STEP = 'Record that the driver mutation is about to be attempted';
+
+    private const RECOVERY_STEP = 'Establish the exact state after a failure or cancellation';
+
+    private const TAKEOVER_PHRASE = 'TAKE OVER MAINTENANCE FOR SESSION ROLLBACK';
 
     /** The `artisan down` the recovery step must issue when the driver changed. */
     private const RECOVERY_DOWN = 'remote "php artisan down --retry=60" >/dev/null 2>&1 || true';
+
+    /** The guard that keeps recovery read-only when nothing was mutated. */
+    private const MUTATION_GUARD = 'if [ "$mutation_attempted" = "true" ]; then';
+
+    /** Every step the runner could execute, in order, minus the two with no logic. */
+    private const SEQUENCE = [
+        'Refuse unless this was dispatched from main',
+        'Refuse unless the confirmation phrase is exact',
+        'Refuse an unrecognised target driver',
+        'Verify SSH access before anything is changed',
+        self::PLAN_STEP,
+        self::MAINTENANCE_STEP,
+        self::MUTATION_STEP,
+        'Align SESSION_DRIVER',
+        'Clear compiled caches',
+        'Verify the effective driver is the requested target',
+        'Verify application health over SSH',
+        'Close the maintenance window',
+        'Verify the site over HTTPS',
+        'Report what was done',
+        'Report that no change was required',
+        self::RECOVERY_STEP,
+    ];
 
     private string $dir;
 
@@ -73,15 +106,11 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         @rmdir($this->dir);
     }
 
-    // -----------------------------------------------------------------
-    // Trigger: manual, and nothing else.
-    // -----------------------------------------------------------------
+    // =================================================================
+    // Trigger, inputs, credentials - the contract that was approved.
+    // =================================================================
 
-    /**
-     * W1. workflow_dispatch and NOTHING else.
-     *
-     * Mutation: add `push: {branches: main}` to the trigger block.
-     */
+    /** W1. workflow_dispatch and NOTHING else. */
     public function test_the_workflow_is_manual_dispatch_only(): void
     {
         $on = $this->block($this->workflow(), 'on');
@@ -98,13 +127,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         }
     }
 
-    /**
-     * W2. And nothing else runs it either.
-     *
-     * A push trigger is the obvious mistake. The subtle one is another workflow
-     * calling this one, or deploy.yml running the script directly - which would
-     * put a driver switch on every push to main, documentation merges included.
-     */
+    /** W2. And nothing else runs it either. */
     public function test_no_other_workflow_invokes_the_driver_script_or_this_workflow(): void
     {
         $checked = 0;
@@ -117,18 +140,8 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             $checked++;
             $source = $this->withoutComments((string) file_get_contents($path));
 
-            $this->assertStringNotContainsString(
-                'ensure-session-driver.sh',
-                $source,
-                basename($path).' invokes the session driver script. Only the manual, confirmed, '
-                .'main-guarded alignment workflow may.'
-            );
-
-            $this->assertStringNotContainsString(
-                basename(self::WORKFLOW),
-                $source,
-                basename($path).' references the alignment workflow. It must not be chained to anything.'
-            );
+            $this->assertStringNotContainsString('ensure-session-driver.sh', $source, basename($path).' invokes the session driver script.');
+            $this->assertStringNotContainsString(basename(self::WORKFLOW), $source, basename($path).' references the alignment workflow.');
         }
 
         $this->assertGreaterThan(5, $checked, 'Almost no workflows were scanned. The glob stopped matching.');
@@ -141,21 +154,10 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
 
         $this->assertStringNotContainsString('ensure-session-driver', $deploy);
         $this->assertStringNotContainsString('SESSION_DRIVER', $deploy);
-
-        // The sibling it must keep doing, so this case cannot pass by the
-        // deployment having lost its .env handling entirely.
         $this->assertStringContainsString('ensure-session-lifetime.sh', $deploy);
     }
 
-    // -----------------------------------------------------------------
-    // Inputs: two names, a typed phrase, no key and no value.
-    // -----------------------------------------------------------------
-
-    /**
-     * W4. The target is a CHOICE of exactly two drivers.
-     *
-     * Mutation: change `type: choice` to `type: string`, or add an option.
-     */
+    /** W4. The target is a CHOICE of exactly two drivers. */
     public function test_the_target_input_is_a_choice_of_exactly_file_and_database(): void
     {
         $target = $this->block($this->block($this->workflow(), 'on'), 'target', depth: 6);
@@ -163,22 +165,12 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         $this->assertStringContainsString('type: choice', $target, 'The target driver is not a restricted choice.');
 
         preg_match_all('/^\s*- (\S+)\s*$/m', $target, $matches);
-
         sort($matches[1]);
 
-        $this->assertSame(
-            ['database', 'file'],
-            $matches[1],
-            'The selectable drivers must be exactly database and file.'
-        );
+        $this->assertSame(['database', 'file'], $matches[1], 'The selectable drivers must be exactly database and file.');
     }
 
-    /**
-     * W5. A TYPED confirmation, checked against an exact phrase.
-     *
-     * Mutation: delete the comparison and keep the input. The workflow still
-     * looks confirmed and no longer is.
-     */
+    /** W5. A TYPED confirmation, checked against an exact phrase. */
     public function test_a_typed_confirmation_phrase_is_required_and_enforced(): void
     {
         $workflow = $this->workflow();
@@ -186,33 +178,30 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         $this->assertStringContainsString('confirmation:', $this->block($workflow, 'on'));
 
         $this->assertMatchesRegularExpression(
-            '/if \[ "\$CONFIRMATION" != "ALIGN SESSION DRIVER" \]; then/',
+            '/if \[ "\$\{CONFIRMATION:-\}" != "ALIGN SESSION DRIVER" \]; then\s*\n\s*echo "::error::[^\n]*"\s*\n\s*exit 1/',
             $workflow,
-            'The confirmation input is collected but never compared against the expected phrase.'
-        );
-
-        $this->assertMatchesRegularExpression(
-            '/!= "ALIGN SESSION DRIVER" \]; then\s*\n\s*echo "::error::[^\n]*"\s*\n\s*exit 1/',
-            $workflow,
-            'A wrong confirmation phrase does not stop the run.'
+            'The confirmation input is collected but a wrong phrase does not stop the run.'
         );
     }
 
-    /** W6. THERE IS NO GENERAL ENVIRONMENT EDITOR. */
+    /**
+     * W6. THREE INPUTS, AND NOWHERE TO PUT A KEY OR A VALUE.
+     *
+     * The third is the rollback takeover confirmation added in round 3. It is
+     * still a fixed phrase, not a setting: there is no key field, no value
+     * field and no free-text configuration name anywhere in the block.
+     */
     public function test_the_workflow_offers_no_arbitrary_key_or_value_input(): void
     {
         $inputs = $this->block($this->workflow(), 'on');
 
         preg_match_all('/^      ([a-z_]+):\s*$/m', $inputs, $matches);
-
         sort($matches[1]);
 
         $this->assertSame(
-            ['confirmation', 'target'],
+            ['confirmation', 'rollback_takeover', 'target'],
             $matches[1],
-            'The workflow accepts inputs beyond the driver and the confirmation: '
-            .implode(', ', $matches[1]).'. There is nowhere for an arbitrary .env key to be supplied, '
-            .'and it must stay that way.'
+            'The workflow accepts inputs beyond the driver and the two confirmations: '.implode(', ', $matches[1])
         );
 
         foreach (['key:', 'value:', 'env_key:', 'setting:'] as $forbidden) {
@@ -220,29 +209,17 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         }
     }
 
-    // -----------------------------------------------------------------
-    // The ref guard.
-    // -----------------------------------------------------------------
-
     /** W7. A HARD REFUSAL UNLESS THE REF IS main. */
     public function test_it_refuses_unless_it_was_dispatched_from_main(): void
     {
-        $workflow = $this->workflow();
-
         $this->assertMatchesRegularExpression(
-            '/if \[ "\$\{\{ github\.ref \}\}" != "refs\/heads\/main" \]; then/',
-            $workflow,
-            'There is no exact equality check on the dispatching ref.'
-        );
-
-        $this->assertMatchesRegularExpression(
-            '/!= "refs\/heads\/main" \]; then\s*\n\s*echo "::error::[^\n]*"\s*\n\s*exit 1/',
-            $workflow,
+            '/if \[ "\$\{\{ github\.ref \}\}" != "refs\/heads\/main" \]; then\s*\n\s*echo "::error::[^\n]*"\s*\n\s*exit 1/',
+            $this->workflow(),
             'A dispatch from a branch other than main does not stop the run.'
         );
     }
 
-    /** W8. And the guard runs before anything reaches the server. */
+    /** W8. And the guards run before anything reaches the server. */
     public function test_the_ref_and_confirmation_guards_run_before_any_ssh_step(): void
     {
         $workflow = $this->workflow();
@@ -259,10 +236,6 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         $this->assertLessThan($firstSsh, $confirmation, 'SSH is configured before the confirmation is checked.');
     }
 
-    // -----------------------------------------------------------------
-    // Concurrency, permissions, credentials.
-    // -----------------------------------------------------------------
-
     /** W9. THE SAME CONCURRENCY GROUP AS THE DEPLOYMENT, AND NEVER CANCELLED. */
     public function test_it_shares_the_deployment_concurrency_group_and_never_cancels(): void
     {
@@ -271,11 +244,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         $this->assertMatchesRegularExpression('/^\s*group: cpanel-deploy\s*$/m', $concurrency);
         $this->assertMatchesRegularExpression('/^\s*cancel-in-progress: false\s*$/m', $concurrency);
 
-        // The other half of the claim: it is the group the deployment uses.
-        $deployConcurrency = $this->block(
-            $this->withoutComments($this->read('.github/workflows/deploy.yml')),
-            'concurrency'
-        );
+        $deployConcurrency = $this->block($this->withoutComments($this->read('.github/workflows/deploy.yml')), 'concurrency');
 
         $this->assertMatchesRegularExpression(
             '/^\s*group: cpanel-deploy\s*$/m',
@@ -285,7 +254,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         $this->assertMatchesRegularExpression('/^\s*cancel-in-progress: false\s*$/m', $deployConcurrency);
     }
 
-    /** W10. Read-only token. It needs the checkout and nothing more. */
+    /** W10. Read-only token. */
     public function test_the_workflow_token_is_read_only(): void
     {
         $permissions = $this->block($this->workflow(), 'permissions');
@@ -308,45 +277,30 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             'CPANEL_HOST', 'CPANEL_PORT', 'CPANEL_USER', 'CPANEL_DEPLOY_PATH',
             'CPANEL_SSH_PRIVATE_KEY', 'CPANEL_SSH_KEY_PASSPHRASE',
         ] as $secret) {
-            $this->assertStringContainsString(
-                'secrets.'.$secret,
-                $workflow,
-                "The workflow does not read the established [{$secret}] secret."
-            );
+            $this->assertStringContainsString('secrets.'.$secret, $workflow, "The workflow does not read the established [{$secret}] secret.");
         }
 
         preg_match_all('/secrets\.([A-Z_]+)/', $workflow, $matches);
-
         $deploy = $this->read('.github/workflows/deploy.yml');
 
         foreach (array_unique($matches[1]) as $secret) {
             $this->assertStringContainsString(
                 'secrets.'.$secret,
                 $deploy,
-                "[{$secret}] is a secret the deployment does not use. This workflow must not introduce "
-                .'a second credentials model.'
+                "[{$secret}] is a secret the deployment does not use. This workflow must not introduce a second credentials model."
             );
         }
     }
 
-    /** W12. The passphrase-protected key needs ssh-agent and askpass, as the siblings do. */
+    /** W12. The passphrase-protected key needs ssh-agent and askpass. */
     public function test_it_uses_the_established_ssh_agent_and_askpass_mechanism(): void
     {
         $workflow = $this->workflow();
 
         foreach (['ssh-agent -s', 'SSH_ASKPASS', 'SSH_ASKPASS_REQUIRE=force', 'ssh-add', 'ssh-keyscan'] as $fragment) {
-            $this->assertStringContainsString(
-                $fragment,
-                $workflow,
-                "The SSH setup omits [{$fragment}]. The deploy key is passphrase-protected; writing the "
-                .'key file alone produces "Permission denied (publickey)".'
-            );
+            $this->assertStringContainsString($fragment, $workflow, "The SSH setup omits [{$fragment}].");
         }
     }
-
-    // -----------------------------------------------------------------
-    // What it runs on the server.
-    // -----------------------------------------------------------------
 
     /** W13. THE SCRIPT IS CALLED WITH A PATH AND A DRIVER. NOTHING ELSE. */
     public function test_the_script_is_piped_over_stdin_with_only_a_path_and_a_target(): void
@@ -356,16 +310,11 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         $this->assertMatchesRegularExpression(
             '/"sh -s -- \\\\"\$CPANEL_DEPLOY_PATH\\\\" \\\\"\$TARGET_DRIVER\\\\""\s*\\\\\s*\n\s*< deployment\/ensure-session-driver\.sh/',
             $workflow,
-            'The script is not invoked with exactly the deployment path and the target driver, piped '
-            .'over stdin.'
+            'The script is not invoked with exactly the deployment path and the target driver, piped over stdin.'
         );
 
         foreach (['scp ', 'rsync ', 'cat > ', 'install -m'] as $copies) {
-            $this->assertStringNotContainsString(
-                $copies.'deployment/',
-                $workflow,
-                'The script must not be deployed to the host.'
-            );
+            $this->assertStringNotContainsString($copies.'deployment/', $workflow, 'The script must not be deployed to the host.');
         }
 
         $this->assertFileExists($this->root().'/'.self::SCRIPT, 'The workflow pipes a script that does not exist.');
@@ -381,15 +330,21 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         }
     }
 
-    /** W15. IT NEVER TOUCHES IDENTITY, Entra OR APP_KEY. */
+    /**
+     * W15. IT NEVER TOUCHES IDENTITY, SIGN-IN CONFIGURATION OR THE APPLICATION KEY.
+     *
+     * Case-insensitively. The first version of this guard compared case
+     * sensitively, so the word it forbade sat in the workflow's own header in
+     * different case and the test passed - a guard that only catches a mutation
+     * typed in one particular case is most of the way to no guard.
+     */
     public function test_it_never_modifies_identity_configuration_or_the_app_key(): void
     {
-        $workflow = $this->workflow();
+        $workflow = strtolower($this->workflow());
 
         foreach ([
-            'APP_KEY', 'key:generate', 'ensure-app-key',
-            'MICROSOFT_', 'identity_source', 'IDENTITY_SOURCE',
-            'identity:', 'entra',
+            'app_key', 'key:generate', 'ensure-app-key',
+            'microsoft_', 'identity_source', 'identity:', 'entra',
         ] as $forbidden) {
             $this->assertStringNotContainsString(
                 $forbidden,
@@ -408,31 +363,11 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             'cat .env', 'cat "$CPANEL_DEPLOY_PATH/.env"', 'grep .env', 'head .env', 'tail .env',
             'sessions', 'payload', 'ip_address', 'user_agent', 'SELECT',
         ] as $forbidden) {
-            $this->assertStringNotContainsString(
-                $forbidden,
-                $workflow,
-                "The workflow references [{$forbidden}]. Nothing from .env or the session store may reach "
-                .'a workflow log.'
-            );
+            $this->assertStringNotContainsString($forbidden, $workflow, "The workflow references [{$forbidden}].");
         }
     }
 
-    // -----------------------------------------------------------------
-    // Ordering.
-    // -----------------------------------------------------------------
-
-    /**
-     * W17. THE OPERATIONAL SEQUENCE, IN ORDER.
-     *
-     * Validate, prove access, establish the starting state and decide whether
-     * there is anything to do - all before the site goes dark. Then the
-     * existing-maintenance refusal, the window, the change, the cache clear,
-     * the verification that the APPLICATION is on the requested driver, health,
-     * and only then the site comes back.
-     *
-     * Mutation: move `Close the maintenance window` above the verification. The
-     * site then returns before anything has confirmed it works.
-     */
+    /** W17. THE OPERATIONAL SEQUENCE, IN ORDER. */
     public function test_the_steps_run_in_the_required_order(): void
     {
         $names = $this->stepNames();
@@ -444,8 +379,8 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             'Configure SSH',
             'Verify SSH access before anything is changed',
             self::PLAN_STEP,
-            'Refuse if production is already in maintenance',
-            'Open the maintenance window',
+            self::MAINTENANCE_STEP,
+            self::MUTATION_STEP,
             'Align SESSION_DRIVER',
             'Clear compiled caches',
             'Verify the effective driver is the requested target',
@@ -457,9 +392,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
 
         foreach ($expected as $name) {
             $position = array_search($name, $names, true);
-
             $this->assertNotFalse($position, "The workflow has no step named [{$name}].");
-
             $positions[] = $position;
         }
 
@@ -474,11 +407,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     {
         $workflow = $this->workflow();
 
-        $this->assertStringContainsString(
-            'config(\\"session.driver\\")',
-            $workflow,
-            'Nothing reads the effective driver back out of the application.'
-        );
+        $this->assertStringContainsString('config(\\"session.driver\\")', $workflow, 'Nothing reads the effective driver back out of the application.');
 
         $this->assertMatchesRegularExpression(
             '/if \[ "\$effective" != "\$TARGET_DRIVER" \]; then\s*\n\s*echo "::error::[^\n]*"\s*\n\s*exit 1/',
@@ -488,105 +417,52 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     }
 
     // =================================================================
-    // BLOCKER 1 - failing closed means PUTTING THE SITE DOWN, not saying it
-    // is down. These cases RUN the recovery step.
+    // ROUND 1 BLOCKER - failing closed means PUTTING THE SITE DOWN.
     // =================================================================
 
     /**
-     * W19. A FAILURE AFTER THE DRIVER CHANGED RE-ENTERS MAINTENANCE.
+     * W19. A FAILURE AFTER THE SITE CAME BACK UP PUTS IT BACK INTO MAINTENANCE.
      *
-     * THE DEFECT THIS EXISTS FOR. The first version of this workflow announced
-     * that production had been "LEFT IN MAINTENANCE" and issued no command that
-     * would make that so. The normal close step runs `artisan up` BEFORE the
-     * HTTPS verification and the reporting, so a failure in either of those
-     * left a changed, unverified deployment SERVING USERS while the log said
-     * the opposite. The test that covered it asserted the message.
-     *
-     * So this one runs the step. The fixture is exactly that scenario - the
-     * driver changed, `artisan up` has already run, the site is LIVE - and the
-     * assertion is on the commands the step actually sent to the server.
+     * The normal close step runs `artisan up` BEFORE the HTTPS verification and
+     * the reporting, so a failure in either left a changed, unverified
+     * deployment SERVING USERS while the log said the opposite.
      */
     public function test_a_failure_after_the_site_came_back_up_puts_it_back_into_maintenance(): void
     {
-        $result = $this->runRecovery(
-            starting: 'file',
-            effectiveDriver: 'database',
-            maintenanceState: 'LIVE',   // artisan up already ran
-            weOpened: 'true',
-        );
+        $result = $this->runRecovery(starting: 'file', driver: 'database', state: 'LIVE', origin: 'opened', mutated: 'true');
 
         $this->assertNotSame(0, $result['exit'], 'A failed run must fail the job.');
 
         $this->assertContains(
             'php artisan down --retry=60',
             $result['commands'],
-            'The driver was changed and the run failed with the site LIVE, and the recovery step sent no '
-            .'maintenance command. Production is serving an unverified deployment.'
+            'The driver was changed and the run failed with the site LIVE, and recovery sent no maintenance command.'
         );
 
-        $this->assertSame(
-            'MAINTENANCE',
-            $result['state'],
-            'The recovery step ran but production did not end up in maintenance.'
-        );
-
+        $this->assertSame('MAINTENANCE', $result['state'], 'Production did not end up in maintenance.');
         $this->assertStringContainsString('PUT BACK INTO MAINTENANCE', $result['output']);
-
-        $this->assertNotContains(
-            'php artisan up',
-            $result['commands'],
-            'The recovery step brought the site back up after a failed driver change.'
-        );
+        $this->assertNotContains('php artisan up', $result['commands']);
     }
 
-    /**
-     * W20. AND THE COMMAND IS WHAT DOES IT, not the sentence.
-     *
-     * The same fixture against a copy of the workflow with only the recovery
-     * `artisan down` removed. If this run still ended in maintenance, W19 would
-     * be proving nothing.
-     */
+    /** W20. AND THE COMMAND IS WHAT DOES IT, not the sentence. */
     public function test_without_the_recovery_down_the_same_failure_leaves_production_serving(): void
     {
-        $mutant = $this->workflowWithout(self::RECOVERY_DOWN);
-
         $result = $this->runRecovery(
-            starting: 'file',
-            effectiveDriver: 'database',
-            maintenanceState: 'LIVE',
-            weOpened: 'true',
-            workflow: $mutant,
+            starting: 'file', driver: 'database', state: 'LIVE', origin: 'opened', mutated: 'true',
+            workflow: $this->workflowWithout(self::RECOVERY_DOWN),
         );
 
-        $this->assertSame(
-            'LIVE',
-            $result['state'],
-            'Production ended up in maintenance even with the recovery command removed, so W19 proves '
-            .'nothing about that command.'
-        );
-
+        $this->assertSame('LIVE', $result['state'], 'Production ended in maintenance even with the command removed, so W19 proves nothing.');
         $this->assertNotContains('php artisan down --retry=60', $result['commands']);
     }
 
-    /**
-     * W21. THE CLAIM CANNOT OUTLIVE THE COMMAND.
-     *
-     * A structural companion to W19: whatever wording the recovery step uses,
-     * it may not assert that production is in maintenance unless it has sent a
-     * maintenance command first. This catches the original phrasing too, so
-     * reintroducing "LEFT IN MAINTENANCE" without the command fails here.
-     */
+    /** W21. THE CLAIM CANNOT OUTLIVE THE COMMAND. */
     public function test_no_maintenance_claim_appears_before_the_maintenance_command(): void
     {
         $recovery = $this->stepBody($this->workflow(), self::RECOVERY_STEP);
 
         $down = strpos($recovery, 'artisan down');
-
-        $this->assertNotFalse(
-            $down,
-            'The recovery step never issues a maintenance command, so it cannot honestly claim production '
-            .'is in maintenance.'
-        );
+        $this->assertNotFalse($down, 'The recovery step never issues a maintenance command.');
 
         foreach (['LEFT IN MAINTENANCE', 'PUT BACK INTO MAINTENANCE', 'left in maintenance'] as $claim) {
             $position = strpos($recovery, $claim);
@@ -595,243 +471,421 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
                 continue;
             }
 
-            $this->assertLessThan(
-                $position,
-                $down,
-                "The recovery step claims [{$claim}] before it has issued any maintenance command."
-            );
+            $this->assertLessThan($position, $down, "The recovery step claims [{$claim}] before any maintenance command.");
         }
     }
 
-    /**
-     * W22. IF MAINTENANCE CANNOT BE GUARANTEED, IT IS NOT CLAIMED.
-     *
-     * `artisan down` can fail - the same broken SSH or broken application that
-     * failed the run can fail it. Reporting maintenance anyway would be the
-     * original defect wearing a command.
-     */
+    /** W22. IF MAINTENANCE CANNOT BE GUARANTEED, IT IS NOT CLAIMED. */
     public function test_a_failed_recovery_down_escalates_instead_of_claiming_maintenance(): void
     {
         $result = $this->runRecovery(
-            starting: 'file',
-            effectiveDriver: 'database',
-            maintenanceState: 'LIVE',
-            weOpened: 'true',
+            starting: 'file', driver: 'database', state: 'LIVE', origin: 'opened', mutated: 'true',
             downFails: true,
         );
 
         $this->assertNotSame(0, $result['exit']);
         $this->assertSame('LIVE', $result['state']);
-
-        $this->assertStringNotContainsString(
-            'PUT BACK INTO MAINTENANCE',
-            $result['output'],
-            'The recovery step claimed maintenance after the command to enter it had failed.'
-        );
-
+        $this->assertStringNotContainsString('PUT BACK INTO MAINTENANCE', $result['output']);
         $this->assertStringContainsString('CRITICAL', $result['output']);
         $this->assertStringContainsString('MAINTENANCE MODE COULD NOT BE GUARANTEED', $result['output']);
-        $this->assertStringContainsString('SSH IMMEDIATELY', $result['output']);
     }
 
     /** W23. An unreadable driver is an unknown state, and is escalated as one. */
     public function test_an_unreadable_driver_after_a_failure_is_escalated_as_unknown(): void
     {
-        $result = $this->runRecovery(
-            starting: 'file',
-            effectiveDriver: '',
-            maintenanceState: 'LIVE',
-            weOpened: 'true',
-        );
+        $result = $this->runRecovery(starting: 'file', driver: '', state: 'LIVE', origin: 'opened', mutated: 'true');
 
         $this->assertNotSame(0, $result['exit']);
         $this->assertStringContainsString('UNKNOWN', $result['output']);
         $this->assertStringContainsString('CRITICAL', $result['output']);
-
-        $this->assertNotContains(
-            'php artisan up',
-            $result['commands'],
-            'The state could not be read and the recovery step brought the site up anyway.'
-        );
+        $this->assertNotContains('php artisan up', $result['commands']);
     }
 
     /** W24. A failure before the plan step means nothing was touched, and it says so. */
     public function test_a_failure_before_the_driver_was_established_touches_nothing(): void
     {
-        $result = $this->runRecovery(
-            starting: '',
-            effectiveDriver: 'file',
-            maintenanceState: 'LIVE',
-            weOpened: '',
-        );
+        $result = $this->runRecovery(starting: '', driver: 'file', state: 'LIVE', origin: '', mutated: '');
 
         $this->assertNotSame(0, $result['exit']);
         $this->assertSame([], $result['commands'], 'Something was sent to the server after an early failure.');
-        $this->assertStringContainsString('was not touched', $result['output']);
+        $this->assertStringContainsString('nothing on the server was written', $result['output']);
     }
 
     // =================================================================
-    // BLOCKER 3 - this workflow never closes a window it did not open.
+    // BLOCKER 4 - recovery must not write after a refusal that did not.
     // =================================================================
 
-    /** W25. Production already in maintenance is a hard refusal, before any mutation. */
-    public function test_existing_maintenance_causes_a_hard_refusal_before_any_mutation(): void
+    /**
+     * B4-1. A REFUSAL THAT WROTE NOTHING LEAVES RECOVERY READ-ONLY.
+     *
+     * Round 2's recovery ran `optimize:clear` before it knew whether this run
+     * had mutated anything. A run that refused because production was already
+     * in somebody else's maintenance window would therefore go on to clear
+     * compiled caches INSIDE that window - and the workflow's own claim to
+     * "refuse before any mutation" was false.
+     */
+    public function test_recovery_clears_no_caches_when_no_mutation_was_attempted(): void
     {
-        $refusal = $this->stepBody($this->workflow(), 'Refuse if production is already in maintenance');
+        $result = $this->runRecovery(starting: 'file', driver: 'file', state: 'MAINTENANCE', origin: '', mutated: '');
 
-        // Established from the application, not guessed from an HTTP status: a
-        // proxy or a cache can produce a 503 without the application being down.
-        $this->assertStringContainsString(
-            'isDownForMaintenance',
-            $refusal,
-            'The maintenance state is not established from the application itself.'
+        $this->assertNotSame(0, $result['exit']);
+
+        $this->assertNotContains(
+            'php artisan optimize:clear',
+            $result['commands'],
+            'Recovery cleared compiled caches after a run that had written nothing to the server.'
         );
 
-        $this->assertStringNotContainsString('curl', $refusal, 'The maintenance state must not be inferred from HTTP.');
-        $this->assertStringNotContainsString('http_code', $refusal);
+        $this->assertStringContainsString('read-only', $result['output']);
+        $this->assertStringContainsString('written nothing to the server', $result['output']);
+    }
 
-        $this->assertMatchesRegularExpression(
-            '/MAINTENANCE\)\s*\n\s*echo "::error::[^\n]*"\s*\n\s*exit 1/',
-            $refusal,
-            'Finding production already in maintenance does not stop the run.'
+    /** B4-2. And the guard is what does it: removed, the cache clear happens. */
+    public function test_without_the_mutation_guard_recovery_writes_after_a_refusal(): void
+    {
+        $result = $this->runRecovery(
+            starting: 'file', driver: 'file', state: 'MAINTENANCE', origin: '', mutated: '',
+            workflow: $this->workflowWithout(self::MUTATION_GUARD, replacement: 'if true; then'),
         );
 
-        // An unreadable state is a refusal too, not an assumption that it is live.
-        $this->assertMatchesRegularExpression(
-            '/\*\)\s*\n\s*echo "::error::Could not establish[^\n]*"\s*\n\s*exit 1/',
-            $refusal
-        );
-
-        // And it happens before the window is opened.
-        $names = $this->stepNames();
-
-        $this->assertLessThan(
-            array_search('Open the maintenance window', $names, true),
-            array_search('Refuse if production is already in maintenance', $names, true)
+        $this->assertContains(
+            'php artisan optimize:clear',
+            $result['commands'],
+            'No cache clear happened even without the guard, so B4-1 proves nothing about the guard.'
         );
     }
 
-    /** W26. Ownership is recorded only once the window has actually been opened. */
-    public function test_ownership_of_the_window_is_recorded_only_after_it_opens(): void
+    /** B4-3. Recovery DOES clear caches when a mutation really was attempted - it has to. */
+    public function test_recovery_clears_caches_when_a_mutation_was_attempted(): void
     {
-        $open = $this->stepBody($this->workflow(), 'Open the maintenance window');
+        $result = $this->runRecovery(starting: 'file', driver: 'database', state: 'LIVE', origin: 'opened', mutated: 'true');
 
-        $down = strpos($open, 'artisan down --retry=60');
-        $records = strpos($open, 'opened=true');
-
-        $this->assertNotFalse($down);
-        $this->assertNotFalse($records, 'The open step records no ownership, so recovery cannot know who owns the window.');
-
-        $this->assertLessThan(
-            $records,
-            $down,
-            'Ownership is recorded before the window is actually opened, so a failed `artisan down` would '
-            .'still leave the run believing it owns the window.'
-        );
-    }
-
-    /** W27. The close step is gated on OWNERSHIP, not on anything that merely correlates with it. */
-    public function test_the_close_step_is_gated_on_ownership(): void
-    {
-        $this->assertSame(
-            "steps.maintenance.outputs.opened == 'true'",
-            $this->gate('Close the maintenance window'),
-            'The close step is not gated on this run having opened the window.'
+        $this->assertContains(
+            'php artisan optimize:clear',
+            $result['commands'],
+            'After a real mutation the effective driver cannot be read truthfully without clearing the cache.'
         );
     }
 
     /**
-     * W28. RECOVERY DOES NOT RELEASE A WINDOW IT DID NOT OPEN.
+     * B4-4. THE WHOLE REFUSAL SEQUENCE, RUN END TO END, WRITES NOTHING.
      *
-     * The scenario: the existing-maintenance refusal fires. The driver is
-     * unchanged, so recovery takes the "nothing happened" branch - and must not
-     * run `artisan up`, because the window in effect belongs to whatever
-     * operation the refusal was protecting.
+     * Production is in somebody else's maintenance window and the target is
+     * `database`. The maintenance step must refuse, and NOTHING in the entire
+     * run - including recovery - may send a write.
      */
-    public function test_recovery_never_closes_a_maintenance_window_this_run_did_not_open(): void
+    public function test_a_pre_existing_maintenance_refusal_sends_no_write_at_all(): void
     {
-        $result = $this->runRecovery(
-            starting: 'file',
-            effectiveDriver: 'file',
-            maintenanceState: 'MAINTENANCE',   // somebody else's window
-            weOpened: '',
+        $run = $this->runSequence(
+            target: 'database',
+            driver: 'file',
+            state: 'MAINTENANCE',
         );
+
+        $this->assertContains(self::MAINTENANCE_STEP, $run['failed'], 'The maintenance step did not refuse.');
+
+        $this->assertNoWrites($run);
+
+        $this->assertSame('MAINTENANCE', $run['state'], "Somebody else's maintenance window was disturbed.");
+        $this->assertSame('file', $run['driver'], 'The driver moved despite the refusal.');
+        $this->assertStringContainsString('will never assume control of an existing window', $run['output']);
+    }
+
+    /** B4-5. An unreadable maintenance state refuses, and writes nothing either. */
+    public function test_an_unreadable_maintenance_state_refuses_and_writes_nothing(): void
+    {
+        $run = $this->runSequence(target: 'database', driver: 'file', state: 'UNREADABLE-GARBAGE');
+
+        $this->assertContains(self::MAINTENANCE_STEP, $run['failed']);
+        $this->assertNoWrites($run);
+        $this->assertStringContainsString('Could not establish whether production is in maintenance', $run['output']);
+    }
+
+    /** B4-6. A failure before the maintenance step writes nothing either. */
+    public function test_a_failure_before_the_maintenance_step_sends_no_write(): void
+    {
+        // An unrecognised production driver stops the plan step.
+        $run = $this->runSequence(target: 'database', driver: 'redis', state: 'LIVE');
+
+        $this->assertContains(self::PLAN_STEP, $run['failed']);
+        $this->assertNoWrites($run);
+        $this->assertNotContains(self::MAINTENANCE_STEP, $run['ran']);
+    }
+
+    /** B4-7. The mutation flag is recorded immediately before the script, and nowhere else. */
+    public function test_the_mutation_flag_is_recorded_only_immediately_before_the_script(): void
+    {
+        $workflow = $this->workflow();
+
+        $this->assertSame(
+            1,
+            substr_count($workflow, 'attempted=true'),
+            'The mutation-attempted flag is written in more than one place, so it no longer means "the '
+            .'driver script is about to run".'
+        );
+
+        $names = $this->stepNames();
+
+        $this->assertSame(
+            array_search('Align SESSION_DRIVER', $names, true) - 1,
+            array_search(self::MUTATION_STEP, $names, true),
+            'The mutation-attempted flag is not recorded in the step immediately before the script runs.'
+        );
+    }
+
+    // =================================================================
+    // BLOCKER 5 - the advertised rollback must actually be runnable.
+    // =================================================================
+
+    /**
+     * B5-1. THE RECOVERY DEADLOCK, AND ITS WAY OUT - RUN END TO END.
+     *
+     * Round 2 advertised "dispatch this workflow with target [file]" as the
+     * rollback, deliberately left production in maintenance on a failed forward
+     * change, and then refused any run that found production in maintenance.
+     * The documented way out could not run.
+     *
+     * This case runs BOTH dispatches against one stubbed server:
+     *
+     *   Run 1  file -> database, HTTPS verification fails after the site is
+     *          back up. Recovery must leave production DOWN on `database`.
+     *
+     *   Run 2  the rollback: database -> file, production already in
+     *          maintenance, takeover confirmation supplied. It must be
+     *          accepted, run the same script, verify `file`, pass health, and
+     *          close the window it assumed control of.
+     *
+     * Final state must be `file` and LIVE - a deployment an operator could
+     * actually recover with this tooling.
+     */
+    public function test_a_failed_forward_run_can_be_rolled_back_by_the_same_workflow(): void
+    {
+        $this->givenServer(driver: 'file', state: 'LIVE');
+
+        // ---- Run 1: forward, failing after the site came back up. ----------
+        $forward = $this->runSequence(target: 'database', httpCode: '500', fresh: false);
+
+        $this->assertContains('Verify the site over HTTPS', $forward['failed'], 'Run 1 did not fail where this case needs it to.');
+        $this->assertContains('Close the maintenance window', $forward['ran'], 'Run 1 never brought the site back up, so the deadlock is not reproduced.');
+
+        $this->assertSame('database', $forward['driver'], 'Run 1 did not change the driver.');
+        $this->assertSame('MAINTENANCE', $forward['state'], 'Run 1 left a changed, unverified deployment serving users.');
+        $this->assertStringContainsString('rollback takeover confirmation', $forward['output'], 'Run 1 does not tell the operator how to get out.');
+
+        // ---- Run 2: the rollback the failure message named. ----------------
+        $rollback = $this->runSequence(target: 'file', takeover: self::TAKEOVER_PHRASE, fresh: false);
+
+        $this->assertSame([], $rollback['failed'], 'The advertised rollback was refused: '.$rollback['output']);
+
+        $this->assertContains(self::MAINTENANCE_STEP, $rollback['ran']);
+        $this->assertSame('takeover', $rollback['outputs']['maintenance']['origin'] ?? null, 'The rollback did not assume control of the window.');
+
+        $this->assertContains('Align SESSION_DRIVER', $rollback['ran']);
+        $this->assertContains('Verify the effective driver is the requested target', $rollback['ran']);
+        $this->assertContains('Verify application health over SSH', $rollback['ran']);
+        $this->assertContains('Close the maintenance window', $rollback['ran']);
+
+        $this->assertSame('file', $rollback['driver'], 'The rollback did not restore the file driver.');
+        $this->assertSame('LIVE', $rollback['state'], 'The rollback left production down.');
+    }
+
+    /** B5-2. A forward alignment can NEVER take over a window, whatever is typed. */
+    public function test_a_forward_alignment_can_never_take_over_an_existing_window(): void
+    {
+        // Without the phrase.
+        $plain = $this->runSequence(target: 'database', driver: 'file', state: 'MAINTENANCE');
+        $this->assertContains(self::MAINTENANCE_STEP, $plain['failed']);
+        $this->assertNoWrites($plain);
+
+        // And with it - it is refused before anything reaches the server.
+        $withPhrase = $this->runSequence(target: 'database', driver: 'file', state: 'MAINTENANCE', takeover: self::TAKEOVER_PHRASE);
+        $this->assertContains('Refuse an unrecognised target driver', $withPhrase['failed'], 'The takeover phrase was accepted alongside a forward target.');
+        $this->assertNoWrites($withPhrase);
+        $this->assertStringContainsString('can never authorise a forward alignment', $withPhrase['output']);
+    }
+
+    /** B5-3. A rollback without the takeover confirmation cannot take over either. */
+    public function test_a_rollback_without_the_takeover_confirmation_is_refused(): void
+    {
+        $run = $this->runSequence(target: 'file', driver: 'database', state: 'MAINTENANCE');
+
+        $this->assertContains(self::MAINTENANCE_STEP, $run['failed']);
+        $this->assertNoWrites($run);
+        $this->assertSame('MAINTENANCE', $run['state']);
+        $this->assertStringContainsString('only when the exact takeover confirmation is supplied', $run['output']);
+    }
+
+    /** B5-4. And a WRONG takeover phrase is refused - before anything reaches the server. */
+    public function test_a_wrong_takeover_phrase_is_refused(): void
+    {
+        foreach (['take over maintenance for session rollback', 'TAKE OVER MAINTENANCE', 'TAKE OVER MAINTENANCE FOR SESSION ROLLBACK '] as $phrase) {
+            $run = $this->runSequence(target: 'file', driver: 'database', state: 'MAINTENANCE', takeover: $phrase);
+
+            $this->assertNotSame([], $run['failed'], "[{$phrase}] was accepted as the takeover confirmation.");
+            $this->assertNoWrites($run);
+            $this->assertSame('MAINTENANCE', $run['state']);
+        }
+    }
+
+    /**
+     * B5-5. A FAILED ROLLBACK KEEPS PRODUCTION IN MAINTENANCE.
+     *
+     * The window it holds was opened by the failed forward change it exists to
+     * undo. Releasing it would put exactly that state in front of users, so
+     * `takeover` is the one origin that must NOT close on failure.
+     */
+    public function test_a_failed_rollback_leaves_the_inherited_maintenance_window_active(): void
+    {
+        $result = $this->runRecovery(starting: 'database', driver: 'database', state: 'MAINTENANCE', origin: 'takeover', mutated: 'true');
 
         $this->assertNotSame(0, $result['exit']);
 
         $this->assertNotContains(
             'php artisan up',
             $result['commands'],
-            'The recovery step released a maintenance window that belongs to another operation.'
+            'A failed rollback released the window opened by the failure it was undoing.'
         );
 
-        $this->assertSame('MAINTENANCE', $result['state'], "Somebody else's maintenance window was ended.");
-        $this->assertStringContainsString('did not open a maintenance window', $result['output']);
+        $this->assertSame('MAINTENANCE', $result['state']);
+        $this->assertStringContainsString('deliberately LEFT ACTIVE', $result['output']);
+        $this->assertStringContainsString('target [file]', $result['output']);
     }
 
-    /** W29. But it does close its own. */
-    public function test_recovery_closes_the_window_when_this_run_opened_it(): void
+    /** B5-6. Whereas a window this run opened over a LIVE deployment is restored. */
+    public function test_a_failed_forward_run_that_changed_nothing_restores_the_live_state(): void
     {
-        $result = $this->runRecovery(
-            starting: 'file',
-            effectiveDriver: 'file',
-            maintenanceState: 'MAINTENANCE',
-            weOpened: 'true',
-        );
+        $result = $this->runRecovery(starting: 'file', driver: 'file', state: 'MAINTENANCE', origin: 'opened', mutated: 'true');
 
         $this->assertNotSame(0, $result['exit'], 'The run still failed and must still report failure.');
-
-        $this->assertContains(
-            'php artisan up',
-            $result['commands'],
-            'Nothing was changed and the window this run opened was left closed over production.'
-        );
-
+        $this->assertContains('php artisan up', $result['commands']);
         $this->assertSame('LIVE', $result['state']);
         $this->assertStringContainsString('THIS RUN opened', $result['output']);
     }
 
+    /** B5-7. And a run holding nothing never issues `up`. */
+    public function test_recovery_never_closes_a_maintenance_window_this_run_did_not_open(): void
+    {
+        $result = $this->runRecovery(starting: 'file', driver: 'file', state: 'MAINTENANCE', origin: '', mutated: '');
+
+        $this->assertNotSame(0, $result['exit']);
+        $this->assertNotContains('php artisan up', $result['commands'], 'Recovery released a window belonging to another operation.');
+        $this->assertSame('MAINTENANCE', $result['state']);
+        $this->assertStringContainsString('holds no maintenance window', $result['output']);
+    }
+
+    /** B5-8. Only a held window is ever closed on success. */
+    public function test_the_close_step_is_gated_on_holding_the_window(): void
+    {
+        $this->assertSame(
+            "steps.maintenance.outputs.origin == 'opened' || steps.maintenance.outputs.origin == 'takeover'",
+            $this->gate('Close the maintenance window'),
+            'The close step is not gated on this run holding the window.'
+        );
+    }
+
+    /** B5-9. Ownership is recorded only once the authority is real. */
+    public function test_ownership_is_recorded_only_after_the_authority_is_real(): void
+    {
+        $step = $this->stepBody($this->workflow(), self::MAINTENANCE_STEP);
+
+        $down = strpos($step, 'artisan down --retry=60');
+        $opened = strpos($step, 'origin=opened');
+        $takeover = strpos($step, 'origin=takeover');
+
+        $this->assertNotFalse($down);
+        $this->assertNotFalse($opened, 'The step records no ownership, so recovery cannot know who holds the window.');
+        $this->assertNotFalse($takeover);
+
+        $this->assertLessThan($opened, $down, 'Ownership is recorded before the window is actually opened.');
+
+        // The takeover branch re-confirms the window before claiming it.
+        $this->assertSame(2, substr_count($step, 'state="$(read_state)"'), 'The takeover branch does not re-confirm the window before assuming control.');
+        $this->assertLessThan($takeover, strrpos($step, 'state="$(read_state)"'));
+    }
+
+    /** B5-10. The maintenance state is taken from the application, never from HTTP. */
+    public function test_the_maintenance_state_is_established_from_the_application(): void
+    {
+        $step = $this->stepBody($this->workflow(), self::MAINTENANCE_STEP);
+
+        $this->assertStringContainsString('isDownForMaintenance', $step);
+        $this->assertStringNotContainsString('curl', $step, 'The maintenance state must not be inferred from HTTP.');
+        $this->assertStringNotContainsString('http_code', $step);
+    }
+
     // =================================================================
-    // BLOCKER 2 - an aligned deployment is a no-op. These cases RUN the
-    // plan step.
+    // BLOCKER 6 - cancellation, and unknown ownership.
     // =================================================================
 
+    /** B6-1. Recovery runs on cancellation as well as failure. */
+    public function test_the_recovery_step_covers_cancellation_as_well_as_failure(): void
+    {
+        $this->assertSame(
+            'failure() || cancelled()',
+            $this->gate(self::RECOVERY_STEP),
+            'A cancelled run would bypass every piece of recovery reasoning in this workflow.'
+        );
+    }
+
     /**
-     * W30. THE PLAN STEP DECIDES, AND THE DECISION IS RUN RATHER THAN READ.
+     * B6-2. AND THE LIMIT OF THAT IS STATED RATHER THAN GLOSSED.
      *
-     * The script is idempotent; before round 1 of tooling review the workflow
-     * was not, so dispatching `database` at a deployment already on `database`
-     * opened a maintenance window and signed everybody out for a change that
-     * does not exist.
+     * GitHub can terminate a runner before any step executes. The workflow says
+     * so, and says what an operator must establish if that happens - rather
+     * than implying cancellation recovery is guaranteed.
      */
+    public function test_the_workflow_states_the_limit_of_cancellation_recovery(): void
+    {
+        $header = substr($this->read(self::WORKFLOW), 0, 2000);
+
+        $this->assertStringContainsString('DO NOT CANCEL', $header);
+        $this->assertStringContainsString('CANNOT promise recovery', $header);
+        $this->assertStringContainsString('the effective session driver', $header);
+        $this->assertStringContainsString('maintenance state', $header);
+    }
+
+    /**
+     * B6-3. UNKNOWN OWNERSHIP FAILS CLOSED.
+     *
+     * Not "assume we own it", and not "assume we do not and say nothing": read
+     * the maintenance state, report it as uncertain, issue no `up`, fail.
+     */
+    public function test_unknown_ownership_issues_no_up_and_reports_uncertainty(): void
+    {
+        $result = $this->runRecovery(starting: 'file', driver: 'file', state: 'MAINTENANCE', origin: 'something-else', mutated: 'true');
+
+        $this->assertNotSame(0, $result['exit']);
+        $this->assertNotContains('php artisan up', $result['commands']);
+        $this->assertSame('MAINTENANCE', $result['state']);
+        $this->assertStringContainsString('could not establish whether it holds the maintenance window', $result['output']);
+        $this->assertStringContainsString('CRITICAL', $result['output']);
+
+        // It read the state rather than guessing it.
+        $this->assertContains('php artisan tinker', $result['commands']);
+    }
+
+    // =================================================================
+    // The no-op path.
+    // =================================================================
+
+    /** W30. The plan step requires no change when the driver already matches. */
     public function test_the_plan_step_requires_no_change_when_the_driver_already_matches(): void
     {
         foreach ([['file', 'file'], ['database', 'database']] as [$starting, $target]) {
-            $result = $this->runPlan(currentDriver: $starting, target: $target);
+            $run = $this->runSequence(target: $target, driver: $starting, state: 'LIVE');
 
-            $this->assertSame(0, $result['exit'], $result['output']);
-            $this->assertSame($starting, $result['outputs']['starting'] ?? null);
-            $this->assertSame(
-                'false',
-                $result['outputs']['change_required'] ?? null,
-                "Starting [{$starting}] with target [{$target}] was planned as a change."
-            );
+            $this->assertSame([], $run['failed'], $run['output']);
+            $this->assertSame('false', $run['outputs']['plan']['change_required'] ?? null);
         }
     }
 
-    /** W31. And it does require one when they differ - or the no-op would swallow the change. */
+    /** W31. And it does require one when they differ. */
     public function test_the_plan_step_requires_a_change_when_the_driver_differs(): void
     {
         foreach ([['file', 'database'], ['database', 'file']] as [$starting, $target]) {
-            $result = $this->runPlan(currentDriver: $starting, target: $target);
+            $run = $this->runSequence(target: $target, driver: $starting, state: 'LIVE');
 
-            $this->assertSame(0, $result['exit'], $result['output']);
-            $this->assertSame($starting, $result['outputs']['starting'] ?? null);
-            $this->assertSame(
-                'true',
-                $result['outputs']['change_required'] ?? null,
-                "Starting [{$starting}] with target [{$target}] was planned as a no-op."
-            );
+            $this->assertSame('true', $run['outputs']['plan']['change_required'] ?? null);
         }
     }
 
@@ -839,62 +893,60 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     public function test_the_plan_step_refuses_an_unrecognised_production_driver(): void
     {
         foreach (['redis', 'array', ''] as $driver) {
-            $result = $this->runPlan(currentDriver: $driver, target: 'database');
+            $run = $this->runSequence(target: 'database', driver: $driver, state: 'LIVE');
 
-            $this->assertNotSame(0, $result['exit'], "[{$driver}] was accepted as a starting driver.");
-            $this->assertArrayNotHasKey('change_required', $result['outputs']);
+            $this->assertContains(self::PLAN_STEP, $run['failed'], "[{$driver}] was accepted as a starting driver.");
+            $this->assertNoWrites($run);
         }
     }
 
     /**
-     * W33. EVERY MUTATING AND MAINTENANCE STEP IS GATED ON THAT DECISION.
+     * W33. AN ALIGNED DEPLOYMENT IS NEVER TAKEN DOWN - RUN END TO END.
      *
-     * The gate expression is asserted verbatim rather than merely "present", so
-     * there is no room for a condition that reads like the right one and is
-     * not. Combined with W30, this is what establishes that an already-aligned
-     * dispatch opens no window, pipes no script and clears no cache.
-     *
-     * Mutation: delete the `if:` from any of these, or change the comparison.
+     * Not the gates read off the file: the whole sequence executed, with the
+     * gates evaluated, asserting that nothing reached the server.
      */
+    public function test_an_already_aligned_dispatch_takes_no_window_and_writes_nothing(): void
+    {
+        foreach (['file', 'database'] as $driver) {
+            $run = $this->runSequence(target: $driver, driver: $driver, state: 'LIVE');
+
+            $this->assertSame([], $run['failed'], $run['output']);
+
+            $this->assertNotContains(self::MAINTENANCE_STEP, $run['ran'], 'An aligned deployment was taken down.');
+            $this->assertNotContains('Align SESSION_DRIVER', $run['ran']);
+            $this->assertNotContains('Clear compiled caches', $run['ran']);
+            $this->assertContains('Report that no change was required', $run['ran']);
+
+            $this->assertNoWrites($run);
+            $this->assertSame('LIVE', $run['state']);
+        }
+    }
+
+    /** W34. Every mutating and maintenance step is gated on a change being required. */
     public function test_every_mutating_step_is_gated_on_a_change_being_required(): void
     {
-        foreach ([
-            'Refuse if production is already in maintenance',
-            'Open the maintenance window',
-            'Align SESSION_DRIVER',
-            'Clear compiled caches',
-        ] as $step) {
+        foreach ([self::MAINTENANCE_STEP, self::MUTATION_STEP, 'Align SESSION_DRIVER', 'Clear compiled caches'] as $step) {
             $this->assertSame(
                 "steps.plan.outputs.change_required == 'true'",
                 $this->gate($step),
-                "[{$step}] is not gated on a change being required. An already-aligned deployment would be "
-                .'interrupted for a change that does not exist.'
+                "[{$step}] is not gated on a change being required."
             );
         }
     }
 
-    /** W34. The no-op path reports honestly, and does not borrow the change path's language. */
+    /** W35. The no-op report does not borrow the change path's language. */
     public function test_the_no_op_report_does_not_claim_anyone_was_signed_out(): void
     {
         $noop = $this->stepBody($this->workflow(), 'Report that no change was required');
 
-        $this->assertSame(
-            "steps.plan.outputs.change_required != 'true'",
-            $this->gate('Report that no change was required')
-        );
+        $this->assertSame("steps.plan.outputs.change_required != 'true'", $this->gate('Report that no change was required'));
 
-        $this->assertStringNotContainsString(
-            'signed out',
-            $noop,
-            'The no-op report claims users were signed out. Nothing happened, and saying otherwise would '
-            .'make a harmless run look like a production interruption in the record.'
-        );
-
-        $this->assertStringContainsString('not opened', $noop);
+        $this->assertStringNotContainsString('signed out', $noop, 'The no-op report claims users were signed out.');
+        $this->assertStringContainsString('not taken', $noop);
         $this->assertStringContainsString('not interrupted', $noop);
         $this->assertStringContainsString('not read for modification, not written', $noop);
 
-        // The change path keeps its own, accurate wording.
         $this->assertStringContainsString(
             'signed out',
             $this->stepBody($this->workflow(), 'Report what was done'),
@@ -902,20 +954,16 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         );
     }
 
-    // -----------------------------------------------------------------
-
-    /** W35. NO AUTOMATIC ROLLBACK, AND THE EXPLICIT ONE IS NAMED. */
+    /** W36. NO AUTOMATIC ROLLBACK, AND THE EXPLICIT ONE IS NAMED. */
     public function test_it_does_not_roll_back_automatically_and_names_the_explicit_rollback(): void
     {
         $workflow = $this->workflow();
 
-        $invocations = preg_match_all('/< deployment\/ensure-session-driver\.sh/', $workflow);
-
         $this->assertSame(
             1,
-            $invocations,
-            'The driver script is invoked more than once. A failure path that mutates production a '
-            .'second time is not a rollback, it is a second unattended change.'
+            preg_match_all('/< deployment\/ensure-session-driver\.sh/', $workflow),
+            'The driver script is invoked more than once. A failure path that mutates production a second '
+            .'time is not a rollback, it is a second unattended change.'
         );
 
         $this->assertStringContainsString(
@@ -925,7 +973,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         );
     }
 
-    /** W36. THE FILE SAYS WHAT DISPATCHING IT COSTS. */
+    /** W37. THE FILE SAYS WHAT DISPATCHING IT COSTS. */
     public function test_the_workflow_states_its_consequence_and_its_authority_at_the_top(): void
     {
         $header = substr($this->read(self::WORKFLOW), 0, 1200);
@@ -936,82 +984,218 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     }
 
     // =================================================================
-    // Running a step's shell for real, against a stubbed ssh.
+    // Running the workflow's own steps against a stubbed server.
     // =================================================================
 
-    /**
-     * Execute the `plan` step's own shell.
-     *
-     * @return array{exit: int, output: string, outputs: array<string, string>}
-     */
-    private function runPlan(string $currentDriver, string $target): array
+    /** Nothing in this run may have written to the server. */
+    private function assertNoWrites(array $run): void
     {
-        $script = $this->stepScript($this->workflow(), self::PLAN_STEP);
+        foreach (['php artisan down', 'php artisan up', 'php artisan optimize:clear', 'sh -s --'] as $write) {
+            $this->assertNotContains(
+                $write,
+                $run['commands'],
+                "A run that refused before the mutation point sent [{$write}] to the server."
+            );
+        }
+    }
 
-        $result = $this->runStep($script, [
-            'TARGET_DRIVER' => $target,
-            'STUB_DRIVER' => $currentDriver,
-            'STUB_STATE_VALUE' => 'LIVE',
-        ]);
-
-        return $result + ['outputs' => $this->githubOutputs()];
+    /** Set the stubbed server's starting condition. */
+    private function givenServer(string $driver, string $state): void
+    {
+        file_put_contents($this->dir.'/driver', $driver."\n");
+        file_put_contents($this->dir.'/state', $state."\n");
+        file_put_contents($this->dir.'/commands', '');
     }
 
     /**
-     * Execute the failure-recovery step's own shell.
-     *
-     * The runner substitutes `${{ steps.… }}` before the shell ever sees it, so
-     * the two values that come from earlier steps are substituted here the same
-     * way. Everything else is the step verbatim.
+     * Execute the failure-recovery step on its own.
      *
      * @return array{exit: int, output: string, commands: list<string>, state: string}
      */
     private function runRecovery(
         string $starting,
-        string $effectiveDriver,
-        string $maintenanceState,
-        string $weOpened,
+        string $driver,
+        string $state,
+        string $origin,
+        string $mutated,
         bool $downFails = false,
         ?string $workflow = null,
     ): array {
+        $this->givenServer($driver, $state);
+
         $script = $this->stepScript($workflow ?? $this->workflow(), self::RECOVERY_STEP, [
             '${{ steps.plan.outputs.starting }}' => $starting,
-            '${{ steps.maintenance.outputs.opened }}' => $weOpened,
+            '${{ steps.maintenance.outputs.origin }}' => $origin,
+            '${{ steps.mutation.outputs.attempted }}' => $mutated,
         ]);
 
-        $result = $this->runStep($script, [
-            'STUB_DRIVER' => $effectiveDriver,
-            'STUB_STATE_VALUE' => $maintenanceState,
-            'STUB_DOWN_FAILS' => $downFails ? '1' : '0',
-        ]);
+        $result = $this->runScript($script, ['STUB_DOWN_FAILS' => $downFails ? '1' : '0']);
 
         return $result + [
             'commands' => $this->remoteCommands(),
-            'state' => trim((string) @file_get_contents($this->dir.'/state')),
+            'state' => trim((string) file_get_contents($this->dir.'/state')),
         ];
+    }
+
+    /**
+     * Execute the whole step sequence, evaluating each gate as the runner would.
+     *
+     * Checkout and Configure SSH are excluded: they carry no decision and
+     * nothing in them can be simulated honestly.
+     *
+     * @return array{ran: list<string>, skipped: list<string>, failed: list<string>, outputs: array<string, array<string, string>>, commands: list<string>, output: string, driver: string, state: string}
+     */
+    private function runSequence(
+        string $target,
+        ?string $driver = null,
+        ?string $state = null,
+        string $takeover = '',
+        string $confirmation = 'ALIGN SESSION DRIVER',
+        string $httpCode = '200',
+        bool $fresh = true,
+    ): array {
+        if ($fresh) {
+            $this->givenServer($driver ?? 'file', $state ?? 'LIVE');
+        } else {
+            file_put_contents($this->dir.'/commands', '');
+        }
+
+        $workflow = $this->workflow();
+        $outputs = [];
+        $ran = $skipped = $failed = [];
+        $output = '';
+        $runFailed = false;
+
+        foreach (self::SEQUENCE as $name) {
+            $gate = $this->optionalGate($workflow, $name);
+
+            if (! $this->gatePasses($gate, $outputs, $runFailed)) {
+                $skipped[] = $name;
+
+                continue;
+            }
+
+            $id = $this->stepId($workflow, $name);
+
+            file_put_contents($this->dir.'/github_output', '');
+
+            $script = $this->stepScript($workflow, $name, $this->substitutions($outputs));
+
+            $result = $this->runScript($script, [
+                'TARGET_DRIVER' => $target,
+                'ROLLBACK_TAKEOVER' => $takeover,
+                'CONFIRMATION' => $confirmation,
+                'STUB_HTTP_CODE' => $httpCode,
+            ]);
+
+            $ran[] = $name;
+            $output .= $result['output'];
+
+            if ($id !== null) {
+                $outputs[$id] = $this->githubOutputs();
+            }
+
+            if ($result['exit'] !== 0) {
+                $failed[] = $name;
+                $runFailed = true;
+            }
+        }
+
+        return [
+            'ran' => $ran,
+            'skipped' => $skipped,
+            'failed' => $failed,
+            'outputs' => $outputs,
+            'commands' => $this->remoteCommands(),
+            'output' => $output,
+            'driver' => trim((string) file_get_contents($this->dir.'/driver')),
+            'state' => trim((string) file_get_contents($this->dir.'/state')),
+        ];
+    }
+
+    /** @param array<string, array<string, string>> $outputs */
+    private function substitutions(array $outputs): array
+    {
+        $substitutions = ['${{ github.ref }}' => 'refs/heads/main'];
+
+        foreach (['plan' => ['starting', 'change_required'], 'maintenance' => ['origin'], 'mutation' => ['attempted']] as $id => $keys) {
+            foreach ($keys as $key) {
+                $substitutions['${{ steps.'.$id.'.outputs.'.$key.' }}'] = $outputs[$id][$key] ?? '';
+            }
+        }
+
+        return $substitutions;
+    }
+
+    /**
+     * Evaluate a step condition.
+     *
+     * Deliberately tiny, and deliberately strict: it understands the exact
+     * forms this workflow uses and refuses anything else, so a condition that
+     * changed shape could never be silently treated as "true".
+     *
+     * @param  array<string, array<string, string>>  $outputs
+     */
+    private function gatePasses(?string $gate, array $outputs, bool $runFailed): bool
+    {
+        if ($gate === null || $gate === '') {
+            return ! $runFailed;
+        }
+
+        // The recovery conditions. `cancelled()` cannot be simulated here - a
+        // cancelled run is a terminated runner, not a shell - so both forms are
+        // evaluated as "something went wrong". That a CHANGED condition is a
+        // defect is asserted directly, in B6-1, rather than inferred from this
+        // evaluator failing to parse it.
+        if ($gate === 'failure() || cancelled()' || $gate === 'failure()') {
+            return $runFailed;
+        }
+
+        if ($runFailed) {
+            return false;
+        }
+
+        foreach (explode(' || ', $gate) as $clause) {
+            $this->assertSame(
+                1,
+                preg_match('/^steps\.([a-z_]+)\.outputs\.([a-z_]+) (==|!=) \'([a-z]*)\'$/', trim($clause), $match),
+                "The condition [{$gate}] is not a form this evaluator understands, so the sequence cases "
+                .'would be reasoning about a gate they cannot read.'
+            );
+
+            [, $id, $key, $operator, $value] = $match;
+            $actual = $outputs[$id][$key] ?? '';
+
+            if (($operator === '==' && $actual === $value) || ($operator === '!=' && $actual !== $value)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
      * @param  array<string, string>  $env
      * @return array{exit: int, output: string}
      */
-    private function runStep(string $script, array $env): array
+    private function runScript(string $script, array $env = []): array
     {
-        $this->writeSshStub();
+        $this->writeStubs();
 
-        file_put_contents($this->dir.'/state', ($env['STUB_STATE_VALUE'] ?? 'LIVE')."\n");
-        file_put_contents($this->dir.'/commands', '');
-        file_put_contents($this->dir.'/github_output', '');
-        file_put_contents($this->dir.'/summary', '');
+        foreach (['driver', 'state', 'commands', 'github_output', 'summary'] as $file) {
+            if (! file_exists($this->dir.'/'.$file)) {
+                file_put_contents($this->dir.'/'.$file, '');
+            }
+        }
 
         $path = $this->dir.'/step.sh';
         file_put_contents($path, $script);
 
         $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
 
-        // The runner uses bash, so the step is exercised on the shell it will
-        // actually run on - `set -o pipefail` is not POSIX.
-        $process = proc_open(['bash', $path], $descriptors, $pipes, $this->dir, [
+        // The runner uses bash, and the repository root is the working
+        // directory, so `< deployment/ensure-session-driver.sh` resolves.
+        $process = proc_open(['bash', $path], $descriptors, $pipes, $this->root(), [
             'PATH' => $this->dir.'/bin:'.getenv('PATH'),
             'HOME' => $this->dir,
             'CPANEL_HOST' => 'host.invalid',
@@ -1024,6 +1208,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             'GITHUB_RUN_ID' => '1',
             'STUB_LOG' => $this->dir.'/commands',
             'STUB_STATE' => $this->dir.'/state',
+            'STUB_DRIVER' => $this->dir.'/driver',
         ] + $env);
 
         $stdout = stream_get_contents($pipes[1]);
@@ -1035,13 +1220,13 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     }
 
     /**
-     * A stand-in for `ssh` that answers the four things these steps ask the
-     * server, and records every remote command it was given.
+     * Stand-ins for `ssh` and `curl`.
      *
-     * The remote command is always the last argument, which is how both steps
-     * invoke ssh.
+     * The ssh stub answers what these steps ask the server, records every
+     * remote command, and - for the driver script piped over stdin - actually
+     * moves the stubbed driver, so a sequence behaves like one.
      */
-    private function writeSshStub(): void
+    private function writeStubs(): void
     {
         file_put_contents($this->dir.'/bin/ssh', <<<'STUB'
             #!/bin/sh
@@ -1049,6 +1234,15 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             printf '%s\n' "$last" >> "$STUB_LOG"
 
             case "$last" in
+              "sh -s -- "*)
+                # The driver script, piped over stdin. Consume it and apply the
+                # requested target, so a sequence moves like the real thing.
+                cat > /dev/null
+                target="$(printf '%s' "$last" | sed 's/.*"\([a-z]*\)"[[:space:]]*$/\1/')"
+                printf '%s\n' "$target" > "$STUB_DRIVER"
+                printf 'SESSION_DRIVER updated to %s.\n' "$target"
+                exit 0
+                ;;
               *"artisan down"*)
                 [ "${STUB_DOWN_FAILS:-0}" = "1" ] && exit 1
                 printf 'MAINTENANCE\n' > "$STUB_STATE"
@@ -1063,10 +1257,15 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
                 exit 0
                 ;;
               *"session.driver"*)
-                printf '%s\n' "$STUB_DRIVER"
+                cat "$STUB_DRIVER"
                 exit 0
                 ;;
               *"optimize:clear"*)
+                exit 0
+                ;;
+              *"semantiq:health"*)
+                [ "${STUB_HEALTH_FAILS:-0}" = "1" ] && exit 1
+                printf 'Healthy.\n'
                 exit 0
                 ;;
               *REACHABLE*)
@@ -1079,19 +1278,32 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             esac
             STUB);
 
+        file_put_contents($this->dir.'/bin/curl', <<<'STUB'
+            #!/bin/sh
+            for a in "$@"; do last="$a"; done
+            case "$last" in
+              *"/up?"*) printf '%s' "${STUB_UP_BODY:-ok}"; exit 0 ;;
+            esac
+            printf '%s' "${STUB_HTTP_CODE:-200}"
+            exit 0
+            STUB);
+
         chmod($this->dir.'/bin/ssh', 0o755);
+        chmod($this->dir.'/bin/curl', 0o755);
     }
 
-    /**
-     * The remote commands the step sent, reduced to the artisan call in each.
-     *
-     * @return list<string>
-     */
+    /** @return list<string> */
     private function remoteCommands(): array
     {
         $commands = [];
 
         foreach (file($this->dir.'/commands', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            if (str_starts_with($line, 'sh -s -- ')) {
+                $commands[] = 'sh -s --';
+
+                continue;
+            }
+
             if (preg_match('/(php artisan [a-z:]+(?: --retry=\d+)?)/', $line, $match) === 1) {
                 $commands[] = $match[1];
             }
@@ -1137,8 +1349,8 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         return $this->withoutComments($this->read(self::WORKFLOW));
     }
 
-    /** The workflow with one exact line removed, for the paired mutation cases. */
-    private function workflowWithout(string $line): string
+    /** The workflow with one exact line replaced, for the paired mutation cases. */
+    private function workflowWithout(string $line, string $replacement = ':'): string
     {
         $workflow = $this->workflow();
 
@@ -1149,7 +1361,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             .'no-op and the paired case would pass for the wrong reason.'
         );
 
-        return str_replace($line, ':', $workflow);
+        return str_replace($line, $replacement, $workflow);
     }
 
     private function withoutComments(string $yaml): string
@@ -1157,13 +1369,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         return (string) preg_replace('/^\s*#.*$/m', '', $yaml);
     }
 
-    /**
-     * Isolate one mapping block by indentation.
-     *
-     * Asking "is there a push trigger" of the whole file is answered by the
-     * word appearing in a step name. Asking it of the `on:` block alone is
-     * answered by the trigger block.
-     */
+    /** Isolate one mapping block by indentation. */
     private function block(string $yaml, string $key, int $depth = 0): string
     {
         $indent = str_repeat(' ', $depth);
@@ -1173,8 +1379,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
 
         preg_match($pattern, $yaml, $match, PREG_OFFSET_CAPTURE);
 
-        $start = $match[0][1];
-        $lines = explode("\n", substr($yaml, $start));
+        $lines = explode("\n", substr($yaml, $match[0][1]));
         $collected = [array_shift($lines)];
 
         foreach ($lines as $line) {
@@ -1213,23 +1418,31 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
 
         $next = strpos($workflow, '      - name: ', $start + 1);
 
-        return $next === false
-            ? substr($workflow, $start)
-            : substr($workflow, $start, $next - $start);
+        return $next === false ? substr($workflow, $start) : substr($workflow, $start, $next - $start);
     }
 
-    /** A step's `if:` expression, verbatim. */
+    /** A step's `if:` expression, verbatim. It must have one. */
     private function gate(string $name): string
     {
-        $body = $this->stepBody($this->workflow(), $name);
+        $gate = $this->optionalGate($this->workflow(), $name);
 
-        $this->assertSame(
-            1,
-            preg_match('/^        if: (.+)$/m', $body, $match),
-            "[{$name}] has no `if:` condition at all."
-        );
+        $this->assertNotNull($gate, "[{$name}] has no `if:` condition at all.");
 
-        return trim($match[1]);
+        return $gate;
+    }
+
+    private function optionalGate(string $workflow, string $name): ?string
+    {
+        $body = $this->stepBody($workflow, $name);
+
+        return preg_match('/^        if: (.+)$/m', $body, $match) === 1 ? trim($match[1]) : null;
+    }
+
+    private function stepId(string $workflow, string $name): ?string
+    {
+        $body = $this->stepBody($workflow, $name);
+
+        return preg_match('/^        id: (.+)$/m', $body, $match) === 1 ? trim($match[1]) : null;
     }
 
     /**
