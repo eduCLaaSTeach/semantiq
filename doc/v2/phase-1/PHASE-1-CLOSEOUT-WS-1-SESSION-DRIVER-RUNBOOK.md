@@ -15,7 +15,8 @@
 | Baseline | `main` = **`43c280b25f58c98b898f817938063de4a02d1ca2`** |
 | Authority | `PHASE-1-CLOSEOUT-PLAN.md` §3 CL-10, §3A, §5 — Gate A approved |
 | Status | **RUNBOOK READY. NOT EXECUTED.** |
-| **Blocking finding** | **A tooling gap exists — §5.3. No existing mechanism can perform this change safely.** |
+| **Tooling gap** | **Confirmed — §5.3. No existing mechanism can change `SESSION_DRIVER`. APPROVED TO BUILD, NOT APPROVED TO EXECUTE** |
+| Amendment | **Round 1 — four Product Owner safety-accuracy findings applied**, §5.2, §5.3, §9 |
 
 ---
 
@@ -113,7 +114,7 @@ drops no table and alters no schema.
 | | |
 | --- | --- |
 | What could be lost | **The one `.env` line being changed**, if the write went wrong |
-| Why the posture is sufficient | The change mechanism (§5) **preserves every other byte**, writes atomically, and **verifies mode and ownership after the rename**. The prior value is `file` — a known constant recorded in this runbook, not something that needs recovering from a backup |
+| Why the posture is sufficient | The change mechanism (§5.3) writes atomically and, **before the rename**, proves the target line, the line count, that no other content moved, and that mode and ownership match — **aborting with the original `.env` untouched if any fails** (V-1 … V-4). The prior value is `file`, a known constant recorded here, not something needing recovery from a backup |
 | **No `.env` backup is taken, deliberately** | **A backup of a secrets file is a second secrets file.** The existing `ensure-session-lifetime.sh` states this and takes none; this runbook follows the same rule. The rename is already atomic, so a backup would buy nothing and cost a duplicate of every secret on disk |
 | Database backup | **Not required for this change** — no data is written or migrated |
 
@@ -133,21 +134,78 @@ Both are **single-key, purpose-built, and neither can set `SESSION_DRIVER`:**
 **`.env` is otherwise never written by the deployment at all**, and never
 transferred: it is the first line of `deployment/rsync-protected-paths.txt`.
 
-### 5.2 The proven mechanics that must be reused
+### 5.2 What the existing script actually proves — stated precisely
 
-`ensure-session-lifetime.sh` already solved every hazard of editing a live
-secrets file, and its reasoning is recorded in the script itself. **Any
-mechanism for CL-10 must reuse all of it:**
+> **CORRECTED, Product Owner review.** An earlier draft of this section said the
+> existing mechanics already prove *"the edit might not land, or might move
+> something else — the result is **verified** before the rename."* **That
+> overstated what the code does**, and the distinction matters because the whole
+> point of CL-10's mechanism is what it guarantees at runtime on a live secrets
+> file. The corrected reading is below.
 
-| Hazard | How it is already solved |
+**`ensure-session-lifetime.sh` solved most of the hazards of editing a live
+secrets file, and its reasoning is recorded in the script itself.** But its
+guarantees fall into **two different classes**, and they must not be conflated:
+
+#### (a) Runtime-verified — the script checks these while it runs
+
+| Hazard | Runtime guarantee |
 | --- | --- |
-| **The rename swaps the inode**, so the new file carries the *temporary* file's mode and owner | Mode and ownership are **recorded first, restored before the rename, and VERIFIED after it** |
-| A temporary copy of `.env` is a second copy of every secret | Created under **`umask 077`**, removed by a **trap on every exit path** |
-| A run killed by an untrappable signal leaves that copy behind | A **sweep of stale temporaries before writing a new one**, bounding exposure to a single interrupted run — *found by deliberately killing the script mid-write, not by reading it* |
+| A temporary copy of `.env` is a second copy of every secret | Created under **`umask 077`**; a **trap** removes it on every exit path it can catch |
+| A run killed by an **untrappable** signal leaves that copy behind | A **sweep of stale temporaries before writing a new one**, bounding exposure to a single interrupted run — *found by deliberately killing the script mid-write, not by reading it* |
 | A non-atomic replace can truncate the file | **Same-directory `mv -f`** — a rename across filesystems is not atomic |
-| The edit might not land, or might move something else | The result is **verified** before the rename |
-| Secrets could leak into logs | **No value from `.env` is ever printed** |
-| The script becoming a general `.env` editor | *"This script changes ONE key. It is not an .env editor and must never become one."* |
+| **The target line did not land** | `grep -qE "^SESSION_LIFETIME=<value>$"` on the temporary file, **before** the rename |
+| Mode or ownership silently changed | `stat` comparison — **but only AFTER the rename.** See §5.2(c) |
+| Secrets leaking into logs | **No value from `.env` is ever printed** |
+
+#### (b) Test evidence, NOT a runtime check
+
+**That only one line changes is established by the script's behaviour and its
+tests — it is NOT verified at runtime before the rename.**
+
+The single pre-rename check is:
+
+```sh
+if ! grep -qE "^SESSION_LIFETIME=${approved}\$" "$tmp"; then
+```
+
+**That proves the target line EXISTS in the temporary file. It proves nothing
+about any other byte.** A `sed` that also mangled an unrelated line would pass
+it.
+
+**The script's own comment promises more than the code delivers**, and this is
+worth recording rather than glossing:
+
+> *"The edit must have landed, and nothing else may have moved. **A line count
+> that changed by anything other than the one appended line** means the rewrite
+> did something it was not asked to."*
+
+**No line count is ever taken** — `wc -l` does not appear in the script. The
+comment describes a check that was intended and not implemented. **This is not a
+live defect** (the `sed` substitution is sound and its behaviour is tested), but
+it is precisely the shape of thing this project keeps finding: **a comment
+asserting a guarantee the code does not provide.**
+
+#### (c) A genuine ordering weakness — not to be copied
+
+```sh
+chown "$owner" "$tmp" 2>/dev/null || true   # failure is swallowed
+mv -f "$tmp" .env                           # original replaced HERE
+# ... ownership compared only now, after the fact
+```
+
+**A failed ownership restoration is detected only after the original `.env` has
+already been replaced.** The check is real and worth having, but by the time it
+fires the damage is done and the operator is told to *"restore them before
+deploying again"* — recovery, not prevention.
+
+**The new script must be stronger — §5.3.**
+
+> **CL-10 does not refactor `ensure-session-lifetime.sh`.** The weakness above is
+> recorded, not fixed here. That script is a separate, accepted, working D-31
+> control, and **absorbing an unrelated refactor into a session-driver change
+> would widen a controlled production alignment into something else.** If it
+> should be hardened, that is its own justified change.
 
 ### 5.3 ⚠️ THE GAP — no existing mechanism can perform this change
 
@@ -163,21 +221,102 @@ forbids making it so.**
 **Therefore, performing CL-10 safely requires a repository change**, and per the
 approved instruction **it is identified here and NOT implemented.**
 
-**Recommended shape, for a separate approval:**
+> ### PRODUCT OWNER RULING — APPROVED TO BUILD, NOT APPROVED TO EXECUTE
+>
+> The tooling below **may be implemented in a separate PR** once this runbook is
+> approved and merged. **That authorises repository tooling and automated tests
+> ONLY.** It does **not** authorise dispatching the workflow, changing `.env`,
+> opening the maintenance window, touching any production session, or setting
+> `SESSION_DRIVER=database`. See §5.4.
 
-| | |
+**Two artefacts. Neither exists yet.**
+
+#### A. `deployment/ensure-session-driver.sh`
+
+**Purpose-built for `SESSION_DRIVER`. Not a general `.env` editor — the same
+prohibition the existing script places on itself.**
+
+| | Requirement |
 | --- | --- |
-| **What** | `deployment/ensure-session-driver.sh` — modelled on `ensure-session-lifetime.sh`, changing **one key**, preserving every other byte, with the same mode/ownership/atomicity/umask/trap/sweep/verify mechanics |
-| **Plus** | A **manual-dispatch** workflow to run it, modelled on `verify-session-store.yml`'s SSH handling (the deploy key is passphrase-protected and needs ssh-agent with askpass — writing the key file alone yields *"Permission denied (publickey)"*) |
-| **Target value** | Literal `database`. **Not** derived from `.env.example` — reading a repository file and reporting it as deployment reality is precisely how the original wrong claim was made |
-| **Why not the deployment workflow** | `deploy.yml` runs on **every push to `main`**. A driver switch must happen **once, in a chosen window, behind a go/no-go** — not on every documentation merge |
-| **Why not a manual SSH edit** | It has none of §5.2's guarantees. Hand-editing the file that holds every secret, with no atomicity and no mode/ownership verification, is the failure `ensure-session-lifetime.sh` was written to prevent |
+| **Arguments** | **Exactly two:** the deployment path, and a target restricted to **`database` or `file`**. **No arbitrary key. No arbitrary value.** Anything else is refused |
+| **Forward and rollback** | **The same script**, differing only in the target argument. Rollback is therefore not a separate, never-exercised path |
+| **Target source** | The **literal** value passed in. **Never derived from `.env.example`** — reading a repository file and reporting it as deployment reality is exactly how the original wrong claim was made |
 
-**Rejected: a second production mutation path.** The instruction is to reuse
-existing safe mechanics rather than invent a parallel one, and the proposal
-above is deliberately a **sibling** of the existing script, not a new pattern.
+**Runtime preconditions — refuse rather than guess:**
 
-### 5.4 Cache handling after the change
+| # | Precondition | On failure |
+| --- | --- | --- |
+| **R-1** | `.env` **exists** | Abort |
+| **R-2** | **Exactly one** `SESSION_DRIVER=` entry | Abort |
+| **R-3** | **Zero entries → ABORT.** Do not append | **Never invent deployment configuration.** An absent key means the deployment is not in a state this script understands |
+| **R-4** | **Duplicate entries → ABORT** | Ambiguous: which one is live is a question the script must not answer by guessing |
+| **R-5** | **Current value is `file` or `database`** | Abort on anything else — **refuse an unexpected state rather than overwriting it** |
+| **R-6** | Target is **exactly** `file` or `database` | Abort |
+| **R-7** | **Idempotent** — current already equals target | **Exit 0 without writing**, as `ensure-session-lifetime.sh` does |
+
+**Runtime verification BEFORE the rename — all four, on the temporary file:**
+
+| # | Must be proven before `mv` |
+| --- | --- |
+| **V-1** | The `SESSION_DRIVER` line is **exactly** the intended target |
+| **V-2** | **Line count is unchanged** — the check the existing script's comment promises and does not perform (§5.2(b)) |
+| **V-3** | **All content other than the `SESSION_DRIVER` value is unchanged** — a normalised comparison or checksum computed **locally on the server**, printing no `.env` content and creating **no persistent second copy** |
+| **V-4** | **Mode AND ownership of the temporary file match the original** — see below |
+
+> #### V-4 IS THE CORRECTION THAT MATTERS MOST
+>
+> **The existing script sets ownership with `|| true`, renames, and only then
+> compares.** A failed `chown` is therefore discovered **after the original
+> `.env` has already been replaced** — recovery, not prevention.
+>
+> **The new script must verify mode and ownership on the temporary file BEFORE
+> the rename, and abort while the original `.env` is still untouched.**
+> It must **also** verify after the rename, keeping the existing check rather
+> than replacing it. **Before-and-after, not after-only.**
+
+**Retained from §5.2(a) — all mandatory:** same-directory temporary · `umask 077`
+before creation · trap cleanup on every catchable exit · **stale-temp sweep** for
+untrappable termination · **atomic same-directory rename** · **no `.env`
+backup** (a backup of a secrets file is a second secrets file) · **no secret
+output, ever**.
+
+#### B. `.github/workflows/align-session-driver.yml`
+
+| | Requirement |
+| --- | --- |
+| **Trigger** | **`workflow_dispatch` ONLY.** Never on push. **Never wired into `deploy.yml`** |
+| **Ref guard** | **Hard refuse unless the selected ref is `main`** |
+| **Target input** | A **choice** of exactly `database` or `file` — not free text |
+| **Confirmation input** | A **deliberate confirmation** so an accidental dispatch cannot mutate production |
+| **SSH** | **Reuse the exact established pattern** from the read-only production workflows — ssh-agent with askpass, because the deploy key is passphrase-protected and writing the key file alone yields *"Permission denied (publickey)"* |
+| **Credentials** | **Reuse the repository's existing GitHub Environment and secrets.** Do not create a second credentials model |
+| **Output** | **Never display `.env`, credentials or session contents** |
+
+**Why not `deploy.yml`:** it fires on **every push to `main`**. CL-10 is a
+**one-time controlled alignment behind a Product Owner GO / NO-GO** — it must not
+ride on a documentation merge.
+
+**Why not a manual SSH edit:** it has none of §5.2(a)'s guarantees. Hand-editing
+the file that holds every secret, with no atomicity and no mode/ownership
+verification, is the failure `ensure-session-lifetime.sh` was written to prevent.
+
+**Rejected: a second production mutation path.** These are deliberately a
+**sibling** of the existing script and workflow patterns, not a new one.
+
+### 5.4 Three separate states — do not collapse them
+
+**These are three distinct approvals. Holding one is not holding the next.**
+
+| # | State | Status |
+| --- | --- | --- |
+| **1** | **Runbook approval** — this document is correct and authoritative | **Pending final correction and CI** |
+| **2** | **Tooling implementation approval** — the §5.3 script and workflow may be written and tested | **AUTHORISED, effective after this runbook merges.** Repository code and automated tests only |
+| **3** | **Production GO / NO-GO** — the change may actually be made | **NOT AUTHORISED** — §13 |
+
+**State 2 does not imply state 3.** Building the tool is not permission to run
+it, and a merged runbook is not a GO.
+
+### 5.5 Cache handling after the change
 
 **Clear only what is necessary.** The deployment already runs
 `php artisan optimize:clear`; that is the established command and this runbook
@@ -284,25 +423,38 @@ serialised payload and an identifier that is, in effect, a live credential.
 
 ### The proof
 
-**A real authenticated session must create and update a row.** The sequence
-proves behaviour rather than configuration:
+> **CORRECTED, Product Owner review.** An earlier draft made *"total
+> `COUNT(*)` increased after sign-in"* a load-bearing step. **That claims
+> causation from a number that can move on its own** — unrelated traffic can
+> create an anonymous session row, and garbage collection can remove expired
+> rows, in either direction, at any moment. **A total that moved proves
+> something happened, not that the Product Owner's sign-in was what happened.**
+>
+> Total count is retained only as **context**, never as proof.
 
-| Step | Read-only observation | What it proves |
-| --- | --- | --- |
-| **A** | `SELECT COUNT(*) FROM sessions;` **before** the Product Owner signs in | The starting point, established rather than assumed |
-| **B** | Product Owner signs in with Microsoft (proof 4) | A real authenticated session now exists |
-| **C** | `SELECT COUNT(*) FROM sessions;` again | **Count increased** — the store is being **written** |
-| **D** | `SELECT COUNT(*) FROM sessions WHERE user_id IS NOT NULL;` | **At least one authenticated row** — not merely an anonymous visitor row |
-| **E** | Product Owner navigates a console screen, then re-read `SELECT MAX(last_activity) FROM sessions;` | **`last_activity` advanced** — the store is being **read and updated**, not just written once |
+**Three observations carry the proof, and none of them depends on a raw total:**
 
-**Step E is what makes this a behavioural proof.** A row appearing could be a
-single write; a row whose `last_activity` moves as the user navigates proves the
-application is genuinely round-tripping the session through the database.
+| # | Read-only observation | What it establishes | Why it is not confoundable by unrelated traffic |
+| --- | --- | --- | --- |
+| **B-1** | `SELECT COUNT(*) FROM sessions WHERE user_id IS NOT NULL;` **before** and **after** the Product Owner's sign-in | **An authenticated row exists that did not before** | Anonymous visitor traffic creates rows with `user_id IS NULL`. This aggregate moves only when somebody **signs in** |
+| **B-2** | `SELECT MAX(last_activity) FROM sessions WHERE user_id IS NOT NULL;` **immediately before** and **immediately after one controlled page request** by the Product Owner | **The store is being read and UPDATED**, not merely written once | Bounded to authenticated rows, and to a **single deliberate request in a known instant** — not a window in which anything might have happened |
+| **B-3** | The Product Owner states which screen they opened, and when | **Ties the observed movement to a known action** | It is the human statement that supplies causation; the query supplies the fact |
 
-**Run these as read-only statements**, via the established SSH path. **No
-`payload`, no `id`, no `ip_address`, no `user_agent` is selected, printed or
-recorded** — the counts and the timestamp are sufficient and carry nothing
-sensitive.
+**B-2 is what makes this behavioural rather than configurational.** A row
+appearing could be one write. **A timestamp on an authenticated row that advances
+across a single controlled request proves the application is genuinely
+round-tripping the session through the database** — reading it, updating it and
+writing it back.
+
+**Optional context, explicitly not proof:** `SELECT COUNT(*) FROM sessions;` may
+be recorded before and after to show the table is live. **A change in it proves
+nothing about the sign-in**, and the evidence record must not present it as
+though it did.
+
+**Run these as read-only statements** via the established SSH path. **No
+`payload`, no session `id`, no `ip_address`, no `user_agent` is selected,
+printed or recorded** — bounded aggregates and one timestamp are sufficient and
+carry nothing sensitive.
 
 ### A built-in cross-check that already exists
 
@@ -323,7 +475,7 @@ new built.
 | --- | --- |
 | **1** | Production reports **`SESSION_DRIVER=database`** |
 | **2** | **A real Microsoft sign-in succeeds** |
-| **3** | The **`sessions` table reflects live session behaviour** — §9 A–E |
+| **3** | The **`sessions` table reflects live session behaviour** — §9 **B-1, B-2, B-3** |
 | **4** | **`GET /up`** → `ok` |
 | **5** | **`GET /`** → `200` |
 | **6** | **Every previously accepted console route still available** — `/console`, `/console/administration`, `/console/organisation`, `/console/people/users`, `/console/people/groups`, `/console/domains`, `/console/access`, `/console/security`, `/console/security/exceptions`, `/console/security/events`, `/console/access-reviews`, `/console/access-reviews/overdue`, `/console/system-health`, `/console/integrations`, `/console/audit`. **Same status codes as before the change** |
@@ -356,7 +508,7 @@ roll back and investigate with production restored.
 | **Change reference** | The workflow run ID (or operator session reference) that performed it |
 | **Before** | `verify-session-store` output showing **`file`**; `verify-identity` showing **`env`**; the full P-1 … P-11 results |
 | **After** | `verify-session-store` showing **`database`**; `/up`; `/`; the console route sweep |
-| **Behavioural** | The §9 A–E counts and `last_activity` values — **counts and timestamps only** |
+| **Behavioural** | The §9 **B-1** authenticated-row aggregate before/after, the **B-2** `last_activity` values either side of one controlled request, and the **B-3** statement of which screen was opened and when — **bounded aggregates and timestamps only.** Any total-row count recorded is marked **context, not proof** |
 | **Product Owner** | **Their own statement that a real Microsoft sign-in succeeded**, and that the console behaved normally |
 | **Rollback** | If triggered: what was observed, when rollback ran, and the restored-state evidence |
 
@@ -378,17 +530,17 @@ maintenance window was opened.
 
 **Two things are required before step 1 of §6:**
 
-1. **Resolution of the §5.3 gap.** No existing mechanism can safely change
-   `SESSION_DRIVER`. The recommended `deployment/ensure-session-driver.sh` plus
-   a manual-dispatch workflow **has not been written** and needs its own
-   approval. **A GO alone does not make this change performable.**
+1. **The §5.3 tooling must exist, be tested and be merged.** It is now
+   **APPROVED TO BUILD** — §5.4 state 2 — but **neither artefact has been
+   written**. **A GO alone does not make this change performable**, and
+   **building the tool is not permission to run it.**
 2. **This explicit authorisation:**
 
 ```
 Product Owner GO / NO-GO: ______
 
 Agreed window (date and time):  ______
-Approved to resolve the §5.3 gap first (yes / no):  ______
+§5.3 tooling implemented, tested and merged (yes / no):  ______
 ```
 
 **No execution until GO is supplied.** Approval of the Closeout PLAN was not
@@ -402,9 +554,11 @@ this authorisation, and neither is approval of this runbook.
 
 | | |
 | --- | --- |
-| `SESSION_DRIVER` | **still `file`** |
-| Production switch | **NOT performed** |
-| §5.3 gap | **Identified, NOT implemented** |
+| `SESSION_DRIVER` | **still `file`** — confirmed live, `verify-session-store` run `35684301122` |
+| Production switch | **NOT performed.** No `.env` read for modification or written; no session affected; no window opened |
+| **State 1 — runbook** | Amendment round 1 applied; pending approval |
+| **State 2 — tooling** | **APPROVED TO BUILD.** `ensure-session-driver.sh` and `align-session-driver.yml` **do not exist yet** |
+| **State 3 — production change** | **NOT AUTHORISED** |
 | CL-11 | **Not started** |
 | CL-12 | **Not started** |
 | Phase 2 | **Untouched** |
