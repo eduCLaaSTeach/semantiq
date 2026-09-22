@@ -1,6 +1,6 @@
 # P1-11 — Administration Home: VERIFICATION
 
-**GATE D. Gate C approved; merged and deployed. P1-11 IS NOT CLOSED.**
+**PRODUCT OWNER ACCEPTED — GATE D CLOSED — P1-11 CLOSED.** 22 September 2026.
 
 | | |
 | --- | --- |
@@ -13,7 +13,8 @@
 | Gate C | **APPROVED** by the Product Owner at `8f69569` — rulings PO-R1, PO-R2, PO-R3 |
 | Merged as | **`59cacedbc0e4fd099a1e0ad51cc2a963be68f7b1`** (#139), squashed to `main` |
 | Deployed | **`59caced`** — run 35587621169 SUCCESS. Build verified by asset hash, §10.1 |
-| Status | **HELD AT GATE D.** The remaining gate is Product Owner testing. **Not closed** |
+| **Gate D** | **APPROVED.** Product Owner live production review, **8 / 8 PASS**, 22 September 2026 |
+| Status | **P1-11 ACCEPTED / CLOSED** — `P1-11-ADMINISTRATION-HOME-ACCEPTANCE.md`. **Phase 1 is NOT closed** |
 
 **What was executed and observed is stated below. Where something was not
 executed, it says so and says why.**
@@ -677,7 +678,14 @@ sessions are stored. **Both carried items stay OPEN:**
 | **`SESSION_DRIVER=file → database`** | **OPEN / CARRIED.** Untouched by this deployment |
 | **Privilege-change / per-user session revocation** | **OPEN / CARRIED.** The control still does not exist |
 
-### 10.4 What could NOT be observed, and why
+### 10.4 What the DELIVERY TEAM could not observe — and how it was closed
+
+> **RESOLVED 22 September 2026.** Everything in this table was outstanding at
+> Gate D **for me**, and every row was closed by **Product Owner live
+> observation on production**, recorded in §12 and in the acceptance record.
+> The table is kept as written because what a delivery environment could not
+> see is part of the honest record, not something to erase once somebody else
+> saw it.
 
 **Never inferred from a passing test.**
 
@@ -693,16 +701,69 @@ sessions are stored. **Both carried items stay OPEN:**
 
 ---
 
-## 11. Status
+## 11. Gate D — the Product Owner's live production result
 
-**GATE D. MERGED, DEPLOYED, AND HELD FOR PRODUCT OWNER TESTING.**
+> **THIS IS PRODUCT OWNER LIVE PRODUCTION OBSERVATION**, not automated
+> evidence, not a local browser run, and not inferred from a passing test.
+> **§4, §5 and §10 are the automated, MySQL, CI and read-only evidence**, and
+> they are a different and weaker claim about the same screen. **Neither is
+> restated as the other**, in either direction.
 
-**P1-11 IS NOT CLOSED.** Gate C was approved, the implementation is merged as
-`59caced` and live on production. The remaining gate is the Product Owner's own
-observation, and nothing is accepted until they say so.
+**Executed by the Product Owner on the live production deployment,
+22 September 2026, against real production data. CHECKS 1–8 — PASS.**
+The production Administration Home screenshot was supplied as Gate D evidence.
 
-**No carried Phase 1 item was closed or changed by this deployment**, and Phase 1
-closeout has not begun.
+| # | Check | Result | Evidence class |
+| --- | --- | --- | --- |
+| **1** | It looks like the rest of SemantIQ | **PASS** | Product Owner, live |
+| **2** | Readiness tells the truth about their deployment | **PASS** | Product Owner, live |
+| **3** | The dashboard agrees with the screens it summarises | **PASS** | Product Owner, live |
+| **4** | The Action Queue is real | **PASS** | Product Owner, live |
+| **5** | Nothing is invented | **PASS** | Product Owner, live |
+| **6** | An Organisation Administrator sees the right, smaller screen | **PASS** | Product Owner, live |
+| **7** | Responsive, both themes, keyboard | **PASS** | Product Owner, live |
+| **8** | Nothing else moved | **PASS** | Product Owner, live |
+
+**8 / 8. No FAIL. No NOT OBSERVABLE.** No production data was created, changed
+or deleted to make a check observable, and no privileged account was
+manufactured — including for Check 6, where a genuine Organisation
+Administrator already existed.
+
+**Check 3 is the one a summary screen is most likely to fail** — a roll-up that
+disagrees with its source is worse than no roll-up — and it passed against the
+live screens.
+
+### 11.1 The live observations this closes
+
+| Outstanding at Gate D | Now |
+| --- | --- |
+| Administration Home **rendered on production** | **OBSERVED** — screenshot supplied |
+| **PO-R2 live** — the one-item Organisation Administrator sidebar | **OBSERVED — Check 6 PASS** |
+| **PO-R3 live** — the two neutral System Health counts, no invented verdict | **OBSERVED — Checks 3 and 5 PASS** |
+| Source-screen agreement | **OBSERVED — Check 3 PASS** |
+| Action Queue behaviour | **OBSERVED — Check 4 PASS** |
+| Responsive / theme / keyboard | **OBSERVED — Check 7 PASS** |
+| Regression | **OBSERVED — Check 8 PASS** |
+
+**§10.4 remains as written.** What this delivery environment could not see is
+part of the honest record; it was closed by somebody who could see it, and that
+is said rather than quietly deleted.
+
+---
+
+## 12. Status
+
+**PRODUCT OWNER ACCEPTED — GATE D CLOSED — P1-11 CLOSED.** 22 September 2026.
+
+Merged as `59caced`, deployed by run **35587621169**, and accepted on the live
+production screen. The full acceptance record is
+**`P1-11-ADMINISTRATION-HOME-ACCEPTANCE.md`**.
+
+**P1-11 CLOSED IS NOT PHASE 1 CLOSED.** P1-11 was the last unit to build; final
+Phase 1 acceptance additionally requires explicit disposition of every carried
+row. **No carried Phase 1 item was closed or changed by this unit, its
+deployment or its acceptance** — all eleven remain OPEN. **Phase 1 closeout has
+not begun, and Phase 2 has not begun.**
 
 **All three things put to the Product Owner have been ruled on**, and each
 ruling is recorded where the question was asked:
@@ -714,8 +775,8 @@ ruling is recorded where the question was asked:
 | The System Health tile that does not collapse to one state | **PO-R3 — APPROVED** | §7.3 here, and DESIGN §4.7 where the superseded wording is marked |
 
 **The one finding raised — §6.1, P1-06's per-domain evaluation cost — is CARRIED
-FORWARD and is NOT a Gate C blocker.** `PostureEvaluator` / `DomainAdapter` is
-not refactored in this pull request: P1-11 evaluates P1-06 once per render and
+FORWARD and was NOT a Gate C or Gate D blocker.** `PostureEvaluator` / `DomainAdapter` is
+not refactored by this unit: P1-11 evaluates P1-06 once per render and
 measured performance stays inside D-140. It is pre-existing, already live on
 Security Status, and P1-06's to dispose of.
 

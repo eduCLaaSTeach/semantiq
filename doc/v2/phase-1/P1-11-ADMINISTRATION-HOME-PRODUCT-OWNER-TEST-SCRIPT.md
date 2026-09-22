@@ -20,17 +20,35 @@ starts a check or contacts an outside service.
 | **Merge SHA** | **`59cacedbc0e4fd099a1e0ad51cc2a963be68f7b1`** — PR #139 squashed to `main` |
 | **Deployed build** | **`59caced`** — deploy run 35587621169, SUCCESS, 21 September 2026 |
 | Deployed to | `https://semantiq.claas2saas.com` |
-| Status | **LIVE. HELD AT GATE D — your testing is the remaining gate.** |
+| Status | **COMPLETED — 8 / 8 PASS. GATE D CLOSED. P1-11 ACCEPTED / CLOSED** |
+| Executed by | **The Product Owner, live on production** |
+| Observation date | **22 September 2026** |
+| Evidence supplied | The production **Administration Home screenshot** |
 
-> **THIS SCRIPT IS NOW RUNNABLE.** P1-11 is merged and deployed.
+> ## ✅ SCRIPT COMPLETED — ALL EIGHT CHECKS PASS
 >
-> **That the build is `59caced` was verified independently, not taken from the
-> deployment's own report.** The Vite asset hashes are derived from the bundle's
-> content: production serves `app-BppKLV8o.js`, which is what this commit builds,
-> and the previous release built `app-D4pobQzZ.js`. Had the deployment not
-> landed, production would still be serving the old file.
+> **Checks 1–8: PASS.** Observed by the Product Owner on the live production
+> deployment on **22 September 2026**, against real production data. **No check
+> was recorded as FAIL, and none was recorded as NOT OBSERVABLE.**
 >
-> **P1-11 is NOT closed.** Nothing here is accepted until you say so.
+> **These are live observations, not automated results**, and the record does not
+> restate them as anything weaker.
+>
+> **No production data was created, changed or deleted to make any check
+> observable**, and no privileged account was manufactured — including for
+> Check 6, where a genuine Organisation Administrator already existed.
+>
+> **The expected behaviours below are unchanged.** They are what was asked for
+> before the run, and they are left exactly as written: a script rewritten after
+> the fact to match what happened is not evidence of anything.
+>
+> The build is `59caced`, verified independently rather than taken from the
+> deployment's own report — the Vite asset hashes come from the bundle's content,
+> production serves `app-BppKLV8o.js`, which is what this commit builds, and the
+> previous release built `app-D4pobQzZ.js`.
+>
+> **P1-11 is now CLOSED. Phase 1 is not** — see
+> `P1-11-ADMINISTRATION-HOME-ACCEPTANCE.md` §8.
 
 ## 3. Before you start
 
@@ -78,7 +96,7 @@ spacing, the same cards and the same status pills as the other two. Title reads
 **Reviews & Operations**, **Action Queue**. **It is a dashboard, not a form, and
 it has no tab strip** — that is deliberate.
 
-**PASS / FAIL:** ______
+**PASS / FAIL: ✅ PASS** — Product Owner, live on production, 22 September 2026.
 
 ---
 
@@ -95,7 +113,7 @@ Read the four Readiness tiles.
 | **Business Domains** | **Ready**, **Needs attention** or **Not configured**, plus how many are switched on and how many have nobody accountable |
 | **Platform Integrations** | The four services — Microsoft Entra ID, Email & Notifications, AI Provider, Microsoft Fabric — each with the same status word the Integrations screen shows |
 
-**PASS / FAIL:** ______
+**PASS / FAIL: ✅ PASS** — Product Owner, live on production, 22 September 2026.
 
 ---
 
@@ -114,8 +132,7 @@ is worse than no roll-up.
 **Expected.** **Every number and every status word matches its own screen,
 exactly.**
 
-**PASS / FAIL:** ______ **Any figure that disagrees — write down both:**
-______________________
+**PASS / FAIL: ✅ PASS** — Product Owner, live on production, 22 September 2026. **No figure disagreed.**
 
 ---
 
@@ -134,7 +151,7 @@ Read the Action Queue at the bottom.
 - If nothing is outstanding it reads **"Nothing needs your attention."** — not
   an empty box.
 
-**PASS / FAIL:** ______
+**PASS / FAIL: ✅ PASS** — Product Owner, live on production, 22 September 2026.
 
 ---
 
@@ -153,7 +170,7 @@ Look for anything the screen could not honestly know.
   credential anywhere on the page.** It is a summary of counts and statuses;
 - No raw codes, no field names, no developer words.
 
-**PASS / FAIL:** ______
+**PASS / FAIL: ✅ PASS** — Product Owner, live on production, 22 September 2026.
 
 ---
 
@@ -175,7 +192,7 @@ Sign in as them and open Administration Home.
   number and **no link** — these are deployment-wide, not one organisation's;
 - Their Action Queue contains **no row** pointing at either of those.
 
-**PASS / FAIL:** ______ **NOT OBSERVABLE** (no such account exists): ______
+**PASS / FAIL: ✅ PASS** — Product Owner, live on production, 22 September 2026. **Observed, not recorded as NOT OBSERVABLE** — a genuine Organisation Administrator existed, and none was created for this check.
 
 ---
 
@@ -191,7 +208,7 @@ across lines. Both themes readable, every status pill legible in both. Every
 link reachable by Tab with a **visible blue focus ring**. **No browser console
 errors.**
 
-**PASS / FAIL:** ______
+**PASS / FAIL: ✅ PASS** — Product Owner, live on production, 22 September 2026.
 
 ---
 
@@ -206,7 +223,7 @@ confirms who you are signed in as; it did **not** become the dashboard. Every
 previously accepted screen works exactly as it did. Administration Home is
 **first** in System Administration.
 
-**PASS / FAIL:** ______
+**PASS / FAIL: ✅ PASS** — Product Owner, live on production, 22 September 2026.
 
 ---
 
@@ -229,14 +246,14 @@ previously accepted screen works exactly as it did. Administration Home is
 
 | | |
 | --- | --- |
-| **Check 6, if you have no Organisation Administrator** | **NOT OBSERVABLE WITH REAL PRODUCTION DATA.** Creating one would put a role assignment into your real access records to satisfy a test. The behaviour is proved automatically — a System Administrator sees the item, an Organisation Administrator sees it, no other role does, and they see nothing else in that area — and removing the rule makes those tests fail. **The live observation is carried** |
+| **Check 6, if you have no Organisation Administrator** | ~~Would have been NOT OBSERVABLE — creating one would put a role assignment into your real access records to satisfy a test.~~ **RESOLVED 22 September 2026: a genuine Organisation Administrator already existed, and Check 6 was OBSERVED — PASS. None was created.** The automated evidence stands alongside it |
 | **A genuinely empty deployment** | **NOT OBSERVABLE.** Your organisation exists and cannot be removed to see what a day-one deployment looks like. The rule — Organisation reads *Not configured*, the queue leads with setting it up, and **no other tile is rewritten as `0` or `Not configured`** — is proved automatically, including by breaking it deliberately |
 | **A source failing** | **NOT OBSERVABLE.** It would mean breaking your database, your cache or your audit chain on purpose. Proved automatically by forcing **each of the six sources** to fail in turn — People, Business Domains, Access Reviews, Platform Integrations, System Health and Security Posture: its own tile reads **Not available**, every other tile is unaffected, and it contributes no Action Queue row |
 | **The screen with a large number of business domains** | Not observable today — you have a handful. **And there is a finding here you should know about:** Security Status already asks five questions per business domain, and Administration Home shows that summary, so it inherits the cost. At 20 domains the page took about 0.6 s locally, comfortably inside target. **It is P1-06's, it is already live on Security Status, and it is raised for your decision rather than changed here** |
 | **MySQL** | The application runs on MySQL in production and on SQLite locally. **The MySQL run was not observed by me** — there is no MySQL server in the environment I work in. It runs in the build, and a build step was added specifically for this unit |
-| **Production rendering** | **Not seen by me.** The browser available here does not trust this environment's certificate authority, and I did not disable certificate checking to work around it. Production observation happens after deployment |
+| **Production rendering** | **Still not seen by me** — the browser available here does not trust this environment's certificate authority, and I did not disable certificate checking to work around it. **This is no longer outstanding: the Product Owner observed the rendered screen on production on 22 September 2026 and supplied the screenshot as Gate D evidence.** That observation, not mine, is the live evidence |
 
-**None of the nine carried Phase 1 items is closed by this unit.** The System
+**None of the eleven carried Phase 1 items is closed by this unit** — nine inherited, plus the two P1-11 raised at Gate C. The System
 Health tile may SHOW a carried gate's state; showing it closes nothing.
 
 ---
