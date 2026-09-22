@@ -138,8 +138,14 @@ for Organisation or Business Domains.
 **Derived from code, not observed live.** It is consistent with the P1-11
 navigation test, which asserts an Organisation Administrator's node set equals
 exactly `['Administration Home']`, and with Check 6 of the Gate D script, which
-the Product Owner passed. **CL-12 proposes confirming the route-level half
-live** before any decision is taken.
+the Product Owner passed.
+
+> **SUPERSEDED.** This paragraph originally ended *"CL-12 proposes confirming the
+> route-level half live before any decision is taken."* **The Product Owner
+> independently verified this finding and has since ruled** — all seven
+> destinations are to be made discoverable. The live confirmation is no longer a
+> precondition of the decision; it is **post-deployment verification evidence for
+> CL-12**, listed in that item's *Live evidence required* row.
 
 ### D-5 — P1-06's own records never recorded the P1-06 finding
 
@@ -485,7 +491,7 @@ stated reason this was carried rather than closed.
 | **Requirement** | When a privilege changes, that user's **other** sessions are revoked server-side |
 | **Current production state** | **THE CONTROL DOES NOT EXIST.** Established from the code, not assumed: the only two invalidations are `$request->session()->invalidate()` — sign-out and the expiry middleware — and both act on the **viewer's own** session. **Nothing reads `sessions.user_id`** |
 | **Why still open** | It was never built. The table was prepared for it |
-| **Code required** | **YES — this is the only item in the register that requires new application code** |
+| **Code required** | **YES — one of TWO closeout items requiring application code; the other is CL-12** |
 | **Schema required** | **No** — the sessions table already carries `user_id` |
 | **Production config change** | **Indirectly: it requires CL-10 first** |
 | **Deployment required** | **Yes** |
@@ -524,18 +530,18 @@ stated reason this was carried rather than closed.
 | | |
 | --- | --- |
 | **Originating unit** | **P1-11** (raised at Gate C) · **Source** `PHASE-1-PLAN.md` §7; `P1-11-…-VERIFICATION.md` §7.2; D-19, D-182, PO-R2 |
-| **Requirement** | Decide whether System Administration destinations an Organisation Administrator is **authorised for** should be **discoverable** |
+| **Requirement** | **Make the seven authorised System Administration destinations discoverable** for an Organisation Administrator |
 | **Current production state** | Their System Administration navigation is **exactly `['Administration Home']`** — Product Owner observed, Gate D Check 6 PASS. **Seven other authorised destinations are reachable by URL and absent from navigation** — §2 D-4 |
-| **Why still open** | D-182 deliberately exposed **one** node. The rest was left as a decision, not an omission |
-| **Code required** | **Only if the Product Owner decides to expose them.** The change would be narrow — the same authorizer D-182 already modified |
-| **Schema required** | No |
-| **Production config change** | No |
-| **Deployment required** | Only if exposed |
-| **Prerequisite** | **A Product Owner product decision** |
+| **Why still open** | D-182 deliberately exposed **one** node and left the rest as a decision. **The decision is now made; the change is not yet built** |
+| **Code required** | **YES.** Narrow — the same authorizer D-182 already modified. **No route, middleware or action-class change** |
+| **Schema required** | **No** |
+| **Production config change** | **No** |
+| **Deployment required** | **Yes** — after an approved DESIGN and implementation |
+| **Prerequisite** | **An approved Gate B DESIGN** |
 | **Risk** | Exposing **Security Status, Access Reviews and Audit** is a **security-visibility** decision, not a navigation tidy-up. Route authorisation already permits them, so this is about discoverability — but "already permitted" is not the same as "intended to be prominent" |
 | **Automated evidence available** | The equality assertion holding PO-R2; the full route authorisation matrix |
-| **Live evidence required** | **Confirm the route-level half live** — that an Organisation Administrator really does reach all seven by URL. Derived from code here, not observed |
-| **Proposed method** | Confirm the seven live, present the corrected scope, then decide. **No change until then** |
+| **Live evidence required** | **After deployment:** verify the **exact navigation set** an Organisation Administrator sees, and that each of the seven destinations is genuinely reachable |
+| **Proposed method** | **DESIGN → approve → implement → test → verify → accept** |
 | **PO decision?** | **RULED — EXPOSE ALL SEVEN. FIX IN PHASE 1 CLOSEOUT** |
 | **Target final status** | **`CLOSED — CONTROL IMPLEMENTED AND VERIFIED`** |
 | **Category** | **Product/navigation TECHNICAL CHANGE REQUIRED** — changed by this ruling |
@@ -652,10 +658,25 @@ not a reason to renumber a register.
 | **CL-12** | Organisation Administrator navigation | **FIX IN CLOSEOUT — expose all seven** | target **`CLOSED — CONTROL IMPLEMENTED AND VERIFIED`** | **YES** |
 | **CL-13** | P1-06 per-domain query cost | **Accept the limitation**, with two reopen triggers | **`ACCEPTED LIMITATION`** | No |
 
-**Four dispositions are final now** — CL-08 deferred, CL-09 and CL-13 accepted
-limitations. **Three are active build/change work** — CL-10, CL-11, CL-12.
-**Six remain opportunistic**, and will be `UNVERIFIED — PREREQUISITE UNAVAILABLE`
-at WS-10 unless a genuine prerequisite appears.
+**THREE dispositions are final now:**
+
+| | |
+| --- | --- |
+| **CL-08** | `DEFERRED BY EXPLICIT PRODUCT OWNER DECISION` |
+| **CL-09** | `ACCEPTED LIMITATION` |
+| **CL-13** | `ACCEPTED LIMITATION` |
+
+**THREE are active change / build work:** **CL-10** (production configuration),
+**CL-11** and **CL-12** (both application code, both behind Gate B).
+
+**SEVEN remain opportunistic** — **CL-01 to CL-07** — and each becomes
+`UNVERIFIED — PREREQUISITE UNAVAILABLE` at WS-10 unless a genuine prerequisite
+appears. **3 + 3 + 7 = 13.**
+
+> **CORRECTED — an earlier draft of this paragraph said "four dispositions are
+> final" and then listed three.** The count was wrong, not the list. It is stated
+> here as three, with the arithmetic shown, because a register whose own totals
+> do not add up is the shape of defect this document was written to find.
 
 **`UNVERIFIED — PREREQUISITE UNAVAILABLE` is a disposition, not a failure**, and
 it is not interchangeable with `ACCEPTED LIMITATION` or `DEFERRED`. The three say
@@ -746,13 +767,32 @@ Perform the recoverable change first, on a substrate you can still authenticate
 into. Doing the cutover first would mean attempting the session change afterwards
 on a deployment whose sign-in path had just been rebuilt.
 
-**Challenge 3 — the decision-only workstreams should run EARLY and in parallel,
-not late.** WS-7, WS-8 and WS-9 (CL-12, CL-13, CL-09) need **no production
-action at all** — they need Product Owner decisions. The brief schedules them at
-positions 6, 7 and 8, after the risky controlled changes. **Nothing makes them
-wait.** Resolving them alongside WS-0 removes three of thirteen items from the
-register before any production change is attempted, and shrinks what WS-10 has
+**Challenge 3 — WS-7, WS-8 and WS-9 should not wait behind the risky changes,
+for two different reasons.**
+
+> **SUPERSEDED, AND REPLACED ABOVE.** The original Challenge 3 argued these three
+> were *"decision-only"* and needed *"no production action at all"*. **That was
+> true when it was written and is no longer true.** The Product Owner's CL-12
+> ruling made **WS-7 build work** — DESIGN, code and deployment. The reasoning
+> below is the current authority; the old wording is kept only so the change is
+> visible.
+
+**WS-8 and WS-9 are record-only, because their decisions are final.** CL-13 and
+CL-09 are both `ACCEPTED LIMITATION` with nothing left to build, execute or
+observe. They need writing down — CL-13 against P1-06's own record with its two
+reopen triggers, CL-09 with its rationale — and nothing more. **Holding them
+behind WS-1 buys nothing**, and disposing of them early shrinks what WS-10 has
 to reconcile.
+
+**WS-7 is real build work, and it should still start early — because it has no
+dependency on the session work.** CL-12 touches navigation presentation only: no
+route, no middleware, no action class, no session or identity behaviour.
+**Sequencing it after WS-1 and WS-2 would be queueing, not ordering.** Its DESIGN
+can run in parallel with WS-1, and its implementation gated only on its own
+Gate B approval.
+
+**WS-7 must not be described as decision-only anywhere.** It carries the full
+lifecycle, exactly as WS-2 does.
 
 **And WS-4, WS-5, WS-6 cannot be scheduled at all.** They are blocked on
 prerequisites that may never arrive. **They must not sit on the critical path** —
@@ -781,10 +821,10 @@ WS-1  Session driver  file → database   (CL-10)      ── ACTIVE BUILD PATH 
         ▼
 WS-2  Per-user session revocation  (CL-11)
       DESIGN → PO approval → implement → tests → MySQL → LIVE
-        │
-WS-7  Organisation Administrator navigation  (CL-12)
+
+WS-7  Organisation Administrator navigation  (CL-12)   ── SEPARATE BUILD PATH ──
       DESIGN → PO approval → implement → exact-set tests → accept
-      may run alongside WS-1/WS-2; depends on neither
+      NOT downstream of WS-1 or WS-2 — runs in parallel, depends on neither
 
 WS-4 (CL-01)    WS-5 (CL-03–CL-06)    WS-6 (CL-07)
       opportunistic only — NEVER critical-path blockers
@@ -829,7 +869,10 @@ session work rather than queueing behind it.
 > **go / no-go immediately before the CL-10 production change**, with its window.
 > Approving this PLAN is not that authorisation.
 
-**The original questions, kept for the record:**
+**The original questions, kept for the record.** They are reproduced **as they
+were asked**, so the reasoning behind each answer stays legible. **Any claim in
+this table is historical and is superseded by §3 and §3A**, which carry the
+current authority.
 
 | # | Decision | Item | Why it is yours |
 | --- | --- | --- | --- |
@@ -838,7 +881,7 @@ session work rather than queueing behind it.
 | **3** | **Authorise or defer the Entra cutover** | CL-08 | Withheld at every previous gate. Highest risk in the register |
 | **4** | Confirm coupling the step-up observation to the cutover | CL-02 + CL-08 | One controlled change, two items |
 | **5** | **Authorise or defer the session driver switch**, and set the window | CL-10 | It signs everyone out |
-| **6** | **Build per-user revocation in Phase 1 closeout, or defer it explicitly to Phase 2** | CL-11 | The only item needing new code |
+| **6** | **Build per-user revocation in Phase 1 closeout, or defer it explicitly to Phase 2** | CL-11 | *(as asked — **SUPERSEDED**: "the only item needing new code" stopped being true when CL-12 was ruled an implementation item)* |
 | **7** | Will a genuine **test installation** be provisioned? | CL-03–CL-06 | Four items hang on it |
 | **8** | Will genuine **SMTP** be provisioned? | CL-07 | |
 | **9** | **Navigation: expose the seven, expose some, or accept the current behaviour** | CL-12 | The scope changed from four to seven, three of them security surfaces |
