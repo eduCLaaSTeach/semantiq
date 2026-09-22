@@ -16,7 +16,8 @@
 | Authority | `PHASE-1-CLOSEOUT-PLAN.md` §3 CL-10, §3A, §5 — Gate A approved |
 | Status | **RUNBOOK READY. NOT EXECUTED.** |
 | **Tooling gap** | **Confirmed — §5.3. No existing mechanism can change `SESSION_DRIVER`. APPROVED TO BUILD, NOT APPROVED TO EXECUTE** |
-| Amendment | **Round 1 — four Product Owner safety-accuracy findings applied**, §5.2, §5.3, §9 |
+| Amendment | **Round 2** — §2A, §9 rewritten. Round 1's four `.env` safety findings all retained |
+| **Identity finding** | **`sessions.user_id` will be NULL for every SemantIQ session — §2A. OBSERVED, not inferred.** The previous §9 proof rested on it and was impossible. **CL-10's goal is unaffected; CL-11 gains a new design constraint — §9A** |
 
 ---
 
@@ -60,9 +61,93 @@ its source. Nothing is assumed.
 | **Microsoft sign-in configuration** | **Present** | The deployment's *"Verify identity configuration is present on the server"* step passes on every run and is a hard gate |
 | **`.env` is never transferred** | **Guaranteed** | `deployment/rsync-protected-paths.txt` lists `.env`; the deployment asserts the exclusion contract **before any transfer**, and a CI test asserts it against the workflow file |
 
-**`user_id` already exists on the sessions table and nothing reads it.** The
-table was prepared for per-user revocation; **the control does not exist.** This
-runbook does not create it.
+**`user_id` already exists on the sessions table, nothing reads it — and under
+SemantIQ's identity architecture nothing writes a usable value into it either.** That second half was missing from this runbook and from the
+assumptions carried toward CL-11. **§2A establishes it from source and from a
+local run.**
+
+---
+
+## 2A. `sessions.user_id` will be NULL — established, not assumed
+
+> **This invalidated the previous §9 proof.** An earlier draft made
+> `COUNT(*) WHERE user_id IS NOT NULL` a **mandatory** proof. **That column will
+> never be populated by a SemantIQ sign-in**, so the proof could only ever have
+> failed — or, worse, been quietly reinterpreted until it passed.
+
+### The sign-in path, traced end to end
+
+| Step | What actually happens | Source |
+| --- | --- | --- |
+| Microsoft returns | `CallbackController::issueSession()` runs | `app/Modules/Platform/Http/Controllers/Auth/CallbackController.php:83` |
+| The session is issued | `$request->session()->put(EnsureSessionIsCurrent::SESSION_USER_ID, $user->id)` — i.e. the key **`auth.user_id`** | same file, line 109 |
+| **Laravel Guard login** | **NEVER CALLED** | — |
+| Each request re-checks | `EnsureSessionIsCurrent` reads **`auth.user_id`** and resolves the model itself | `EnsureSessionIsCurrent.php:40,50` |
+| The resolved principal | Placed on the request as `semantiq_user`, which every authorising path reads | e.g. `RequireActionClass.php:52` |
+
+**SemantIQ authentication is custom, session-key based.** It does not use
+Laravel's authentication Guard at any point.
+
+### Exhaustive search — no Guard binding exists
+
+| Searched across `app/` | Hits |
+| --- | --- |
+| `Auth::login`, `Auth::setUser`, `loginUsingId`, `Auth::guard`, `->login(` | **0** |
+| `Session::extend`, custom `SessionHandlerInterface`, `DatabaseSessionHandler` subclass | **0** |
+| Any write to the `sessions` table | **0** — the only reference is P1-09's `SessionStoreCheck`, a round-trip health probe |
+
+**`App\Modules\Platform\Models\User` is a plain `Model`** — `final class User
+extends Model`. It does **not** implement `Authenticatable`.
+**`config/auth.php` still carries `'model' => null`** for the `users` provider,
+with the original comment: *"No user model exists in P1-BASE."*
+
+### What Laravel does with that
+
+`Illuminate\Session\DatabaseSessionHandler` populates the column like this:
+
+```php
+protected function addUserInformation(&$payload)
+{
+    if ($this->container->bound(Guard::class)) {
+        $payload['user_id'] = $this->userId();
+    }
+    return $this;
+}
+
+protected function userId()
+{
+    return $this->container->make(Guard::class)->id();
+}
+```
+
+**`Guard::class` IS bound** — it is a core container alias — so the branch runs.
+**But `Guard::id()` has no authenticated user**, because nothing ever logged one
+in. It returns `null`, and `null` is written.
+
+### OBSERVED, not inferred
+
+**Source analysis predicted this; a local run confirmed it.** A throwaway probe
+was written, executed and **deleted — nothing was committed**. It configured
+`session.driver=database`, issued a session exactly as `issueSession()` does,
+and read the row back:
+
+```
+session rows written: 1
+user_id = NULL | last_activity set = yes
+Guard::id() = NULL
+Guard bound  = true
+```
+
+### The three conclusions
+
+| | |
+| --- | --- |
+| **1** | **`sessions.user_id` must NOT be treated as populated.** It will be `NULL` for every SemantIQ session unless an explicit integration is built |
+| **2** | **The driver switch is still safe.** The `bound()` guard means no exception: a row **is** written, and **`last_activity` is set and usable.** CL-10's goal is unaffected |
+| **3** | **Nothing is being fixed here.** Adding Laravel Auth, making `User` implement `Authenticatable`, or altering the middleware would be **security-architecture changes**. They are out of scope for WS-1 and belong, if needed, to the CL-11 DESIGN — see §9A |
+
+> **DO NOT ADD LARAVEL AUTH TO MAKE A PROOF PASS.** Changing the identity model
+> so that a measurement succeeds is the inverse of evidence.
 
 ---
 
@@ -393,7 +478,7 @@ first time under pressure.
 | **3** | **Rollback procedure ready** | §7 rehearsed; **P-10 server access verified before starting** | ☐ |
 | **4** | **Real post-change Microsoft sign-in succeeds** | **Product Owner signs in for real.** Not a simulation, not an automated check | ☐ |
 | **5** | **Production observed reporting `database`** | `verify-session-store` reports `Effective session driver : database` | ☐ |
-| **6** | **The `sessions` table is actually being used** | §9 — real row behaviour | ☐ |
+| **6** | **The `sessions` table is actually being used** | §9 **Fact B**, B-0 → B-3. **Read §9's stated limitation before recording this** — it is a bounded correlation, not a unique identification | ☐ |
 
 > ### WHY PROOF 6 IS NOT PROOF 5
 >
@@ -407,63 +492,90 @@ first time under pressure.
 
 ---
 
-## 9. Database-session behavioural proof
+## 9. Proving the switch worked — two separate facts
 
-### The rule
+> **REBUILT, Product Owner review round 2.** The previous §9 rested on
+> `COUNT(*) WHERE user_id IS NOT NULL`. **§2A proves that column is always
+> NULL**, so that proof was not merely weak — **it was impossible.** One weak
+> proof must not be swapped for another, so what follows states exactly what it
+> establishes and exactly what it does not.
 
-**Prove behaviour without exposing session contents.** A session row contains a
-serialised payload and an identifier that is, in effect, a live credential.
+**Two facts, proven separately. Neither substitutes for the other.**
+
+### Fact A — authentication works after the switch
+
+| | |
+| --- | --- |
+| **A-1** | **The Product Owner performs a genuine Microsoft / SemantIQ sign-in.** Not simulated |
+| **A-2** | **`/console` loads**, and **one authenticated console screen** loads |
+| **What it proves** | The custom `auth.user_id` session path survives the driver change end to end — sign-in, session issue, `EnsureSessionIsCurrent` re-resolution, authorisation |
+| **Why it stands alone** | It needs **no database observation at all.** A successful authenticated page load is itself the evidence |
+
+### Fact B — Laravel is persisting sessions through the database
+
+**The controlled window is what makes this defensible**, and it exists anyway:
+the switch invalidates every pre-existing `file` session, so there is a natural
+moment when **no authenticated session exists at all**.
+
+| Step | Observation | What it establishes |
+| --- | --- | --- |
+| **B-0** | **Before the change:** `COUNT(*)` and `MAX(last_activity)`, taken **twice, minutes apart** | **The table is INERT on the `file` driver.** Two identical readings prove nothing is writing it — this is the baseline the rest is measured against, and it is the strongest single element here |
+| **B-1** | **General users are instructed not to sign back in yet.** The Product Owner is the **first** to sign in | Bounds the window |
+| **B-2** | **After A-1:** `COUNT(*)` and `MAX(last_activity)` again | **A table that was provably frozen is now being written.** The driver switch took effect in behaviour, not only in configuration |
+| **B-3** | Product Owner makes **one controlled authenticated request** at a noted time; `MAX(last_activity)` read immediately before and after | **The store is READ and UPDATED**, not written once. This is what distinguishes a live session store from a one-off insert |
+| **B-4** | Product Owner records **which screen and at what time** | Supplies the human half of the correlation |
+
+### What this proves — and what it does not
+
+| | |
+| --- | --- |
+| **Proven** | **Laravel is persisting and round-tripping sessions through the database.** That is CL-10's actual claim, and B-0 → B-3 establishes it |
+| **NOT proven** | **That any particular row is the Product Owner's.** It cannot be, and no amount of care changes that: **`user_id` is NULL**, and session `id`, `payload`, `ip_address` and `user_agent` are all off-limits |
+| **The residual gap, stated plainly** | An **anonymous visitor** reaching the sign-in page during the window also creates a row. The controlled window makes this unlikely; **it does not make it impossible.** So B-2 and B-3 are **a tightly-bounded correlation, not a unique identification** |
+
+**That gap is acceptable for CL-10 and it is named rather than hidden.** CL-10
+claims *"session persistence has moved to the database"* — a statement about the
+**store**, which B-0's frozen baseline followed by observed movement does
+establish. It never claimed *"this row belongs to this person"*, and after §2A
+it could not.
+
+**Closing the residual gap would require a committed diagnostic** — an endpoint
+or command that reports a session's own row. **That is not built, not proposed
+here, and would need its own approval.** Inventing one to reach certainty would
+widen this pull request and add a production surface for the sake of a
+measurement.
+
+### Safety rules for every observation above
 
 | Never | Always |
 | --- | --- |
-| `SELECT *` from `sessions` | Aggregates, and bounded non-sensitive columns only |
-| Print or log `payload` | Ignore it entirely |
-| Print or log a session `id` | Count rows, don't identify them |
-| Copy a row anywhere | Read in place, read-only |
+| `SELECT *` from `sessions` | Bounded aggregates and one timestamp |
+| Session `id`, `payload`, `ip_address`, `user_agent`, cookie | `COUNT(*)`, `MAX(last_activity)` |
+| Copying a row anywhere | Read in place, read-only, over the established SSH path |
 
-### The proof
+**`WHERE user_id IS NOT NULL` is removed from this runbook entirely** — it would
+return zero and, given §2A, could only mislead whoever ran it next.
 
-> **CORRECTED, Product Owner review.** An earlier draft made *"total
-> `COUNT(*)` increased after sign-in"* a load-bearing step. **That claims
-> causation from a number that can move on its own** — unrelated traffic can
-> create an anonymous session row, and garbage collection can remove expired
-> rows, in either direction, at any moment. **A total that moved proves
-> something happened, not that the Product Owner's sign-in was what happened.**
->
-> Total count is retained only as **context**, never as proof.
+---
 
-**Three observations carry the proof, and none of them depends on a raw total:**
+## 9A. CL-11 / WS-2 design constraint — created by this finding
 
-| # | Read-only observation | What it establishes | Why it is not confoundable by unrelated traffic |
-| --- | --- | --- | --- |
-| **B-1** | `SELECT COUNT(*) FROM sessions WHERE user_id IS NOT NULL;` **before** and **after** the Product Owner's sign-in | **An authenticated row exists that did not before** | Anonymous visitor traffic creates rows with `user_id IS NULL`. This aggregate moves only when somebody **signs in** |
-| **B-2** | `SELECT MAX(last_activity) FROM sessions WHERE user_id IS NOT NULL;` **immediately before** and **immediately after one controlled page request** by the Product Owner | **The store is being read and UPDATED**, not merely written once | Bounded to authenticated rows, and to a **single deliberate request in a known instant** — not a window in which anything might have happened |
-| **B-3** | The Product Owner states which screen they opened, and when | **Ties the observed movement to a known action** | It is the human statement that supplies causation; the query supplies the fact |
+> **CL-11 DESIGN IS NOT STARTED.** This records a constraint it must satisfy; it
+> does not begin it or choose its mechanism.
 
-**B-2 is what makes this behavioural rather than configurational.** A row
-appearing could be one write. **A timestamp on an authenticated row that advances
-across a single controlled request proves the application is genuinely
-round-tripping the session through the database** — reading it, updating it and
-writing it back.
+**CL-11 must establish a durable, authoritative mapping between each database
+session and the SemantIQ principal whose privileges that session carries.**
 
-**Optional context, explicitly not proof:** `SELECT COUNT(*) FROM sessions;` may
-be recorded before and after to show the table is live. **A change in it proves
-nothing about the sign-in**, and the evidence record must not present it as
-though it did.
+| | |
+| --- | --- |
+| **The assumption this replaces** | *"The sessions table has a `user_id` column, so sessions are linked to users."* **The column exists; the link does not.** §2A |
+| **The constraint** | CL-11 **must not assume Laravel's default `sessions.user_id` is that mapping.** Per-user revocation cannot target rows by a column that is always NULL |
+| **The mechanism** | **Undecided, and deliberately so.** Binding SemantIQ identity to the Laravel Guard, writing the principal through a custom session handler, or maintaining a separate mapping are all candidates with different security consequences. **The Gate B DESIGN decides** |
+| **Not a CL-10 blocker** | CL-10 moves session **persistence** to the database. That remains correct, necessary and unchanged — **it is still the prerequisite for CL-11**, because on the `file` driver there is nothing to target at all |
 
-**Run these as read-only statements** via the established SSH path. **No
-`payload`, no session `id`, no `ip_address`, no `user_agent` is selected,
-printed or recorded** — bounded aggregates and one timestamp are sufficient and
-carry nothing sensitive.
-
-### A built-in cross-check that already exists
-
-`verify-session-store` **already fails** if the driver is `database` while the
-P1-09 System Health row still reads *Not checked* — and fails in the other
-direction too. **It is a guard, not a narration:** after the change it must
-report `database` *and* a consistent System Health row, or it errors. That
-existing assertion is part of the evidence for proofs 5 and 6 and needs nothing
-new built.
+**This finding makes CL-11 larger than "read `sessions.user_id` and delete
+rows".** Discovering that at Gate B design time is the point of having found it
+now.
 
 ---
 
@@ -475,7 +587,7 @@ new built.
 | --- | --- |
 | **1** | Production reports **`SESSION_DRIVER=database`** |
 | **2** | **A real Microsoft sign-in succeeds** |
-| **3** | The **`sessions` table reflects live session behaviour** — §9 **B-1, B-2, B-3** |
+| **3** | The **`sessions` table reflects live session behaviour** — §9 **Fact B**, steps B-0 → B-3 |
 | **4** | **`GET /up`** → `ok` |
 | **5** | **`GET /`** → `200` |
 | **6** | **Every previously accepted console route still available** — `/console`, `/console/administration`, `/console/organisation`, `/console/people/users`, `/console/people/groups`, `/console/domains`, `/console/access`, `/console/security`, `/console/security/exceptions`, `/console/security/events`, `/console/access-reviews`, `/console/access-reviews/overdue`, `/console/system-health`, `/console/integrations`, `/console/audit`. **Same status codes as before the change** |
@@ -508,7 +620,9 @@ roll back and investigate with production restored.
 | **Change reference** | The workflow run ID (or operator session reference) that performed it |
 | **Before** | `verify-session-store` output showing **`file`**; `verify-identity` showing **`env`**; the full P-1 … P-11 results |
 | **After** | `verify-session-store` showing **`database`**; `/up`; `/`; the console route sweep |
-| **Behavioural** | The §9 **B-1** authenticated-row aggregate before/after, the **B-2** `last_activity` values either side of one controlled request, and the **B-3** statement of which screen was opened and when — **bounded aggregates and timestamps only.** Any total-row count recorded is marked **context, not proof** |
+| **Fact A** | The Product Owner's own statement that a real Microsoft sign-in succeeded and that `/console` plus one authenticated screen loaded |
+| **Fact B** | The **two identical B-0 baseline readings** taken before the change (proving the table was inert), the B-2 readings after sign-in, and the B-3 `MAX(last_activity)` either side of one controlled request, with B-4's note of which screen and when — **`COUNT(*)` and `MAX(last_activity)` only** |
+| **Stated limitation** | The evidence record must carry §9's residual gap: this is **a bounded correlation, not a unique identification**, because `sessions.user_id` is NULL and no identifier may be exposed |
 | **Product Owner** | **Their own statement that a real Microsoft sign-in succeeded**, and that the console behaved normally |
 | **Rollback** | If triggered: what was observed, when rollback ran, and the restored-state evidence |
 
@@ -556,7 +670,7 @@ this authorisation, and neither is approval of this runbook.
 | --- | --- |
 | `SESSION_DRIVER` | **still `file`** — confirmed live, `verify-session-store` run `35684301122` |
 | Production switch | **NOT performed.** No `.env` read for modification or written; no session affected; no window opened |
-| **State 1 — runbook** | Amendment round 1 applied; pending approval |
+| **State 1 — runbook** | **Amendment round 2 applied** — §2A identity finding, §9 rebuilt, §9A constraint added. Round 1's `.env` safety requirements all retained. Pending approval |
 | **State 2 — tooling** | **APPROVED TO BUILD.** `ensure-session-driver.sh` and `align-session-driver.yml` **do not exist yet** |
 | **State 3 — production change** | **NOT AUTHORISED** |
 | CL-11 | **Not started** |
