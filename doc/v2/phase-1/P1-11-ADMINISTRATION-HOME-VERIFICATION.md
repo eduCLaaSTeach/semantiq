@@ -1,6 +1,6 @@
 # P1-11 — Administration Home: VERIFICATION
 
-**GATE C. Implementation complete, UNMERGED and UNDEPLOYED.**
+**PRODUCT OWNER ACCEPTED — GATE D CLOSED — P1-11 CLOSED.** 22 September 2026.
 
 | | |
 | --- | --- |
@@ -10,7 +10,11 @@
 | Decisions in force | D-130 – D-147, D-178 – D-181, **D-182** |
 | Schema | **NONE.** No table, no column, no migration |
 | Writes | **NONE.** No write path, no cache, no new `SecurityEventLogger` key |
-| Status | **NOT MERGED. NOT DEPLOYED.** Awaiting Product Owner Gate C review |
+| Gate C | **APPROVED** by the Product Owner at `8f69569` — rulings PO-R1, PO-R2, PO-R3 |
+| Merged as | **`59cacedbc0e4fd099a1e0ad51cc2a963be68f7b1`** (#139), squashed to `main` |
+| Deployed | **`59caced`** — run 35587621169 SUCCESS. Build verified by asset hash, §10.1 |
+| **Gate D** | **APPROVED.** Product Owner live production review, **8 / 8 PASS**, 22 September 2026 |
+| Status | **P1-11 ACCEPTED / CLOSED** — `P1-11-ADMINISTRATION-HOME-ACCEPTANCE.md`. **Phase 1 is NOT closed** |
 
 **What was executed and observed is stated below. Where something was not
 executed, it says so and says why.**
@@ -579,12 +583,187 @@ closes nothing.**
 
 ---
 
-## 10. Status
+## 10. Production deployment and read-only verification — Gate D
 
-**GATE C. READY FOR PRODUCT OWNER REVIEW.**
+| | |
+| --- | --- |
+| Gate C approved at | `8f69569` — CI run 35586681413 SUCCESS |
+| **Merge SHA** | **`59cacedbc0e4fd099a1e0ad51cc2a963be68f7b1`** — PR #139, squashed |
+| **`main` now** | **`59caced`** |
+| **Deploy run** | **35587621169 — SUCCESS**, 29/29 steps, 2 m 12 s |
+| Deployed to | `https://semantiq.claas2saas.com` |
 
-**The implementation pull request is UNMERGED and UNDEPLOYED**, per the
-Product Owner's instruction.
+### 10.1 The deployed build was verified, not assumed
+
+**A deployment reporting success is not the same claim as the right build being
+live**, so the deployed SHA was established independently of the workflow's own
+report. Vite asset names are content hashes:
+
+| | |
+| --- | --- |
+| Production's page references and serves | `app-BppKLV8o.js`, `app-D8VIisje.css` — both **200** |
+| Building `59caced` locally produces | `app-BppKLV8o.js`, `app-D8VIisje.css` |
+| Building the **previous** `main` (`59a3f73`) produces | `app-D4pobQzZ.js`, `app-KvceA1Ro.css` |
+
+**The previous release's hashes are different**, so this check discriminates: had
+the deployment not landed, production would still be serving `app-D4pobQzZ.js`.
+
+### 10.2 What was observed on production, read-only
+
+Every check below is a `GET`. Nothing was written, no account was created or
+altered, no configuration was changed and no outside service was contacted.
+
+| # | Check | Observed |
+| --- | --- | --- |
+| **P1** | Application health — `GET /up` | **`ok`** |
+| **P2** | Site root — `GET /` | **200** |
+| **P3** | `GET /console/administration` **exists on the deployed build** | **302 → sign-in.** The route is present and fails closed for an unauthenticated visitor |
+| **P4** | **The 302 is not a false pass** | `GET /console/this-route-does-not-exist` → **404**. A route that does not exist answers 404 on this deployment, so 302 genuinely distinguishes "exists" from "absent" |
+| **P5** | `/console` unchanged | **302 → sign-in**, exactly as before |
+| **P6** | Every accepted console route still available | `/console`, `/console/organisation`, `/console/people/users`, `/console/people/groups`, `/console/domains`, `/console/access`, `/console/security`, `/console/security/exceptions`, `/console/security/events`, `/console/access-reviews`, `/console/access-reviews/overdue`, `/console/system-health`, `/console/integrations`, `/console/audit` — **all 302 → sign-in**. None 404, none 500 |
+| **P7** | Deployment completed without error | All **29** steps green, including `php artisan migrate --force`, `optimize:clear`, `semantiq:health` over SSH, the HTTPS verification and the web-exposure negative tests |
+| **P8** | **No schema change** | P1-11 adds **no migration**: `git diff 59a3f73..59caced -- database/migrations/` is empty and the count stays at **35**. `migrate --force` ran and reported **`INFO  Nothing to migrate.`** — observed in the deployment log, not inferred from the absence of a file |
+| **P9** | **No P1-11-specific configuration change** — see §10.3, which states this precisely rather than broadly | `.env` was not replaced, `APP_KEY` preserved, no Entra credential, no `identity_source`, no `SESSION_DRIVER`, no administrator assignment, no SMTP, no Bootstrap First-Run, no session revocation. **The standard workflow's already-approved D-31 `SESSION_LIFETIME` enforcement still runs, and is not a P1-11 change** |
+
+### 10.3 "No configuration change" — stated precisely
+
+**The earlier wording of P9 read simply *"No configuration change"*, and that was
+too broad to be true.** The standard `deploy.yml` runs a previously approved
+step — *"Bring SESSION_LIFETIME to the approved session policy"*, **D-31** — and
+a blanket claim that nothing in configuration is ever touched would have quietly
+contradicted a step the Product Owner approved two units ago. **A sentence that
+is broader than the evidence is the same defect as a test that passes for the
+wrong reason**, so it is split into what was actually true of this deployment.
+
+**What P1-11 introduced:**
+
+| | |
+| --- | --- |
+| **P1-11-specific configuration change** | **NONE.** This unit introduced no environment key, no setting, no stored value and no configuration migration. It has no write path at all |
+
+**What the deployment did and did not do to the server:**
+
+| | |
+| --- | --- |
+| `.env` **was not replaced** by rsync | It is on the exclusion list, and the exclusion contract is asserted as its own step before any sync happens |
+| **Existing `APP_KEY` preserved** | It is bootstrapped only when absent. This was not a first deployment, so that branch was not taken |
+| **Microsoft Entra credentials not changed** | Not read for modification, not written. The identity step only asserts required keys are *present* |
+| **`identity_source` not changed** | The `env → encrypted store` cutover was not performed and remains explicitly withheld |
+| **`SESSION_DRIVER` not changed** | Production remains `file`. The `file → database` alignment was not attempted |
+| **No administrator assignment created or changed** | None was created, promoted or removed. `srikanth@lithan.com` was not altered |
+| **SMTP configuration not manufactured** | No mail configuration was created, and no send was attempted |
+| **Bootstrap First-Run not invoked** | Not reachable on a deployment that has a System Administrator, and not attempted |
+| **Per-user session revocation not implemented** | Nothing was built, simulated or stubbed |
+
+**And the one thing the standard workflow legitimately does:**
+
+| | |
+| --- | --- |
+| **D-31 — `SESSION_LIFETIME` enforcement** | The standard deployment **retains its already-approved D-31 step**, which brings the server's `SESSION_LIFETIME` to the policy the application itself reports. **This is existing approved deployment behaviour and is NOT a P1-11 change.** P1-11 neither added it, altered it nor depends on it |
+
+**On this run it changed nothing.** The step is idempotent and logged:
+
+> `SESSION_LIFETIME already matches the approved policy. Leaving .env untouched.`
+
+so the approved value was already in place and `.env` was not rewritten at all.
+That is what the deployment log says, rather than what the script is capable of
+doing.
+
+**`SESSION_DRIVER` and D-31 are different things and must not be conflated.**
+D-31 governs *how long* an idle session lives; the carried item governs *where*
+sessions are stored. **Both carried items stay OPEN:**
+
+| Carried item | Status |
+| --- | --- |
+| **`SESSION_DRIVER=file → database`** | **OPEN / CARRIED.** Untouched by this deployment |
+| **Privilege-change / per-user session revocation** | **OPEN / CARRIED.** The control still does not exist |
+
+### 10.4 What the DELIVERY TEAM could not observe — and how it was closed
+
+> **RESOLVED 22 September 2026.** Everything in this table was outstanding at
+> Gate D **for me**, and every row was closed by **Product Owner live
+> observation on production**, recorded in §12 and in the acceptance record.
+> The table is kept as written because what a delivery environment could not
+> see is part of the honest record, not something to erase once somebody else
+> saw it.
+
+**Never inferred from a passing test.**
+
+| | |
+| --- | --- |
+| **The rendered screen on production** | **NOT OBSERVED.** Reaching it requires signing in with Microsoft, and this environment's browser does not trust the inspecting proxy's certificate authority. **TLS verification was not disabled and no bypass was installed.** Every browser observation in §5 is from a local server |
+| **PO-R2 live** — the Organisation Administrator sidebar | **NOT OBSERVED.** Requires signing in as one. Automated evidence is the equality assertion in G18/V4 |
+| **PO-R3 live** — the two System Health counts | **NOT OBSERVED.** Same reason. Check 3 of the Product Owner script is where this is confirmed against the System Health screen itself |
+| **"Opening Administration Home contacts nobody"** | **NOT OBSERVED IN PRODUCTION**, because opening it requires a session. The guarantee is **structural and automated**: `SystemHealthReport` is built on `inspectLocal()` and `storedReport()`, and a guard fails the build if any P1-11 file names `inspect()`, `report()`, `semantiq:health`, a connection tester or `EntraDiscovery`. That is a strong claim about the code and **not** a live observation, and it is not presented as one |
+
+**These are the Product Owner's to observe**, through the eight checks in
+`P1-11-ADMINISTRATION-HOME-PRODUCT-OWNER-TEST-SCRIPT.md`.
+
+---
+
+## 11. Gate D — the Product Owner's live production result
+
+> **THIS IS PRODUCT OWNER LIVE PRODUCTION OBSERVATION**, not automated
+> evidence, not a local browser run, and not inferred from a passing test.
+> **§4, §5 and §10 are the automated, MySQL, CI and read-only evidence**, and
+> they are a different and weaker claim about the same screen. **Neither is
+> restated as the other**, in either direction.
+
+**Executed by the Product Owner on the live production deployment,
+22 September 2026, against real production data. CHECKS 1–8 — PASS.**
+The production Administration Home screenshot was supplied as Gate D evidence.
+
+| # | Check | Result | Evidence class |
+| --- | --- | --- | --- |
+| **1** | It looks like the rest of SemantIQ | **PASS** | Product Owner, live |
+| **2** | Readiness tells the truth about their deployment | **PASS** | Product Owner, live |
+| **3** | The dashboard agrees with the screens it summarises | **PASS** | Product Owner, live |
+| **4** | The Action Queue is real | **PASS** | Product Owner, live |
+| **5** | Nothing is invented | **PASS** | Product Owner, live |
+| **6** | An Organisation Administrator sees the right, smaller screen | **PASS** | Product Owner, live |
+| **7** | Responsive, both themes, keyboard | **PASS** | Product Owner, live |
+| **8** | Nothing else moved | **PASS** | Product Owner, live |
+
+**8 / 8. No FAIL. No NOT OBSERVABLE.** No production data was created, changed
+or deleted to make a check observable, and no privileged account was
+manufactured — including for Check 6, where a genuine Organisation
+Administrator already existed.
+
+**Check 3 is the one a summary screen is most likely to fail** — a roll-up that
+disagrees with its source is worse than no roll-up — and it passed against the
+live screens.
+
+### 11.1 The live observations this closes
+
+| Outstanding at Gate D | Now |
+| --- | --- |
+| Administration Home **rendered on production** | **OBSERVED** — screenshot supplied |
+| **PO-R2 live** — the one-item Organisation Administrator sidebar | **OBSERVED — Check 6 PASS** |
+| **PO-R3 live** — the two neutral System Health counts, no invented verdict | **OBSERVED — Checks 3 and 5 PASS** |
+| Source-screen agreement | **OBSERVED — Check 3 PASS** |
+| Action Queue behaviour | **OBSERVED — Check 4 PASS** |
+| Responsive / theme / keyboard | **OBSERVED — Check 7 PASS** |
+| Regression | **OBSERVED — Check 8 PASS** |
+
+**§10.4 remains as written.** What this delivery environment could not see is
+part of the honest record; it was closed by somebody who could see it, and that
+is said rather than quietly deleted.
+
+---
+
+## 12. Status
+
+**PRODUCT OWNER ACCEPTED — GATE D CLOSED — P1-11 CLOSED.** 22 September 2026.
+
+Merged as `59caced`, deployed by run **35587621169**, and accepted on the live
+production screen. The full acceptance record is
+**`P1-11-ADMINISTRATION-HOME-ACCEPTANCE.md`**.
+
+**P1-11 CLOSED IS NOT PHASE 1 CLOSED.** P1-11 was the last unit to build; final
+Phase 1 acceptance additionally requires explicit disposition of every carried
+row. **No carried Phase 1 item was closed or changed by this unit, its
+deployment or its acceptance** — all eleven remain OPEN. **Phase 1 closeout has
+not begun, and Phase 2 has not begun.**
 
 **All three things put to the Product Owner have been ruled on**, and each
 ruling is recorded where the question was asked:
@@ -596,8 +775,8 @@ ruling is recorded where the question was asked:
 | The System Health tile that does not collapse to one state | **PO-R3 — APPROVED** | §7.3 here, and DESIGN §4.7 where the superseded wording is marked |
 
 **The one finding raised — §6.1, P1-06's per-domain evaluation cost — is CARRIED
-FORWARD and is NOT a Gate C blocker.** `PostureEvaluator` / `DomainAdapter` is
-not refactored in this pull request: P1-11 evaluates P1-06 once per render and
+FORWARD and was NOT a Gate C or Gate D blocker.** `PostureEvaluator` / `DomainAdapter` is
+not refactored by this unit: P1-11 evaluates P1-06 once per render and
 measured performance stays inside D-140. It is pre-existing, already live on
 Security Status, and P1-06's to dispose of.
 

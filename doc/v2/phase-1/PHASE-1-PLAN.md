@@ -126,7 +126,7 @@ where to look for what is delivered.
 | 10 | P1-08 | **ACCEPTED** — Gate D closed |
 | 11 | P1-09 | **ACCEPTED** — 20 Sep 2026. Carried: production session-driver alignment, §10 |
 | 12 | **P1-10** | **PRODUCT OWNER ACCEPTED — GATE D CLOSED. P1-10 CLOSED.** 21 Sep 2026. `P1-10-PLATFORM-INTEGRATIONS-ACCEPTANCE.md`. Nine carried items remain **OPEN**, §10 and that record's §5 |
-| 13 | **P1-11** | **ACTIVE / GATE C.** PLAN approved (`b98bba4`). **DESIGN approved, Gate B closed** — D-182 and three corrections, `59a3f73`. **Gate C rulings PO-R1 (Access Reviews seam APPROVED), PO-R2 (D-182 consequence ACCEPTED) and PO-R3 (System Health neutral counts APPROVED) recorded**; one evidence gap closed — Access Reviews added to the source-failure isolation set. Implementation **UNMERGED / UNDEPLOYED**, awaiting Product Owner Gate C review. `P1-11-ADMINISTRATION-HOME-VERIFICATION.md` |
+| 13 | **P1-11** | **PRODUCT OWNER ACCEPTED — GATE D CLOSED — P1-11 CLOSED**, 22 September 2026. PLAN `b98bba4`. DESIGN / Gate B `59a3f73`. Gate C APPROVED at `8f69569` with rulings **PO-R1** (Access Reviews seam APPROVED, owned by P1-07), **PO-R2** (Organisation Administrator sees exactly `Administration Home`) and **PO-R3** (System Health neutral counts, no aggregate verdict) — all three **in force**. Merged as **`59caced`** (PR #139), deployed by run **35587621169**; the deployed build was verified by asset hash rather than taken from the deployment's own report. **Product Owner live production review: 8 / 8 PASS.** `P1-11-ADMINISTRATION-HOME-ACCEPTANCE.md` |
 
 **ACCEPTED IS NOT THE SAME AS NOTHING OUTSTANDING.** Several accepted units
 carry a live observation their delivered state could not execute. Those rows
@@ -381,9 +381,10 @@ pass:
 
 ### PHASE 1 DOES NOT CLOSE WHEN P1-11 CLOSES — 21 September 2026
 
-**P1-11 is the final delivery unit. It is not the final gate.** With P1-10
-accepted, twelve of the thirteen units are closed and the temptation to treat
-"the last unit shipped" as "the phase is done" arrives with it.
+**P1-11 is the final delivery unit. It is not the final gate.** **P1-11 was
+Product Owner accepted on 22 September 2026, so all THIRTEEN units are now
+closed** — and the temptation this section was written to resist has arrived in
+full. **"The last unit shipped" is not "the phase is done."**
 
 Final Phase 1 acceptance additionally requires **explicit disposition** — a
 decision recorded, not an omission — of every row in §10. Four of them cannot
