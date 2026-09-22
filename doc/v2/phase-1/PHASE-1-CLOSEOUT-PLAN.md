@@ -9,7 +9,8 @@ no Phase 2.
 | Delivery units | **All 13 Product Owner accepted.** P1-11 closed 22 September 2026 |
 | Canonical unresolved register | **13 items, CL-01 … CL-13** — §3 |
 | Discrepancies found and reconciled | **Six** — §2 |
-| Status | **Gate A. Awaiting Product Owner approval of this PLAN** |
+| **Product Owner rulings** | **Recorded 22 September 2026 — every one of the 13 items now has a disposition, §3A** |
+| Status | **Gate A, amendment round 1. Awaiting approval of the amended PLAN** |
 
 > **THE NUMBER 11 WAS NOT COPIED, AND IT WAS WRONG.** The Product Owner was
 > right to refuse it. The register below is derived from the source records, and
@@ -163,8 +164,14 @@ while `CL-00`…`CL-10` name ten workstreams and the register holds thirteen ite
 **Two different things sharing one identifier is how D-2 happened.**
 
 **Proposed, for Product Owner decision:** register items keep **`CL-01`…`CL-13`**;
-workstreams are renamed **`WS-0`…`WS-10`**. The mapping is in §5. Nothing is
+workstreams are renamed **`WS-0`…`WS-11`**. The mapping is in §5. Nothing is
 dropped — only disambiguated.
+
+> **AMENDED — Product Owner review, Gate A.** An earlier draft of this document
+> wrote the range as `WS-0…WS-10` here and in §5 while the execution table
+> already carried **`WS-11`** for the transition baseline. **The authoritative
+> range is `WS-0`…`WS-11`**, and the shorter form is superseded wherever it
+> appeared. Items remain **`CL-01`…`CL-13`**.
 
 ---
 
@@ -195,9 +202,13 @@ without a Product Owner decision.
 | **Automated evidence available** | Full. Every refusal path is covered |
 | **Live evidence still required** | The two-administrator round trip |
 | **Proposed method** | Execute at the first genuine opportunity. **Do not create, promote or borrow an account for it** |
-| **PO decision?** | **YES** — only if the prerequisite is still absent at final acceptance |
+| **PO decision?** | **RULED** — see below |
 | **Proposed final status** | `CLOSED — VERIFIED` if executed, else **`UNVERIFIED — PREREQUISITE UNAVAILABLE`** |
 | **Category** | Prerequisite currently unavailable |
+
+> **PRODUCT OWNER RULING — do not create or promote an account for testing.** If a
+> genuine second permanent System Administrator still does not exist at **WS-10**,
+> the disposition is **`UNVERIFIED — PREREQUISITE UNAVAILABLE`**.
 
 ### CL-02 — Microsoft privileged step-up, genuine live observation
 
@@ -217,9 +228,19 @@ without a Product Owner decision.
 | **Automated evidence available** | Extensive |
 | **Live evidence still required** | One completed round trip |
 | **Proposed method** | **Couple to CL-08.** The Entra cutover *is* a privileged configuration change, so performing it produces this observation as a by-product. **One controlled change, two items closed** |
-| **PO decision?** | **YES** — whether to couple, and to authorise the cutover |
-| **Proposed final status** | `CLOSED — VERIFIED` |
+| **PO decision?** | **RULED** — see below. **The coupling proposal is withdrawn** |
+| **Proposed final status** | **`UNVERIFIED — PREREQUISITE UNAVAILABLE`** unless a genuine privileged change arises |
 | **Category** | Live verification only |
+
+> **PRODUCT OWNER RULING — the coupling to CL-08 does not happen, because CL-08 is
+> deferred.** **Do not manufacture another privileged configuration change solely
+> to exercise step-up.** The automated evidence stands and is kept.
+>
+> If a **genuine** privileged production change arises naturally during closeout,
+> perform the live observation then. Otherwise the disposition at WS-10 is
+> **`UNVERIFIED — PREREQUISITE UNAVAILABLE`**.
+>
+> **The §5 proposal to close CL-02 as a by-product of the cutover is SUPERSEDED.**
 
 ### CL-03 — Bootstrap First-Run, end to end
 
@@ -239,9 +260,17 @@ without a Product Owner decision.
 | **Automated evidence available** | B1–B15 |
 | **Live evidence still required** | The flow on a fresh installation |
 | **Proposed method** | Stand up a genuine test installation, or accept as unverified |
-| **PO decision?** | **YES** — whether a test installation will be provisioned during closeout |
-| **Proposed final status** | `CLOSED — VERIFIED` if a test installation exists, else `UNVERIFIED — PREREQUISITE UNAVAILABLE` |
+| **PO decision?** | **RULED** — see below |
+| **Proposed final status** | `CLOSED — VERIFIED` only if a genuine installation arises, else **`UNVERIFIED — PREREQUISITE UNAVAILABLE`** |
 | **Category** | Prerequisite currently unavailable |
+
+> **PRODUCT OWNER RULING — covering CL-03, CL-04, CL-05 and CL-06.**
+> **Do not create a fresh installation solely to obtain green closeout evidence.**
+> If a genuine fresh or test installation becomes available naturally during
+> closeout, execute all four validations against it. Otherwise all four are
+> **`UNVERIFIED — PREREQUISITE UNAVAILABLE`** at WS-10.
+>
+> **Never damage production to make Bootstrap observable.**
 
 ### CL-04 — Bootstrap 30-minute idle expiry, live
 
@@ -295,9 +324,13 @@ without a Product Owner decision.
 | **Risk** | Manufacturing mail configuration for a green test would be a false pass |
 | **Live evidence required** | One real send to a real mailbox |
 | **Proposed method** | Execute when SMTP is genuinely provisioned |
-| **PO decision?** | **YES** — whether SMTP will be provisioned during closeout |
-| **Proposed final status** | `CLOSED — VERIFIED`, else `UNVERIFIED — PREREQUISITE UNAVAILABLE` |
+| **PO decision?** | **RULED** — see below |
+| **Proposed final status** | `CLOSED — VERIFIED` only on a real send, else **`UNVERIFIED — PREREQUISITE UNAVAILABLE`** |
 | **Category** | Prerequisite currently unavailable |
+
+> **PRODUCT OWNER RULING — do not manufacture SMTP configuration.** If genuine
+> organisation-owned SMTP becomes available, run the real send test. Otherwise the
+> disposition is **`UNVERIFIED — PREREQUISITE UNAVAILABLE`**.
 
 ### CL-08 — Production Entra configuration cutover, `env` → encrypted store
 
@@ -317,9 +350,29 @@ without a Product Owner decision.
 | **Automated evidence available** | C1–C5, H6 |
 | **Live evidence required** | The cutover itself, then sign-in proven on the store |
 | **Proposed method** | One scheduled controlled change with a rehearsed rollback, **producing CL-02's step-up observation**. **Never expose, request or echo a secret** |
-| **PO decision?** | **YES — explicit authorisation required. This has been withheld at every gate and nothing here changes that** |
-| **Proposed final status** | `CLOSED — CONTROL IMPLEMENTED AND VERIFIED`, or **`DEFERRED BY EXPLICIT PRODUCT OWNER DECISION`** |
+| **PO decision?** | **RULED — DEFERRED** |
+| **Final status** | **`DEFERRED BY EXPLICIT PRODUCT OWNER DECISION`** |
 | **Category** | Controlled production alignment/change |
+
+> ### PRODUCT OWNER RULING — CL-08 IS DEFERRED. DO NOT PERFORM THE CUTOVER.
+>
+> **The production cutover is not performed during Phase 1 closeout.** Current
+> production `env` authority is functioning and accepted. The cutover carries the
+> **highest lockout risk in the register** and has been explicitly withheld at
+> every previous gate.
+>
+> **Final disposition: `DEFERRED BY EXPLICIT PRODUCT OWNER DECISION`** — which is
+> a decision recorded, not an omission, and is **not** `UNVERIFIED`: the
+> prerequisite exists and the capability is built. It was deliberately not used.
+>
+> **The Phase 1 → Phase 2 transition baseline (WS-11) must state plainly:**
+>
+> - production Microsoft identity authority **remains `env`**;
+> - the **encrypted-store cutover capability exists** and is tested (C2–C5);
+> - it was **intentionally not exercised**.
+>
+> **It must not be silently reopened in Phase 2.** Reopening is a new Product
+> Owner decision, not an inherited task.
 
 ### CL-09 — Console screens opened on production by the delivery team
 
@@ -337,9 +390,23 @@ without a Product Owner decision.
 | **Automated evidence available** | Full local browser evidence for every unit |
 | **Live evidence still required** | **Arguably none — see below** |
 | **Proposed method** | **Recommend explicit supersession, with rationale** |
-| **PO decision?** | **YES** |
-| **Proposed final status** | **`ACCEPTED LIMITATION`** (recommended), or `CLOSED — VERIFIED` if executed |
-| **Category** | Candidate accepted limitation |
+| **PO decision?** | **RULED — ACCEPTED LIMITATION** |
+| **Final status** | **`ACCEPTED LIMITATION`** |
+| **Category** | Accepted limitation |
+
+> ### PRODUCT OWNER RULING — ACCEPTED LIMITATION
+>
+> **Do not issue production Microsoft credentials or modify CA trust solely to
+> duplicate evidence already obtained through Product Owner live production
+> testing.** The Product Owner's live Gate D observations remain **authoritative
+> for product acceptance**.
+>
+> **Recorded as:** *ACCEPTED LIMITATION — delivery-team authenticated production
+> browser observation not performed.*
+>
+> **This must never be relabelled `CLOSED — VERIFIED`.** It was not executed. An
+> accepted limitation and a verified closure are different claims, and collapsing
+> them is the failure this register exists to prevent.
 
 **Recommendation, with the reasoning stated rather than assumed.** This gate
 exists so that *somebody* looks at the real screens on the real deployment. The
@@ -375,9 +442,35 @@ is theirs to weigh.
 | **Automated evidence available** | The migration exists and the driver is supported |
 | **Live evidence required** | Driver observed as `database` after the change, and a real sign-in on it |
 | **Proposed method** | One controlled configuration change in a scheduled window |
-| **PO decision?** | **YES** — authorisation and window |
-| **Proposed final status** | `CLOSED — CONTROL IMPLEMENTED AND VERIFIED`, or `DEFERRED BY EXPLICIT PRODUCT OWNER DECISION` |
+| **PO decision?** | **RULED — EXECUTE IN PHASE 1 CLOSEOUT** |
+| **Target final status** | **`CLOSED — CONTROL IMPLEMENTED AND VERIFIED`** |
 | **Category** | Controlled production alignment/change |
+
+> ### PRODUCT OWNER RULING — EXECUTE. Production moves `file` → `database`.
+>
+> **This is WS-1, and it comes before session revocation.** **No execution in this
+> task.**
+>
+> **Everyone being signed out is understood and accepted** as an expected effect
+> of this controlled change — not a defect, and not a reason to defer.
+>
+> **WS-1 must carry all six of these when it is designed:**
+>
+> | | |
+> | --- | --- |
+> | **1 — Pre-change checks** | Explicit, executed and recorded **before** the change |
+> | **2 — Window** | A maintenance / sign-out window, agreed in advance |
+> | **3 — Rollback** | A written, rehearsed rollback procedure |
+> | **4 — Post-change sign-in** | A **real** sign-in performed after the change |
+> | **5 — Driver proof** | Production **observed** reporting `database` |
+> | **6 — Table proof** | Confirmation the **`sessions` table is actually being used** |
+>
+> **Item 6 is not item 5.** A deployment can report `database` while nothing has
+> yet written a row — reporting the setting is a claim about configuration;
+> rows in the table are a claim about behaviour. Both are required.
+>
+> **Execution still requires a separate go / no-go immediately before the
+> production change.** Approval of this PLAN is not that authorisation.
 
 **Why this is not cosmetic.** It breaks no delivered control today. **It will
 matter the day CL-11 is built**: on the `file` driver, per-user revocation would
@@ -401,9 +494,30 @@ stated reason this was carried rather than closed.
 | **Automated evidence available** | **None — there is nothing to test yet** |
 | **Live evidence required** | A privilege change observed to terminate the target's other sessions |
 | **Proposed method** | Full lifecycle: **DESIGN → APPROVE → EXECUTE → TEST → VERIFY → ACCEPT** |
-| **PO decision?** | **YES** — whether this is built inside Phase 1 closeout or becomes an explicit Phase 2 obligation |
-| **Proposed final status** | `CLOSED — CONTROL IMPLEMENTED AND VERIFIED`, or `DEFERRED BY EXPLICIT PRODUCT OWNER DECISION` |
+| **PO decision?** | **RULED — MUST BE BUILT IN PHASE 1 CLOSEOUT. NOT deferred to Phase 2** |
+| **Target final status** | **`CLOSED — CONTROL IMPLEMENTED AND VERIFIED`** |
 | **Category** | Technical control/change required |
+
+> ### PRODUCT OWNER RULING — BUILD IT. It is a Phase 1 security control.
+>
+> **CL-11 is not deferred to Phase 2.** **No implementation now.**
+>
+> **The hard dependency stands: CL-10 must be implemented AND verified first.**
+> On the `file` driver this control would silently no-op, and a revocation
+> control that silently fails is worse than none because it is believed.
+>
+> **CL-11 requires all six:**
+>
+> 1. **DESIGN**;
+> 2. **Product Owner DESIGN approval** (Gate B);
+> 3. implementation;
+> 4. **automated tests**;
+> 5. **MySQL verification**;
+> 6. **live verification that changing a user's privilege revokes that user's
+>    other active sessions.**
+>
+> **Item 6 is the whole point.** Everything above it can pass while the control
+> does nothing to a real second session.
 
 ### CL-12 — Organisation Administrator navigation gap — **SEVEN screens, not four**
 
@@ -422,12 +536,56 @@ stated reason this was carried rather than closed.
 | **Automated evidence available** | The equality assertion holding PO-R2; the full route authorisation matrix |
 | **Live evidence required** | **Confirm the route-level half live** — that an Organisation Administrator really does reach all seven by URL. Derived from code here, not observed |
 | **Proposed method** | Confirm the seven live, present the corrected scope, then decide. **No change until then** |
-| **PO decision?** | **YES — and it is now a different decision than when it was described as four** |
-| **Proposed final status** | `CLOSED — CONTROL IMPLEMENTED AND VERIFIED` if exposed; **`ACCEPTED LIMITATION`** if current behaviour is confirmed as intended |
-| **Category** | Product/navigation gap |
+| **PO decision?** | **RULED — EXPOSE ALL SEVEN. FIX IN PHASE 1 CLOSEOUT** |
+| **Target final status** | **`CLOSED — CONTROL IMPLEMENTED AND VERIFIED`** |
+| **Category** | **Product/navigation TECHNICAL CHANGE REQUIRED** — changed by this ruling |
 
-**PO-R2 is preserved historically either way.** P1-11 itself exposed only
-Administration Home, and that remains true of P1-11 whatever is decided now.
+> ### PRODUCT OWNER RULING — MAKE ALL SEVEN DISCOVERABLE
+>
+> **The Product Owner independently verified the D-4 finding** — that
+> `OrganisationAdministrator` holds `OrgAdmin`, `AccessAdmin` **and**
+> `EvidenceRead`, and that route permissions therefore already authorise more
+> than the four previously recorded screens. **The corrected scope of eight
+> authorised nodes, one visible, is accepted.**
+>
+> **Make all seven discoverable in System Administration navigation for an
+> Organisation Administrator:**
+>
+> | # | Destination |
+> | --- | --- |
+> | 1 | **Organisation** |
+> | 2 | **Users & Groups** |
+> | 3 | **Roles & Access** |
+> | 4 | **Business Domains** |
+> | 5 | **Security Status** |
+> | 6 | **Access Reviews** |
+> | 7 | **Audit** |
+>
+> **Continue to hide the three `PlatformAdmin` destinations** — **Identity & SSO**,
+> **System Health**, **Integrations**. They are not authorised for the role and
+> nothing here changes that.
+>
+> **THIS DECISION DOES NOT WIDEN ROUTE ACCESS.** It aligns navigation with access
+> that **already exists**. No middleware, no action class and no route changes.
+> If a design proposes touching route authorisation, it has misread this ruling.
+>
+> **CL-12 therefore changes category** — from *product/navigation decision only*
+> to **product/navigation technical change required**, and it **now requires a
+> DESIGN gate (Gate B) before any code**.
+>
+> **REQUIRED: exact-set navigation tests for an Organisation Administrator**, so
+> that a future widening or narrowing **cannot pass silently**. The assertion must
+> be an **equality on the whole node set** — the same shape that held PO-R2 — not
+> a list of "can see X" checks. Eight separate presence assertions are satisfied
+> by a menu that also renders Integrations; only an equality catches that.
+>
+> **No code in this Gate A task.**
+
+**PO-R2 is preserved historically, and is not contradicted.** **P1-11 itself
+delivered only Administration Home**, and that remains permanently true of
+P1-11. D-182 exposed one node deliberately; **closeout now resolves the carried
+navigation gap that D-182 deliberately left open.** The earlier statement that
+the alternative was `ACCEPTED LIMITATION` is **SUPERSEDED by this ruling**.
 
 ### CL-13 — P1-06 `PostureEvaluator` / `DomainAdapter` per-domain query cost
 
@@ -446,9 +604,63 @@ Administration Home, and that remains true of P1-11 whatever is decided now.
 | **Automated evidence available** | Measured at two data sizes; `AdministrationHomeBudgetTest` asserts P1-11 adds no N+1 of its own and pays no more for posture than Security Status does |
 | **Live evidence required** | None. It is measured |
 | **Proposed method** | **Do not refactor merely because closeout exists.** Record the finding against P1-06 (see D-5), decide, and if deferred make it an explicit backlog item with a scale trigger |
-| **PO decision?** | **YES** |
-| **Proposed final status** | **`ACCEPTED LIMITATION`** (recommended, with a scale trigger), or `CLOSED — CONTROL IMPLEMENTED AND VERIFIED` if optimised |
+| **PO decision?** | **RULED — ACCEPTED LIMITATION** |
+| **Final status** | **`ACCEPTED LIMITATION`** |
 | **Category** | Performance finding |
+
+> ### PRODUCT OWNER RULING — ACCEPTED LIMITATION, WITH REOPEN TRIGGERS
+>
+> **Do not refactor `PostureEvaluator` / `DomainAdapter` during Phase 1
+> closeout.** Current production scale is acceptable and measured performance
+> remains **inside D-140**.
+>
+> **Record the finding against the P1-06 owning record**, as proposed in D-5 — so
+> it lives with the code that causes it rather than only in P1-11's records.
+>
+> **Reopen the optimisation when EITHER trigger fires:**
+>
+> 1. a deployment is expected to **materially exceed the tested 20-business-domain
+>    scale**; or
+> 2. measured **Security Status** or **Administration Home** performance
+>    **threatens or exceeds the approved D-140 response-time target**.
+>
+> **Preserve the finding in the Phase 1 → Phase 2 transition baseline (WS-11)**,
+> with both triggers. An accepted limitation with no trigger is a finding that
+> quietly becomes permanent.
+
+---
+
+## 3A. Product Owner dispositions — all 13 items ruled
+
+**Recorded 22 September 2026, Gate A amendment round 1.** Every item now has a
+disposition. **CL item numbering is unchanged** — a disposition becoming known is
+not a reason to renumber a register.
+
+| ID | Item | Product Owner ruling | Final / target status | Code? |
+| --- | --- | --- | --- | --- |
+| **CL-01** | P1-02 second-administrator SSO re-check | **Do not create or promote an account.** Execute only if one genuinely exists | `UNVERIFIED — PREREQUISITE UNAVAILABLE` at WS-10 if absent | No |
+| **CL-02** | Microsoft privileged step-up, live | **Do not manufacture a privileged change.** Coupling to CL-08 withdrawn | `UNVERIFIED — PREREQUISITE UNAVAILABLE` unless one arises naturally | No |
+| **CL-03** | Bootstrap First-Run | **Do not create an installation for evidence** | `UNVERIFIED — PREREQUISITE UNAVAILABLE` unless one arises | No |
+| **CL-04** | Bootstrap 30-minute idle | As CL-03 | `UNVERIFIED — PREREQUISITE UNAVAILABLE` unless one arises | No |
+| **CL-05** | Bootstrap 4-hour absolute | As CL-03 | `UNVERIFIED — PREREQUISITE UNAVAILABLE` unless one arises | No |
+| **CL-06** | Bootstrap recovery flow | As CL-03 | `UNVERIFIED — PREREQUISITE UNAVAILABLE` unless one arises | No |
+| **CL-07** | Real SMTP send | **Do not manufacture SMTP configuration** | `UNVERIFIED — PREREQUISITE UNAVAILABLE` unless genuine SMTP arrives | No |
+| **CL-08** | Entra `env` → encrypted store cutover | **DEFER. Do not perform during closeout** | **`DEFERRED BY EXPLICIT PRODUCT OWNER DECISION`** | No |
+| **CL-09** | Delivery-team production observation | **Accept the limitation.** No production credentials, no CA change | **`ACCEPTED LIMITATION`** | No |
+| **CL-10** | `SESSION_DRIVER` `file` → `database` | **EXECUTE IN CLOSEOUT.** WS-1, before revocation | target **`CLOSED — CONTROL IMPLEMENTED AND VERIFIED`** | No — config |
+| **CL-11** | Per-user session revocation | **MUST BE BUILT IN CLOSEOUT.** Not deferred to Phase 2 | target **`CLOSED — CONTROL IMPLEMENTED AND VERIFIED`** | **YES** |
+| **CL-12** | Organisation Administrator navigation | **FIX IN CLOSEOUT — expose all seven** | target **`CLOSED — CONTROL IMPLEMENTED AND VERIFIED`** | **YES** |
+| **CL-13** | P1-06 per-domain query cost | **Accept the limitation**, with two reopen triggers | **`ACCEPTED LIMITATION`** | No |
+
+**Four dispositions are final now** — CL-08 deferred, CL-09 and CL-13 accepted
+limitations. **Three are active build/change work** — CL-10, CL-11, CL-12.
+**Six remain opportunistic**, and will be `UNVERIFIED — PREREQUISITE UNAVAILABLE`
+at WS-10 unless a genuine prerequisite appears.
+
+**`UNVERIFIED — PREREQUISITE UNAVAILABLE` is a disposition, not a failure**, and
+it is not interchangeable with `ACCEPTED LIMITATION` or `DEFERRED`. The three say
+different things: *nobody could check*, *we checked and chose to live with it*,
+and *we could have done it and deliberately did not*.
 
 ---
 
@@ -456,27 +668,43 @@ Administration Home, and that remains true of P1-11 whatever is decided now.
 
 | Category | Items | Count |
 | --- | --- | --- |
-| **Technical control/change required** | CL-11 | **1** |
+| **Technical control/change required** | **CL-11, CL-12** | **2** |
 | **Controlled production alignment/change** | CL-08, CL-10 | **2** |
 | **Live verification only** | CL-02 | **1** |
 | **Prerequisite currently unavailable** | CL-01, CL-03, CL-04, CL-05, CL-06, CL-07 | **6** |
-| **Product/navigation gap** | CL-12 | **1** |
 | **Performance finding** | CL-13 | **1** |
-| **Candidate accepted limitation** | CL-09 | **1** |
+| **Accepted limitation** | CL-09 | **1** |
 | **Already satisfied but documentation stale** | **none** | **0** |
 
 **Nothing qualified as "already satisfied".** Every item was checked against
 production or against the code, and not one turned out to be done already.
 
-**Only CL-11 requires new application code.** Two items (CL-08, CL-10) are
-production configuration changes with no code. Six are blocked on prerequisites
-nobody can conjure. Three are decisions.
+> ### AMENDED — "Only CL-11 requires new application code" is SUPERSEDED
+>
+> That statement was true when CL-12 was a decision. **The Product Owner's CL-12
+> ruling makes it an implementation item**, so the register now carries **two**
+> code items, not one:
+>
+> | Item | Code | Schema | DESIGN gate |
+> | --- | --- | --- | --- |
+> | **CL-11** — session revocation | **YES** | No | **Gate B required** |
+> | **CL-12** — Organisation Administrator navigation | **YES** | No | **Gate B required** |
+>
+> **Gate B / design discipline applies to BOTH.** Neither proceeds to code
+> without an approved DESIGN.
+>
+> **Neither needs schema.** CL-11's `sessions` table already carries `user_id`;
+> CL-12 touches navigation presentation only and **does not widen route access**.
+
+**Two items require new application code (CL-11, CL-12).** Two are production
+configuration changes with no code (CL-08 — now deferred — and CL-10). Six are
+blocked on prerequisites nobody can conjure. Two are accepted limitations.
 
 ---
 
 ## 5. Proposed execution sequence — and where I disagree with the brief
 
-**Workstreams are renamed `WS-0`…`WS-10`** to end the ID collision in D-6. The
+**Workstreams are renamed `WS-0`…`WS-11`** to end the ID collision in D-6. The
 Product Owner's ordering is preserved except where repository evidence supports
 a safer order; **each change is argued, not asserted.**
 
@@ -484,12 +712,12 @@ a safer order; **each change is argued, not asserted.**
 | --- | --- | --- | --- |
 | **WS-0** | Inventory & evidence reconciliation | all | — |
 | **WS-1** | Session driver alignment | **CL-10** | WS-0 |
-| **WS-2** | Per-user session revocation | **CL-11** | **WS-1** |
-| **WS-3** | Microsoft identity & privileged configuration | **CL-08 + CL-02** | WS-0 |
+| **WS-2** | Per-user session revocation — **DESIGN → implement → accept** | **CL-11** | **WS-1** |
+| **WS-3** | Microsoft identity & privileged configuration | **CL-08 deferred · CL-02 awaiting a genuine change** | WS-0 |
 | **WS-4** | Provider-wide SSO re-check | CL-01 | prerequisite |
 | **WS-5** | Bootstrap & recovery validation | CL-03–CL-06 | test installation |
 | **WS-6** | SMTP operational validation | CL-07 | real SMTP |
-| **WS-7** | Organisation Administrator navigation | **CL-12** | WS-0 |
+| **WS-7** | Organisation Administrator navigation — **DESIGN → implement → accept** | **CL-12** | WS-0 |
 | **WS-8** | P1-06 performance finding | **CL-13** | WS-0 |
 | **WS-9** | Delivery-team production observation | **CL-09** | WS-0 |
 | **WS-10** | Final Phase 1 reconciliation | all | everything |
@@ -533,31 +761,75 @@ otherwise disposed of explicitly at WS-10.
 
 ### Proposed order
 
+> **AMENDED — the approved path after the Product Owner rulings.** The diagram
+> below replaces the one in the first draft. **WS-3 no longer executes a
+> cutover**, and **WS-7 is now build work, not a decision**.
+
 ```
-WS-0  Inventory                    ──┬── WS-7  Navigation decision    (CL-12)
-      (this document)                ├── WS-8  Performance decision   (CL-13)
-                                     └── WS-9  Delivery-team waiver   (CL-09)
-                                              decisions, no production action
+WS-0  Inventory reconciliation
+      (this document)
+        │
+        ├──────────────────────►  WS-8   CL-13  ACCEPTED LIMITATION   record only
+        ├──────────────────────►  WS-9   CL-09  ACCEPTED LIMITATION   record only
+        └──────────────────────►  WS-3   CL-08  DEFERRED  ·  CL-02 awaiting
+                                          NO cutover executed. Record only.
 
-WS-1  Session driver  (CL-10)  ──►  WS-2  Revocation  (CL-11)
-        controlled                        DESIGN → … → ACCEPT
-             │
-             └──────────────────►  WS-3  Entra cutover + step-up  (CL-08, CL-02)
-                                         one controlled change
+WS-1  Session driver  file → database   (CL-10)      ── ACTIVE BUILD PATH ──
+      controlled change · six required proofs
+      separate go / no-go immediately before
+        │
+        ▼
+WS-2  Per-user session revocation  (CL-11)
+      DESIGN → PO approval → implement → tests → MySQL → LIVE
+        │
+WS-7  Organisation Administrator navigation  (CL-12)
+      DESIGN → PO approval → implement → exact-set tests → accept
+      may run alongside WS-1/WS-2; depends on neither
 
-WS-4 (CL-01)   WS-5 (CL-03–06)   WS-6 (CL-07)      opportunistic — never blocking
+WS-4 (CL-01)    WS-5 (CL-03–CL-06)    WS-6 (CL-07)
+      opportunistic only — NEVER critical-path blockers
+      if the prerequisite never arrives → UNVERIFIED — PREREQUISITE UNAVAILABLE
 
                           ▼
-WS-10  Final reconciliation — every item explicitly disposed
+WS-10  Final Phase 1 reconciliation — all 13 explicitly disposed
                           ▼
-WS-11  Transition baseline — only after WS-10 is accepted
+WS-11  Phase 1 → Phase 2 transition baseline — only after WS-10 is accepted
 ```
+
+**WS-7 has no dependency on WS-1 or WS-2.** It touches navigation presentation
+and no session or identity behaviour, so it can proceed in parallel with the
+session work rather than queueing behind it.
 
 ---
 
 ## 6. Decisions required from the Product Owner
 
-**Nothing below proceeds without an explicit answer.**
+> ### ANSWERED — Gate A amendment round 1, 22 September 2026
+>
+> **All twelve were ruled on.** The table is kept as asked rather than deleted,
+> with each answer recorded beside the question, because a decision log that
+> deletes the questions loses why the answer was needed.
+>
+> | # | Answer |
+> | --- | --- |
+> | 1 | **Register of 13 ACCEPTED.** D-1–D-5 accepted findings. The two restored items stay in the register |
+> | 2 | **ACCEPTED** — items `CL-01…CL-13`, workstreams `WS-0…WS-11` |
+> | 3 | **CL-08 DEFERRED** |
+> | 4 | **Coupling WITHDRAWN** — CL-08 is deferred, so CL-02 has no vehicle |
+> | 5 | **CL-10 AUTHORISED to execute in closeout**; window and go/no-go still to be set |
+> | 6 | **CL-11 MUST BE BUILT in Phase 1 closeout.** Not deferred |
+> | 7 | **No installation will be manufactured** — CL-03–CL-06 opportunistic |
+> | 8 | **No SMTP will be manufactured** — CL-07 opportunistic |
+> | 9 | **Expose all seven.** Keep the three `PlatformAdmin` destinations hidden |
+> | 10 | **CL-13 ACCEPTED LIMITATION**, with two reopen triggers |
+> | 11 | **CL-09 ACCEPTED LIMITATION** |
+> | 12 | **APPROVED** — record the finding against P1-06's own record, in its workstream |
+>
+> **One decision remains open, and it is deliberately not taken here:** the
+> **go / no-go immediately before the CL-10 production change**, with its window.
+> Approving this PLAN is not that authorisation.
+
+**The original questions, kept for the record:**
 
 | # | Decision | Item | Why it is yours |
 | --- | --- | --- | --- |
@@ -581,7 +853,7 @@ WS-11  Transition baseline — only after WS-10 is accepted
 | Gate | What it covers |
 | --- | --- |
 | **Gate A** | **This PLAN approved.** ← we are here |
-| **Gate B** | **DESIGN approved** — required for **CL-11 only**, the one item needing new code |
+| **Gate B** | **DESIGN approved** — required for **CL-11 and CL-12**, the two items needing new code |
 | **Gate C** | EXECUTE → TEST → VERIFY, per item |
 | **Gate D** | Product Owner acceptance, per item |
 | **Final** | **Phase 1 acceptance** — only once **every** register item has an explicit disposition |
@@ -589,6 +861,11 @@ WS-11  Transition baseline — only after WS-10 is accepted
 **Pure live-verification items do not get invented design work.** CL-01 to CL-07
 and CL-09 need no DESIGN phase — inventing one would be ceremony that proves
 nothing. They need a prerequisite, an execution, and an honest record.
+
+**CL-12 now takes the full lifecycle, exactly as CL-11 does.** It is a small
+change, and small changes to authorisation-adjacent presentation are precisely
+where an exact-set test earns its place — so it gets **DESIGN → APPROVE →
+EXECUTE → TEST → VERIFY → ACCEPT**, not a shortcut.
 
 **Controlled production changes (CL-08, CL-10) need no DESIGN either** — the
 code already exists and is tested. They need **authorisation, a window and a
@@ -630,6 +907,17 @@ limitations and findings.
 role/access model · a second sensitivity model · a second organisation model ·
 a second audit/history system.
 
+### Three things the baseline must carry, added by the Gate A rulings
+
+| From | The baseline must state |
+| --- | --- |
+| **CL-08** | Production Microsoft identity authority **remains `env`**; the **encrypted-store cutover capability exists and is tested**; it was **intentionally not exercised**. **It must not be silently reopened in Phase 2** — reopening is a new Product Owner decision, not an inherited task |
+| **CL-13** | The `PostureEvaluator` / `DomainAdapter` per-domain finding, as an **accepted limitation**, **with both reopen triggers** — material excess over the tested 20-business-domain scale, or measured performance threatening D-140 |
+| **CL-09** | **ACCEPTED LIMITATION — delivery-team authenticated production browser observation not performed.** Product Owner live Gate D observation is the authoritative evidence for product acceptance |
+
+**An accepted limitation with no trigger becomes permanent by default**, which is
+why CL-13's two triggers are part of the baseline rather than a footnote here.
+
 ---
 
 ## 9. What this task did not do
@@ -650,6 +938,23 @@ restored in D-2 are restored as **OPEN**.
 
 ## 10. Status
 
-**GATE A. PLAN ONLY. AWAITING PRODUCT OWNER APPROVAL.**
+**GATE A — AMENDMENT ROUND 1. PLAN ONLY. AWAITING APPROVAL OF THE AMENDED PLAN.**
+
+| | |
+| --- | --- |
+| Canonical register | **13 items, CL-01 … CL-13 — unchanged** |
+| Workstreams | **WS-0 … WS-11**, one range, used consistently |
+| Dispositions | **All 13 ruled.** 4 final · 3 active work · 6 opportunistic |
+| Requires code and a DESIGN gate | **CL-11 and CL-12** |
+| Executed in this task | **Nothing.** No code, no production change, no deployment |
+
+**No item was renumbered because its disposition became known.** Superseded
+statements are **marked as superseded**, not rewritten away — the first draft's
+coupling proposal, its "only CL-11 requires code" line, its `WS-0…WS-10` range
+and its CL-12 accepted-limitation alternative all remain visible with their
+supersession recorded beside them.
+
+**No existing accepted unit record was modified.** The corrections in §2 belong
+to their workstreams and to WS-10, not to this task.
 
 **Phase 1 is not closed. Phase 2 has not begun.**
