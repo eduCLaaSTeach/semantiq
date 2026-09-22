@@ -1,0 +1,332 @@
+# Align the production SESSION_DRIVER - CL-10, WS-1.
+#
+# ⛔ DISPATCHING THIS WORKFLOW CHANGES PRODUCTION AND SIGNS EVERY USER OUT.
+# It requires a Product Owner GO. See
+# doc/v2/phase-1/PHASE-1-CLOSEOUT-WS-1-SESSION-DRIVER-RUNBOOK.md §13. The
+# existence of this file is NOT that authorisation: the runbook is approved and
+# this tooling is approved to BUILD, which is not permission to RUN it.
+#
+# MANUAL DISPATCH ONLY. There is no push trigger, no schedule and no
+# workflow_call, and nothing in deploy.yml invokes the driver script. deploy.yml
+# fires on every push to main, including a documentation merge; a driver switch
+# happens once, in a chosen window, behind a go/no-go.
+#
+# FORWARD AND ROLLBACK ARE THE SAME WORKFLOW. `database` is the change, `file`
+# is the rollback, and both run the same checked-in script. A rollback path made
+# of different code is a path nobody has ever run.
+#
+# CONCURRENCY. The group is `cpanel-deploy` - the SAME group deploy.yml uses,
+# with cancel-in-progress false. A deployment rsyncing the application while
+# this rewrites .env, or the reverse, is the kind of interleaving that produces
+# a state nobody can reason about afterwards. Sharing the group makes them queue
+# rather than race, and never cancelling means neither is killed mid-mutation.
+#
+# WHAT IT NEVER DOES: display .env, any credential or any session content;
+# modify identity or Entra configuration; touch APP_KEY; run migrations; accept
+# an arbitrary key or an arbitrary value. The only thing it can change is
+# SESSION_DRIVER, and only to `file` or `database`.
+#
+# SSH reuses the established pattern from the read-only verification workflows,
+# ssh-agent and askpass included: the deploy key is passphrase-protected, and
+# writing the key file alone produces "Permission denied (publickey)". The
+# script is piped over stdin rather than copied to the host - deployment/ is
+# excluded from rsync and this script has no business living there.
+#
+# FAILURE BEHAVIOUR IS DELIBERATE, AND THERE IS NO AUTOMATIC ROLLBACK.
+# A failure BEFORE the driver changed closes the maintenance window again: the
+# application is exactly as it was and leaving it dark would be an outage caused
+# by a refusal. A failure AFTER the driver changed leaves the site in
+# maintenance and reports the exact state, because exposing an unverified
+# application is worse than a visible maintenance page. Which of the two
+# happened is established by READING the effective driver, not by assuming.
+# Rolling back automatically would mean a second unattended production mutation
+# on a path already known to be misbehaving; the runbook's explicit rollback -
+# this same workflow with target `file` - is the safer instrument.
+name: Align production SESSION_DRIVER (manual, CL-10)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Session driver production should be running after this run'
+        required: true
+        type: choice
+        options:
+          - database
+          - file
+      confirmation:
+        description: 'Type ALIGN SESSION DRIVER to confirm. Every signed-in user will be signed out.'
+        required: true
+        type: string
+
+# The same group as deploy.yml, on purpose. See the note above.
+concurrency:
+  group: cpanel-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  align:
+    name: Change SESSION_DRIVER on the production server
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+      APP_URL: https://semantiq.claas2saas.com
+      TARGET_DRIVER: ${{ inputs.target }}
+
+    steps:
+      # EVERY VALIDATION HAPPENS BEFORE ANY SSH MUTATION, and the ref check is
+      # first because a dispatch from a branch is the one mistake that could
+      # otherwise run an unreviewed script against production.
+      - name: Refuse unless this was dispatched from main
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::This workflow may only be dispatched from main. It was dispatched from ${{ github.ref }}."
+            exit 1
+          fi
+          echo "::notice::Dispatched from main."
+
+      # A typed phrase, not a checkbox. The dropdown alone would let a stray
+      # click on a repeated dispatch sign every user out.
+      - name: Refuse unless the confirmation phrase is exact
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          if [ "$CONFIRMATION" != "ALIGN SESSION DRIVER" ]; then
+            echo "::error::The confirmation phrase was not exactly ALIGN SESSION DRIVER. Nothing was changed."
+            exit 1
+          fi
+          echo "::notice::Confirmation accepted."
+
+      # Belt and braces: the choice input already restricts this, but a choice
+      # list is part of the workflow file and this is part of the run.
+      - name: Refuse an unrecognised target driver
+        run: |
+          set -euo pipefail
+          case "$TARGET_DRIVER" in
+            file|database) echo "::notice::Requested target driver: $TARGET_DRIVER" ;;
+            *) echo "::error::[$TARGET_DRIVER] is not a session driver this workflow will set."; exit 1 ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      # P-10 in the runbook: never start a change whose rollback path is
+      # unverified. Rollback is this same workflow over this same connection, so
+      # the connection is proven before the maintenance window opens rather than
+      # discovered to be broken when it is needed.
+      - name: Verify SSH access before anything is changed
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && test -f artisan && test -f .env && echo REACHABLE" \
+            | grep -qx REACHABLE
+
+          echo "::notice::The deployment is reachable and rollback can be performed over this connection."
+
+      # Establish the starting driver rather than assuming it. Only the driver
+      # name is read and printed - a configuration choice, not a credential -
+      # and an unrecognised value stops the run before production is touched.
+      - name: Establish the starting session driver
+        id: starting
+        run: |
+          set -euo pipefail
+
+          starting="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='echo (string) config(\"session.driver\");'" \
+            | tr -d '[:space:]')"
+
+          case "$starting" in
+            file|database) ;;
+            *)
+              echo "::error::The production session driver is not one this workflow recognises. Nothing was changed."
+              exit 1
+              ;;
+          esac
+
+          echo "starting=$starting" >> "$GITHUB_OUTPUT"
+          echo "::notice::Starting session driver: $starting. Requested target: $TARGET_DRIVER."
+
+      # ▸ FROM HERE THE SITE IS DARK. ▸
+      - name: Open the maintenance window
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan down --retry=60"
+
+      # ▸ POINT OF NO RETURN ▸
+      #
+      # The script is piped over stdin. It takes the deployment path and the
+      # target driver and nothing else - no key name, no key=value pair, no
+      # flag. Everything it guarantees is in the script and tested for real in
+      # tests/Architecture/SessionDriverDeploymentTest.php.
+      - name: Align SESSION_DRIVER
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "sh -s -- \"$CPANEL_DEPLOY_PATH\" \"$TARGET_DRIVER\"" \
+            < deployment/ensure-session-driver.sh
+
+      - name: Clear compiled caches
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan optimize:clear --no-interaction"
+
+      # The script reporting success says the FILE was written. This says the
+      # APPLICATION is running the requested driver, which is the claim that
+      # matters and is not the same claim.
+      - name: Verify the effective driver is the requested target
+        run: |
+          set -euo pipefail
+
+          effective="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='echo (string) config(\"session.driver\");'" \
+            | tr -d '[:space:]')"
+
+          if [ "$effective" != "$TARGET_DRIVER" ]; then
+            echo "::error::The effective session driver is [$effective], not the requested [$TARGET_DRIVER]."
+            exit 1
+          fi
+
+          echo "::notice::Effective session driver: $effective."
+
+      - name: Verify application health over SSH
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan semantiq:health"
+
+      # Only now. The site comes back once the driver is what was asked for AND
+      # the application reports itself healthy on it.
+      - name: Close the maintenance window
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan up"
+
+      - name: Verify the site over HTTPS
+        run: |
+          set -euo pipefail
+          # Cache-busted: a cached 200 from an earlier state would read as a pass.
+          code="$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 --retry-all-errors "$APP_URL/?align=${GITHUB_RUN_ID}")"
+          [ "$code" = "200" ] || { echo "::error::Site root returned $code"; exit 1; }
+
+          up="$(curl -fsS --retry 3 --retry-delay 5 --retry-all-errors "$APP_URL/up?align=${GITHUB_RUN_ID}")"
+          [ "$up" = "ok" ] || { echo "::error::/up returned [$up]"; exit 1; }
+
+          echo "::notice::Site root 200 and /up ok on session driver $TARGET_DRIVER."
+
+      - name: Report what was done
+        run: |
+          set -euo pipefail
+          {
+            echo "### Session driver alignment"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Starting driver | \`${{ steps.starting.outputs.starting }}\` |"
+            echo "| Requested target | \`$TARGET_DRIVER\` |"
+            echo "| Effective driver now | \`$TARGET_DRIVER\` |"
+            echo "| Every signed-in user | signed out - the expected, accepted effect |"
+            echo "| Rollback | re-run this workflow with target \`file\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # FAIL CLOSED, AND SAY WHICH SIDE OF THE MUTATION THE FAILURE LANDED ON.
+      #
+      # This runs only on failure. It reads the effective driver rather than
+      # inferring it from which step failed, because the one case that must not
+      # be guessed is a script that replaced .env and then failed its own
+      # post-rename check.
+      #
+      # If nothing changed, the maintenance window is closed again: the
+      # application is exactly as it was, and leaving it dark would be an outage
+      # caused by a refusal. If the driver DID change, the window stays open -
+      # an unverified application behind a maintenance page is recoverable, an
+      # unverified application serving users is not - and the operator is told
+      # the exact state and the explicit rollback.
+      - name: Establish the exact state after a failure
+        if: failure()
+        run: |
+          set -uo pipefail
+
+          starting="${{ steps.starting.outputs.starting }}"
+
+          if [ -z "$starting" ]; then
+            echo "::error::The run failed before the starting driver was established. Production configuration was not touched; the maintenance window was never opened."
+            exit 1
+          fi
+
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan optimize:clear --no-interaction" >/dev/null 2>&1 || true
+
+          effective="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='echo (string) config(\"session.driver\");'" \
+            2>/dev/null | tr -d '[:space:]')" || effective=''
+
+          if [ -z "$effective" ]; then
+            echo "::error::The run failed and the effective session driver could NOT be read. The deployment may be in maintenance. Establish the state over SSH before doing anything else; do not dispatch this workflow again until you have."
+            exit 1
+          fi
+
+          if [ "$effective" = "$starting" ]; then
+            echo "::notice::The session driver is still [$effective]. Nothing was changed, so the maintenance window is being closed again."
+
+            ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+              "$CPANEL_USER@$CPANEL_HOST" \
+              "cd \"$CPANEL_DEPLOY_PATH\" && php artisan up"
+
+            echo "::error::The alignment failed with production unchanged on session driver [$effective]. The site has been brought back up."
+            exit 1
+          fi
+
+          echo "::error::The session driver WAS changed from [$starting] to [$effective] and the run then failed. The site has been LEFT IN MAINTENANCE deliberately, rather than exposed unverified. To roll back, dispatch this workflow from main with target [$starting]. To go forward, fix the failure and re-run."
+          exit 1
