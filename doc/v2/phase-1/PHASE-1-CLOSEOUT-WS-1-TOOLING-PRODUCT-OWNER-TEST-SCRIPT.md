@@ -176,10 +176,10 @@ ever run, exercised for the first time under pressure.
 | Suite | Cases | What they do |
 | --- | --- | --- |
 | `SessionDriverDeploymentTest` | 32 | **Run the actual script** against throwaway `.env` fixtures containing a fake client secret and APP_KEY |
-| `SessionDriverAlignmentWorkflowTest` | 65 | The workflow's safety contract, comments stripped first — and for the orchestration, **whole sequences of the workflow's own steps executed** against a stubbed server, gates evaluated and outputs carried between them |
+| `SessionDriverAlignmentWorkflowTest` | 66 | The workflow's safety contract, comments stripped first — and for the orchestration, **whole sequences of the workflow's own steps executed** against a stubbed server, gates evaluated and outputs carried between them |
 
-**The pull request body lists 57 deliberate mutations** — 10 against the script,
-47 against the workflow — **each one recorded with the test that caught it.**
+**The pull request body lists 59 deliberate mutations** — 10 against the script,
+49 against the workflow — **each one recorded with the test that caught it.**
 Ten of the script tests are paired: one half breaks the rewrite and proves the
 guard refuses; the other half **also removes the guard** and proves the damage
 actually lands. That second half is what shows the first half was the guard
@@ -449,6 +449,37 @@ in fact serving.
 
 ---
 
+### Step 18 — The report says what each operation actually did to people
+
+> **FINAL EVIDENCE CORRECTION.** Non-blocking, and it changes no production
+> control logic — only what the run record claims.
+
+The report step runs for a **change** and for a **rollback completion**, and it
+told both of them that *"every signed-in user | signed out"*.
+
+**That is true of a change.** It rewrites `.env` and moves the session store, so
+every existing sign-in stops being readable.
+
+**It is not true of a completion.** That path rewrites nothing and moves no
+store — anyone signed out was signed out by the change it is *finishing*. Saying
+otherwise records a second production interruption that never happened.
+
+**Read the *"Report what was done"* step.**
+
+**Expected:**
+
+| Operation | Reported session impact |
+| --- | --- |
+| **`change`** | *"existing sign-ins were invalidated by the driver switch, and everyone must sign in again — the expected, accepted effect"* |
+| **`rollback_completion`** | *"**no driver switch occurred in this run**, so it caused no additional session invalidation"* |
+
+**The automated proof runs both paths and reads the RENDERED SUMMARY**, asserting
+the completion's record contains neither *"signed out"* nor *"sign in again"*.
+
+**PASS / FAIL:** ☐
+
+---
+
 ## 7. Negative, refusal and security cases
 
 **All of them are automated and listed in step 8.** They are not repeated as
@@ -480,7 +511,7 @@ professional-polish gate has nothing to inspect.
 
 | | |
 | --- | --- |
-| **1** | Your PASS / FAIL for steps 1 – 17 |
+| **1** | Your PASS / FAIL for steps 1 – 18 |
 | **2** | The CI run number and its result |
 | **3** | Anything in the script or workflow you want changed **before** the production GO is considered |
 

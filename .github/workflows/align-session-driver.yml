@@ -535,10 +535,25 @@ jobs:
 
           echo "::notice::Site root 200 and /up ok on session driver $TARGET_DRIVER."
 
+      # THE REPORT IS OPERATION-AWARE, because the two operations have
+      # different consequences for people who were signed in.
+      #
+      # A `change` rewrites .env and moves the session store, so every existing
+      # sign-in stops being readable and everyone must sign in again. A
+      # `rollback_completion` rewrites nothing and moves no store - anyone who
+      # was signed out was signed out by the change it is finishing, and saying
+      # otherwise would record a second interruption that never happened.
       - name: Report what was done
         if: steps.plan.outputs.operation != 'noop'
         run: |
           set -euo pipefail
+
+          if [ "${{ steps.plan.outputs.operation }}" = "change" ]; then
+            impact="existing sign-ins were invalidated by the driver switch, and everyone must sign in again - the expected, accepted effect"
+          else
+            impact="**no driver switch occurred in this run**, so it caused no additional session invalidation"
+          fi
+
           {
             echo "### Session driver alignment"
             echo
@@ -550,7 +565,7 @@ jobs:
             echo "| Effective driver now | \`$TARGET_DRIVER\` |"
             echo "| Maintenance authority | \`${{ steps.maintenance.outputs.origin }}\` |"
             echo "| .env rewritten | \`$([ "${{ steps.plan.outputs.operation }}" = "change" ] && echo yes || echo no)\` |"
-            echo "| Every signed-in user | signed out - the expected, accepted effect |"
+            echo "| Session impact | $impact |"
             echo "| Recovery direction | always \`file\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 

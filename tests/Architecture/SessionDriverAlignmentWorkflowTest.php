@@ -1055,9 +1055,54 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         $this->assertStringContainsString('not read for modification, not written', $noop);
 
         $this->assertStringContainsString(
-            'signed out',
+            'invalidated by the driver switch',
             $this->stepBody($this->workflow(), 'Report what was done'),
             'The change report no longer states the accepted consequence.'
+        );
+    }
+
+    /**
+     * B7-11. THE REPORT SAYS WHAT EACH OPERATION ACTUALLY DID TO PEOPLE.
+     *
+     * The report step runs for a completion as well as a change, and it used
+     * to tell both of them that every signed-in user had been signed out. That
+     * is true of a change, which rewrites .env and moves the session store. It
+     * is NOT true of a completion, which rewrites nothing and moves no store -
+     * anyone signed out was signed out by the change it is finishing, and
+     * saying otherwise records a second production interruption that never
+     * happened.
+     *
+     * Asserted on the RENDERED SUMMARY, by running the step.
+     */
+    public function test_the_report_states_the_session_impact_each_operation_actually_had(): void
+    {
+        $change = $this->runSequence(target: 'database', driver: 'file', state: 'LIVE');
+
+        $this->assertSame([], $change['failed'], $change['output']);
+        $this->assertStringContainsString('invalidated by the driver switch', $change['summary']);
+        $this->assertStringContainsString('sign in again', $change['summary']);
+
+        $completion = $this->runSequence(
+            target: 'file', driver: 'file', state: 'MAINTENANCE', takeover: self::TAKEOVER_PHRASE,
+        );
+
+        $this->assertSame([], $completion['failed'], $completion['output']);
+        $this->assertSame('rollback_completion', $completion['outputs']['plan']['operation'] ?? null);
+
+        $this->assertStringContainsString('no driver switch occurred in this run', $completion['summary']);
+        $this->assertStringContainsString('no additional session invalidation', $completion['summary']);
+
+        $this->assertStringNotContainsString(
+            'signed out',
+            $completion['summary'],
+            'The rollback-completion report claims users were signed out. It rewrote no .env and moved no '
+            .'session store, so it caused no sign-out of its own.'
+        );
+
+        $this->assertStringNotContainsString(
+            'sign in again',
+            $completion['summary'],
+            'The rollback-completion report tells users to sign in again for an interruption it did not cause.'
         );
     }
 
@@ -1388,6 +1433,8 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             file_put_contents($this->dir.'/commands', '');
         }
 
+        file_put_contents($this->dir.'/summary', '');
+
         $workflow = $this->workflow();
         $outputs = [];
         $ran = $skipped = $failed = [];
@@ -1439,6 +1486,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             'output' => $output,
             'driver' => trim((string) file_get_contents($this->dir.'/driver')),
             'state' => trim((string) file_get_contents($this->dir.'/state')),
+            'summary' => (string) file_get_contents($this->dir.'/summary'),
         ];
     }
 
