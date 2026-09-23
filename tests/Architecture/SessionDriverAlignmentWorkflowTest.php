@@ -461,18 +461,67 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     {
         $recovery = $this->stepBody($this->workflow(), self::RECOVERY_STEP);
 
-        $down = strpos($recovery, 'artisan down');
-        $this->assertNotFalse($down, 'The recovery step never issues a maintenance command.');
+        // The command lives in a helper, so its DEFINITION sits above
+        // everything. Anchoring on that would make this guard vacuous - which
+        // is exactly what happened when the helper was introduced, and a
+        // mutation that moved a maintenance claim above the first call sailed
+        // through. Anchor on the first CALL.
+        $this->assertStringContainsString(
+            'php artisan down --retry=60',
+            $recovery,
+            'The recovery step never issues a maintenance command.'
+        );
 
-        foreach (['LEFT IN MAINTENANCE', 'PUT BACK INTO MAINTENANCE', 'left in maintenance'] as $claim) {
+        $firstCall = strpos($recovery, 'if secure_maintenance; then');
+
+        $this->assertNotFalse($firstCall, 'The recovery step never calls the helper that secures maintenance.');
+
+        foreach ([
+            'LEFT IN MAINTENANCE', 'PUT BACK INTO MAINTENANCE', 'left in maintenance', 'LEFT ACTIVE',
+        ] as $claim) {
             $position = strpos($recovery, $claim);
 
             if ($position === false) {
                 continue;
             }
 
-            $this->assertLessThan($position, $down, "The recovery step claims [{$claim}] before any maintenance command.");
+            $this->assertLessThan(
+                $position,
+                $firstCall,
+                "The recovery step claims [{$claim}] before it has secured or read the maintenance state."
+            );
         }
+    }
+
+    /**
+     * B5-9b. THE MAINTENANCE STEP GUARDS THE TAKEOVER ON ITS OWN.
+     *
+     * The planning step decides; this step acts. Both check, independently,
+     * because ending somebody else's outage is the one action worth two
+     * guards - and because a mutation that removed only this one would
+     * otherwise be invisible behind the planning step's refusal.
+     */
+    public function test_the_maintenance_step_independently_guards_the_takeover(): void
+    {
+        $step = $this->stepBody($this->workflow(), self::MAINTENANCE_STEP);
+
+        $this->assertMatchesRegularExpression(
+            '/if \[ "\$TARGET_DRIVER" != "file" \]; then\s*\n\s*echo "::error::[^\n]*"\s*\n\s*exit 1/',
+            $step,
+            'The maintenance step does not independently refuse a takeover for a forward target.'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/if \[ "\$\{ROLLBACK_TAKEOVER:-\}" != "\$TAKEOVER_PHRASE" \]; then\s*\n\s*echo "::error::[^\n]*"\s*\n\s*exit 1/',
+            $step,
+            'The maintenance step does not independently require the exact takeover confirmation.'
+        );
+
+        // And the planning step carries its own, so neither is the only one.
+        $plan = $this->stepBody($this->workflow(), self::PLAN_STEP);
+
+        $this->assertStringContainsString('takeover_supplied', $plan, 'The planning step does not evaluate the takeover confirmation at all.');
+        $this->assertSame(2, substr_count($plan, 'if [ "$takeover_supplied" != "true" ]; then'), 'The planning step must require the confirmation on both maintenance paths.');
     }
 
     /** W22. IF MAINTENANCE CANNOT BE GUARANTEED, IT IS NOT CLAIMED. */
@@ -582,7 +631,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             state: 'MAINTENANCE',
         );
 
-        $this->assertContains(self::MAINTENANCE_STEP, $run['failed'], 'The maintenance step did not refuse.');
+        $this->assertContains(self::PLAN_STEP, $run['failed'], 'The planning step did not refuse.');
 
         $this->assertNoWrites($run);
 
@@ -596,7 +645,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     {
         $run = $this->runSequence(target: 'database', driver: 'file', state: 'UNREADABLE-GARBAGE');
 
-        $this->assertContains(self::MAINTENANCE_STEP, $run['failed']);
+        $this->assertContains(self::PLAN_STEP, $run['failed']);
         $this->assertNoWrites($run);
         $this->assertStringContainsString('Could not establish whether production is in maintenance', $run['output']);
     }
@@ -694,7 +743,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     {
         // Without the phrase.
         $plain = $this->runSequence(target: 'database', driver: 'file', state: 'MAINTENANCE');
-        $this->assertContains(self::MAINTENANCE_STEP, $plain['failed']);
+        $this->assertContains(self::PLAN_STEP, $plain['failed']);
         $this->assertNoWrites($plain);
 
         // And with it - it is refused before anything reaches the server.
@@ -709,7 +758,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     {
         $run = $this->runSequence(target: 'file', driver: 'database', state: 'MAINTENANCE');
 
-        $this->assertContains(self::MAINTENANCE_STEP, $run['failed']);
+        $this->assertContains(self::PLAN_STEP, $run['failed']);
         $this->assertNoWrites($run);
         $this->assertSame('MAINTENANCE', $run['state']);
         $this->assertStringContainsString('only when the exact takeover confirmation is supplied', $run['output']);
@@ -798,9 +847,15 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
 
         $this->assertLessThan($opened, $down, 'Ownership is recorded before the window is actually opened.');
 
-        // The takeover branch re-confirms the window before claiming it.
-        $this->assertSame(2, substr_count($step, 'state="$(read_state)"'), 'The takeover branch does not re-confirm the window before assuming control.');
-        $this->assertLessThan($takeover, strrpos($step, 'state="$(read_state)"'));
+        // The step re-reads the state itself rather than trusting the plan.
+        $this->assertStringContainsString('state="$(read_state)"', $step, 'The step trusts the planning step\'s reading instead of taking its own.');
+        $this->assertLessThan($opened, strpos($step, 'state="$(read_state)"'));
+
+        // And the takeover branch refuses a window that is no longer in effect
+        // BEFORE claiming it.
+        $refusal = strpos($step, 'if [ "$state" != "MAINTENANCE" ]; then');
+        $this->assertNotFalse($refusal, 'The takeover branch does not confirm the window is still in effect.');
+        $this->assertLessThan($takeover, $refusal);
     }
 
     /** B5-10. The maintenance state is taken from the application, never from HTTP. */
@@ -868,28 +923,54 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     // The no-op path.
     // =================================================================
 
-    /** W30. The plan step requires no change when the driver already matches. */
-    public function test_the_plan_step_requires_no_change_when_the_driver_already_matches(): void
+    // =================================================================
+    // THE STATE MACHINE - change / rollback_completion / noop.
+    // =================================================================
+
+    /**
+     * W30. A NO-OP REQUIRES BOTH: the driver already right AND production live.
+     *
+     * Round 3 decided this on the driver alone, and that is what stranded a
+     * half-finished rollback: `file` while production was still down planned a
+     * no-op, reported "nothing to do", and left the deployment dark.
+     */
+    public function test_a_no_op_requires_the_driver_to_match_and_production_to_be_live(): void
     {
-        foreach ([['file', 'file'], ['database', 'database']] as [$starting, $target]) {
-            $run = $this->runSequence(target: $target, driver: $starting, state: 'LIVE');
+        foreach (['file', 'database'] as $driver) {
+            $run = $this->runSequence(target: $driver, driver: $driver, state: 'LIVE');
 
             $this->assertSame([], $run['failed'], $run['output']);
-            $this->assertSame('false', $run['outputs']['plan']['change_required'] ?? null);
+            $this->assertSame('noop', $run['outputs']['plan']['operation'] ?? null);
         }
     }
 
-    /** W31. And it does require one when they differ. */
-    public function test_the_plan_step_requires_a_change_when_the_driver_differs(): void
+    /** W31. A differing driver is a change, in either direction. */
+    public function test_a_differing_driver_is_planned_as_a_change(): void
     {
-        foreach ([['file', 'database'], ['database', 'file']] as [$starting, $target]) {
-            $run = $this->runSequence(target: $target, driver: $starting, state: 'LIVE');
+        $forward = $this->runSequence(target: 'database', driver: 'file', state: 'LIVE');
+        $this->assertSame('change', $forward['outputs']['plan']['operation'] ?? null);
 
-            $this->assertSame('true', $run['outputs']['plan']['change_required'] ?? null);
-        }
+        $rollback = $this->runSequence(target: 'file', driver: 'database', state: 'MAINTENANCE', takeover: self::TAKEOVER_PHRASE);
+        $this->assertSame('change', $rollback['outputs']['plan']['operation'] ?? null);
     }
 
-    /** W32. An unrecognised production driver stops the run before anything is touched. */
+    /**
+     * W32. `file` + MAINTENANCE + the confirmation is a ROLLBACK COMPLETION.
+     *
+     * Not a no-op, and not a change: the .env is already correct, so nothing
+     * is rewritten - but production is down and this run exists to bring it
+     * back.
+     */
+    public function test_file_in_maintenance_with_the_confirmation_is_a_rollback_completion(): void
+    {
+        $run = $this->runSequence(target: 'file', driver: 'file', state: 'MAINTENANCE', takeover: self::TAKEOVER_PHRASE);
+
+        $this->assertSame([], $run['failed'], $run['output']);
+        $this->assertSame('rollback_completion', $run['outputs']['plan']['operation'] ?? null);
+        $this->assertSame('takeover', $run['outputs']['maintenance']['origin'] ?? null);
+    }
+
+    /** W33. An unrecognised production driver stops the run before anything is touched. */
     public function test_the_plan_step_refuses_an_unrecognised_production_driver(): void
     {
         foreach (['redis', 'array', ''] as $driver) {
@@ -900,8 +981,18 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         }
     }
 
+    /** W34. And so does an unreadable maintenance state, before anything is touched. */
+    public function test_the_plan_step_refuses_an_unreadable_maintenance_state(): void
+    {
+        $run = $this->runSequence(target: 'database', driver: 'file', state: 'UNREADABLE-GARBAGE');
+
+        $this->assertContains(self::PLAN_STEP, $run['failed']);
+        $this->assertNoWrites($run);
+        $this->assertStringContainsString('Could not establish whether production is in maintenance', $run['output']);
+    }
+
     /**
-     * W33. AN ALIGNED DEPLOYMENT IS NEVER TAKEN DOWN - RUN END TO END.
+     * W35. AN ALIGNED, SERVING DEPLOYMENT IS NEVER TAKEN DOWN - RUN END TO END.
      *
      * Not the gates read off the file: the whole sequence executed, with the
      * gates evaluated, asserting that nothing reached the server.
@@ -913,7 +1004,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
 
             $this->assertSame([], $run['failed'], $run['output']);
 
-            $this->assertNotContains(self::MAINTENANCE_STEP, $run['ran'], 'An aligned deployment was taken down.');
+            $this->assertNotContains(self::MAINTENANCE_STEP, $run['ran'], 'An aligned, serving deployment was taken down.');
             $this->assertNotContains('Align SESSION_DRIVER', $run['ran']);
             $this->assertNotContains('Clear compiled caches', $run['ran']);
             $this->assertContains('Report that no change was required', $run['ran']);
@@ -923,24 +1014,40 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         }
     }
 
-    /** W34. Every mutating and maintenance step is gated on a change being required. */
-    public function test_every_mutating_step_is_gated_on_a_change_being_required(): void
+    /** W35b. Every step that rewrites anything is gated on `change`, and only `change`. */
+    public function test_every_mutating_step_is_gated_on_the_change_operation(): void
     {
-        foreach ([self::MAINTENANCE_STEP, self::MUTATION_STEP, 'Align SESSION_DRIVER', 'Clear compiled caches'] as $step) {
+        foreach ([self::MUTATION_STEP, 'Align SESSION_DRIVER', 'Clear compiled caches'] as $step) {
             $this->assertSame(
-                "steps.plan.outputs.change_required == 'true'",
+                "steps.plan.outputs.operation == 'change'",
                 $this->gate($step),
-                "[{$step}] is not gated on a change being required."
+                "[{$step}] is not gated on the change operation. A rollback completion rewrites nothing, "
+                .'so it must not reach any of these.'
+            );
+        }
+
+        // The window and the verification run for a completion too - it has a
+        // window to take and a driver to confirm, it simply rewrites nothing.
+        foreach ([
+            self::MAINTENANCE_STEP,
+            'Verify the effective driver is the requested target',
+            'Verify application health over SSH',
+            'Verify the site over HTTPS',
+        ] as $step) {
+            $this->assertSame(
+                "steps.plan.outputs.operation != 'noop'",
+                $this->gate($step),
+                "[{$step}] must run for a rollback completion as well as a change."
             );
         }
     }
 
-    /** W35. The no-op report does not borrow the change path's language. */
+    /** W35c. The no-op report does not borrow the change path's language. */
     public function test_the_no_op_report_does_not_claim_anyone_was_signed_out(): void
     {
         $noop = $this->stepBody($this->workflow(), 'Report that no change was required');
 
-        $this->assertSame("steps.plan.outputs.change_required != 'true'", $this->gate('Report that no change was required'));
+        $this->assertSame("steps.plan.outputs.operation == 'noop'", $this->gate('Report that no change was required'));
 
         $this->assertStringNotContainsString('signed out', $noop, 'The no-op report claims users were signed out.');
         $this->assertStringContainsString('not taken', $noop);
@@ -952,6 +1059,224 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             $this->stepBody($this->workflow(), 'Report what was done'),
             'The change report no longer states the accepted consequence.'
         );
+    }
+
+    // =================================================================
+    // BLOCKER 7 - the rollback-completion state, run end to end.
+    // =================================================================
+
+    /**
+     * B7-1. THE THREE-RUN RECOVERY SEQUENCE, AGAINST ONE STUBBED SERVER.
+     *
+     * Round 3 could get production to `file` + MAINTENANCE and no further: the
+     * driver already matched the target, so the next dispatch planned a no-op
+     * and left the deployment dark. This runs the whole way out.
+     *
+     *   A  forward `file` -> `database`, failing late. Ends `database` + DOWN.
+     *   B  rollback takeover `database` -> `file`, the rewrite lands, health
+     *      then fails. Ends `file` + DOWN - the state round 3 could not leave.
+     *   C  dispatch `file` with the confirmation. Recognised as a ROLLBACK
+     *      COMPLETION: no script, no cache clear, verify, health, window
+     *      closed. Ends `file` + LIVE.
+     */
+    public function test_the_three_run_recovery_sequence_ends_live_on_file(): void
+    {
+        $this->givenServer(driver: 'file', state: 'LIVE');
+
+        // ---- Run A: forward, failing after the site came back up. ----------
+        $a = $this->runSequence(target: 'database', httpCode: '500', fresh: false);
+
+        $this->assertContains('Verify the site over HTTPS', $a['failed'], 'Run A did not fail where this case needs it to.');
+        $this->assertSame('change', $a['outputs']['plan']['operation'] ?? null);
+        $this->assertSame('database', $a['driver'], 'Run A did not change the driver.');
+        $this->assertSame('MAINTENANCE', $a['state'], 'Run A left a changed, unverified deployment serving users.');
+
+        // ---- Run B: the rollback, whose rewrite lands but health fails. -----
+        $b = $this->runSequence(target: 'file', takeover: self::TAKEOVER_PHRASE, healthFails: true, fresh: false);
+
+        $this->assertContains('Verify application health over SSH', $b['failed']);
+        $this->assertSame('change', $b['outputs']['plan']['operation'] ?? null);
+        $this->assertSame('takeover', $b['outputs']['maintenance']['origin'] ?? null);
+        $this->assertSame('file', $b['driver'], 'Run B did not roll the driver back.');
+        $this->assertSame('MAINTENANCE', $b['state'], 'Run B left production serving after a failed rollback.');
+
+        // THE STATE ROUND 3 COULD NOT ESCAPE: file, and still down.
+        $this->assertStringContainsString('ROLLBACK COMPLETION', $b['output'], 'Run B does not tell the operator how to finish.');
+
+        // ---- Run C: the completion. ----------------------------------------
+        $c = $this->runSequence(target: 'file', takeover: self::TAKEOVER_PHRASE, fresh: false);
+
+        $this->assertSame([], $c['failed'], 'The completion was refused: '.$c['output']);
+        $this->assertSame('rollback_completion', $c['outputs']['plan']['operation'] ?? null);
+        $this->assertSame('takeover', $c['outputs']['maintenance']['origin'] ?? null);
+
+        // NOTHING WAS REWRITTEN.
+        $this->assertNotContains(self::MUTATION_STEP, $c['ran']);
+        $this->assertNotContains('Align SESSION_DRIVER', $c['ran'], 'The completion invoked the mutation script.');
+        $this->assertNotContains('Clear compiled caches', $c['ran'], 'The completion cleared caches.');
+        $this->assertNotContains('sh -s --', $c['commands'], 'The completion piped the driver script to the server.');
+        $this->assertNotContains('php artisan optimize:clear', $c['commands'], 'The completion cleared compiled caches.');
+
+        // But it DID verify, check health and bring production back.
+        $this->assertContains('Verify the effective driver is the requested target', $c['ran']);
+        $this->assertContains('Verify application health over SSH', $c['ran']);
+        $this->assertContains('Close the maintenance window', $c['ran']);
+        $this->assertContains('Verify the site over HTTPS', $c['ran']);
+
+        $this->assertSame('file', $c['driver']);
+        $this->assertSame('LIVE', $c['state'], 'The completion left production down.');
+    }
+
+    /** B7-2. A completion never touches .env, in isolation as well as in sequence. */
+    public function test_a_rollback_completion_rewrites_nothing(): void
+    {
+        $run = $this->runSequence(target: 'file', driver: 'file', state: 'MAINTENANCE', takeover: self::TAKEOVER_PHRASE);
+
+        $this->assertSame([], $run['failed'], $run['output']);
+        $this->assertNotContains('sh -s --', $run['commands']);
+        $this->assertNotContains('php artisan optimize:clear', $run['commands']);
+        $this->assertSame('file', $run['driver']);
+        $this->assertSame('LIVE', $run['state']);
+    }
+
+    /** B7-3. Without the confirmation, `file` + MAINTENANCE is refused and stays down. */
+    public function test_a_completion_without_the_takeover_confirmation_is_refused(): void
+    {
+        $run = $this->runSequence(target: 'file', driver: 'file', state: 'MAINTENANCE');
+
+        $this->assertContains(self::PLAN_STEP, $run['failed']);
+        $this->assertNoWrites($run);
+        $this->assertSame('MAINTENANCE', $run['state'], 'The refusal released the window anyway.');
+        $this->assertStringContainsString('still in maintenance, which is where a partially completed rollback stops', $run['output']);
+    }
+
+    /** B7-4. A wrong confirmation is refused too, before anything reaches the server. */
+    public function test_a_completion_with_a_wrong_takeover_phrase_is_refused(): void
+    {
+        foreach (['take over maintenance for session rollback', 'TAKE OVER MAINTENANCE', self::TAKEOVER_PHRASE.' '] as $phrase) {
+            $run = $this->runSequence(target: 'file', driver: 'file', state: 'MAINTENANCE', takeover: $phrase);
+
+            $this->assertNotSame([], $run['failed'], "[{$phrase}] was accepted.");
+            $this->assertNoWrites($run);
+            $this->assertSame('MAINTENANCE', $run['state']);
+        }
+    }
+
+    /**
+     * B7-5. `database` + MAINTENANCE with target `database` is NOT a completion.
+     *
+     * The recovery direction is always `file`. Treating this as a completion
+     * would mean assuming control of a maintenance window in order to leave
+     * production on the driver the failed change was moving it to.
+     */
+    public function test_database_in_maintenance_can_never_become_a_completion(): void
+    {
+        $run = $this->runSequence(target: 'database', driver: 'database', state: 'MAINTENANCE', takeover: self::TAKEOVER_PHRASE);
+
+        $this->assertNotSame([], $run['failed']);
+        $this->assertNoWrites($run);
+        $this->assertSame('MAINTENANCE', $run['state']);
+        $this->assertSame('database', $run['driver']);
+
+        // And it is refused for being a forward target, not silently planned.
+        $this->assertStringContainsString('can never authorise a forward alignment', $run['output']);
+    }
+
+    /** B7-6. Even without the phrase, it is refused rather than planned as a no-op. */
+    public function test_database_in_maintenance_without_the_phrase_is_refused_not_a_no_op(): void
+    {
+        $run = $this->runSequence(target: 'database', driver: 'database', state: 'MAINTENANCE');
+
+        $this->assertContains(self::PLAN_STEP, $run['failed']);
+        $this->assertNoWrites($run);
+        $this->assertStringContainsString('the recovery target is [file]', $run['output']);
+        $this->assertStringNotContainsString('noop', $run['outputs']['plan']['operation'] ?? '');
+    }
+
+    /** B7-7. A completion whose health check fails leaves the window ACTIVE. */
+    public function test_a_failed_completion_leaves_production_in_maintenance(): void
+    {
+        $run = $this->runSequence(
+            target: 'file', driver: 'file', state: 'MAINTENANCE',
+            takeover: self::TAKEOVER_PHRASE, healthFails: true,
+        );
+
+        $this->assertContains('Verify application health over SSH', $run['failed']);
+        $this->assertNotContains('Close the maintenance window', $run['ran'], 'A failed completion released the window.');
+        $this->assertNotContains('php artisan up', $run['commands']);
+        $this->assertSame('MAINTENANCE', $run['state']);
+        $this->assertStringContainsString('deliberately LEFT ACTIVE', $run['output']);
+    }
+
+    /**
+     * B7-8. A completion that fails AFTER `artisan up` is put back down.
+     *
+     * This is the case the round-3 recovery would have got wrong: the driver
+     * never changed, so its "nothing changed" branch would have reported the
+     * window as left active while production was in fact SERVING, unverified.
+     * Recovery now reads the maintenance state rather than inferring it from
+     * the driver.
+     */
+    public function test_a_completion_that_fails_after_the_site_came_back_up_is_put_back_down(): void
+    {
+        $run = $this->runSequence(
+            target: 'file', driver: 'file', state: 'MAINTENANCE',
+            takeover: self::TAKEOVER_PHRASE, httpCode: '500',
+        );
+
+        $this->assertContains('Verify the site over HTTPS', $run['failed']);
+        $this->assertContains('Close the maintenance window', $run['ran'], 'The site never came back up, so this proves nothing.');
+
+        $this->assertContains('php artisan down --retry=60', $run['commands'], 'Recovery sent no maintenance command.');
+        $this->assertSame('MAINTENANCE', $run['state'], 'Production was left serving a state this run never verified.');
+        $this->assertStringContainsString('RELEASED it, and then ended', $run['output']);
+
+        // And it still wrote nothing: a completion has no mutation point.
+        $this->assertNotContains('sh -s --', $run['commands']);
+        $this->assertNotContains('php artisan optimize:clear', $run['commands']);
+    }
+
+    /**
+     * B7-9. NO RECOVERY MESSAGE EVER SENDS THE OPERATOR BACK TO `database`.
+     *
+     * A failed rollback leaves the driver on `file`; telling the operator to
+     * take over the window with target `database` would undo the recovery and
+     * re-apply the change that failed.
+     */
+    public function test_no_recovery_message_directs_a_takeover_back_to_database(): void
+    {
+        $recovery = $this->stepBody($this->workflow(), self::RECOVERY_STEP);
+
+        $this->assertStringNotContainsString(
+            'target [database]',
+            $recovery,
+            'A recovery message names [database] as the dispatch target. The recovery direction is always file.'
+        );
+
+        $this->assertStringNotContainsString(
+            'target [$starting]',
+            $recovery,
+            'A recovery message names the STARTING driver as the dispatch target. After a failed rollback '
+            .'that is [database], which would re-apply the change that failed.'
+        );
+
+        $this->assertSame(
+            2,
+            substr_count($recovery, 'with target [file]'),
+            'Both recovery directions must name target [file] explicitly.'
+        );
+    }
+
+    /** B7-10. And the two directions are distinguished, not collapsed. */
+    public function test_the_recovery_message_distinguishes_rollback_from_completion(): void
+    {
+        $onDatabase = $this->runRecovery(starting: 'file', driver: 'database', state: 'LIVE', origin: 'opened', mutated: 'true');
+        $this->assertStringContainsString('ROLL BACK to file using the same script', $onDatabase['output']);
+        $this->assertStringNotContainsString('ROLLBACK COMPLETION', $onDatabase['output']);
+
+        $onFile = $this->runRecovery(starting: 'database', driver: 'file', state: 'MAINTENANCE', origin: 'takeover', mutated: 'true');
+        $this->assertStringContainsString('ROLLBACK COMPLETION', $onFile['output']);
+        $this->assertStringContainsString('rewrite nothing', $onFile['output']);
     }
 
     /** W36. NO AUTOMATIC ROLLBACK, AND THE EXPLICIT ONE IS NAMED. */
@@ -967,9 +1292,9 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            'dispatch this workflow from main with target [$starting]',
+            'dispatch this workflow from main with target [file]',
             $this->stepBody($workflow, self::RECOVERY_STEP),
-            'The failure message does not tell the operator how to roll back.'
+            'The failure message does not tell the operator how to recover.'
         );
     }
 
@@ -1018,6 +1343,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         string $state,
         string $origin,
         string $mutated,
+        string $operation = 'change',
         bool $downFails = false,
         ?string $workflow = null,
     ): array {
@@ -1025,6 +1351,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
 
         $script = $this->stepScript($workflow ?? $this->workflow(), self::RECOVERY_STEP, [
             '${{ steps.plan.outputs.starting }}' => $starting,
+            '${{ steps.plan.outputs.operation }}' => $operation,
             '${{ steps.maintenance.outputs.origin }}' => $origin,
             '${{ steps.mutation.outputs.attempted }}' => $mutated,
         ]);
@@ -1052,6 +1379,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         string $takeover = '',
         string $confirmation = 'ALIGN SESSION DRIVER',
         string $httpCode = '200',
+        bool $healthFails = false,
         bool $fresh = true,
     ): array {
         if ($fresh) {
@@ -1086,6 +1414,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
                 'ROLLBACK_TAKEOVER' => $takeover,
                 'CONFIRMATION' => $confirmation,
                 'STUB_HTTP_CODE' => $httpCode,
+                'STUB_HEALTH_FAILS' => $healthFails ? '1' : '0',
             ]);
 
             $ran[] = $name;
@@ -1118,7 +1447,11 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
     {
         $substitutions = ['${{ github.ref }}' => 'refs/heads/main'];
 
-        foreach (['plan' => ['starting', 'change_required'], 'maintenance' => ['origin'], 'mutation' => ['attempted']] as $id => $keys) {
+        foreach ([
+            'plan' => ['starting', 'operation', 'maintenance_plan'],
+            'maintenance' => ['origin'],
+            'mutation' => ['attempted'],
+        ] as $id => $keys) {
             foreach ($keys as $key) {
                 $substitutions['${{ steps.'.$id.'.outputs.'.$key.' }}'] = $outputs[$id][$key] ?? '';
             }
@@ -1158,7 +1491,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
         foreach (explode(' || ', $gate) as $clause) {
             $this->assertSame(
                 1,
-                preg_match('/^steps\.([a-z_]+)\.outputs\.([a-z_]+) (==|!=) \'([a-z]*)\'$/', trim($clause), $match),
+                preg_match('/^steps\.([a-z_]+)\.outputs\.([a-z_]+) (==|!=) \'([a-z_]*)\'$/', trim($clause), $match),
                 "The condition [{$gate}] is not a form this evaluator understands, so the sequence cases "
                 .'would be reasoning about a gate they cannot read.'
             );
@@ -1195,7 +1528,7 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
 
         // The runner uses bash, and the repository root is the working
         // directory, so `< deployment/ensure-session-driver.sh` resolves.
-        $process = proc_open(['bash', $path], $descriptors, $pipes, $this->root(), [
+        $process = proc_open(['bash', $path], $descriptors, $pipes, $this->root(), $env + [
             'PATH' => $this->dir.'/bin:'.getenv('PATH'),
             'HOME' => $this->dir,
             'CPANEL_HOST' => 'host.invalid',
@@ -1209,7 +1542,11 @@ final class SessionDriverAlignmentWorkflowTest extends TestCase
             'STUB_LOG' => $this->dir.'/commands',
             'STUB_STATE' => $this->dir.'/state',
             'STUB_DRIVER' => $this->dir.'/driver',
-        ] + $env);
+            'TAKEOVER_PHRASE' => self::TAKEOVER_PHRASE,
+            'TARGET_DRIVER' => 'file',
+            'ROLLBACK_TAKEOVER' => '',
+            'CONFIRMATION' => 'ALIGN SESSION DRIVER',
+        ]);
 
         $stdout = stream_get_contents($pipes[1]);
         $stderr = stream_get_contents($pipes[2]);

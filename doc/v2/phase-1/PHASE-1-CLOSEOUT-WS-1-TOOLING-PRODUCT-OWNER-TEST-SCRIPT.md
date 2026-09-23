@@ -31,7 +31,7 @@ untouched and remains NOT AUTHORISED.**
 | | |
 | --- | --- |
 | **Branch** | `claude/phase-1-closeout-ws1-session-driver-tooling` |
-| **Review round** | **3** — three further blockers raised in round 2 are corrected. The script is STILL unchanged; all six blockers so far have been in the workflow |
+| **Review round** | **4** — the rollback-completion state gap raised in round 3 is corrected. The script is STILL unchanged; all seven blockers so far have been in the workflow |
 | **Base** | `main` = `9fe513e07683166d53469afe86ab1ade508622a7` — the merged WS-1 runbook |
 | **Deployed?** | **NO. This branch is not merged and not deployed.** The tooling exists only in the pull request |
 | **Production at the time of writing** | `SESSION_DRIVER=file` — `verify-session-store` run `35688043476` |
@@ -176,10 +176,10 @@ ever run, exercised for the first time under pressure.
 | Suite | Cases | What they do |
 | --- | --- | --- |
 | `SessionDriverDeploymentTest` | 32 | **Run the actual script** against throwaway `.env` fixtures containing a fake client secret and APP_KEY |
-| `SessionDriverAlignmentWorkflowTest` | 52 | The workflow's safety contract, comments stripped first — and for the orchestration, **whole sequences of the workflow's own steps executed** against a stubbed server, gates evaluated and outputs carried between them |
+| `SessionDriverAlignmentWorkflowTest` | 65 | The workflow's safety contract, comments stripped first — and for the orchestration, **whole sequences of the workflow's own steps executed** against a stubbed server, gates evaluated and outputs carried between them |
 
-**The pull request body lists 48 deliberate mutations** — 10 against the script,
-38 against the workflow — **each one recorded with the test that caught it.**
+**The pull request body lists 57 deliberate mutations** — 10 against the script,
+47 against the workflow — **each one recorded with the test that caught it.**
 Ten of the script tests are paired: one half breaks the rewrite and proves the
 guard refuses; the other half **also removes the guard** and proves the damage
 actually lands. That second half is what shows the first half was the guard
@@ -215,10 +215,13 @@ still `600`.
 anything must change"*, then look at the `if:` line on each of *"Open the
 maintenance window"*, *"Align SESSION_DRIVER"* and *"Clear compiled caches"*.**
 
-**Expected:** the plan step reads the current driver off the server and sets
-`change_required` to `false` when it already equals what you asked for. Each of
-the three steps above carries
-`if: steps.plan.outputs.change_required == 'true'`.
+**Expected:** the plan step reads the current driver **and the maintenance
+state** off the server, and plans `noop` only when the driver already equals
+what you asked for **AND production is serving**. Each of the three steps above
+carries `if: steps.plan.outputs.operation == 'change'`.
+
+> **ROUND 4 CORRECTED THE RULE.** Deciding this on the driver alone is what
+> stranded a half-finished rollback — see step 16.
 
 **So dispatching `database` at a deployment already on `database` opens no
 maintenance window, pipes no script, clears no cache and signs nobody out.** It
@@ -382,6 +385,70 @@ maintenance state**.
 
 ---
 
+### Step 16 — The three operations, and why "driver already right" is not enough
+
+> **ROUND 4, blocker 7. This is the last gap in the recovery path, and it is
+> the same shape as the previous two: a state the tooling could reach and not
+> leave.**
+
+Round 3 could get production to **`file` + still in maintenance** — a rollback
+whose `.env` rewrite landed and whose later steps did not. Dispatching `file`
+again then planned a **no-op**, reported *"nothing to do"*, and **left the
+deployment dark**. The recovery it advertised could not recover it.
+
+**Read the planning step, *"Establish the starting session driver and decide
+whether anything must change"*.**
+
+**Expected — it reads the driver AND the maintenance state, and plans one of
+three operations:**
+
+| Operation | When | What runs |
+| --- | --- | --- |
+| **`change`** | The driver differs from the target | The mutation script, the cache clear, everything |
+| **`rollback_completion`** | Driver already **`file`**, production **still down**, exact takeover confirmation supplied | **No script. No `.env` rewrite. No cache clear.** Verify the driver, check health, bring production back up |
+| **`noop`** | Driver already equals the target **AND production is live** | **Nothing** |
+
+**And these are refused rather than planned:**
+
+| Situation | Outcome |
+| --- | --- |
+| `file` + in maintenance, **no** takeover confirmation | **Refused.** Production stays down, nothing is written |
+| `file` + in maintenance, **wrong** phrase | **Refused** before anything reaches the server |
+| **`database`** + in maintenance, target `database` | **Refused.** It is not a completion, and the message says the recovery target is `file` |
+
+**PASS / FAIL:** ☐
+
+---
+
+### Step 17 — The whole way out, run end to end
+
+**In the pull request body, read
+`test_the_three_run_recovery_sequence_ends_live_on_file`.**
+
+**Expected:** three dispatches against **one** stubbed server, in sequence, with
+the gates evaluated and step outputs carried forward:
+
+| | |
+| --- | --- |
+| **Run A** | Forward `file` → `database`. The HTTPS check fails after the site is back up. Ends **`database` + down** |
+| **Run B** | Rollback takeover `database` → `file`. The rewrite lands; health then fails. Ends **`file` + down** — *the state round 3 could not leave* |
+| **Run C** | Dispatch `file` with the confirmation. Recognised as **`rollback_completion`**: no script, no cache clear, driver verified, health passed, window closed. Ends **`file` + LIVE** |
+
+**And the direction is always `file`.** A failed rollback leaves the driver on
+`file`; a message telling you to take over the window with target `database`
+would re-apply the change that just failed. **No recovery message in this
+workflow names `database` as the dispatch target** — asserted directly.
+
+**Also asserted, by running it:** a completion whose health check fails leaves
+the window **active**; and a completion that fails **after** `artisan up` has
+run is **put back into maintenance**, because the driver never changed and the
+round-3 recovery would have reported the window as active while production was
+in fact serving.
+
+**PASS / FAIL:** ☐
+
+---
+
 ## 7. Negative, refusal and security cases
 
 **All of them are automated and listed in step 8.** They are not repeated as
@@ -413,7 +480,7 @@ professional-polish gate has nothing to inspect.
 
 | | |
 | --- | --- |
-| **1** | Your PASS / FAIL for steps 1 – 15 |
+| **1** | Your PASS / FAIL for steps 1 – 17 |
 | **2** | The CI run number and its result |
 | **3** | Anything in the script or workflow you want changed **before** the production GO is considered |
 
@@ -429,6 +496,7 @@ professional-polish gate has nothing to inspect.
 | **That the workflow successfully changes the production session driver** | **It has never been run, and must not be.** The production GO has not been granted | **Carried to the WS-1 execution window.** Runbook §6 step 5, §8 proof 5 |
 | **That the script behaves identically on the cPanel host** | The behavioural tests run on Linux in CI. The host's `stat`, `sed` and `wc` are handled by the script's BSD/GNU fallbacks, but **that is a design provision, not an observation** | **Carried to the execution window.** The script's own refusals are the safety net: an unreadable mode or a failed rewrite aborts with `.env` untouched |
 | **That the maintenance-window ordering behaves as intended live** | The step order is asserted in the repository; **the live behaviour of `artisan down` / `artisan up` around a driver change has not been observed** | **Carried to the execution window.** Runbook §6 |
+| **That a real host reaches the `file` + in-maintenance state the same way the stub does** | The three-run sequence is executed against a stubbed server, so the ORCHESTRATION is proven. **That the cPanel host fails at exactly those points is not something a repository can observe** | **Carried to the WS-1 execution window.** What is proven is that if production reaches that state, the tooling can leave it |
 | **That a cancelled run's recovery actually completes** | GitHub can terminate a runner at any point, including before the recovery step starts. **The condition now covers cancellation; the runner surviving long enough to honour it is not something this repository can guarantee** | **NOT CURRENTLY OBSERVABLE, AND NOT CLAIMED.** The workflow says so at the top and names what an operator must establish over SSH if it happens |
 | **That `php artisan down` is genuinely idempotent on this host** | Laravel reports *"Application is already down"* and exits 0, which is what the recovery step relies on when the window was never closed. **That is read from the framework, not observed on the server** | **Carried to the execution window.** If it were not idempotent the recovery would still not expose production — it verifies the state afterwards rather than assuming the command worked |
 | **That the failure path leaves the correct state ON THE REAL HOST** | It would require deliberately failing a production run | **NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION DATA.** Manufacturing a production failure to watch the recovery is not a test worth its cost. **What round 2 changed is how much is now observable WITHOUT it:** the recovery step's own shell is executed against a stubbed server, so the commands it sends — and does not send — are proven. What remains unobserved is only that the real host answers those commands as expected |
