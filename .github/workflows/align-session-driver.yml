@@ -1,0 +1,716 @@
+# Align the production SESSION_DRIVER - CL-10, WS-1.
+#
+# ⛔ DISPATCHING THIS WORKFLOW CHANGES PRODUCTION AND SIGNS EVERY USER OUT.
+# It requires a Product Owner GO. See
+# doc/v2/phase-1/PHASE-1-CLOSEOUT-WS-1-SESSION-DRIVER-RUNBOOK.md §13. The
+# existence of this file is NOT that authorisation: the runbook is approved and
+# this tooling is approved to BUILD, which is not permission to RUN it.
+#
+# ---------------------------------------------------------------------------
+# ⛔ DO NOT CANCEL THIS RUN ONCE THE MAINTENANCE SEQUENCE HAS BEGUN.
+# ---------------------------------------------------------------------------
+#
+# Cancel only for an actual emergency. The recovery step below runs on failure
+# AND on cancellation, but GitHub can terminate a runner before any step gets
+# to execute - and this workflow CANNOT promise recovery in that case, so it
+# does not.
+#
+# IF A CANCELLATION PREVENTED RECOVERY FROM COMPLETING, an operator must
+# establish BOTH of the following over SSH before re-dispatching anything:
+#
+#   1. the effective session driver - php artisan tinker, config("session.driver");
+#   2. the application maintenance state - app()->isDownForMaintenance().
+#
+# Re-dispatching without establishing both is how a half-finished change
+# becomes two half-finished changes.
+#
+# ---------------------------------------------------------------------------
+# MANUAL DISPATCH ONLY.
+# ---------------------------------------------------------------------------
+#
+# There is no push trigger, no schedule and no workflow_call, and nothing in
+# deploy.yml invokes the driver script. deploy.yml fires on every push to main,
+# including a documentation merge; a driver switch happens once, in a chosen
+# window, behind a go/no-go.
+#
+# FORWARD AND ROLLBACK ARE THE SAME WORKFLOW AND THE SAME SCRIPT. `database` is
+# the change, `file` is the rollback. A rollback path made of different code is
+# a path nobody has ever run.
+#
+# CONCURRENCY. The group is `cpanel-deploy` - the SAME group deploy.yml uses,
+# with cancel-in-progress false. A deployment rsyncing the application while
+# this rewrites .env, or the reverse, is the kind of interleaving that produces
+# a state nobody can reason about afterwards.
+#
+# WHAT IT NEVER DOES: display .env, any credential or any session content;
+# modify identity or sign-in configuration; touch the application key; run
+# migrations; accept an arbitrary key or an arbitrary value. The only thing it
+# can change is SESSION_DRIVER, and only to `file` or `database`.
+#
+# SSH reuses the established pattern from the read-only verification workflows,
+# ssh-agent and askpass included: the deploy key is passphrase-protected. The
+# script is piped over stdin rather than copied to the host.
+#
+# ---------------------------------------------------------------------------
+# THREE OPERATIONS. THE DRIVER ALONE DOES NOT DECIDE WHICH.
+# ---------------------------------------------------------------------------
+#
+# The planning step reads BOTH the effective driver AND the maintenance state,
+# because the same driver value means different things depending on whether
+# production is serving:
+#
+#   change               The effective driver differs from the target. The
+#                        mutation script runs.
+#
+#   rollback_completion  The driver is ALREADY `file`, production is STILL in
+#                        maintenance, and the operator supplied the exact
+#                        rollback takeover confirmation. This is where a
+#                        rollback stops when its .env rewrite succeeded and a
+#                        later step did not. NOTHING IS MUTATED: no script, no
+#                        .env rewrite, no cache clear. The run verifies the
+#                        driver, checks health, and brings production back up.
+#
+#   noop                 The driver already equals the target AND production is
+#                        LIVE. Nothing needs to happen, and nothing does.
+#
+# WHY rollback_completion HAS TO EXIST. Round 3 left `file` + MAINTENANCE with
+# no way out: the driver already matched the target, so the run planned a
+# no-op, reported "nothing to do", and left production down indefinitely. The
+# recovery it advertised could not recover it. Treating "driver already right"
+# as "nothing to do" is only true when production is actually serving.
+#
+# ---------------------------------------------------------------------------
+# MAINTENANCE AUTHORITY - THE THREE ORIGINS.
+# ---------------------------------------------------------------------------
+#
+# `php artisan up` releases WHATEVER maintenance mode is in effect, including a
+# window that belongs to a deployment or to a person mid-operation. So this
+# workflow tracks WHERE its authority over that window came from, and never
+# reduces it to a single boolean:
+#
+#   opened    This run found production LIVE and took it down itself. It owns
+#             the window outright and may close it.
+#
+#   takeover  Production was ALREADY down, the target is `file`, and the
+#             operator supplied the separate rollback takeover confirmation.
+#             This run may finish the rollback - or complete one - and close
+#             the window ON SUCCESS ONLY, because the window it inherited was
+#             opened by the failed change it exists to undo.
+#
+#   none      This run holds no window. It must NEVER run `php artisan up`.
+#
+# A FORWARD ALIGNMENT NEVER TAKES OVER A WINDOW. target `database` with
+# production already in maintenance is always refused, whatever is typed - and
+# so is the case where the driver is already `database` and production is down,
+# which is NOT a completion: the recovery direction is always `file`.
+#
+# ---------------------------------------------------------------------------
+# WHAT RECOVERY MAY AND MAY NOT DO.
+# ---------------------------------------------------------------------------
+#
+# Recovery reads state; it does not assume it. Three rules bound what it writes:
+#
+#   1. IT ONLY CLEARS COMPILED CACHES IF A MUTATION WAS ACTUALLY ATTEMPTED.
+#      `mutation_attempted` is recorded immediately before the driver script is
+#      piped, and nowhere else. A run that refused before that point has written
+#      nothing to the server, and its recovery stays read-only - otherwise a
+#      refusal that protected somebody else's maintenance window would go on to
+#      clear caches inside it.
+#
+#   2. IT ONLY RUNS `php artisan up` FOR A WINDOW IT HOLDS, and only where the
+#      origins above allow. If ownership cannot be established at all, it issues
+#      no `up`, reads the maintenance state, reports it as uncertain and fails
+#      closed.
+#
+#   3. IT NEVER LEAVES PRODUCTION SERVING SOMETHING THIS RUN DID NOT VERIFY.
+#      That covers two cases, not one: the driver changed and the run then
+#      failed, AND the run RELEASED a window it held and then failed - which is
+#      what a rollback_completion failing at the HTTPS check looks like. Both
+#      put production back down and CONFIRM it from the application.
+#
+# THE RECOVERY DIRECTION IS ALWAYS `file`. Never `database`. A failed forward
+# change is undone by rolling back to `file`; a rollback that stopped half way
+# is finished by dispatching `file` again. No failure message in this workflow
+# ever tells an operator to take over a maintenance window in order to leave
+# production on `database`.
+#
+# THERE IS STILL NO AUTOMATIC ROLLBACK. Rolling the driver back on failure would
+# be a second unattended production mutation on a path already known to be
+# misbehaving. Recovery establishes the state, secures it, and names the
+# explicit next dispatch.
+name: Align production SESSION_DRIVER (manual, CL-10)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Session driver production should be running after this run'
+        required: true
+        type: choice
+        options:
+          - database
+          - file
+      confirmation:
+        description: 'Type ALIGN SESSION DRIVER to confirm. Every signed-in user will be signed out.'
+        required: true
+        type: string
+      rollback_takeover:
+        description: 'ROLLBACK ONLY. Leave blank normally. To roll back or finish a rollback to file while production is already in maintenance, type TAKE OVER MAINTENANCE FOR SESSION ROLLBACK'
+        required: false
+        type: string
+
+# The same group as deploy.yml, on purpose. See the note above.
+concurrency:
+  group: cpanel-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  align:
+    name: Change SESSION_DRIVER on the production server
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+      APP_URL: https://semantiq.claas2saas.com
+      TARGET_DRIVER: ${{ inputs.target }}
+      ROLLBACK_TAKEOVER: ${{ inputs.rollback_takeover }}
+      TAKEOVER_PHRASE: TAKE OVER MAINTENANCE FOR SESSION ROLLBACK
+
+    steps:
+      # EVERY VALIDATION HAPPENS BEFORE ANY SSH MUTATION, and the ref check is
+      # first because a dispatch from a branch is the one mistake that could
+      # otherwise run an unreviewed script against production.
+      - name: Refuse unless this was dispatched from main
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::This workflow may only be dispatched from main. It was dispatched from ${{ github.ref }}."
+            exit 1
+          fi
+          echo "::notice::Dispatched from main."
+
+      # A typed phrase, not a checkbox. The dropdown alone would let a stray
+      # click on a repeated dispatch sign every user out.
+      - name: Refuse unless the confirmation phrase is exact
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          if [ "${CONFIRMATION:-}" != "ALIGN SESSION DRIVER" ]; then
+            echo "::error::The confirmation phrase was not exactly ALIGN SESSION DRIVER. Nothing was changed."
+            exit 1
+          fi
+          echo "::notice::Confirmation accepted."
+
+      # Belt and braces: the choice input already restricts this, but a choice
+      # list is part of the workflow file and this is part of the run.
+      #
+      # The takeover confirmation is validated here too, so a typo in it is
+      # caught before anything reaches the server rather than after. It is
+      # permitted ONLY with target `file`: it exists to roll back or to finish a
+      # rollback, and must never become a way to force a forward change into
+      # somebody else's maintenance window.
+      - name: Refuse an unrecognised target driver
+        run: |
+          set -euo pipefail
+
+          case "$TARGET_DRIVER" in
+            file|database) echo "::notice::Requested target driver: $TARGET_DRIVER" ;;
+            *) echo "::error::[$TARGET_DRIVER] is not a session driver this workflow will set."; exit 1 ;;
+          esac
+
+          if [ -n "${ROLLBACK_TAKEOVER:-}" ]; then
+            if [ "$TARGET_DRIVER" != "file" ]; then
+              echo "::error::The rollback takeover confirmation was supplied with target [$TARGET_DRIVER]. It applies ONLY to a rollback to file, and can never authorise a forward alignment. Nothing was changed."
+              exit 1
+            fi
+
+            if [ "$ROLLBACK_TAKEOVER" != "$TAKEOVER_PHRASE" ]; then
+              echo "::error::The rollback takeover confirmation was not exact. Nothing was changed."
+              exit 1
+            fi
+
+            echo "::notice::Rollback takeover confirmation accepted. It applies only if production is already in maintenance."
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      # P-10 in the runbook: never start a change whose rollback path is
+      # unverified. Rollback is this same workflow over this same connection, so
+      # the connection is proven before anything is taken or written.
+      - name: Verify SSH access before anything is changed
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && test -f artisan && test -f .env && echo REACHABLE" \
+            | grep -qx REACHABLE
+
+          echo "::notice::The deployment is reachable and rollback can be performed over this connection."
+
+      # THE STATE MACHINE. It reads the driver AND the maintenance state, and
+      # decides which of the three operations this dispatch is - because the
+      # driver alone does not say. `file` while production is serving is
+      # nothing to do; `file` while production is still down is a rollback that
+      # stopped half way, and leaving it alone would strand the deployment.
+      #
+      # Both values are READ, never assumed, and an unrecognised value for
+      # either stops the run before anything is touched. Only the driver name
+      # and the maintenance state are printed: neither is a credential.
+      - name: Establish the starting session driver and decide whether anything must change
+        id: plan
+        run: |
+          set -euo pipefail
+
+          remote() {
+            ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+              "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && $1" | tr -d '[:space:]'
+          }
+
+          starting="$(remote "php artisan tinker --execute='echo (string) config(\"session.driver\");'")"
+
+          case "$starting" in
+            file|database) ;;
+            *)
+              echo "::error::The production session driver is not one this workflow recognises. Nothing was changed."
+              exit 1
+              ;;
+          esac
+
+          state="$(remote "php artisan tinker --execute='echo app()->isDownForMaintenance() ? \"MAINTENANCE\" : \"LIVE\";'")"
+
+          case "$state" in
+            LIVE|MAINTENANCE) ;;
+            *)
+              echo "::error::Could not establish whether production is in maintenance mode. Refusing to proceed; nothing on the server has been written."
+              exit 1
+              ;;
+          esac
+
+          takeover_supplied=false
+          if [ "${ROLLBACK_TAKEOVER:-}" = "$TAKEOVER_PHRASE" ]; then
+            takeover_supplied=true
+          fi
+
+          if [ "$starting" != "$TARGET_DRIVER" ]; then
+            operation=change
+
+            if [ "$state" = "MAINTENANCE" ]; then
+              # A real mutation into a window this run did not open.
+              if [ "$TARGET_DRIVER" != "file" ]; then
+                echo "::error::Production is ALREADY in maintenance mode, so that window belongs to another operation. A forward alignment to [$TARGET_DRIVER] will never assume control of an existing window. Nothing on the server has been written."
+                exit 1
+              fi
+
+              if [ "$takeover_supplied" != "true" ]; then
+                echo "::error::Production is ALREADY in maintenance mode. A rollback to file may assume control of that window, but only when the exact takeover confirmation is supplied as a separate input. Nothing on the server has been written."
+                exit 1
+              fi
+
+              maintenance_plan=takeover
+            else
+              maintenance_plan=open
+            fi
+          elif [ "$state" = "LIVE" ]; then
+            # The driver is what was asked for AND production is serving.
+            operation=noop
+            maintenance_plan=none
+          else
+            # THE DRIVER IS ALREADY THE TARGET AND PRODUCTION IS STILL DOWN.
+            # This is not "nothing to do" - it is where a rollback stops when
+            # its .env rewrite landed and a later step did not.
+            if [ "$TARGET_DRIVER" != "file" ]; then
+              echo "::error::The session driver is already [$starting] and production is in maintenance. This is NOT nothing to do, and it is NOT a completion: this workflow will never assume control of a maintenance window in order to leave production on [database]. If you are recovering a failed change, the recovery target is [file]. Nothing on the server has been written."
+              exit 1
+            fi
+
+            if [ "$takeover_supplied" != "true" ]; then
+              echo "::error::The session driver is already [file] but production is still in maintenance, which is where a partially completed rollback stops. Finishing it assumes control of that window, so it requires the exact rollback takeover confirmation. Nothing on the server has been written."
+              exit 1
+            fi
+
+            operation=rollback_completion
+            maintenance_plan=takeover
+          fi
+
+          echo "starting=$starting" >> "$GITHUB_OUTPUT"
+          echo "operation=$operation" >> "$GITHUB_OUTPUT"
+          echo "maintenance_plan=$maintenance_plan" >> "$GITHUB_OUTPUT"
+
+          echo "::notice::Starting session driver: $starting. Maintenance: $state. Requested target: $TARGET_DRIVER. Operation: $operation."
+
+      # TAKE THE MAINTENANCE WINDOW, AND RECORD WHERE THE AUTHORITY CAME FROM.
+      #
+      # This is the only step that establishes `origin`, and it writes it ONLY
+      # after the authority is real - after `artisan down` has actually
+      # succeeded, or after the takeover has been re-confirmed. A failure here
+      # leaves origin unset, which recovery reads as `none`: this run holds
+      # nothing.
+      #
+      # The takeover conditions are checked AGAIN here rather than trusted from
+      # the planning step. Two independent guards on the one action that can
+      # end somebody else's outage is the right number.
+      - name: Take the maintenance window
+        id: maintenance
+        if: steps.plan.outputs.operation != 'noop'
+        run: |
+          set -euo pipefail
+
+          read_state() {
+            ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+              "$CPANEL_USER@$CPANEL_HOST" \
+              "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='echo app()->isDownForMaintenance() ? \"MAINTENANCE\" : \"LIVE\";'" \
+              | tr -d '[:space:]'
+          }
+
+          state="$(read_state)"
+
+          case "$state" in
+            LIVE|MAINTENANCE) ;;
+            *)
+              echo "::error::Could not establish whether production is in maintenance mode. Refusing to proceed; nothing on the server has been written."
+              exit 1
+              ;;
+          esac
+
+          # ▸ FROM HERE THE SITE IS DARK. ▸
+          if [ "${{ steps.plan.outputs.maintenance_plan }}" = "open" ]; then
+            if [ "$state" != "LIVE" ]; then
+              echo "::error::Production entered maintenance between planning and acting. Refusing to proceed on a stale reading; nothing on the server has been written."
+              exit 1
+            fi
+
+            ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+              "$CPANEL_USER@$CPANEL_HOST" \
+              "cd \"$CPANEL_DEPLOY_PATH\" && php artisan down --retry=60"
+
+            echo "origin=opened" >> "$GITHUB_OUTPUT"
+            echo "::notice::This run opened the maintenance window and owns it outright."
+            exit 0
+          fi
+
+          if [ "$TARGET_DRIVER" != "file" ]; then
+            echo "::error::Only a rollback to file may assume control of an existing maintenance window. Nothing on the server has been written."
+            exit 1
+          fi
+
+          if [ "${ROLLBACK_TAKEOVER:-}" != "$TAKEOVER_PHRASE" ]; then
+            echo "::error::Assuming control of an existing maintenance window requires the exact rollback takeover confirmation. Nothing on the server has been written."
+            exit 1
+          fi
+
+          if [ "$state" != "MAINTENANCE" ]; then
+            echo "::error::The maintenance window this run was authorised to assume control of is no longer in effect. Refusing to proceed on an assumption; nothing on the server has been written."
+            exit 1
+          fi
+
+          echo "origin=takeover" >> "$GITHUB_OUTPUT"
+          echo "::notice::This run has ASSUMED CONTROL of an existing maintenance window (operation: ${{ steps.plan.outputs.operation }}), on the operator's explicit confirmation."
+
+      # ▸ POINT OF NO RETURN ▸
+      #
+      # The single place that records that the server may have been written to.
+      # It runs for `change` and for nothing else - a rollback_completion
+      # rewrites no .env at all, so recovery after one must stay read-only.
+      - name: Record that the driver mutation is about to be attempted
+        id: mutation
+        if: steps.plan.outputs.operation == 'change'
+        run: |
+          set -euo pipefail
+          echo "attempted=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::A .env mutation is about to be attempted. From here, recovery must establish the effective driver rather than assume it."
+
+      # The script is piped over stdin. It takes the deployment path and the
+      # target driver and nothing else - no key name, no key=value pair, no
+      # flag. Everything it guarantees is in the script and tested for real in
+      # tests/Architecture/SessionDriverDeploymentTest.php.
+      - name: Align SESSION_DRIVER
+        if: steps.plan.outputs.operation == 'change'
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "sh -s -- \"$CPANEL_DEPLOY_PATH\" \"$TARGET_DRIVER\"" \
+            < deployment/ensure-session-driver.sh
+
+      - name: Clear compiled caches
+        if: steps.plan.outputs.operation == 'change'
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan optimize:clear --no-interaction"
+
+      # The script reporting success says the FILE was written. This says the
+      # APPLICATION is running the requested driver, which is the claim that
+      # matters and is not the same claim. It runs for a completion too: that
+      # the driver is still what the operator asked for is the premise the
+      # whole completion rests on, and it is checked rather than assumed.
+      - name: Verify the effective driver is the requested target
+        if: steps.plan.outputs.operation != 'noop'
+        run: |
+          set -euo pipefail
+
+          effective="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='echo (string) config(\"session.driver\");'" \
+            | tr -d '[:space:]')"
+
+          if [ "$effective" != "$TARGET_DRIVER" ]; then
+            echo "::error::The effective session driver is [$effective], not the requested [$TARGET_DRIVER]."
+            exit 1
+          fi
+
+          echo "::notice::Effective session driver: $effective."
+
+      - name: Verify application health over SSH
+        if: steps.plan.outputs.operation != 'noop'
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan semantiq:health"
+
+      # Only now, and only for a window this run actually holds. `opened` closes
+      # what it took down; `takeover` closes the inherited window BECAUSE THE
+      # ROLLBACK - or its completion - SUCCEEDED, which is the only circumstance
+      # in which releasing it is correct.
+      - name: Close the maintenance window
+        if: steps.maintenance.outputs.origin == 'opened' || steps.maintenance.outputs.origin == 'takeover'
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && php artisan up"
+
+          echo "::notice::The maintenance window held by this run (origin: ${{ steps.maintenance.outputs.origin }}) has been closed."
+
+      - name: Verify the site over HTTPS
+        if: steps.plan.outputs.operation != 'noop'
+        run: |
+          set -euo pipefail
+          # Cache-busted: a cached 200 from an earlier state would read as a pass.
+          code="$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 --retry-all-errors "$APP_URL/?align=${GITHUB_RUN_ID}")"
+          [ "$code" = "200" ] || { echo "::error::Site root returned $code"; exit 1; }
+
+          up="$(curl -fsS --retry 3 --retry-delay 5 --retry-all-errors "$APP_URL/up?align=${GITHUB_RUN_ID}")"
+          [ "$up" = "ok" ] || { echo "::error::/up returned [$up]"; exit 1; }
+
+          echo "::notice::Site root 200 and /up ok on session driver $TARGET_DRIVER."
+
+      # THE REPORT IS OPERATION-AWARE, because the two operations have
+      # different consequences for people who were signed in.
+      #
+      # A `change` rewrites .env and moves the session store, so every existing
+      # sign-in stops being readable and everyone must sign in again. A
+      # `rollback_completion` rewrites nothing and moves no store - anyone who
+      # was signed out was signed out by the change it is finishing, and saying
+      # otherwise would record a second interruption that never happened.
+      - name: Report what was done
+        if: steps.plan.outputs.operation != 'noop'
+        run: |
+          set -euo pipefail
+
+          if [ "${{ steps.plan.outputs.operation }}" = "change" ]; then
+            impact="existing sign-ins were invalidated by the driver switch, and everyone must sign in again - the expected, accepted effect"
+          else
+            impact="**no driver switch occurred in this run**, so it caused no additional session invalidation"
+          fi
+
+          {
+            echo "### Session driver alignment"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Operation | \`${{ steps.plan.outputs.operation }}\` |"
+            echo "| Starting driver | \`${{ steps.plan.outputs.starting }}\` |"
+            echo "| Requested target | \`$TARGET_DRIVER\` |"
+            echo "| Effective driver now | \`$TARGET_DRIVER\` |"
+            echo "| Maintenance authority | \`${{ steps.maintenance.outputs.origin }}\` |"
+            echo "| .env rewritten | \`$([ "${{ steps.plan.outputs.operation }}" = "change" ] && echo yes || echo no)\` |"
+            echo "| Session impact | $impact |"
+            echo "| Recovery direction | always \`file\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # THE NO-OP PATH. Reached only when the driver already matches AND
+      # production is serving. Nothing was taken, nothing was written, nobody
+      # was interrupted - and this report says exactly that rather than reusing
+      # the change report's language.
+      - name: Report that no change was required
+        if: steps.plan.outputs.operation == 'noop'
+        run: |
+          set -euo pipefail
+          echo "::notice::Production is already running session driver [$TARGET_DRIVER] and is serving normally. Nothing was changed."
+          {
+            echo "### Session driver alignment - no change required"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Driver before this run | \`${{ steps.plan.outputs.starting }}\` |"
+            echo "| Requested target | \`$TARGET_DRIVER\` |"
+            echo "| Action taken | **none** |"
+            echo "| Maintenance window | **not taken** |"
+            echo "| .env | **not read for modification, not written** |"
+            echo "| Existing logins | **not interrupted** |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # FAIL CLOSED, AND SAY EXACTLY WHERE THE RUN ENDED.
+      #
+      # Runs on failure AND on cancellation. It makes NO assumption about where
+      # the run ended - before the window was taken, between the rewrite and the
+      # verification, or after `artisan up` has already put the site back in
+      # front of users. It reads the effective driver rather than inferring it,
+      # and it reads the maintenance state rather than announcing one.
+      #
+      # It is NOT a guarantee against cancellation: GitHub can terminate a
+      # runner before this step executes. See the header.
+      - name: Establish the exact state after a failure or cancellation
+        if: failure() || cancelled()
+        run: |
+          set -uo pipefail
+
+          starting="${{ steps.plan.outputs.starting }}"
+          operation="${{ steps.plan.outputs.operation }}"
+          origin="${{ steps.maintenance.outputs.origin }}"
+          mutation_attempted="${{ steps.mutation.outputs.attempted }}"
+
+          [ -n "$origin" ] || origin='none'
+          [ -n "$mutation_attempted" ] || mutation_attempted='false'
+
+          remote() {
+            ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+              "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && $1"
+          }
+
+          read_state() {
+            remote "php artisan tinker --execute='echo app()->isDownForMaintenance() ? \"MAINTENANCE\" : \"LIVE\";'" 2>/dev/null | tr -d '[:space:]'
+          }
+
+          # PUT PRODUCTION BACK DOWN AND CONFIRM IT FROM THE APPLICATION.
+          # Used wherever production would otherwise be serving something this
+          # run did not verify. `php artisan down` is idempotent, so calling it
+          # on an already-down deployment is correct.
+          secure_maintenance() {
+            remote "php artisan down --retry=60" >/dev/null 2>&1 || true
+            secured_state="$(read_state)" || secured_state=''
+            [ "$secured_state" = "MAINTENANCE" ]
+          }
+
+          if [ -z "$starting" ]; then
+            echo "::error::The run ended before the starting driver was established. No .env mutation was attempted, no maintenance window was taken, and nothing on the server was written."
+            exit 1
+          fi
+
+          # CLEARING CACHES IS A WRITE. A run that refused before the mutation
+          # point - or one that never had a mutation point, like a completion -
+          # has written nothing, and must not start now.
+          if [ "$mutation_attempted" = "true" ]; then
+            remote "php artisan optimize:clear --no-interaction" >/dev/null 2>&1 || true
+          else
+            echo "::notice::No .env mutation was attempted, so this run has written nothing to the server. The inspection below is read-only and no cache was cleared."
+          fi
+
+          effective="$(remote "php artisan tinker --execute='echo (string) config(\"session.driver\");'" 2>/dev/null | tr -d '[:space:]')" || effective=''
+
+          if [ -z "$effective" ]; then
+            echo "::error::CRITICAL - the run ended and the effective session driver could NOT be read, so the state of production is UNKNOWN. Verify the application over SSH IMMEDIATELY - the effective driver AND the maintenance state. Do not dispatch this workflow again until you have."
+            exit 1
+          fi
+
+          # THE RECOVERY DIRECTION IS ALWAYS file. A deployment left on
+          # `database` is rolled back; one already on `file` is completed. In
+          # neither case is the answer to take over a window for `database`.
+          if [ "$effective" = "file" ]; then
+            next_dispatch="dispatch this workflow from main with target [file], the usual confirmation AND the rollback takeover confirmation - it will run as a ROLLBACK COMPLETION, rewrite nothing, verify the driver, check health and bring production back up"
+          else
+            next_dispatch="dispatch this workflow from main with target [file], the usual confirmation AND the rollback takeover confirmation - it will ROLL BACK to file using the same script"
+          fi
+
+          if [ "$effective" != "$starting" ]; then
+            # THE DRIVER CHANGED and the run then ended.
+            echo "::notice::The session driver was changed from [$starting] to [$effective] and the run then ended. Putting production back into maintenance before reporting."
+
+            if secure_maintenance; then
+              echo "::error::The session driver was changed from [$starting] to [$effective] and the run ended. Production has been PUT BACK INTO MAINTENANCE rather than left serving an unverified deployment, and the application confirms it is down. TO RECOVER: $next_dispatch."
+              exit 1
+            fi
+
+            echo "::error::CRITICAL - the session driver was changed from [$starting] to [$effective], the run ended, AND MAINTENANCE MODE COULD NOT BE GUARANTEED. Production may be serving an unverified deployment right now. Verify the application state over SSH IMMEDIATELY, before anything else."
+            exit 1
+          fi
+
+          # THE DRIVER DID NOT CHANGE. What matters now is whether production is
+          # serving something this run failed to verify.
+          echo "::notice::The session driver is still [$effective]. No driver change took effect. Operation was [$operation]."
+
+          case "$origin" in
+            opened)
+              # This run took a LIVE deployment down and changed nothing, so
+              # putting it back is restoring the state it found.
+              if remote "php artisan up"; then
+                echo "::notice::The maintenance window THIS RUN opened has been closed. Production is unchanged and serving."
+              else
+                echo "::error::This run opened a maintenance window and could not close it. Run 'php artisan up' over SSH."
+              fi
+              ;;
+            takeover)
+              current="$(read_state)" || current=''
+
+              if [ "$current" = "MAINTENANCE" ]; then
+                echo "::error::This run ASSUMED CONTROL of an existing maintenance window and did not complete. The window is deliberately LEFT ACTIVE: it was opened by the failed change this run exists to undo, and releasing it would put that state in front of users. TO RECOVER: $next_dispatch."
+              elif secure_maintenance; then
+                # The close step had already run and the run then failed, so
+                # production was serving a state this run never verified.
+                echo "::error::This run ASSUMED CONTROL of an existing maintenance window, RELEASED it, and then ended. Production has been PUT BACK INTO MAINTENANCE rather than left serving unverified, and the application confirms it is down. TO RECOVER: $next_dispatch."
+              else
+                echo "::error::CRITICAL - this run released a maintenance window it had assumed control of, the run ended, AND MAINTENANCE MODE COULD NOT BE RESTORED. Production may be serving unverified right now. Verify the application state over SSH IMMEDIATELY."
+              fi
+              ;;
+            none)
+              echo "::notice::This run holds no maintenance window, so none was closed. Any maintenance mode in effect belongs to another operation and has been left alone."
+              ;;
+            *)
+              current="$(read_state)" || current='UNREADABLE'
+              echo "::error::CRITICAL - this run could not establish whether it holds the maintenance window (origin reported as [$origin]). NO 'php artisan up' was issued. The application reports maintenance state [$current]. An operator must establish the effective driver and the maintenance state before any re-dispatch."
+              ;;
+          esac
+
+          echo "::error::The run ended with production on session driver [$effective]."
+          exit 1
