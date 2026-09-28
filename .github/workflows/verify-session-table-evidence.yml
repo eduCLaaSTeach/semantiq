@@ -1,0 +1,349 @@
+# Read-only session TABLE evidence - CL-10, WS-1, Fact B.
+#
+# ---------------------------------------------------------------------------
+# THIS IS EVIDENCE TOOLING. IT IS NOT A SESSION DRIVER CHANGE.
+# ---------------------------------------------------------------------------
+#
+# Running this workflow does not move production to `database`, does not
+# authorise moving production to `database`, and does not constitute a GO. The
+# production driver stays exactly as it was. Every statement it sends to the
+# server is a read.
+#
+# WHY IT EXISTS. The WS-1 go/no-go pack could not be completed, for two
+# reasons that are the same reason:
+#
+#   P-5     "the sessions table exists in production" was INFERRED from the
+#           migration set, not observed. The existing read-only session-store
+#           verification reports table existence only when the effective driver
+#           is already `database`. Production is `file`, so that branch has
+#           never run, and the claim has never been checked.
+#
+#   Fact B  the runbook requires a PRE-CHANGE baseline of the session table -
+#           its row count and its most recent activity timestamp - recorded
+#           before anything is switched. No mechanism existed to collect it.
+#
+# Both gaps needed a reader that looks at the configured session table WHILE
+# THE DRIVER IS `file`. That is the one thing this workflow does that the
+# existing read-only verification deliberately refuses to do.
+#
+# WHAT LOOKING AT THE TABLE UNDER `file` DOES NOT MEAN. It does not mean the
+# application is using that table. It is not evidence that the driver is
+# `database`, and this workflow never says it is - it reports the effective
+# driver separately, verbatim, so the two facts can never be confused. The
+# table is inert right now; that is precisely what makes it a usable baseline.
+#
+# ---------------------------------------------------------------------------
+# MANUAL DISPATCH ONLY.
+# ---------------------------------------------------------------------------
+#
+# No push trigger, no schedule, no workflow_call, no workflow_run. It touches
+# production, even if only to read it, during an open change window; it runs
+# because a person chose to run it, from main, or it does not run.
+#
+# CONCURRENCY. The group is `cpanel-deploy` - the SAME group the deployment
+# and the driver alignment tooling use - with cancel-in-progress false.
+# Session table evidence must never be sampled while normal deployment or
+# session driver alignment is changing production: a row count read halfway
+# through an rsync, or either side of an .env rewrite, is a number nobody can
+# later say what it was a count OF. Sharing the group makes the sample
+# atomic with respect to the only two things that change this server.
+#
+# ---------------------------------------------------------------------------
+# IT REPORTS FIVE FIELDS AND NOTHING ELSE.
+# ---------------------------------------------------------------------------
+#
+#   effective_session_driver   the configured driver name, verbatim
+#   configuration_is_cached    whether Laravel configuration is cached
+#   session_table_exists       true or false
+#   session_row_count          integer, present only when the table exists
+#   max_last_activity          integer Unix timestamp, or null when empty
+#
+# The allow-list is enforced on the output itself, after the fact, so an edit
+# that adds a sixth field fails the run instead of printing it into a log.
+#
+# IT NEVER REPORTS: a session id, a payload, a user id, an IP address, a user
+# agent, a cookie, the database host, name, user or password, a connection
+# string, the application key, any Microsoft identity value, any filesystem
+# path, or any line of .env. It never reports the session table NAME either -
+# only whether it is there - because the boolean is the whole of the evidence
+# and the name is one more identifier than the evidence needs.
+#
+# NO SQL TEXT IS EMITTED. The count and the maximum are built by the query
+# builder from the configured connection and table. Nothing constructs a
+# statement string, and nothing prints one.
+#
+# ---------------------------------------------------------------------------
+# WHAT IT NEVER RUNS.
+# ---------------------------------------------------------------------------
+#
+# No `artisan down`, no `artisan up`, no `optimize:clear` or any other cache
+# command, no migration, no INSERT, UPDATE, DELETE or TRUNCATE, no schema
+# change, no write to .env, no session created, touched or deleted. It does
+# not invoke the driver alignment tooling and the driver alignment tooling
+# does not invoke it.
+#
+# A FAILED CHECK IS NOT A FALSE. If the table lookup or either aggregate
+# throws, this run reports that the evidence could not be established and
+# fails - it does not report `session_table_exists: false`, because "the check
+# blew up" and "the table is not there" are different facts and only one of
+# them is the one the go/no-go needs. The exception itself is never printed:
+# it can carry the database host, name and user.
+#
+# SSH reuses the established pattern from the other read-only verification
+# workflows, ssh-agent and askpass included: the deploy key is
+# passphrase-protected, and writing the key file alone produces
+# "Permission denied (publickey)".
+name: Verify the session table (read-only evidence)
+
+on:
+  workflow_dispatch:
+
+# The same group as the deployment. See the note above.
+concurrency:
+  group: cpanel-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    name: Report the session table baseline over SSH
+    runs-on: ubuntu-latest
+    environment: development
+
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: ${{ secrets.CPANEL_PORT || '22' }}
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_DEPLOY_PATH: ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+    steps:
+      # FIRST, BEFORE ANY CONNECTION. A dispatch from a branch would run an
+      # unreviewed remote statement against production. It reads rather than
+      # writes, but "it was only a read" is not a thing this repository gets to
+      # find out afterwards.
+      - name: Refuse unless this was dispatched from main
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::This workflow may only be dispatched from main. It was dispatched from ${{ github.ref }}."
+            exit 1
+          fi
+          echo "::notice::Dispatched from main."
+
+      - name: Configure SSH
+        env:
+          CPANEL_SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
+          CPANEL_SSH_KEY_PASSPHRASE: ${{ secrets.CPANEL_SSH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${CPANEL_SSH_PRIVATE_KEY:?CPANEL_SSH_PRIVATE_KEY secret is required}"
+          : "${CPANEL_SSH_KEY_PASSPHRASE:?CPANEL_SSH_KEY_PASSPHRASE secret is required}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_PRIVATE_KEY" > ~/.ssh/cpanel_deploy_key
+
+          cat > ~/.ssh/askpass.sh <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$CPANEL_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 ~/.ssh/askpass.sh
+
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          DISPLAY=:0 SSH_ASKPASS="$HOME/.ssh/askpass.sh" SSH_ASKPASS_REQUIRE=force \
+            ssh-add ~/.ssh/cpanel_deploy_key </dev/null
+
+          ssh-keyscan -p "$CPANEL_PORT" -H "$CPANEL_HOST" >> ~/.ssh/known_hosts
+
+      - name: Verify SSH access before anything is read
+        run: |
+          set -euo pipefail
+
+          # The remote stderr is suppressed on purpose. A failed `cd` reports
+          # the deploy path back, and this workflow prints no filesystem path.
+          # The sentinel is the whole result: either the application is there
+          # or the run stops.
+          if ! ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" \
+            "cd \"$CPANEL_DEPLOY_PATH\" && test -f artisan && echo REACHABLE" 2>/dev/null \
+            | grep -qx REACHABLE; then
+            echo "::error::The deployment could not be reached over SSH, or the deploy path holds no application. The underlying message is deliberately not printed: it carries the deploy path."
+            exit 1
+          fi
+
+          echo "::notice::The deployment is reachable."
+
+      # THE EVIDENCE. Five reads, no branch on the driver.
+      #
+      # The connection and the table come from the application's own session
+      # configuration, so this reads the table the application WOULD use - not
+      # a name this workflow guessed. Neither value is printed.
+      - name: Collect the read-only session table evidence
+        run: |
+          set -euo pipefail
+
+          # The status is CAPTURED, not inherited. Under `set -e` a non-zero
+          # remote exit would abort this step on the assignment itself, so the
+          # refusal below - the one that distinguishes "the check failed" from
+          # "the table is absent" - would never run and the operator would get
+          # a bare red X with no statement at all.
+          #
+          # The remote stderr goes nowhere. An uncaught bootstrap error prints
+          # a stack trace full of filesystem paths, and this workflow prints
+          # none.
+          set +e
+          out="$(ssh -i ~/.ssh/cpanel_deploy_key -p "$CPANEL_PORT" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$CPANEL_USER@$CPANEL_HOST" "cd \"$CPANEL_DEPLOY_PATH\" && php artisan tinker --execute='
+              \$connection = config(\"session.connection\");
+              \$table = (string) config(\"session.table\", \"sessions\");
+
+              \$report = [
+                \"effective_session_driver\" => (string) config(\"session.driver\"),
+                \"configuration_is_cached\"  => app()->configurationIsCached(),
+              ];
+
+              try {
+                \$exists = \Illuminate\Support\Facades\Schema::connection(\$connection)->hasTable(\$table);
+                \$report[\"session_table_exists\"] = \$exists;
+
+                /*
+                 * DELIBERATELY NOT GATED ON THE DRIVER. The whole point is to
+                 * read this table while the driver is file. The count is of
+                 * whatever is in the table right now, which under file is the
+                 * inert pre-change baseline Fact B asks for.
+                 *
+                 * Only when the table is actually there. Counting a table that
+                 * does not exist throws, and the thrown message names the
+                 * database.
+                 */
+                if (\$exists) {
+                  \$rows = \Illuminate\Support\Facades\DB::connection(\$connection)->table(\$table)->count();
+                  \$latest = \Illuminate\Support\Facades\DB::connection(\$connection)->table(\$table)->max(\"last_activity\");
+
+                  \$report[\"session_row_count\"] = (int) \$rows;
+                  \$report[\"max_last_activity\"] = \$latest === null ? null : (int) \$latest;
+                }
+              } catch (\Throwable \$e) {
+                /*
+                 * NOT reported as false. The exception text can carry the
+                 * host, the database and the user, so none of it leaves the
+                 * server - only the fact that the evidence is unavailable.
+                 */
+                echo \"SESSION_EVIDENCE_UNAVAILABLE\";
+                exit(1);
+              }
+
+              echo json_encode(\$report, JSON_PRETTY_PRINT);
+            ' 2>/dev/null")"
+          remote_status=$?
+          set -e
+
+          if printf '%s' "$out" | grep -q SESSION_EVIDENCE_UNAVAILABLE; then
+            echo "::error::The session table evidence could not be established over the configured connection. The exception is deliberately not printed: it can carry the database host, name and user. Establish the cause by hand; do NOT record this as the table being absent."
+            exit 1
+          fi
+
+          if [ "$remote_status" -ne 0 ]; then
+            echo "::error::The evidence command did not complete on the server, and returned no report. Its output is deliberately not printed: it can carry the deploy path and the database host, name and user."
+            exit 1
+          fi
+
+          case "$out" in
+            *'{'*'}'*) ;;
+            *)
+              echo "::error::The server returned no report. Nothing was collected, and nothing is inferred from that."
+              exit 1
+              ;;
+          esac
+
+          # The raw output is NOT echoed. Everything a reader sees below comes
+          # out of the sweep, after the allow-list has passed - so a value the
+          # allow-list would have rejected cannot already be in the log by the
+          # time it is rejected.
+          # A LEAK SWEEP AND AN ALLOW-LIST ON THE OUTPUT ITSELF, not a promise
+          # in a comment. A future edit that adds a field, or a value that
+          # carries a credential or a path, fails the run rather than printing
+          # it into a log anybody can read.
+          python3 - "$out" <<'PYEOF'
+          import json, sys
+
+          raw = sys.argv[1]
+          data = json.loads(raw[raw.index('{'):raw.rindex('}') + 1])
+
+          # EXACTLY THESE FIVE. Nothing else may ever be reported from this
+          # workflow, and the two aggregates are absent rather than guessed
+          # when there is no table to aggregate.
+          permitted = {
+              'effective_session_driver', 'configuration_is_cached',
+              'session_table_exists', 'session_row_count', 'max_last_activity',
+          }
+
+          extra = sorted(set(data) - permitted)
+          if extra:
+              print(f"::error::The report carries unapproved fields: {extra}")
+              raise SystemExit(1)
+
+          blob = json.dumps(data)
+          for marker in [
+              'APP_KEY', 'base64:', 'DB_PASSWORD', 'DB_USERNAME', 'DB_HOST',
+              'DB_DATABASE', 'DB_CONNECTION', 'mysql://', 'password', 'secret',
+              '/home/', 'localhost', '127.0.0.1',
+              'payload', 'session_id', 'user_id', 'ip_address', 'user_agent', 'cookie',
+          ]:
+              if marker.lower() in blob.lower():
+                  print(f"::error::The report contains [{marker}].")
+                  raise SystemExit(1)
+
+          driver = data.get('effective_session_driver')
+          cached = data.get('configuration_is_cached')
+          exists = data.get('session_table_exists')
+          rows = data.get('session_row_count')
+          latest = data.get('max_last_activity')
+
+          if not isinstance(exists, bool):
+              print("::error::session_table_exists was not reported as a boolean, so nothing here is evidence of anything.")
+              raise SystemExit(1)
+
+          print()
+          print(f"Effective session driver : {driver}")
+          print(f"Configuration is cached  : {cached}")
+          print(f"Session table exists     : {exists}")
+
+          # THE EVIDENCE GATE. Absent table, absent baseline - and this is a
+          # failure, because the go/no-go pack it feeds cannot be completed
+          # without it. Reporting "false" and exiting 0 would hand back a
+          # green run that proves the opposite of what it was dispatched for.
+          if not exists:
+              print()
+              print("::error::The configured session table does not exist in this deployment. No baseline was collected, and P-5 is NOT satisfied.")
+              raise SystemExit(1)
+
+          if not isinstance(rows, int) or isinstance(rows, bool):
+              print("::error::The table exists but no row count was reported.")
+              raise SystemExit(1)
+
+          if latest is not None and (not isinstance(latest, int) or isinstance(latest, bool)):
+              print("::error::max_last_activity is neither an integer timestamp nor null.")
+              raise SystemExit(1)
+
+          # The two aggregates have to agree with each other. A count above
+          # zero with no maximum, or a maximum with no rows, means one of the
+          # two reads did not do what it claims.
+          if rows == 0 and latest is not None:
+              print("::error::The table reports no rows but a most-recent activity timestamp. The two aggregates disagree.")
+              raise SystemExit(1)
+          if rows > 0 and latest is None:
+              print("::error::The table reports rows but no most-recent activity timestamp. The two aggregates disagree.")
+              raise SystemExit(1)
+
+          print(f"Session row count        : {rows}")
+          print(f"Most recent activity     : {'none - the table is empty' if latest is None else latest}")
+          print()
+          print("This is a READ-ONLY baseline. It is not a driver change and it is not a GO.")
+          PYEOF
