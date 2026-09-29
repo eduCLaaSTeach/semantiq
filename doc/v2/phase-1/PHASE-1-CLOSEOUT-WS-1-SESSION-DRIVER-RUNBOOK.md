@@ -194,13 +194,77 @@ was not run is a check that failed.
 | **P-2** | Site responds | `GET /` | `200` |
 | **P-3** | **Current session driver** | Dispatch **`verify-session-store`** (read-only) | **`file`** — confirming the starting point, not assuming it |
 | **P-4** | Configuration is not cached | Same workflow | **Not cached.** If it *is* cached, the reported value may not be live and the change plan must be re-examined before proceeding |
-| **P-5** | Sessions table exists | Read-only check on the server | Present |
+| **P-5** | Sessions table exists | Dispatch **`verify-session-table-evidence`** (read-only) | **Present — PASS, DIRECTLY OBSERVED.** `session_table_exists: True`, runs `36391980170` and `36392333552`, 28 September 2026. **This was previously INFERRED from the migration set**; see §4A |
 | **P-6** | Database connectivity | `php artisan migrate:status` over SSH | Runs and returns; connection healthy |
 | **P-7** | Migration status clean | Same command | **Nothing pending.** A pending migration means an unrelated change is mid-flight |
 | **P-8** | **Identity source is still `env`** | Dispatch **`verify-identity`** (read-only) | **`env`.** CL-08 is deferred; if this reads `store`, an unauthorised cutover has happened and **this change must not proceed** |
 | **P-9** | Microsoft sign-in configuration present | The deployment's identity step, or `verify-identity` | Present. **Without it, a signed-out user cannot sign back in** |
 | **P-10** | **Server access for rollback is available and tested** | SSH reaches the deploy path **before** the change | Confirmed. **Never start a change whose rollback path is unverified** |
 | **P-11** | No unrelated deployment or change in progress | GitHub Actions — no running deploy; no open production change | Clear |
+
+### 4A. P-5 and the Fact B B-0 baseline — DIRECTLY OBSERVED, 28 September 2026
+
+> **THIS REPLACES THE EARLIER "FACT B BASELINE NOT COLLECTED" POSITION.**
+> At the first go/no-go the pack was incomplete for two reasons that were the
+> same reason: **P-5 was inferred, not observed**, and **no mechanism existed
+> to collect the B-0 baseline at all.** `verify-session-store` reports table
+> existence **only when the effective driver is already `database`** — and
+> production is `file`, so that branch had never run. Run `36392412993`, taken
+> today, still prints `Session table : not reported - the driver is not
+> database`, which is the gap itself, on the record.
+>
+> **`verify-session-table-evidence.yml` was built to close exactly that**
+> (PR #144, merged `86760940c9633da1cd406488b11ba2937a954cb1`). It is
+> **READ-ONLY EVIDENCE TOOLING.** It is not a driver change and merging it was
+> not a GO.
+
+**Both readings were taken from `main`, on head `8676094`, with production
+untouched between them.**
+
+| | **Baseline Reading 1** | **Baseline Reading 2** |
+| --- | --- | --- |
+| **Workflow run** | **`36391980170`** | **`36392333552`** |
+| **Head SHA** | `86760940c9633da1cd406488b11ba2937a954cb1` | `86760940c9633da1cd406488b11ba2937a954cb1` |
+| **Sample taken (UTC)** | **07:30:24** | **07:34:12** |
+| **Result** | **SUCCESS** | **SUCCESS** |
+| `effective_session_driver` | **`file`** | **`file`** |
+| `configuration_is_cached` | **`False`** | **`False`** |
+| `session_table_exists` | **`True`** | **`True`** |
+| `session_row_count` | **`0`** | **`0`** |
+| `max_last_activity` | **`null`** — the table is empty | **`null`** — the table is empty |
+
+| | |
+| --- | --- |
+| **Interval between samples** | **3 minutes 48 seconds** (07:30:24 → 07:34:12 UTC) |
+| **Row count unchanged?** | **Yes — `0` in both readings** |
+| **Most recent activity unchanged?** | **Yes — `null` in both readings** |
+| **Competing `cpanel-deploy` operation in the interval?** | **None.** The deployment for this merge (run `36391676485`) completed at **07:28:38**, before Reading 1 began. The only other run in the window was CI `36391676633`, which uses the `ci-<ref>` concurrency group and never touches the server |
+
+#### The conclusion, stated exactly
+
+> **No session-table movement was observed during the controlled pre-change
+> interval.**
+
+**That is the whole of the claim.** It **does not mathematically prove that no
+write or delete occurred between the two samples** — a write and a compensating
+delete, or a write to an already-counted row, would not show. It is an
+observation over an interval, not a proof of inertness. That limitation is
+§9 B-0's own wording and it is repeated here rather than quietly dropped now
+that the readings agree.
+
+#### Table state: **EMPTY AND STABLE**
+
+`session_row_count` is **`0` in both readings**, so the additional Product
+Owner safety rule resolves to **EMPTY AND STABLE**. There are no pre-existing
+database-session rows to account for, and therefore **no set of rows that could
+be silently treated as harmless when the database driver is activated**.
+
+**Had the count been greater than zero**, this section would report the count
+and the latest activity timestamp **only**, and the driver switch would remain
+unauthorised pending Product Owner review. No row was exposed, none was
+deleted, and no payload, user or session identifier was inspected — the
+workflow cannot read them, and its output allow-list is enforced on the report
+itself.
 
 ### Backup and recovery posture
 
@@ -484,12 +548,12 @@ first time under pressure.
 
 | # | Proof | Evidence | Status |
 | --- | --- | --- | --- |
-| **1** | **Pre-change checks completed** | P-1 … P-11 recorded with values and timestamps | ☐ |
+| **1** | **Pre-change checks completed** | P-1 … P-11 recorded with values and timestamps | **P-1 … P-11 ALL PASS**, P-5 now **directly observed** (§4A). Re-confirm immediately before the window |
 | **2** | **Agreed maintenance / sign-out window** | Window agreed in advance and recorded | ☐ |
 | **3** | **Rollback procedure ready** | §7 rehearsed; **P-10 server access verified before starting** | ☐ |
 | **4** | **Real post-change Microsoft sign-in succeeds** | **Product Owner signs in for real.** Not a simulation, not an automated check | ☐ |
 | **5** | **Production observed reporting `database`** | `verify-session-store` reports `Effective session driver : database` | ☐ |
-| **6** | **The `sessions` table is actually being used** | §9 **Fact B**, B-0 → B-3. **Read §9's stated limitation before recording this** — it is a bounded correlation, not a unique identification | ☐ |
+| **6** | **The `sessions` table is actually being used** | §9 **Fact B**, B-0 → B-3. **Read §9's stated limitation before recording this** — it is a bounded correlation, not a unique identification | **B-0 DONE** (§4A). B-1 … B-4 ☐ — they require the change, which is not authorised |
 
 > ### WHY PROOF 6 IS NOT PROOF 5
 >
@@ -530,7 +594,7 @@ moment when **no authenticated session exists at all**.
 
 | Step | Observation | What it establishes |
 | --- | --- | --- |
-| **B-0** | **Before the change:** `COUNT(*)` and `MAX(last_activity)`, taken **twice, minutes apart** | **Two identical readings establish that NO TABLE MOVEMENT WAS OBSERVED during the controlled pre-change interval.** This is the baseline the rest is measured against. **It does not mathematically prove that no write or delete could have occurred between the two samples** — a write and a compensating delete, or a write to an already-counted row, would not show. It is an observation over an interval, not a proof of inertness |
+| **B-0** | **Before the change:** `COUNT(*)` and `MAX(last_activity)`, taken **twice, minutes apart**. **COLLECTED — see §4A.** Runs `36391980170` and `36392333552`, 3m48s apart, both `0` / `null` | **Two identical readings establish that NO TABLE MOVEMENT WAS OBSERVED during the controlled pre-change interval.** This is the baseline the rest is measured against. **It does not mathematically prove that no write or delete could have occurred between the two samples** — a write and a compensating delete, or a write to an already-counted row, would not show. It is an observation over an interval, not a proof of inertness |
 | **B-1** | **General users are instructed not to sign back in yet.** The Product Owner is the **first** to sign in | Bounds the window |
 | **B-2** | **After A-1:** `COUNT(*)` and `MAX(last_activity)` again | **A table that showed no movement during the controlled pre-change interval now shows movement after the driver change and the controlled sign-in / request window.** The switch took effect in behaviour, not only in configuration |
 | **B-3** | Product Owner makes **one controlled authenticated request** at a noted time; `MAX(last_activity)` read immediately before and after | **The store is READ and UPDATED**, not written once. This is what distinguishes a live session store from a one-off insert |
@@ -629,7 +693,7 @@ roll back and investigate with production restored.
 | --- | --- |
 | **Timestamps** | Window start; change applied; window closed; each proof observed |
 | **Change reference** | The workflow run ID (or operator session reference) that performed it |
-| **Before** | `verify-session-store` output showing **`file`**; `verify-identity` showing **`env`**; the full P-1 … P-11 results |
+| **Before** | `verify-session-store` output showing **`file`**; `verify-identity` showing **`env`**; the full P-1 … P-11 results. **ALREADY CAPTURED — §13.1**, with the B-0 baseline in §4A |
 | **After** | `verify-session-store` showing **`database`**; `/up`; `/`; the console route sweep |
 | **Fact A** | The Product Owner's own statement that a real Microsoft sign-in succeeded and that `/console` plus one authenticated screen loaded |
 | **Fact B** | The **two identical B-0 baseline readings** taken before the change (establishing that no table movement was observed over that interval), the B-2 readings after sign-in, and the B-3 `MAX(last_activity)` either side of one controlled request, with B-4's note of which screen and when — **`COUNT(*)` and `MAX(last_activity)` only** |
@@ -646,20 +710,158 @@ roll back and investigate with production restored.
 
 ## 13. Product Owner GO / NO-GO
 
-> # ✅ RUNBOOK APPROVED · ✅ TOOLING APPROVED TO BUILD
-> # ⛔ PRODUCTION CHANGE NOT AUTHORISED
+> # ✅ RUNBOOK APPROVED · ✅ TOOLING BUILT, TESTED, MERGED · ✅ EVIDENCE PACK COMPLETE
+> # ⛔ FINAL PRODUCT OWNER DECISION: NO-GO FOR THE PRODUCTION MUTATION AT THIS MOMENT
+>
+> **This is not a technical rejection of CL-10.** The implementation, the
+> rollback tooling, the evidence tooling, P-1 … P-11 and the empty/stable
+> session-table baseline are **ready**. One control item remains open and it is
+> not a code item: **no maintenance window has been agreed** (§13.3).
 
-**Nothing here has been executed.** Production still runs `SESSION_DRIVER=file`.
-No `.env` was read for modification or written. No session was affected. No
-maintenance window was opened.
+**Nothing in §6 has been executed.** Production still runs
+`SESSION_DRIVER=file`. No `.env` was read for modification or written. No
+session was affected. No maintenance window was opened for this change.
+`align-session-driver.yml` **has never been dispatched — the Actions API
+reports 0 runs for it.**
 
-**Two things are required before step 1 of §6:**
+### 13.1 The pre-change evidence pack — COMPLETE as of 28 September 2026
 
-1. **The §5.3 tooling must exist, be tested and be merged.** It is now
-   **APPROVED TO BUILD** — §5.4 state 2 — but **neither artefact has been
-   written**. **A GO alone does not make this change performable**, and
-   **building the tool is not permission to run it.**
-2. **This explicit authorisation:**
+**The gap that blocked the first go/no-go is closed.** P-5 is observed rather
+than inferred, and the Fact B B-0 baseline exists. **Proof 6 was not waived
+and nothing in it was fabricated**; the measurement that was missing was built
+(PR #144), reviewed, merged and run.
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| **P-1** application health | **PASS** | `/up` = `ok`, deployment run `36391676485` |
+| **P-2** site responds | **PASS** | `/` = `200`, same run |
+| **P-3** current driver is `file` | **PASS** | `verify-session-store` run **`36392412993`** |
+| **P-4** configuration not cached | **PASS** | same run — `configuration_is_cached: False` |
+| **P-5** sessions table exists | **PASS — DIRECTLY OBSERVED** | **§4A**, runs `36391980170` / `36392333552` — `session_table_exists: True`. **Previously INFERRED; no longer** |
+| **P-6** database connectivity | **PASS** | both evidence runs reached the configured connection and returned aggregates |
+| **P-7** migration status clean | **PASS** | deployment run `36391676485` — `INFO Nothing to migrate.` |
+| **P-8** identity source is `env` | **PASS** | `verify-identity` run `35825123806` — `identity_source: env` |
+| **P-9** Microsoft sign-in configuration present | **PASS** | deployment run `36391676485` — "All four Microsoft identity settings are present and non-empty. No value was read." |
+| **P-10** rollback server access tested | **PASS** | every evidence run reaches the deploy path over the same SSH path a rollback uses |
+| **P-11** no unrelated change in progress | **PASS** | no competing `cpanel-deploy` operation in the sampling window — §4A |
+| **Fact B, B-0 baseline** | **COLLECTED** | **§4A** — two readings 3m48s apart, `0` / `null` both times |
+| **Table state** | **EMPTY AND STABLE** | `session_row_count: 0` in both readings |
+
+**Rollback readiness is unchanged and still stands.** Rollback is the **same
+workflow and the same script** with `target: file` (§7). It was never a
+separate code path, and P-10 is confirmed above.
+
+### 13.2 Dispatch values — RECORDED, NOT EXECUTED
+
+**These are written down so the operator does not have to compose them under
+time pressure. Writing them here is not authorisation to type them.**
+
+> ### ⚠️ CORRECTED — Product Owner final review, 29 September 2026
+>
+> **The earlier version of this table had a single "Rollback" row with the
+> takeover field blank.** That is correct **only while production is still
+> LIVE**. The merged workflow **refuses a `database` → `file` rollback when
+> production is already in maintenance** unless the separate takeover
+> confirmation is supplied — so the operator would have followed this runbook,
+> been refused, and had to work out why **during an incident**, which is the
+> worst possible moment to discover a runbook is wrong.
+>
+> **The workflow was right and is unchanged.** This is a runbook correction
+> only. **The maintenance state is half of the decision**, and the table now
+> says so.
+
+**FOUR CASES. THE DRIVER ALONE DOES NOT DECIDE WHICH — read the maintenance
+state first** (§5.4). If you do not know whether production is LIVE or in
+MAINTENANCE, **establish it before dispatching anything**; the workflow reads
+it too and will refuse rather than guess.
+
+| # | Case | Production state | `target` | `confirmation` | `rollback_takeover` |
+| --- | --- | --- | --- | --- | --- |
+| **1** | **Forward change** | **LIVE** | `database` | `ALIGN SESSION DRIVER` | *(leave empty)* |
+| **2** | **Rollback from a live `database` deployment** | **LIVE** | `file` | `ALIGN SESSION DRIVER` | *(leave empty)* |
+| **3** | **Rollback while production is ALREADY in MAINTENANCE** — the driver is still `database` and a change failed mid-window | **MAINTENANCE** | `file` | `ALIGN SESSION DRIVER` | **`TAKE OVER MAINTENANCE FOR SESSION ROLLBACK`** |
+| **4** | **Rollback completion** — the driver is already `file` but production is still down, which is where a rollback stops when its `.env` rewrite succeeded and a later step did not | **MAINTENANCE** | `file` | `ALIGN SESSION DRIVER` | **`TAKE OVER MAINTENANCE FOR SESSION ROLLBACK`** |
+
+> ## ⛔ NEVER SUPPLY THE TAKEOVER PHRASE WITH TARGET `database`.
+>
+> **It exists only to recover, and recovery is always towards `file`.** The
+> workflow refuses this combination before it reaches the server, and no
+> situation makes it correct. If production is in maintenance and you believe
+> you need to go forward to `database`, **the answer is to finish or undo the
+> operation that owns that window first** — not to take it over.
+
+**Why cases 3 and 4 both require the phrase.** In both, the window was opened
+by somebody or something else, and `php artisan up` releases **whatever**
+maintenance mode is in effect — including a window that belongs to a
+deployment or to a person mid-operation. The phrase is the operator stating,
+in words that cannot be produced by a stray click on a repeated dispatch,
+that they intend to assume control of that window. **Case 4 rewrites
+nothing**: no script runs, no `.env` is touched, no cache is cleared; the run
+verifies the driver, checks health and brings production back up.
+
+**What the workflow refuses, so the operator is not surprised by it:**
+
+| Attempt | Result |
+| --- | --- |
+| Forward change (`database`) while production is in MAINTENANCE | **Refused, whatever is typed.** A forward alignment never assumes control of an existing window |
+| Takeover phrase supplied with `target: database` | **Refused before any connection is made** |
+| Driver already `database`, production in MAINTENANCE, target `database` | **Refused.** This is neither a no-op nor a completion — the recovery direction is always `file` |
+| Rollback (`file`) while production is in MAINTENANCE, phrase **missing or misspelt** | **Refused.** Nothing on the server is written |
+| Driver already `file`, production **LIVE**, target `file` | **No-op.** No window, no script, no cache clear, no interruption |
+
+### 13.3 ⛔ BLOCKER — no maintenance window has been agreed
+
+**Proof 2 of §8 requires an agreed maintenance / sign-out window, recorded in
+advance. There is none.** That is the outstanding item, and it is the reason
+the final decision is **NO-GO AT THIS MOMENT** rather than a technical
+objection to CL-10.
+
+| | |
+| --- | --- |
+| **Status** | **NOT AGREED** |
+| **Who supplies it** | **The Product Owner, and nobody else.** Not the delivery team, not this runbook, not a default |
+| **What must not happen** | **No date or time may be invented, assumed, proposed as a placeholder, or inferred from convenience.** A window nobody agreed to is not a window |
+| **Why it gates everything** | The change **signs every user out**. Choosing when that happens is a business decision about real people's working day, not a deployment detail |
+
+**Until the Product Owner supplies an exact window, nothing in §6 may be
+dispatched — regardless of how complete the evidence pack is.**
+
+### 13.4 The execution-day sequence, once a window exists
+
+**Nothing below has been performed. It is the agreed order for the day, so it
+does not have to be recalled under pressure.** The evidence in §4A and §13.1
+was collected on 28 September 2026 and **is a record, not a substitute** — it
+is re-taken on the day, because a pre-change baseline that is a day old is a
+baseline of a different day.
+
+| # | Step | Requirement |
+| --- | --- | --- |
+| **1** | Fresh **P-1 … P-11** | All eleven PASS, recorded with values and timestamps |
+| **2** | Fresh **`verify-session-store`** | **`file`**, configuration **not cached** |
+| **3** | Fresh **`verify-identity`** | **`env`** |
+| **4** | Fresh session-table evidence **Reading 1** | `verify-session-table-evidence` — SUCCESS |
+| **5** | **Wait at least 3 minutes**, with **no competing `cpanel-deploy` operation** | Confirmed from the Actions history, not assumed |
+| **6** | **Reading 2** | SUCCESS |
+| **7** | Compare | **Table still exists** and remains **EMPTY AND STABLE** |
+| **8** | Confirm **no unrelated production change** is in flight | Clear |
+| **9** | **Notify users** | Before the window opens, not during it |
+| **10** | **Explicit production GO**, then dispatch | §13.5. **Step 10 is a separate decision from steps 1-9 passing** |
+
+**If step 7 shows the table is no longer empty**, the driver switch is **not**
+authorised by this pack: report the count and the latest activity timestamp
+only, expose no row, delete nothing, inspect no payload, user or session
+identifier, and **stop for Product Owner review** (§4A).
+
+### 13.5 What is still required
+
+**One thing now, not two.** The §5.3 tooling **exists, is tested and is
+merged** — `deployment/ensure-session-driver.sh` and
+`.github/workflows/align-session-driver.yml`, merged at
+`2a70eeedf82f4c716d18d863c254411fd10999a3`, with the read-only evidence
+workflow merged at `86760940c9633da1cd406488b11ba2937a954cb1`. **That closes
+§5.4 state 2. It is not permission to run any of it.**
+
+**What remains is the agreed window (§13.3) and the authorisation itself:**
 
 ```
 Product Owner GO / NO-GO: ______
@@ -669,21 +871,30 @@ Agreed window (date and time):  ______
 ```
 
 **No execution until GO is supplied.** Approval of the Closeout PLAN was not
-this authorisation, and neither is approval of this runbook.
+this authorisation. Neither is approval of this runbook, approval of the
+tooling, approval of the read-only evidence workflow, or the fact that the
+evidence pack is now complete. **A complete evidence pack is what makes the
+decision possible; it is not the decision.**
 
 ---
 
 ## 14. Status
 
-**WS-1 RUNBOOK APPROVED. TOOLING APPROVED TO BUILD. NOT EXECUTED.**
+**WS-1 RUNBOOK APPROVED. TOOLING BUILT, TESTED AND MERGED. EVIDENCE PACK
+COMPLETE. PRODUCTION CHANGE NOT EXECUTED AND NOT AUTHORISED.**
 
 | | |
 | --- | --- |
-| `SESSION_DRIVER` | **still `file`** — confirmed live, `verify-session-store` run `35684301122` |
-| Production switch | **NOT performed.** No `.env` read for modification or written; no session affected; no window opened |
+| `SESSION_DRIVER` | **still `file`** — confirmed live, `verify-session-store` run **`36392412993`**, 28 September 2026. Configuration **not cached**. Earlier confirmations retained: runs `35825117167` (23 September) and `35684301122` (at runbook approval) |
+| Production switch | **NOT performed.** No `.env` read for modification or written; no session affected; no window opened for this change |
+| `align-session-driver.yml` | **NEVER DISPATCHED — 0 runs** |
 | **State 1 — runbook** | **APPROVED** — Product Owner, after amendment round 3 (§2A evidence reclassification, §9 B-0/B-2 restatement). Rounds 1 and 2 fully retained |
-| **State 2 — tooling** | **APPROVED TO BUILD.** At the time this runbook was approved, `ensure-session-driver.sh` and `align-session-driver.yml` **did not exist** |
-| **State 3 — production change** | **NOT AUTHORISED** |
+| **State 2 — tooling** | **CLOSED.** `ensure-session-driver.sh` and `align-session-driver.yml` merged at `2a70eeedf82f4c716d18d863c254411fd10999a3`; `verify-session-table-evidence.yml` merged at `86760940c9633da1cd406488b11ba2937a954cb1` |
+| **Evidence pack** | **COMPLETE — §13.1.** P-1 … P-11 all PASS with P-5 **directly observed**, and Fact B **B-0 collected** (§4A). Proof 6 was **not waived and not fabricated** |
+| **Table state** | **EMPTY AND STABLE** — `session_row_count: 0` in both baseline readings |
+| **State 3 — production change** | **NOT AUTHORISED — final Product Owner decision, 29 September 2026: NO-GO AT THIS MOMENT.** Not a technical rejection; the one open item is the **un-agreed maintenance window** (§13.3) |
+| **Maintenance window** | **NOT AGREED.** To be supplied by the Product Owner. **No date or time may be invented or assumed** |
+| **§13.2 dispatch table** | **CORRECTED** — four operational cases, because a `database` → `file` rollback **while production is already in maintenance** requires the takeover phrase and the earlier three-row table did not say so |
 | CL-11 | **Not started** |
 | CL-12 | **Not started** |
 | Phase 2 | **Untouched** |
