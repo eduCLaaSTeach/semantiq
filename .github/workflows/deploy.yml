@@ -305,6 +305,8 @@ jobs:
             --exclude "tests/" \
             --exclude "phpunit.xml" \
             --exclude "doc/" \
+            --exclude ".claude/" \
+            --exclude "developer-handbook/" \
             --exclude "*.md" \
             --exclude ".editorconfig" \
             --exclude ".gitignore" \
