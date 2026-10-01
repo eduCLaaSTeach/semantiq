@@ -1,0 +1,38 @@
+{
+    "permissions": {
+        "defaultMode": "default",
+        "deny": [
+            "Bash(rm -rf /)",
+            "Bash(rm -rf ~)"
+        ],
+        "ask": [
+            "Bash(claude mcp add*)",
+            "Bash(claude mcp remove*)",
+            "Bash(*login*)",
+            "Bash(*token*)",
+            "Bash(*install*)",
+            "Bash(*deploy*)",
+            "Bash(*publish*)",
+            "Bash(*migrate*)"
+        ],
+        "allow": [
+            "Read",
+            "Glob",
+            "Grep",
+            "Write(.claude/feedback-logs/**)",
+            "Edit(.claude/feedback-logs/**)",
+            "Write(docs/eod/**)",
+            "Edit(docs/eod/**)",
+            "Write(docs/orientation-map.html)",
+            "Edit(docs/orientation-map.html)",
+            "Bash(claude --version)",
+            "Bash(claude mcp list*)",
+            "Bash(git)",
+            "Bash(git *)",
+            "Bash(git.exe*)",
+            "Bash(gh)",
+            "Bash(gh *)",
+            "Bash(gh.exe*)"
+        ]
+    }
+}
