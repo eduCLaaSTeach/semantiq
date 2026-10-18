@@ -543,6 +543,7 @@ stated reason this was carried rather than closed.
 | **Live evidence required** | **After deployment:** verify the **exact navigation set** an Organisation Administrator sees, and that each of the seven destinations is genuinely reachable |
 | **Proposed method** | **DESIGN → approve → implement → test → verify → accept** |
 | **PO decision?** | **RULED — EXPOSE ALL SEVEN. FIX IN PHASE 1 CLOSEOUT** |
+| **WS-7 progress** | **GATE B DESIGN WRITTEN, 18 October 2026** — `PHASE-1-CLOSEOUT-CL-12-ORGADMIN-NAVIGATION-DESIGN.md`, awaiting Product Owner approval. **Route-authorisation verification COMPLETE: all seven destinations are already authorised for Organisation Administrator** through `OrgAdmin` / `AccessAdmin` / `EvidenceRead`; the three platform destinations are `PlatformAdmin`-gated and stay denied. **No discrepancy found, so nothing was escalated and no authorisation is widened.** No code written |
 | **Target final status** | **`CLOSED — CONTROL IMPLEMENTED AND VERIFIED`** |
 | **Category** | **Product/navigation TECHNICAL CHANGE REQUIRED** — changed by this ruling |
 
