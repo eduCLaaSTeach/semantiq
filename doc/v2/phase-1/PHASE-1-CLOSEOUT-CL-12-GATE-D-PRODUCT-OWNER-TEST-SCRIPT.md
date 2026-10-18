@@ -21,12 +21,18 @@ open yesterday.
 
 | | |
 | --- | --- |
-| Merge SHA (squash) | `80c1a603e39bd2a85f92d510439b7e0fd3597af0` |
-| Pull request | #147 |
-| Reviewed head | `910a52263417413b2d49a82d4b2212619542ffdd` |
+| **Build under test** | **`7be3afd6a80edbb04409ef8e06c5e9a9a7d34ea9`** — test against this, not #147 |
+| Pull requests merged into it | **#148** (query efficiency) on top of **#147** (the navigation change) |
+| CL-12 implementation merged at | `80c1a603e39bd2a85f92d510439b7e0fd3597af0` (#147) |
 | Gate B design merged at | `33c04b94fd0c27be5fe83448a86019407fc1ea82` (#146) |
 | Site | https://semantiq.claas2saas.com |
 | Deployment run | *see the covering report for this run's ID and result* |
+
+**#148 changed no behaviour you can see.** It stopped the navigation code asking
+the database the same role question once per menu entry — 45 queries down to 3
+on a page load. Every check below is expected to behave exactly as it would
+have on #147. If anything in the sidebar looks different from the eight entries
+described here, that is a finding, not an improvement.
 
 ## 3. Preconditions
 
