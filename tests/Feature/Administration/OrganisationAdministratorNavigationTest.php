@@ -23,9 +23,9 @@ use Tests\TestCase;
 /**
  * CL-12 - THE ORGANISATION ADMINISTRATOR NAVIGATION SET.
  *
- * An Organisation Administrator was authorised for seven System Administration
- * screens and could discover ONE. All seven returned 200 when typed into the
- * address bar; six were absent from the sidebar. That is "navigation that
+ * An Organisation Administrator was authorised for EIGHT System Administration
+ * screens and could discover ONE. All eight returned 200 when typed into the
+ * address bar; seven were absent from the sidebar. That is "navigation that
  * exists technically but the user cannot actually discover" - the last item on
  * the professional-polish gate, and a discoverability defect rather than an
  * access defect.

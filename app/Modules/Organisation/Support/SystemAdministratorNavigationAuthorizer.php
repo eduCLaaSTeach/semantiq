@@ -11,7 +11,15 @@ use App\Shared\Navigation\Contracts\NavigationAuthorizer;
 
 /**
  * Replaces DenyAllNavigationAuthorizer now that there is something to navigate
- * to. It admits System Administrators, plus ONE node named by D-182.
+ * to. It admits System Administrators to the whole System Administration area,
+ * and an Organisation Administrator to the EIGHT nodes CL-12 names below.
+ *
+ * Those eight are not a grant. Every one of them sits behind a route an
+ * Organisation Administrator was ALREADY authorised for; seven of them were
+ * simply impossible to find. CL-12 stopped hiding them. D-182, which admitted
+ * the first of the eight and is the ruling CL-12 supersedes, is preserved in
+ * full further down because it is the reasoning CL-12 applies, not a repealed
+ * rule.
  *
  * This is UX, not access control. Every Organisation route re-authorises through
  * RequireSystemAdministrator on its own; if this authorizer were wrong, the
@@ -40,12 +48,12 @@ use App\Shared\Navigation\Contracts\NavigationAuthorizer;
  * D-182's reasoning is UNCHANGED and is the reason CL-12 exists: a node may be
  * shown when THE ROUTE BEHIND IT ALREADY ADMITS THE VIEWER. D-182 applied that
  * test to one node and said the next node would need its own ruling. CL-12 is
- * that ruling, and it applies the same test to the six others that pass it.
+ * that ruling, and it applies the same test to the seven others that pass it.
  *
  * AN ORGANISATION ADMINISTRATOR NOW SEES EIGHT NODES. Administration Home,
  * Organisation, Users & Groups, Roles & Access, Business Domains, Security
  * Status, Access Reviews and Audit. Every one was reachable by URL before this
- * change and returned 200; six of them simply could not be found, which is
+ * change and returned 200; seven of them simply could not be found, which is
  * "navigation that exists technically but the user cannot actually discover" -
  * the last item on the professional-polish gate.
  *

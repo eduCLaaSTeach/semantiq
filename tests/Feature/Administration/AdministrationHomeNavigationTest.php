@@ -174,7 +174,7 @@ final class AdministrationHomeNavigationTest extends TestCase
      * eleven labels instead of eight, and the System Administrator cases above
      * stay green - which is exactly why the equality is here.
      */
-    public function test_an_organisation_administrator_sees_that_node_and_no_other(): void
+    public function test_an_organisation_administrator_sees_exactly_the_cl12_approved_set(): void
     {
         $response = $this->actingAsUser($this->userWith(RoleCode::OrganisationAdministrator))->get('/console');
 
