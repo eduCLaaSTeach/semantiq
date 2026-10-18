@@ -154,6 +154,14 @@ final class SystemAdministratorNavigationAuthorizer implements NavigationAuthori
         'audit.view',                               // Audit
     ];
 
+    /**
+     * Where the per-request role answers live.
+     *
+     * A Request attribute, so it is born and dies with the request. Named
+     * distinctly from semantiq_user so neither can be mistaken for the other.
+     */
+    public const REQUEST_ROLE_MEMO = 'semantiq_navigation_role_memo';
+
     public function __construct(private readonly AccessEngine $engine) {}
 
     /**
@@ -172,7 +180,7 @@ final class SystemAdministratorNavigationAuthorizer implements NavigationAuthori
             return false;
         }
 
-        if ($this->engine->holdsRole($user, RoleCode::SystemAdministrator)) {
+        if ($this->roleHeldOnceThisRequest($user, RoleCode::SystemAdministrator)) {
             return true;
         }
 
@@ -184,6 +192,72 @@ final class SystemAdministratorNavigationAuthorizer implements NavigationAuthori
          * loose one would admit anything PHP considers equal to a key.
          */
         return in_array($policyKey, self::ORGANISATION_ADMINISTRATOR_POLICY_KEYS, true)
-            && $this->engine->holdsRole($user, RoleCode::OrganisationAdministrator);
+            && $this->roleHeldOnceThisRequest($user, RoleCode::OrganisationAdministrator);
+    }
+
+    /**
+     * AccessEngine::holdsRole, asked AT MOST ONCE PER ROLE PER USER PER REQUEST.
+     *
+     * NOT A SECOND DEFINITION OF THE QUESTION, and deliberately not named as
+     * though it were. It decides nothing: it forwards to the engine and
+     * remembers what the engine said. N-B8 (AccessBoundaryTest) fails any
+     * `function holdsRole` outside the engine, and it was right to fail this
+     * one while it carried that name - a method called holdsRole here reads as
+     * a rival answer to the same question, which is how two definitions drift
+     * apart.
+     *
+     * WHY THIS EXISTS. NavigationRegistry::visibleFor() calls allows() once per
+     * menu node - 36 of them - so every page render asked the same two
+     * questions 36 and 8 times. Measured on /console before this method:
+     *
+     *   System Administrator        37 role_assignments queries
+     *   Organisation Administrator  45
+     *   Auditor                     45  <- eight OrgAdmin lookups for a role
+     *   Business User               45     they do not hold
+     *
+     * (36 of each count come from this class; the 37th SystemAdministrator
+     * lookup is ConsoleController's own, which CL-12 does not touch.)
+     *
+     * THE ANSWER IS AN INVARIANT WITHIN ONE REQUEST. Role assignments do not
+     * change halfway through rendering a menu, so asking again cannot return
+     * anything new - it can only cost another round trip.
+     *
+     * WHERE IT IS KEPT, AND WHY NOWHERE ELSE. The current Request's attribute
+     * bag, which is created per request and discarded with it.
+     *
+     *   - NOT a static property and NOT an instance property: NavigationRegistry
+     *     holds this authorizer as a SINGLETON, so either would outlive the
+     *     request and answer the next viewer with the previous viewer's roles.
+     *     That is a privilege-escalation bug, not a performance detail.
+     *   - NOT the application cache, the session, Redis or the database: a role
+     *     revoked between two requests must be gone on the second one. D-69
+     *     forbids caching permission answers across requests and is unchanged.
+     *
+     * KEYED BY USER ID AS WELL AS ROLE, so that even within a single request a
+     * second user's question can never be answered from the first user's entry.
+     * One request normally has one viewer; the key does not rely on that.
+     *
+     * AccessEngine IS UNTOUCHED. This memoises the CALLER's repeated question;
+     * it does not put a cache inside the engine, and every route still
+     * re-authorises through its own middleware on a fresh request.
+     */
+    private function roleHeldOnceThisRequest(User $user, RoleCode $role): bool
+    {
+        $request = request();
+
+        /** @var array<string, bool> $answered */
+        $answered = $request->attributes->get(self::REQUEST_ROLE_MEMO, []);
+
+        $key = $user->getKey().'|'.$role->value;
+
+        if (array_key_exists($key, $answered)) {
+            return $answered[$key];
+        }
+
+        $answered[$key] = $this->engine->holdsRole($user, $role);
+
+        $request->attributes->set(self::REQUEST_ROLE_MEMO, $answered);
+
+        return $answered[$key];
     }
 }
