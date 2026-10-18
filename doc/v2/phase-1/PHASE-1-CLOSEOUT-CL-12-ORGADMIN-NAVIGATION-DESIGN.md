@@ -132,6 +132,49 @@ writing the list out by hand safe.
 Reviews and Audit as a side effect of a change about administrators. The role is
 checked **first**. Mutation X7 proves it — killed by the Auditor equality.
 
+### 0.6 Disclosure: the role picker was telling administrators the opposite
+
+**Raised as a P1 on #149, and correct.** `RoleCode::OrganisationAdministrator`
+read:
+
+> Organisation, people, groups, domains and access administration. **No platform
+> authority** and no business data.
+
+`AccessController::roleOptions()` sends `summary()` straight to the Roles &
+Access picker, so that sentence is what somebody reads **at the moment they
+decide to delegate the role**. After the amended ruling it promised *no platform
+authority* while delegating Identity & SSO, System Health and Integrations —
+including the Entra client secret and the deployment-wide integration
+credentials.
+
+**A summary that understates a role is worse than no summary: it does not merely
+fail to inform, it actively reassures.**
+
+The approved wording:
+
+> Full organisation and platform administration, including Identity & SSO,
+> System Health and Integrations. No business data. Cannot grant System
+> Administrator.
+
+**This is disclosure and UX alignment, NOT another authorisation change.** No
+action class, route, navigation definition, schema, frontend component or
+workflow moved; the correction is one string plus tests, and the tests assert
+the authorisation is unchanged alongside the wording.
+
+**The guard is tied to the grant, not just to the text.**
+`test_no_role_summary_denies_an_authority_the_role_actually_holds` walks every
+role and fails if a summary and `RoleCatalogue` disagree about platform or
+business authority **in either direction** — so the next action-class change
+cannot leave the disclosure behind the way this one did. Three mutations were
+run and all three caught, including one that corrects the enum but has the
+screen send a stale copy; only the rendered-props test kills that one.
+
+**The P1-05 design document still carries the old wording** and is deliberately
+left alone — it recorded the model correctly as it then stood, and rewriting it
+would hide that the model changed.
+
+---
+
 ### 0.6 Gate D is superseded
 
 The eight-check script written against the first ruling must **not** be used.
