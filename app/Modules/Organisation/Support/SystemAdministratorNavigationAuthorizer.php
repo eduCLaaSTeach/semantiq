@@ -34,7 +34,41 @@ use App\Shared\Navigation\Contracts\NavigationAuthorizer;
  * cannot be collapsed into one.
  *
  * ---------------------------------------------------------------------------
- * D-182 - ONE EXPLICIT EXCEPTION, AND ONE ONLY
+ * CL-12 SUPERSEDES THE NARROW D-182 PRESENTATION RULE - PROSPECTIVELY
+ * ---------------------------------------------------------------------------
+ *
+ * D-182's reasoning is UNCHANGED and is the reason CL-12 exists: a node may be
+ * shown when THE ROUTE BEHIND IT ALREADY ADMITS THE VIEWER. D-182 applied that
+ * test to one node and said the next node would need its own ruling. CL-12 is
+ * that ruling, and it applies the same test to the six others that pass it.
+ *
+ * AN ORGANISATION ADMINISTRATOR NOW SEES EIGHT NODES. Administration Home,
+ * Organisation, Users & Groups, Roles & Access, Business Domains, Security
+ * Status, Access Reviews and Audit. Every one was reachable by URL before this
+ * change and returned 200; six of them simply could not be found, which is
+ * "navigation that exists technically but the user cannot actually discover" -
+ * the last item on the professional-polish gate.
+ *
+ * NOTHING IS WIDENED. RoleCatalogue::MATRIX, every route, every
+ * RequireActionClass declaration and every action class are untouched. The
+ * allow-list MIRRORS an authorisation fact; it does not create one.
+ *
+ * IDENTITY & SSO, SYSTEM HEALTH AND INTEGRATIONS STAY HIDDEN, because they are
+ * PlatformAdmin and an Organisation Administrator is not one. Removing this
+ * authorizer entirely would still not let them in.
+ *
+ * AND IT IS DERIVED FROM NOTHING. The obvious "improvement" is to compute
+ * visibility from the ActionClass each route requires. That is WRONG and is
+ * deliberately not done: an AUDITOR holds EvidenceRead, so a class-derived rule
+ * would hand them Security Status, Access Reviews and Audit as a side effect of
+ * a change about Organisation Administrators. An explicit list cannot do that.
+ *
+ * P1-11's acceptance of the narrow behaviour is NOT rewritten. It was correct
+ * for the state it described, and it required that any widening be a decision
+ * rather than a side effect - which this is.
+ *
+ * ---------------------------------------------------------------------------
+ * D-182 - THE ORIGINAL RULING, PRESERVED
  * ---------------------------------------------------------------------------
  *
  * "D-19 remains in force for System Administration navigation generally, except
@@ -62,9 +96,11 @@ use App\Shared\Navigation\Contracts\NavigationAuthorizer;
  * already admits the viewer. It is not a principle that generalises itself to
  * the next node; the next node needs its own ruling.
  *
- * THE DEFAULT STILL RETURNS FALSE. An Organisation Administrator gains exactly
- * one node, a viewer holding neither role gains nothing, and an inactive person
- * is refused before either role is consulted.
+ * *** The sentence above is exactly what CL-12 is: the next ruling. The four
+ * screens D-182 named as "staying hidden" are now shown, by decision. ***
+ *
+ * THE DEFAULT STILL RETURNS FALSE. A viewer holding neither role gains nothing,
+ * and an inactive person is refused before either role is consulted.
  *
  * AND THIS IS STILL NOT ACCESS CONTROL. Administration Home re-authorises
  * through its own RequireActionClass; removing this exception would hide the
@@ -73,13 +109,42 @@ use App\Shared\Navigation\Contracts\NavigationAuthorizer;
 final class SystemAdministratorNavigationAuthorizer implements NavigationAuthorizer
 {
     /**
-     * The one policy key D-182 admits an Organisation Administrator to.
+     * The one policy key D-182 admitted an Organisation Administrator to.
      *
-     * ApprovedMenu already declares this key for the Administration Home node,
-     * so the exception names the key the menu uses rather than a second string
-     * that could drift from it.
+     * KEPT, and still a member of the CL-12 allow-list below. It is referenced
+     * by the P1-11 tests that recorded D-182's original behaviour, and removing
+     * it would erase the name of the ruling CL-12 supersedes rather than
+     * superseding it.
+     *
+     * @deprecated by CL-12. Use ORGANISATION_ADMINISTRATOR_POLICY_KEYS.
      */
     public const ORGANISATION_ADMINISTRATOR_EXCEPTION = 'administration.view';
+
+    /**
+     * CL-12. THE COMPLETE SET AN ORGANISATION ADMINISTRATOR MAY SEE.
+     *
+     * Eight keys, every one declared by ApprovedMenu, and every one behind a
+     * route an Organisation Administrator is ALREADY authorised for through
+     * OrgAdmin, AccessAdmin or EvidenceRead. Nothing here widens an
+     * authorisation; it stops hiding destinations the viewer can already open.
+     *
+     * THE THREE THAT ARE ABSENT ARE ABSENT ON PURPOSE. identity.view,
+     * system-health.view and integrations.view sit behind PlatformAdmin, which
+     * an Organisation Administrator does not hold. So do fabric.view and
+     * workplace.view, which belong to phases that are not delivered.
+     *
+     * @var list<string>
+     */
+    public const ORGANISATION_ADMINISTRATOR_POLICY_KEYS = [
+        self::ORGANISATION_ADMINISTRATOR_EXCEPTION, // Administration Home
+        'organisation.view',                        // Organisation
+        'people.view',                              // Users & Groups
+        'access.view',                              // Roles & Access
+        'domains.view',                             // Business Domains
+        'security.view',                            // Security Status
+        'access-reviews.view',                      // Access Reviews
+        'audit.view',                               // Audit
+    ];
 
     public function __construct(private readonly AccessEngine $engine) {}
 
@@ -103,10 +168,14 @@ final class SystemAdministratorNavigationAuthorizer implements NavigationAuthori
             return true;
         }
 
-        // D-182, and ONLY D-182. One key, because the route behind it is
-        // OrgAdmin and this is where an Organisation Administrator starts.
-        // Every other System Administration node keeps its D-19 behaviour.
-        return $policyKey === self::ORGANISATION_ADMINISTRATOR_EXCEPTION
+        /*
+         * CL-12. An explicit list, compared strictly, and STILL GATED ON THE
+         * ROLE - the two conditions are both required and neither is enough.
+         *
+         * in_array with strict: true rather than a loose comparison, because a
+         * loose one would admit anything PHP considers equal to a key.
+         */
+        return in_array($policyKey, self::ORGANISATION_ADMINISTRATOR_POLICY_KEYS, true)
             && $this->engine->holdsRole($user, RoleCode::OrganisationAdministrator);
     }
 }
