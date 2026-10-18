@@ -1,49 +1,53 @@
-# CL-12 — GATE D — PRODUCT OWNER TEST SCRIPT
+# CL-12 — REVISED GATE D — PRODUCT OWNER TEST SCRIPT
 
-Eight checks. Browser only. Genuine existing accounts only.
+**Ten checks. Browser only. Genuine existing accounts only.**
+
+> ## ⚠️ THIS SUPERSEDES THE EIGHT-CHECK SCRIPT
+>
+> The earlier script was written against the first CL-12 ruling. **Do not use
+> it.** Every one of its core expectations is now wrong: it said one product
+> area, exactly eight entries, and Identity & SSO / System Health /
+> Integrations necessarily hidden. The Product Owner has since clarified the
+> role model and all three of those are now expected to be **present and
+> openable**.
 
 ---
 
 ## 1. Feature being tested
 
-**CL-12 — Organisation Administrator navigation.**
+**CL-12 (amended) — Organisation Administrator receives the full administration
+surface.**
 
-An Organisation Administrator was **authorised for eight** System Administration
-destinations and could **discover one**. All eight already returned 200 when the
-URL was typed in; **seven were missing from the sidebar**. CL-12 stops hiding
-those seven.
+Fabric Configuration and System Administration are both **administration**
+areas. An Organisation Administrator is an administrator of the organisation
+and is entitled to the complete current administration surface. SemantIQ
+Workplace is the **business** area and stays out: administration authority is
+not business-data authority.
 
-**This is a discoverability change, not an access change.** No permission, role,
-action class or route was altered. Nobody can now open a screen they could not
-open yesterday.
+**This release widens a real authorisation.** An Organisation Administrator now
+holds platform administration and can reach Identity & SSO, System Health and
+Integrations — which includes deployment-wide credentials. That was named in
+the design before approval and chosen deliberately. It is stated here because
+you are about to verify it on live production.
 
 ## 2. Deployed build
 
 | | |
 | --- | --- |
-| **Build under test** | **`7be3afd6a80edbb04409ef8e06c5e9a9a7d34ea9`** — test against this, not #147 |
-| Pull requests merged into it | **#148** (query efficiency) on top of **#147** (the navigation change) |
-| CL-12 implementation merged at | `80c1a603e39bd2a85f92d510439b7e0fd3597af0` (#147) |
-| Gate B design merged at | `33c04b94fd0c27be5fe83448a86019407fc1ea82` (#146) |
+| **Build under test** | **`9546f954b888bb8b2354e3d11f2ff47e316d7317`** |
+| Pull request | **#149**, squash-merged |
+| Previous CL-12 merges | #147 (first ruling), #148 (query efficiency) |
 | Site | https://semantiq.claas2saas.com |
-| Deployment run | *see the covering report for this run's ID and result* |
-
-**#148 changed no behaviour you can see.** It stopped the navigation code asking
-the database the same role question once per menu entry — 45 queries down to 3
-on a page load. Every check below is expected to behave exactly as it would
-have on #147. If anything in the sidebar looks different from the eight entries
-described here, that is a finding, not an improvement.
+| Deployment run | *see the covering report* |
 
 ## 3. Preconditions
 
 - The deployment for the SHA above completed successfully.
-- You have the **existing genuine Organisation Administrator** account you
-  already use. **Do not create one, and do not promote anyone to get one.**
-- You have the **existing genuine System Administrator** account (Check 8).
-- Sign-in is Microsoft Entra SSO, so you will authenticate with Microsoft.
-- Use a normal browser window. If you are already signed in as somebody else,
-  sign out first — a stale session is the most common cause of a confusing
-  result here.
+- You have the **existing genuine Organisation Administrator** account.
+- You have the **existing genuine System Administrator** account (Check 10).
+- Sign-in is Microsoft Entra SSO.
+- Sign out first if a different account is already signed in — a stale session
+  is the commonest cause of a confusing result here.
 
 ## 4. Test data required
 
@@ -51,164 +55,203 @@ described here, that is a finding, not an improvement.
 
 ## 5. Warning — permanence
 
-**This script creates no data and requires none.** Nothing you do below is
-written, so nothing has to be deleted afterwards.
-
-Two cautions anyway:
+**This script creates no data and requires none.**
 
 - **Do not create or promote a user to run this test.** SemantIQ has no hard
   delete for users, so a test account made here would be permanent, real
-  organisational history. If you cannot run a check with a genuine account, mark
-  it **NOT RUN** and say so — that is the correct outcome, not a failure.
-- Opening a screen is recorded in the audit trail as a view. That is normal and
-  expected; it is not test pollution.
+  organisational history. A check you cannot run with a genuine account is
+  marked **NOT RUN** — that is the correct outcome, not a failure.
+- **Check 8 is look-only.** Do not submit a role grant to prove a refusal.
+- Opening a screen is recorded in the audit trail as a view. That is normal.
+- Identity & SSO and Integrations hold live credentials. **Open them, read
+  them, change nothing.**
 
 ## 6–7. Numbered steps and expected results
 
 ### Check 1 — Sign in as the Organisation Administrator
-
-| | |
-| --- | --- |
-| **Step** | Go to https://semantiq.claas2saas.com and sign in with the **existing genuine Organisation Administrator** account. |
-| **Expected** | Sign-in completes and the console loads. No error page, no "access denied", no blank screen. |
-| **PASS / FAIL** | |
-
----
-
-### Check 2 — System Administration is the only area, and it is open
-
-| | |
-| --- | --- |
-| **Step** | Look at the left sidebar without clicking anything. |
-| **Expected** | **System Administration** is the **only** product area shown, and it is **already expanded** — you should not have to click to reveal its entries. **SemantIQ Workplace** and **Fabric Configuration** must **not** appear. |
-| **Why** | Those two belong to phases that are not delivered. An Organisation Administrator seeing either would mean a future phase leaked into production. |
-| **PASS / FAIL** | |
+**Step:** Go to https://semantiq.claas2saas.com and sign in with the existing
+genuine Organisation Administrator.
+**Expected:** `/console` loads normally. No error, no access-denied, no blank
+screen.
+**PASS / FAIL / NOT RUN:** ______
 
 ---
 
-### Check 3 — Exactly these eight entries, in this order
-
-| | |
-| --- | --- |
-| **Step** | Read the entries under **System Administration**, top to bottom. |
-| **Expected** | Exactly these eight, in exactly this order, with nothing extra and nothing missing: |
-
-1. Administration Home
-2. Organisation
-3. Users & Groups
-4. Roles & Access
-5. Business Domains
-6. Security Status
-7. Access Reviews
-8. Audit
-
-| | |
-| --- | --- |
-| **Also check** | Spelling, capitalisation and the ampersands (`Users & Groups`, `Roles & Access`). Every entry has an icon. No entry is truncated or overlapping. No entry shows a raw key such as `people.view`. |
-| **PASS / FAIL** | |
+### Check 2 — Exactly two product areas
+**Step:** Read the left sidebar without clicking.
+**Expected:** Exactly **two** areas — **Fabric Configuration** and **System
+Administration**. **SemantIQ Workplace is ABSENT.**
+**Why:** Workplace is the business area. An administrator must not receive it
+for being an administrator. **If Workplace appears, STOP and fail the gate.**
+**PASS / FAIL / NOT RUN:** ______
 
 ---
 
-### Check 4 — The three platform entries are absent
-
-| | |
-| --- | --- |
-| **Step** | Confirm these are **not** present anywhere in the sidebar: **Identity & SSO**, **System Health**, **Integrations**. |
-| **Expected** | All three absent. |
-| **Why** | They are platform-administration screens. An Organisation Administrator is not a Platform Administrator, and could not open them even if the entry were shown. If any of the three appears, **STOP and fail the gate** — that is the one result that would mean something went wrong. |
-| **PASS / FAIL** | |
-
----
-
-### Check 5 — Administration Home, Users & Groups and Audit open
-
-| | |
-| --- | --- |
-| **Step** | Click **Administration Home**. Then **Users & Groups**. Then **Audit**. |
-| **Expected** | Each loads a real, populated screen — a heading, content, and the sidebar entry highlighted as current. No 403, no "access denied", no error, no empty shell, no spinner that never resolves. |
-| **Also check** | No browser console errors (press F12 → Console) if you are comfortable doing so. |
-| **PASS / FAIL** | |
+### Check 3 — Fabric Configuration: all 14, all locked
+**Step:** Open Fabric Configuration and read every entry.
+**Expected:** All fourteen present —
+Overview · Data Sources · Connect Source · Discovery · Data Classification ·
+Ingestion · Data Quality · Business Model · Security Mapping · Semantic Model ·
+AI Readiness · Pipelines & Refresh · Power BI Publication · Monitoring
+— **every one visibly locked / "Soon"**, and **none opens a delivered page**.
+Click one: it must go nowhere.
+**Why:** These are roadmap entries with no route behind them. A Fabric entry
+that opens a real page would mean an undelivered phase leaked into production.
+**PASS / FAIL / NOT RUN:** ______
 
 ---
 
-### Check 6 — Roles & Access and Security Status open
-
-| | |
-| --- | --- |
-| **Step** | Click **Roles & Access**. Then **Security Status**. |
-| **Expected** | Both load real, populated screens, as in Check 5. |
-| **Why separately** | These two reach the deepest authorisation paths of the eight, so they are the ones most worth opening by hand. |
-| **PASS / FAIL** | |
-
----
-
-### Check 7 — Phone width
-
-| | |
-| --- | --- |
-| **Step** | Narrow the browser to roughly phone width (or open the site on your phone). Open the navigation. |
-| **Expected** | All **eight** entries are reachable and readable. Labels are not cut off or overlapping. If the list is taller than the screen, it **scrolls** and you can reach **Audit** at the bottom. Tapping an entry navigates and the menu closes. |
-| **PASS / FAIL** | |
+### Check 4 — System Administration: exactly these 11
+**Step:** Read the entries under System Administration, top to bottom.
+**Expected:** Exactly these eleven —
+1. Administration Home 2. Organisation 3. Users & Groups 4. Roles & Access
+5. Business Domains 6. Identity & SSO 7. Security Status 8. Access Reviews
+9. Audit 10. System Health 11. Integrations
+**Also check:** spelling, the ampersands, every entry has an icon, nothing
+truncated or overlapping, no raw key such as `people.view`.
+**PASS / FAIL / NOT RUN:** ______
 
 ---
 
-### Check 8 — The System Administrator is unchanged
+### Check 5 — Existing organisation administration still opens
+**Step:** Open Administration Home, then Users & Groups, then Roles & Access,
+then Business Domains, then Audit.
+**Expected:** Each loads a real populated screen with the sidebar entry
+highlighted. No 403, no access-denied, no error, no empty shell, no endless
+spinner.
+**PASS / FAIL / NOT RUN:** ______
 
-| | |
-| --- | --- |
-| **Step** | Sign out. Sign back in as the **existing genuine System Administrator** account. |
-| **Expected** | Their navigation is **exactly as it was before this change**. In particular **Identity & SSO**, **System Health** and **Integrations** are all **still present**, and all three still open. The other product areas they saw before are still there. |
-| **Why** | CL-12 is about one role. If anything moved for the System Administrator, it moved as a side effect, and that fails the gate. |
-| **PASS / FAIL** | |
+---
+
+### Check 6 — Newly granted platform administration opens
+**Step:** Open **Identity & SSO**, then **System Health**, then
+**Integrations**.
+**Expected:** All three load normally. **No access-denied.**
+**This is the heart of the amended ruling** — these three were refused before
+this release.
+**⚠️ Read only. Do not edit a credential, do not run a test-send, do not remove
+a secret.**
+**PASS / FAIL / NOT RUN:** ______
+
+---
+
+### Check 7 — Role disclosure
+**Step:** Open **Roles & Access** and find how **Organisation Administrator**
+is described.
+**Expected, word for word:**
+
+> Full organisation and platform administration, including Identity & SSO,
+> System Health and Integrations. No business data. Cannot grant System
+> Administrator.
+
+**Why:** Before this release the picker said *"No platform authority"* while
+delegating exactly that. A description that understates a role does not merely
+fail to inform — it reassures.
+**PASS / FAIL / NOT RUN:** ______
+
+---
+
+### Check 8 — Security boundary: System Administrator cannot be granted
+
+> ### ⚠️ READ THIS BEFORE RUNNING CHECK 8 — expectation corrected
+>
+> The check was drafted as *"verify no UI offers Organisation Administrator the
+> ability to grant System Administrator."* **Measured against the real
+> application, that is not what happens, and the check would fail as drafted.**
+>
+> **What is actually true, verified:** the Roles & Access role dropdown lists
+> **all seven** roles including System Administrator, to every administrator.
+> Submitting System Administrator as an Organisation Administrator is
+> **refused** and **no assignment is created**. The boundary holds in the
+> backend; the dropdown simply is not filtered by who is signed in.
+>
+> This is **pre-existing** behaviour and not introduced by #149 — the picker
+> has never filtered by grantability. It matters more now, because the role
+> summary in Check 7 states "Cannot grant System Administrator" while the
+> dropdown still offers it.
+>
+> **This needs a Product Owner ruling and is NOT being changed unprompted.**
+
+**Step (look only):** On Roles & Access, open the role dropdown and note
+whether System Administrator is listed.
+**Expected (what is true today):** System Administrator **is** listed. The
+backend refuses the grant.
+**Do NOT submit a grant to prove the refusal.** Automated evidence is retained
+— `test_an_organisation_administrator_cannot_grant_the_system_administrator_role`
+drives the real route and asserts no row is written.
+**Record what you observe, then rule:** leave as is, or raise filtering the
+dropdown by grantability as its own unit.
+**PASS / FAIL / NOT RUN:** ______
+
+---
+
+### Check 9 — Responsive navigation
+**Step:** Narrow the browser to roughly phone width (or use your phone) and
+open the navigation.
+**Expected:** Both areas reachable; all entries scrollable and readable; labels
+not cut off or overlapping; **locked Fabric entries still visibly locked**;
+tapping an entry navigates and the menu closes.
+**PASS / FAIL / NOT RUN:** ______
+
+---
+
+### Check 10 — System Administrator regression
+**Step:** Sign out. Sign in as the existing genuine System Administrator.
+**Expected:** **All three** product areas visible — **SemantIQ Workplace**,
+**Fabric Configuration**, **System Administration** — and Identity & SSO,
+System Health and Integrations still open normally.
+**Why:** Workplace visibility is now one of only two things that distinguish
+the two administrator roles. If the System Administrator lost it, CL-12 moved
+something it had no business moving.
+**PASS / FAIL / NOT RUN:** ______
 
 ---
 
 ## 8. Negative, refusal and security cases
 
-Check 4 and Check 8 **are** the security cases, and they are the two that matter:
+Checks **2**, **8** and **10** are the security cases.
 
-- **Check 4** — the three platform destinations stay out of the Organisation
-  Administrator's sidebar.
-- **Check 8** — nothing was taken away from, or given to, the System
-  Administrator.
+- **Check 2** — the business area stays out of an administrator's sidebar.
+- **Check 8** — System Administrator cannot be granted by an Organisation
+  Administrator. Verified by observation of the UI plus retained automated
+  evidence, **not** by submitting a grant.
+- **Check 10** — nothing was taken from the System Administrator.
 
-**A refusal case is deliberately NOT in this script.** Asking you to type a
-platform URL into the address bar as an Organisation Administrator would test
-route authorisation, which **CL-12 did not change** — the same refusal happened
-before this deployment and will happen after it. It is covered by the automated
-suite and by the pre-deployment production probe recorded in the covering
-report. Running it by hand here would produce evidence about yesterday's
-behaviour and invite the reading that CL-12 caused it.
+**A route-refusal case is deliberately absent.** Typing a URL would test route
+authorisation, and the three screens that changed are now *allowed* — there is
+no refusal left to demonstrate for this role that CL-12 did not deliberately
+remove.
 
 ## 9. Visual and UX checks
 
-Built into Checks 2, 3, 5, 6 and 7 rather than listed apart, because they are
-the point of this unit: spelling and capitalisation, icons present, no raw
-policy keys or internal terminology on screen, no truncation or overflow, the
-current entry highlighted, order correct, and the whole thing usable at phone
-width.
-
-If your environment uses a dark theme, repeat Check 3 in it.
+Built into Checks 2, 3, 4, 5, 6 and 9: spelling and capitalisation, icons,
+locked styling on all 14 Fabric entries, no raw policy keys or internal
+terminology, no truncation or overflow, current entry highlighted, correct
+order, usable at phone width. Repeat Check 4 in dark theme if your environment
+uses one.
 
 ## 10. Evidence to capture
 
-1. Screenshot of the sidebar at normal desktop width showing all eight entries
-   (Checks 2, 3, 4 in one image).
-2. Screenshot of any **one** opened screen from Check 5 or 6.
-3. Screenshot of the sidebar at phone width (Check 7).
-4. Screenshot of the System Administrator's sidebar showing Identity & SSO,
-   System Health and Integrations still present (Check 8).
-5. This script with PASS / FAIL filled in.
+1. Sidebar at desktop width showing **both** areas (covers 2 and 4).
+2. Fabric Configuration expanded, showing all 14 locked (Check 3).
+3. **Identity & SSO open as the Organisation Administrator** (Check 6) — the
+   single most important screenshot in this gate.
+4. The Organisation Administrator description on Roles & Access (Check 7).
+5. The role dropdown showing what is listed (Check 8).
+6. Sidebar at phone width (Check 9).
+7. System Administrator sidebar showing all three areas (Check 10).
+8. This script with PASS / FAIL / NOT RUN filled in.
 
 ## 11. PASS / FAIL
 
-A field is provided on every check above.
+A field is provided on every check.
 
 ## 12. What CANNOT currently be tested, and why
 
 | Not observable | Why |
 | --- | --- |
-| **That a Product Owner's browser sees this** — until you run it | The automated suite proves the menu *data* is correct for each role, and the production probe proves every destination exists and refuses anonymous callers. **Neither is a rendered screen.** This script exists precisely because a passing test is not an observed result. |
-| **Whether the three platform destinations refuse an Organisation Administrator *in production*** | Establishing it needs a genuine Organisation Administrator session driven against production. The automated suite proves it (A8, redirect to `auth.access-denied`), and the production probe proves the routes exist and fail closed to anonymous callers. Proving it live would mean either manufacturing an account — which is forbidden — or asking you to do something CL-12 did not change. **Carried, not inferred.** |
-| **An inactive Organisation Administrator being refused** | Would require deactivating a genuine person to watch it happen. That is real, permanent organisational history created to satisfy a test. **NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION DATA** — automated evidence retained (A12). |
-| **An Auditor seeing no System Administration navigation** | Needs a genuine Auditor account. If one exists, this is worth adding as a ninth check; if not, do **not** create one. Automated evidence retained (A10) — this is the single assertion that would catch the rejected class-derived implementation. |
+| **That a Product Owner's browser sees this** — until you run it | The automated suite proves the menu data and route authorisation per role; the production probe proves every destination exists and refuses anonymous callers. **Neither is a rendered screen.** This script exists because a passing test is not an observed result. |
+| **The System Administrator grant refusal, live** | Proving it by hand means submitting a real grant of the highest role in the product. Automated evidence is retained (the real route is driven and no row is written). **Carried, not inferred.** |
+| **An inactive Organisation Administrator being refused** | Would require deactivating a real person to watch it happen. **NOT CURRENTLY OBSERVABLE WITH REAL PRODUCTION DATA** — automated evidence retained. |
+| **An Auditor seeing no administration areas** | Needs a genuine Auditor account. If one exists, repeat Check 2 expecting **no** areas at all; if not, **do not create one**. Automated evidence retained — this is the single assertion that would catch a class-derived navigation rule. |
+| **Fabric Configuration behaviour when delivered** | All 14 are locked roadmap entries. Nothing behind them exists to test. |
