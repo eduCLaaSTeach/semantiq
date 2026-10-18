@@ -149,25 +149,49 @@ final class AdministrationHomeNavigationTest extends TestCase
     /**
      * V4. AND NOTHING ELSE. Asserted as an EQUALITY over the whole area.
      *
-     * The other four OrgAdmin System Administration screens - Organisation,
-     * Users & Groups, Roles & Access, Business Domains - stay hidden. They are
-     * reachable by URL and that remains a carried navigation item; D-182 was
-     * granted to one node for one reason, and widening the rest would have been
-     * a change nobody asked for.
+     * ---------------------------------------------------------------------
+     * SUPERSEDED BY CL-12 - the rationale below is kept, not deleted.
+     * ---------------------------------------------------------------------
+     *
+     * WHAT THIS CASE ORIGINALLY SAID, and it was right when it said it:
+     *
+     *   "The other four OrgAdmin System Administration screens - Organisation,
+     *   Users & Groups, Roles & Access, Business Domains - stay hidden. They
+     *   are reachable by URL and that remains a carried navigation item; D-182
+     *   was granted to one node for one reason, and widening the rest would
+     *   have been a change nobody asked for."
+     *
+     * SOMEBODY HAS NOW ASKED. CL-12 is the Product Owner ruling that widens it,
+     * and this equality is the assertion that required the widening to BE a
+     * ruling rather than a side effect. It did its job: the set could not drift
+     * without this failing, and it is changing because a decision changed it.
+     *
+     * THE EQUALITY ITSELF IS UNCHANGED IN KIND - still the whole area, still
+     * not a list of absences, for the reason the class docblock gives. Only the
+     * expected set moved, from one label to the eight CL-12 approves.
      *
      * Mutation: make the exception `return true` for any key. This fails with
-     * eleven labels instead of one, and the System Administrator cases above
+     * eleven labels instead of eight, and the System Administrator cases above
      * stay green - which is exactly why the equality is here.
      */
-    public function test_an_organisation_administrator_sees_that_node_and_no_other(): void
+    public function test_an_organisation_administrator_sees_exactly_the_cl12_approved_set(): void
     {
         $response = $this->actingAsUser($this->userWith(RoleCode::OrganisationAdministrator))->get('/console');
 
         $this->assertSame(
-            ['Administration Home'],
+            [
+                'Administration Home',
+                'Organisation',
+                'Users & Groups',
+                'Roles & Access',
+                'Business Domains',
+                'Security Status',
+                'Access Reviews',
+                'Audit',
+            ],
             $this->systemAdministrationNodes($response),
-            'D-182 is one explicit exception. Something else in System Administration became '
-            .'visible to an Organisation Administrator as a side effect.'
+            'The Organisation Administrator System Administration set is not the eight CL-12 '
+            .'approves. Either a platform-only node leaked in, or an approved one is missing.'
         );
     }
 
