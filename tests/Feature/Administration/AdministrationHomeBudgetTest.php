@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Administration;
 
 use App\Modules\Access\Support\RoleCode;
+use App\Modules\Administration\Support\AdministrationHomeProjection;
 use App\Modules\Domains\Models\DomainOwnership;
 use App\Modules\Organisation\Models\Organisation;
 use App\Modules\People\Models\Group;
@@ -300,17 +301,67 @@ final class AdministrationHomeBudgetTest extends TestCase
     }
 
     /**
-     * AN ORGANISATION ADMINISTRATOR PAYS LESS, because two sources are not
-     * evaluated at all - DESIGN CORRECTION 3.
+     * A VIEWER WITHHELD FROM THE PLATFORM VALUES DOES NOT PAY FOR THEM.
      *
-     * This is the cost half of G16. The call-count spy proves the objects are
-     * never built; this proves the queries behind them are never issued, which
-     * is the part a viewer would actually feel.
+     * ---------------------------------------------------------------------
+     * REPOINTED BY THE AMENDED CL-12 RULING. The property is unchanged.
+     * ---------------------------------------------------------------------
+     *
+     * THIS CASE USED TO COMPARE AN ORGANISATION ADMINISTRATOR WITH A SYSTEM
+     * ADMINISTRATOR, because the former was withheld from both platform-only
+     * sources and so paid less. The Product Owner granted them PlatformAdmin,
+     * so they now receive those values and pay the same - which is the correct
+     * cost of the access they were given, not a regression.
+     *
+     * DESIGN CORRECTION 3 IS UNTOUCHED: authorise before evaluating, so a
+     * withheld viewer is never charged for a value they will not receive. The
+     * comparison is therefore repointed to a viewer who IS withheld.
+     *
+     * MEASURED AT THE PROJECTION, NOT OVER HTTP. An Auditor does not hold
+     * OrgAdmin, so the route refuses them before the projection is built; a
+     * query count taken that way would measure a page that never rendered.
+     * Both sides are measured the same way, so the comparison is like for like.
      *
      * Mutation: evaluate the platform-only sources and withhold the result
      * afterwards. The counts become equal and this fails.
      */
-    public function test_an_organisation_administrator_issues_fewer_queries_than_a_system_administrator(): void
+    public function test_a_withheld_viewer_issues_fewer_queries_than_a_platform_administrator(): void
+    {
+        $organisation = $this->make->organisation();
+
+        $system = $this->make->user($organisation);
+        $this->access->assignment($system, RoleCode::SystemAdministrator, $organisation);
+
+        $auditor = $this->make->user($organisation);
+        $this->access->assignment($auditor, RoleCode::Auditor, $organisation);
+
+        $platform = $this->projectionQueries($system);
+        $withheld = $this->projectionQueries($auditor);
+
+        $this->assertGreaterThan(
+            0,
+            $withheld,
+            'The withheld viewer issued no queries at all, so the comparison below would pass '
+            .'against a projection that did nothing.'
+        );
+
+        $this->assertLessThan(
+            $platform,
+            $withheld,
+            "A withheld viewer paid {$withheld} queries and a platform administrator {$platform}. "
+            .'The viewer who may not receive the platform-only values should not be paying for '
+            .'them to be read.'
+        );
+    }
+
+    /**
+     * AND THE ORGANISATION ADMINISTRATOR NOW PAYS THE PLATFORM PRICE.
+     *
+     * Stated rather than left implied, because "they pay the same as a System
+     * Administrator" is the visible cost of the amended ruling and should fail
+     * loudly if it ever quietly stops being true - in either direction.
+     */
+    public function test_an_organisation_administrator_now_pays_the_same_as_a_system_administrator(): void
     {
         $organisation = $this->make->organisation();
 
@@ -320,15 +371,27 @@ final class AdministrationHomeBudgetTest extends TestCase
         $organisationAdmin = $this->make->user($organisation);
         $this->access->assignment($organisationAdmin, RoleCode::OrganisationAdministrator, $organisation);
 
-        $platform = $this->render($system);
-        $narrow = $this->render($organisationAdmin);
-
-        $this->assertLessThan(
-            $platform['queries'],
-            $narrow['queries'],
-            "An Organisation Administrator paid {$narrow['queries']} queries and a System "
-            ."Administrator {$platform['queries']}. The viewer who may not receive the "
-            .'platform-only values should not be paying for them to be read.'
+        $this->assertSame(
+            $this->projectionQueries($system),
+            $this->projectionQueries($organisationAdmin),
+            'The two administrators no longer compose Administration Home at the same cost. '
+            .'After the amended ruling they hold the same action classes and receive the same '
+            .'values, so the same sources must be read for each.'
         );
+    }
+
+    /** Queries issued composing the screen for one viewer, route aside. */
+    private function projectionQueries(User $viewer): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        app(AdministrationHomeProjection::class)->for($viewer);
+
+        $queries = count(DB::getQueryLog());
+
+        DB::disableQueryLog();
+
+        return $queries;
     }
 }

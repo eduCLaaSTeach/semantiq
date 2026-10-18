@@ -35,6 +35,11 @@ use Tests\TestCase;
  *   Auditor                     45   (37 SysAdmin, 8 OrgAdmin)
  *   Business User               45   (37 SysAdmin, 8 OrgAdmin)
  *
+ * CL-12's amended ruling widened the allow-list from eight keys to twelve, so
+ * the un-memoised cost would now be HIGHER than those numbers, not lower. The
+ * assertions below are counts, not labels, and hold unchanged across the
+ * amendment - which is the point of writing them as counts.
+ *
  * 36 of each SysAdmin count come from the authorizer - one per menu node. The
  * 37th is ConsoleController's own call, which this change does not touch and
  * which is why the HTTP assertions below allow two rather than one.
@@ -165,7 +170,16 @@ final class NavigationRoleQueryEfficiencyTest extends TestCase
     {
         $user = $this->userWith(RoleCode::OrganisationAdministrator);
 
-        $outside = ['identity.view', 'system-health.view', 'integrations.view', 'fabric.view', 'workplace.view'];
+        /*
+         * CL-12 AMENDED: THERE IS EXACTLY ONE KEY LEFT OUTSIDE THE LIST.
+         *
+         * identity.view, system-health.view and integrations.view used to be
+         * here. The Product Owner's amended ruling granted PlatformAdmin, so
+         * all three are now inside the administration surface and the only
+         * policy key an Organisation Administrator is refused is Workplace -
+         * the business area, which administration authority does not reach.
+         */
+        $outside = ['workplace.view'];
 
         $this->inOneRequestAs($user, function () use ($outside): void {
             $authorizer = app(SystemAdministratorNavigationAuthorizer::class);
@@ -272,7 +286,7 @@ final class NavigationRoleQueryEfficiencyTest extends TestCase
         $this->access->assignment($user, RoleCode::OrganisationAdministrator, $organisation);
 
         $this->assertCount(
-            8,
+            11,
             $this->systemAdministrationLabels($this->renderConsoleAs($user)),
             'A role granted between two requests was not visible on the second. The memo is '
             .'outliving the request.'

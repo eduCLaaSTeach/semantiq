@@ -11,15 +11,14 @@ use App\Shared\Navigation\Contracts\NavigationAuthorizer;
 
 /**
  * Replaces DenyAllNavigationAuthorizer now that there is something to navigate
- * to. It admits System Administrators to the whole System Administration area,
- * and an Organisation Administrator to the EIGHT nodes CL-12 names below.
+ * to. It admits System Administrators to the whole approved roadmap, and an
+ * Organisation Administrator to the TWO ADMINISTRATION AREAS - Fabric
+ * Configuration and System Administration - and not to SemantIQ Workplace.
  *
- * Those eight are not a grant. Every one of them sits behind a route an
- * Organisation Administrator was ALREADY authorised for; seven of them were
- * simply impossible to find. CL-12 stopped hiding them. D-182, which admitted
- * the first of the eight and is the ruling CL-12 supersedes, is preserved in
- * full further down because it is the reasoning CL-12 applies, not a repealed
- * rule.
+ * SemantIQ Workplace is the business area. Administration authority is not
+ * business-data authority, so an administrator does not receive it for being
+ * one; it stays governed by business access, which is a separate unit and not
+ * built here.
  *
  * This is UX, not access control. Every Organisation route re-authorises through
  * RequireSystemAdministrator on its own; if this authorizer were wrong, the
@@ -42,38 +41,44 @@ use App\Shared\Navigation\Contracts\NavigationAuthorizer;
  * cannot be collapsed into one.
  *
  * ---------------------------------------------------------------------------
- * CL-12 SUPERSEDES THE NARROW D-182 PRESENTATION RULE - PROSPECTIVELY
+ * CL-12, AND THE TWO RULINGS IT WENT THROUGH. BOTH ARE KEPT.
  * ---------------------------------------------------------------------------
  *
- * D-182's reasoning is UNCHANGED and is the reason CL-12 exists: a node may be
- * shown when THE ROUTE BEHIND IT ALREADY ADMITS THE VIEWER. D-182 applied that
- * test to one node and said the next node would need its own ruling. CL-12 is
- * that ruling, and it applies the same test to the seven others that pass it.
+ * CL-12 WAS FIRST DELIVERED AS AN EIGHT-KEY LIST, in #147 and #148, and that
+ * was CORRECT FOR THE RULING IT WAS GIVEN. The Product Owner's instruction at
+ * the time was that an Organisation Administrator should see the System
+ * Administration destinations they were ALREADY AUTHORISED FOR - eight of
+ * eleven - while Identity & SSO, System Health and Integrations stayed hidden
+ * because they are PlatformAdmin and an Organisation Administrator was not one.
+ * It shipped, it was verified, and it is not being rewritten as a mistake.
  *
- * AN ORGANISATION ADMINISTRATOR NOW SEES EIGHT NODES. Administration Home,
- * Organisation, Users & Groups, Roles & Access, Business Domains, Security
- * Status, Access Reviews and Audit. Every one was reachable by URL before this
- * change and returned 200; seven of them simply could not be found, which is
- * "navigation that exists technically but the user cannot actually discover" -
- * the last item on the professional-polish gate.
+ * THE PRODUCT OWNER THEN CLARIFIED THE ACTUAL ROLE MODEL, and it was a
+ * different model rather than a correction to the same one: Fabric
+ * Configuration and System Administration are BOTH administration areas, and
+ * an Organisation Administrator is an administrator of the organisation -
+ * entitled to the complete current administration surface. RoleCatalogue was
+ * amended to grant PlatformAdmin, so the three formerly-hidden nodes are now
+ * genuinely theirs to open rather than shown-and-refused.
  *
- * NOTHING IS WIDENED. RoleCatalogue::MATRIX, every route, every
- * RequireActionClass declaration and every action class are untouched. The
- * allow-list MIRRORS an authorisation fact; it does not create one.
+ * SO AN ORGANISATION ADMINISTRATOR NOW SEES TWO AREAS AND 25 NODES. Fourteen
+ * Fabric Configuration nodes, every one LOCKED and carrying no route, and
+ * eleven System Administration nodes, every one DELIVERED.
  *
- * IDENTITY & SSO, SYSTEM HEALTH AND INTEGRATIONS STAY HIDDEN, because they are
- * PlatformAdmin and an Organisation Administrator is not one. Removing this
- * authorizer entirely would still not let them in.
+ * WHAT THE AMENDMENT DELIBERATELY DID NOT DO. BusinessData is still absent.
+ * grantableBy() still excludes system_administrator, so an Organisation
+ * Administrator still cannot make one. requiringStepUp() is unchanged. The two
+ * role codes are not collapsed, and System Administrator remains the role that
+ * sees the entire roadmap including Workplace.
  *
- * AND IT IS DERIVED FROM NOTHING. The obvious "improvement" is to compute
- * visibility from the ActionClass each route requires. That is WRONG and is
- * deliberately not done: an AUDITOR holds EvidenceRead, so a class-derived rule
- * would hand them Security Status, Access Reviews and Audit as a side effect of
- * a change about Organisation Administrators. An explicit list cannot do that.
+ * AND IT IS STILL DERIVED FROM NOTHING. The obvious "improvement" is to
+ * compute visibility from the ActionClass each route requires. That is WRONG
+ * and is deliberately not done: an AUDITOR holds EvidenceRead, so a
+ * class-derived rule would hand them Security Status, Access Reviews and Audit
+ * as a side effect of a change about administrators. The role is checked
+ * FIRST, and an Auditor is neither administrator, so they see nothing.
  *
- * P1-11's acceptance of the narrow behaviour is NOT rewritten. It was correct
- * for the state it described, and it required that any widening be a decision
- * rather than a side effect - which this is.
+ * P1-11's acceptance, and the first CL-12 ruling, are both preserved below and
+ * in the tests. Each was right for the state it described.
  *
  * ---------------------------------------------------------------------------
  * D-182 - THE ORIGINAL RULING, PRESERVED
@@ -129,29 +134,50 @@ final class SystemAdministratorNavigationAuthorizer implements NavigationAuthori
     public const ORGANISATION_ADMINISTRATOR_EXCEPTION = 'administration.view';
 
     /**
-     * CL-12. THE COMPLETE SET AN ORGANISATION ADMINISTRATOR MAY SEE.
+     * CL-12 AMENDED. THE TWO ADMINISTRATION AREAS, AS POLICY KEYS.
      *
-     * Eight keys, every one declared by ApprovedMenu, and every one behind a
-     * route an Organisation Administrator is ALREADY authorised for through
-     * OrgAdmin, AccessAdmin or EvidenceRead. Nothing here widens an
-     * authorisation; it stops hiding destinations the viewer can already open.
+     * fabric.view is the whole of Fabric Configuration - all FOURTEEN of its
+     * nodes share that one key, and every one of them is LOCKED: no route, no
+     * controller, no table, no service. Showing that area grants nothing,
+     * because there is nothing behind it to reach.
      *
-     * THE THREE THAT ARE ABSENT ARE ABSENT ON PURPOSE. identity.view,
-     * system-health.view and integrations.view sit behind PlatformAdmin, which
-     * an Organisation Administrator does not hold. So do fabric.view and
-     * workplace.view, which belong to phases that are not delivered.
+     * The other eleven are every policy key System Administration declares.
+     * All eleven are DELIVERED, and after the RoleCatalogue amendment an
+     * Organisation Administrator holds the action class each one requires -
+     * so nothing here is visible-but-unopenable.
+     *
+     * workplace.view IS ABSENT, AND THAT IS THE POINT OF THE LIST. SemantIQ
+     * Workplace is the business area, governed by business access rather than
+     * administration authority. Administration authority is not business-data
+     * authority, and an administrator does not get Workplace for being one.
+     *
+     * WHY A LIST RATHER THAN "is this an admin area". The authorizer is handed
+     * a policy key and nothing else; deciding by area would mean either
+     * rebuilding ApprovedMenu on every one of the 36 calls per render, or
+     * widening the NavigationAuthorizer contract. The Product Owner ruled for
+     * the smallest explicit approach, so the list is written out - and
+     * test_the_allow_list_is_exactly_the_two_admin_areas DERIVES the same set
+     * from ApprovedMenu and fails if the two ever disagree. The list cannot go
+     * stale silently; that test is what makes writing it out safe.
      *
      * @var list<string>
      */
     public const ORGANISATION_ADMINISTRATOR_POLICY_KEYS = [
+        // Fabric Configuration - all 14 nodes, every one locked.
+        'fabric.view',
+
+        // System Administration - all 11 nodes, every one delivered.
         self::ORGANISATION_ADMINISTRATOR_EXCEPTION, // Administration Home
         'organisation.view',                        // Organisation
         'people.view',                              // Users & Groups
         'access.view',                              // Roles & Access
         'domains.view',                             // Business Domains
+        'identity.view',                            // Identity & SSO
         'security.view',                            // Security Status
         'access-reviews.view',                      // Access Reviews
         'audit.view',                               // Audit
+        'system-health.view',                       // System Health
+        'integrations.view',                        // Integrations
     ];
 
     /**

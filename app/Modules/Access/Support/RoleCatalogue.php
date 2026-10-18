@@ -43,7 +43,36 @@ final class RoleCatalogue
             ActionClass::AccessAdmin,
             ActionClass::EvidenceRead,
         ],
+        /*
+         * CL-12 AMENDED. THE PRODUCT OWNER RULED FULL ADMINISTRATION ACCESS,
+         * and PlatformAdmin is how that ruling is expressed.
+         *
+         * This is the only line in the repository that widens an authorisation
+         * for CL-12, and it widens a real one. An Organisation Administrator
+         * can now reach Identity & SSO, System Health and Integrations - which
+         * means writing the Entra client secret and the deployment-wide
+         * integration credentials for the identity, email, ai and fabric
+         * families. The amended Gate B design named that consequence
+         * explicitly and the Product Owner chose it knowing so.
+         *
+         * WHAT THIS DOES NOT DO, and each is asserted rather than asserted of:
+         *
+         *   - BusinessData is ABSENT. Administration authority is still not
+         *     business-data authority; that separation is the architectural
+         *     rule CL-12 was careful not to break.
+         *   - It does not make them a System Administrator. grantableBy()
+         *     below still excludes system_administrator, so the
+         *     privilege-escalation path stays closed.
+         *   - It does not touch requiringStepUp(), so granting either
+         *     administrator role still re-authenticates.
+         *
+         * The two roles now hold the SAME four action classes. What still
+         * separates them is grantability and navigation: a System
+         * Administrator sees the whole roadmap, an Organisation Administrator
+         * sees the two administration areas and not SemantIQ Workplace.
+         */
         RoleCode::OrganisationAdministrator->value => [
+            ActionClass::PlatformAdmin,
             ActionClass::OrgAdmin,
             ActionClass::AccessAdmin,
             ActionClass::EvidenceRead,

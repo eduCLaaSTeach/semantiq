@@ -174,20 +174,49 @@ final class RouteAuthorizationMatrixTest extends TestCase
     }
 
     /**
-     * AN ORGANISATION ADMINISTRATOR REACHES THE APPROVED SURFACES AND NOT
-     * IDENTITY & SSO.
+     * AN ORGANISATION ADMINISTRATOR REACHES THE WHOLE ADMINISTRATION SURFACE,
+     * INCLUDING IDENTITY & SSO.
      *
-     * Asserted behaviourally through real HTTP requests, because the matrix
-     * above proves what is declared and this proves what happens.
+     * ---------------------------------------------------------------------
+     * SUPERSEDED BY THE AMENDED CL-12 RULING - the original is kept, not
+     * deleted, because it was right for the model it described.
+     * ---------------------------------------------------------------------
+     *
+     * WHAT THIS CASE ORIGINALLY ASSERTED, and correctly at the time:
+     *
+     *   "An Organisation Administrator reaches the approved surfaces and NOT
+     *   Identity & SSO ... Identity & SSO is the front door of the product and
+     *   is System-Administrator-only."
+     *
+     * THAT WAS TRUE WHILE ORGANISATION ADMINISTRATOR DID NOT HOLD PlatformAdmin.
+     * The Product Owner has since ruled that an Organisation Administrator is
+     * entitled to the complete current administration surface, and amended
+     * RoleCatalogue to grant it. Identity & SSO is now theirs by decision.
+     *
+     * THE GUARD IS NOT WEAKENED, IT IS REPOINTED. A test that only asserted
+     * "these all return 200" would pass against a deployment that authorises
+     * everybody, so the refusal half is kept and aimed at a role that must
+     * still be refused: an AUDITOR holds EvidenceRead and nothing else, and
+     * the front door stays shut to them.
      */
-    public function test_an_organisation_administrator_cannot_reach_identity_and_sso(): void
+    public function test_an_organisation_administrator_reaches_the_whole_administration_surface(): void
     {
         $organisation = $this->make->organisation();
         $person = $this->make->user($organisation);
+        $auditor = $this->make->user($organisation);
 
         $this->access->assignment($person, RoleCode::OrganisationAdministrator, $organisation);
+        $this->access->assignment($auditor, RoleCode::Auditor, $organisation);
 
-        // The approved surfaces.
+        $identity = [
+            '/console/identity',
+            '/console/identity/providers',
+            '/console/identity/login-experience',
+            '/console/identity/health',
+            '/console/identity/session-policy',
+        ];
+
+        // The surfaces that were always theirs.
         foreach (['/console/organisation', '/console/people/users', '/console/domains', '/console/access'] as $uri) {
             $this->assertSame(
                 200,
@@ -196,19 +225,25 @@ final class RouteAuthorizationMatrixTest extends TestCase
             );
         }
 
-        // And the one that is NOT theirs. All seven.
-        foreach ([
-            '/console/identity',
-            '/console/identity/providers',
-            '/console/identity/login-experience',
-            '/console/identity/health',
-            '/console/identity/session-policy',
-        ] as $uri) {
+        // And the ones the amended ruling opened - all five, plus the other two
+        // platform screens.
+        foreach ([...$identity, '/console/system-health', '/console/integrations'] as $uri) {
+            $this->assertSame(
+                200,
+                $this->signedInAs($person)->get($uri)->getStatusCode(),
+                "An Organisation Administrator could not reach [{$uri}]. The amended CL-12 "
+                .'ruling grants them PlatformAdmin and the whole administration surface.'
+            );
+        }
+
+        // THE REFUSAL HALF, REPOINTED. Without this the case above would pass
+        // against a deployment that admits everyone to everything.
+        foreach ($identity as $uri) {
             $this->assertSame(
                 route('auth.access-denied'),
-                $this->signedInAs($person)->get($uri)->headers->get('Location'),
-                "An Organisation Administrator reached [{$uri}]. Identity & SSO is the front door of "
-                .'the product and is System-Administrator-only.'
+                $this->signedInAs($auditor)->get($uri)->headers->get('Location'),
+                "An Auditor reached [{$uri}]. Identity & SSO is the front door of the product "
+                .'and EvidenceRead is not administration authority.'
             );
         }
     }

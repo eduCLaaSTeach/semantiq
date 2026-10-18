@@ -147,13 +147,13 @@ final class AdministrationHomeNavigationTest extends TestCase
     }
 
     /**
-     * V4. AND NOTHING ELSE. Asserted as an EQUALITY over the whole area.
+     * V4. THE WHOLE AREA, ASSERTED AS AN EQUALITY.
      *
      * ---------------------------------------------------------------------
-     * SUPERSEDED BY CL-12 - the rationale below is kept, not deleted.
+     * THIS CASE HAS NOW OUTLIVED TWO RULINGS. BOTH ARE KEPT.
      * ---------------------------------------------------------------------
      *
-     * WHAT THIS CASE ORIGINALLY SAID, and it was right when it said it:
+     * RULING 1 - D-182. What this case originally said, and it was right:
      *
      *   "The other four OrgAdmin System Administration screens - Organisation,
      *   Users & Groups, Roles & Access, Business Domains - stay hidden. They
@@ -161,18 +161,28 @@ final class AdministrationHomeNavigationTest extends TestCase
      *   was granted to one node for one reason, and widening the rest would
      *   have been a change nobody asked for."
      *
-     * SOMEBODY HAS NOW ASKED. CL-12 is the Product Owner ruling that widens it,
-     * and this equality is the assertion that required the widening to BE a
-     * ruling rather than a side effect. It did its job: the set could not drift
-     * without this failing, and it is changing because a decision changed it.
+     * RULING 2 - CL-12 AS FIRST DELIVERED (#147, #148). Somebody asked, and
+     * the expected set became EIGHT: the System Administration destinations an
+     * Organisation Administrator was already authorised for. Identity & SSO,
+     * System Health and Integrations stayed out because they are PlatformAdmin
+     * and an Organisation Administrator was not one. That shipped and was
+     * verified.
      *
-     * THE EQUALITY ITSELF IS UNCHANGED IN KIND - still the whole area, still
-     * not a list of absences, for the reason the class docblock gives. Only the
-     * expected set moved, from one label to the eight CL-12 approves.
+     * RULING 3 - CL-12 AMENDED, and this is the current one. The Product Owner
+     * clarified the role model rather than correcting the same one: an
+     * Organisation Administrator is entitled to the complete current
+     * administration surface. RoleCatalogue was amended to grant PlatformAdmin,
+     * so the expected set is now ALL ELEVEN.
      *
-     * Mutation: make the exception `return true` for any key. This fails with
-     * eleven labels instead of eight, and the System Administrator cases above
-     * stay green - which is exactly why the equality is here.
+     * THE EQUALITY IS WHY EACH OF THOSE WAS A DECISION. It has never once
+     * allowed the set to drift on its own; it has failed, loudly, at every
+     * ruling and been changed deliberately each time. That is the whole reason
+     * it is an equality over the area rather than a list of absences.
+     *
+     * Mutation: make the OrgAdmin branch `return true` for any key. The
+     * System Administration set still reads eleven and this PASSES - which is
+     * exactly why the amended suite asserts the PRODUCT AREAS too: SemantIQ
+     * Workplace appearing is what catches it now.
      */
     public function test_an_organisation_administrator_sees_exactly_the_cl12_approved_set(): void
     {
@@ -185,13 +195,16 @@ final class AdministrationHomeNavigationTest extends TestCase
                 'Users & Groups',
                 'Roles & Access',
                 'Business Domains',
+                'Identity & SSO',
                 'Security Status',
                 'Access Reviews',
                 'Audit',
+                'System Health',
+                'Integrations',
             ],
             $this->systemAdministrationNodes($response),
-            'The Organisation Administrator System Administration set is not the eight CL-12 '
-            .'approves. Either a platform-only node leaked in, or an approved one is missing.'
+            'The Organisation Administrator System Administration set is not all eleven nodes '
+            .'the amended CL-12 ruling approves.'
         );
     }
 

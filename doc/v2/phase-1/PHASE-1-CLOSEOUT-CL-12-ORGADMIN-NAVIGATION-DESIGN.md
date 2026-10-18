@@ -1,5 +1,192 @@
 # Phase 1 Closeout — CL-12: Organisation Administrator navigation
 
+> # ⚠️ AMENDED — READ §0 FIRST
+>
+> **The design below §0 describes the FIRST Product Owner ruling**, which was
+> implemented in #147, refined in #148, deployed, and is correct for what it
+> was asked. **The Product Owner then clarified the role model itself**, and
+> the current target is §0. The original is kept in full and deliberately not
+> rewritten: it was a decision, not a mistake, and erasing it would hide that
+> the model changed rather than that somebody got it wrong.
+
+---
+
+## 0. THE AMENDED RULING — CURRENT AND BINDING
+
+| | |
+| --- | --- |
+| Baseline | `main` = **`7be3afd6a80edbb04409ef8e06c5e9a9a7d34ea9`** |
+| Supersedes | the eight-node model in §1–§12 below |
+| Ruled | Organisation Administrator receives **full current administration access** |
+
+### 0.1 The model
+
+**There are two ADMINISTRATION areas and one BUSINESS area.**
+
+| Area | Kind | System Administrator | Organisation Administrator |
+| --- | --- | --- | --- |
+| **Fabric Configuration** | administration | ✅ | ✅ **(new)** |
+| **System Administration** | administration | ✅ | ✅ **all 11 (new)** |
+| **SemantIQ Workplace** | business | ✅ | ❌ **stays out** |
+
+**SemantIQ Workplace is governed separately by business access.** Administration
+authority is not business-data authority, and an administrator does not receive
+the business area for being one. No business-access navigation mechanism exists
+yet; building one is **not** in CL-12 and is carried as its own unit.
+
+### 0.2 What changed, and what deliberately did not
+
+**CHANGED — one line in `RoleCatalogue`.** Organisation Administrator now holds
+`PlatformAdmin`, `OrgAdmin`, `AccessAdmin`, `EvidenceRead`. Identity & SSO,
+System Health and Integrations are therefore genuinely theirs to open rather
+than shown-and-refused.
+
+**This widens a real authorisation, and the amended Gate B package said so
+before it was approved:** an Organisation Administrator can now write the Entra
+client secret and the deployment-wide integration credentials for the identity,
+email, ai and fabric families. The Product Owner chose that knowing the
+consequence.
+
+**NOT CHANGED, and each is asserted rather than assumed:**
+
+- `BusinessData` is **absent** — administration authority is still not
+  business-data authority;
+- `grantableBy(OrganisationAdministrator)` still **excludes**
+  `system_administrator` — the privilege-escalation path stays closed;
+- `requiringStepUp()` is unchanged;
+- the System Administrator role definition is unchanged;
+- the two role codes are **not** collapsed;
+- no route, `ActionClass`, `RoleCode`, `AccessEngine`, schema, frontend
+  component or deployment workflow was touched.
+
+**The two roles now hold the same four action classes.** What still separates
+them is **grantability** and **navigation**: a System Administrator sees the
+whole roadmap including SemantIQ Workplace; an Organisation Administrator sees
+the two administration areas.
+
+### 0.3 What the Organisation Administrator sees — 2 areas, 25 nodes
+
+**Fabric Configuration — 14 nodes, every one LOCKED.** Overview · Data Sources ·
+Connect Source · Discovery · Data Classification · Ingestion · Data Quality ·
+Business Model · Security Mapping · Semantic Model · AI Readiness · Pipelines &
+Refresh · Power BI Publication · Monitoring.
+
+They share one policy key, `fabric.view`. **None has a route, controller, table
+or service.** Showing the area grants nothing — there is nothing behind it to
+reach — and `route === null` is asserted per node so that a future route cannot
+quietly turn a roadmap entry into access.
+
+**System Administration — all 11 nodes, every one DELIVERED.** Administration
+Home · Organisation · Users & Groups · Roles & Access · Business Domains ·
+Identity & SSO · Security Status · Access Reviews · Audit · System Health ·
+Integrations.
+
+### 0.4 A finding worth recording: nothing in the Administration module changed
+
+`AdministrationHomeProjection::seesPlatformValues()` asks `AccessEngine` with
+`ActionClass::PlatformAdmin` — **the same decision `RequireActionClass` makes**,
+not a second copy of the rule. Administration Home therefore followed the
+`RoleCatalogue` amendment with **no production change at all**: the platform
+tiles stopped being withheld, and the platform rows entered the Action Queue, on
+their own.
+
+Six existing tests failed on the amendment. **Every one of them was a test
+encoding the old model, not a defect** — and three of them are worth naming:
+
+- the G16 **zero-call** guard ("authorise before evaluating") named the
+  Organisation Administrator as the withheld viewer. After the amendment **no
+  role that can reach Administration Home is withheld**, so the guard was
+  repointed to an Auditor and driven **at the projection** rather than over
+  HTTP — a zero obtained through a refused route would be a page that never
+  rendered;
+- the cost half of the same guard was repointed the same way;
+- `test_a_deployment_with_nothing_to_do_says_so` asserted an **empty** Action
+  Queue and passed only **because the Organisation Administrator could not see
+  the unconfigured required integration**. The deployment never had nothing to
+  do. It now asserts the queue is **exactly** the outstanding item, which fails
+  both if an action leaks in and if that row disappears.
+
+**The withheld branch is now unreachable over HTTP for every current role.** It
+is kept and kept tested, because it is the guard that holds if a future role is
+given `OrgAdmin` without `PlatformAdmin`.
+
+### 0.5 The implementation
+
+A **12-key allow-list** in `SystemAdministratorNavigationAuthorizer` —
+`fabric.view` plus the 11 System Administration keys — compared strictly and
+still gated on the role. The class is **not renamed** (Product Owner ruling: a
+rename is dependency churn with no product value at this gate), and the
+request-local memoisation from #148 is **preserved exactly**: measured at **2**
+role lookups for a System Administrator and **3** for an Organisation
+Administrator, unchanged from #148 despite the list growing from 8 keys to 12
+and the rendered node count from 8 to 25.
+
+**The list is hand-written and cannot go stale.**
+`test_the_allow_list_is_exactly_the_two_admin_areas` derives the same set from
+`ApprovedMenu` and fails if the two ever diverge. That test is what makes
+writing the list out by hand safe.
+
+**Visibility is still derived from nothing.** Computing it from each route's
+`ActionClass` remains wrong and is deliberately not done: an **Auditor** holds
+`EvidenceRead`, so a class-derived rule hands them Security Status, Access
+Reviews and Audit as a side effect of a change about administrators. The role is
+checked **first**. Mutation X7 proves it — killed by the Auditor equality.
+
+### 0.6 Disclosure: the role picker was telling administrators the opposite
+
+**Raised as a P1 on #149, and correct.** `RoleCode::OrganisationAdministrator`
+read:
+
+> Organisation, people, groups, domains and access administration. **No platform
+> authority** and no business data.
+
+`AccessController::roleOptions()` sends `summary()` straight to the Roles &
+Access picker, so that sentence is what somebody reads **at the moment they
+decide to delegate the role**. After the amended ruling it promised *no platform
+authority* while delegating Identity & SSO, System Health and Integrations —
+including the Entra client secret and the deployment-wide integration
+credentials.
+
+**A summary that understates a role is worse than no summary: it does not merely
+fail to inform, it actively reassures.**
+
+The approved wording:
+
+> Full organisation and platform administration, including Identity & SSO,
+> System Health and Integrations. No business data. Cannot grant System
+> Administrator.
+
+**This is disclosure and UX alignment, NOT another authorisation change.** No
+action class, route, navigation definition, schema, frontend component or
+workflow moved; the correction is one string plus tests, and the tests assert
+the authorisation is unchanged alongside the wording.
+
+**The guard is tied to the grant, not just to the text.**
+`test_no_role_summary_denies_an_authority_the_role_actually_holds` walks every
+role and fails if a summary and `RoleCatalogue` disagree about platform or
+business authority **in either direction** — so the next action-class change
+cannot leave the disclosure behind the way this one did. Three mutations were
+run and all three caught, including one that corrects the enum but has the
+screen send a stale copy; only the rendered-props test kills that one.
+
+**The P1-05 design document still carries the old wording** and is deliberately
+left alone — it recorded the model correctly as it then stood, and rewriting it
+would hide that the model changed.
+
+---
+
+### 0.6 Gate D is superseded
+
+The eight-check script written against the first ruling must **not** be used.
+Its expectations — one product area, exactly eight nodes, Identity & SSO /
+System Health / Integrations necessarily hidden — are all now wrong. A revised
+script covering two areas, 25 nodes and the locked Fabric entries replaces it.
+
+---
+
+## THE ORIGINAL GATE B DESIGN — SUPERSEDED, PRESERVED
+
+
 ## WS-7 · GATE B — DESIGN ONLY
 
 **No code in this task.** No implementation, no production change, no

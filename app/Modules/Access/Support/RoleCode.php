@@ -54,12 +54,29 @@ enum RoleCode: string
     /**
      * What an administrator is told this role does. Business language, because
      * it reaches a screen.
+     *
+     * THIS IS A DISCLOSURE, NOT A LABEL. AccessController::roleOptions() sends
+     * these straight to the Roles & Access picker, so this sentence is what
+     * somebody reads at the moment they decide to delegate the role. A summary
+     * that understates the role is worse than no summary: it does not merely
+     * fail to inform, it actively reassures.
+     *
+     * THAT IS EXACTLY WHAT HAPPENED HERE. Organisation Administrator read "No
+     * platform authority and no business data" - true, and the reason it was
+     * written - until CL-12's amended ruling granted PlatformAdmin. For the
+     * length of that change the picker promised NO PLATFORM AUTHORITY while
+     * delegating Identity & SSO, System Health and Integrations, including the
+     * Entra client secret and the deployment-wide integration credentials.
+     *
+     * So when an action class moves, this sentence moves in the same change.
+     * It is covered by its own tests, including one that fails if the old
+     * wording returns.
      */
     public function summary(): string
     {
         return match ($this) {
             self::SystemAdministrator => 'Full platform and system administration, including Identity and single sign-on. No business data.',
-            self::OrganisationAdministrator => 'Organisation, people, groups, domains and access administration. No platform authority and no business data.',
+            self::OrganisationAdministrator => 'Full organisation and platform administration, including Identity & SSO, System Health and Integrations. No business data. Cannot grant System Administrator.',
             self::Executive => 'Business information only, through explicit domain entitlements.',
             self::DomainOwner => 'A business role. It confers no automatic entitlement and no access from owning a domain.',
             self::Manager => 'Business information only, for teams and business units that have been explicitly assigned.',
