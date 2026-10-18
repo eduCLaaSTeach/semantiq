@@ -685,21 +685,35 @@ final class SystemHealthTest extends TestCase
     // -----------------------------------------------------------------------
 
     /**
-     * H13. PlatformAdmin only.
+     * H13. PlatformAdmin only — which is now BOTH administrator roles.
      *
-     * An Auditor and an Organisation Administrator hold EvidenceRead and are
-     * refused here, because infrastructure visibility is a different authority
-     * from audit-evidence access.
+     * ---------------------------------------------------------------------
+     * REPOINTED BY THE AMENDED CL-12 RULING. The rule itself is unchanged.
+     * ---------------------------------------------------------------------
      *
-     * Mutation: lower the route to EvidenceRead. The Auditor and the
-     * Organisation Administrator would then be admitted.
+     * THIS CASE USED TO LIST THE ORGANISATION ADMINISTRATOR AMONG THE REFUSED,
+     * on the stated ground that they "hold EvidenceRead ... because
+     * infrastructure visibility is a different authority from audit-evidence
+     * access." THAT REASONING IS STILL CORRECT and is exactly why the Auditor
+     * is still refused below.
+     *
+     * What changed is not the rule but the role: the Product Owner granted the
+     * Organisation Administrator PlatformAdmin, so they are admitted BY THAT
+     * CLASS and not by EvidenceRead. The route is untouched and still declares
+     * PlatformAdmin.
+     *
+     * THE REFUSAL HALF IS THE POINT AND IT IS KEPT. An Auditor holds
+     * EvidenceRead and nothing else, so if this screen ever slipped down to
+     * EvidenceRead they would be admitted — and this still fails.
+     *
+     * Mutation: lower the route to EvidenceRead. The Auditor is then admitted
+     * and this fails.
      */
     public function test_only_a_platform_administrator_may_read_system_health(): void
     {
         $organisation = $this->make->organisation();
 
         foreach ([
-            RoleCode::OrganisationAdministrator,
             RoleCode::Auditor,
             RoleCode::Executive,
             RoleCode::DomainOwner,
@@ -717,6 +731,13 @@ final class SystemHealthTest extends TestCase
                 "[{$role->value}] reached System Health, which is PlatformAdmin only."
             );
         }
+
+        // Both roles holding PlatformAdmin are admitted, and the Organisation
+        // Administrator is named explicitly because their admission is the
+        // amended ruling.
+        $organisationAdmin = $this->make->user($organisation);
+        $this->make->roleAssignment($organisationAdmin, RoleCode::OrganisationAdministrator, $organisation);
+        $this->actingAsUser($organisationAdmin)->get('/console/system-health')->assertOk();
 
         $admin = $this->make->user(administrator: true);
         $this->actingAsUser($admin)->get('/console/system-health')->assertOk();

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Administration;
 
 use App\Modules\Access\Support\RoleCode;
+use App\Modules\Administration\Support\AdministrationHomeProjection;
 use App\Modules\Audit\Services\AuditChainVerifier;
 use App\Modules\Domains\Projection\DomainSummaryProjection;
 use App\Modules\Identity\Health\IdentityHealthCheck;
@@ -152,32 +153,66 @@ final class AdministrationHomeTest extends TestCase
     // -----------------------------------------------------------------------
 
     /**
-     * G16 / N14. AN ORGANISATION ADMINISTRATOR CAUSES ZERO CALLS TO EITHER
-     * PLATFORM-ONLY SOURCE.
+     * G16 / N14. A VIEWER WHO MAY NOT SEE PLATFORM VALUES CAUSES ZERO CALLS TO
+     * EITHER PLATFORM-ONLY SOURCE.
      *
-     * "Rendered Withheld" is satisfied by a dozen implementations. "Called zero
-     * times" is satisfied by one.
+     * ---------------------------------------------------------------------
+     * REPOINTED BY THE AMENDED CL-12 RULING. The guard is unchanged in kind.
+     * ---------------------------------------------------------------------
      *
-     * THE SYSTEM ADMINISTRATOR COUNT IS ASSERTED IN THE SAME TEST, and that is
-     * what makes the zero mean anything: a spy that was never wired records
-     * zero for every viewer, and the assertion would pass while checking
-     * nothing.
+     * THIS CASE USED TO NAME THE ORGANISATION ADMINISTRATOR, and the property
+     * it asserted has not moved an inch: authorise BEFORE evaluating, because
+     * "rendered Withheld" is satisfied by a dozen implementations and "called
+     * zero times" by one. What moved is WHO is unauthorised. The Product Owner
+     * granted the Organisation Administrator PlatformAdmin, so they now
+     * legitimately evaluate both sources - asserted immediately below.
+     *
+     * SO THE ZERO IS ASSERTED FOR AN AUDITOR INSTEAD, and NOT through the
+     * route. An Auditor does not hold OrgAdmin, so /console/administration
+     * refuses them before the projection is ever constructed - a zero obtained
+     * that way would be a page that never rendered, which is the second
+     * failure shape CLAUDE.md names. The projection is therefore driven
+     * DIRECTLY, where the withholding branch actually lives.
+     *
+     * WORTH RECORDING: after the amendment, no role that can REACH this screen
+     * is withheld from, so the withheld branch is unreachable over HTTP today.
+     * It is kept, and kept tested here, because it is the guard that holds if a
+     * future role is given OrgAdmin without PlatformAdmin.
      *
      * Mutation: evaluate the source and withhold the result afterwards - the
-     * exact shape §4.8 forbids. The counts become 1 and 1, this fails, AND THE
-     * RENDERED PAGE IS IDENTICAL - which is why the assertion is on the call
-     * count rather than on the output.
+     * exact shape §4.8 forbids. The counts become 1 and 1 and this fails, while
+     * THE RENDERED PAGE IS IDENTICAL - which is why the assertion is on the
+     * call count and not on the output.
      */
-    public function test_an_organisation_administrator_evaluates_neither_platform_only_source(): void
+    public function test_a_viewer_without_platform_authority_evaluates_neither_platform_only_source(): void
     {
-        $counts = $this->callCountsFor(RoleCode::OrganisationAdministrator);
+        $counts = $this->callCountsForProjection(RoleCode::Auditor);
 
         $this->assertSame(
             ['setup' => 0, 'health' => 0],
             $counts,
-            'An Organisation Administrator evaluated a platform-only source and then withheld the '
-            .'result. A value that is never produced cannot leak; one that is produced and '
-            .'discarded is one careless array spread away from the props.'
+            'A viewer with no platform authority evaluated a platform-only source and then '
+            .'withheld the result. A value that is never produced cannot leak; one that is '
+            .'produced and discarded is one careless array spread away from the props.'
+        );
+    }
+
+    /**
+     * AND THE ORGANISATION ADMINISTRATOR NOW EVALUATES BOTH, EXACTLY ONCE.
+     *
+     * The amended ruling in one assertion: they hold PlatformAdmin, so the
+     * screen produces the platform values for them rather than withholding
+     * them. "Exactly once" rather than "at least once", so a tile that
+     * rebuilds its own source still fails.
+     */
+    public function test_an_organisation_administrator_now_evaluates_each_platform_only_source_once(): void
+    {
+        $this->assertSame(
+            ['setup' => 1, 'health' => 1],
+            $this->callCountsFor(RoleCode::OrganisationAdministrator),
+            'An Organisation Administrator did not evaluate the platform-only sources exactly '
+            .'once. After the amended CL-12 ruling they hold PlatformAdmin and these values are '
+            .'theirs to see.'
         );
     }
 
@@ -240,16 +275,122 @@ final class AdministrationHomeTest extends TestCase
     }
 
     /**
-     * The other half of D-145: no link the viewer cannot open.
+     * The same spy, driven DIRECTLY at the projection.
      *
-     * An Organisation Administrator gets Withheld on both platform tiles, with
-     * NO href and NO number.
+     * For viewers the route refuses. Going through HTTP for one of those would
+     * record zero because nothing rendered, not because the projection declined
+     * to evaluate - a guard that passes for the wrong reason.
+     *
+     * @return array{setup: int, health: int}
      */
-    public function test_the_platform_tiles_are_withheld_with_no_link_and_no_number(): void
+    private function callCountsForProjection(RoleCode $role): array
     {
-        $tiles = $this->tiles(
-            $this->actingAsUser($this->userWith(RoleCode::OrganisationAdministrator))
-                ->get('/console/administration')
+        $counts = ['setup' => 0, 'health' => 0];
+
+        $this->app->bind(SetupProjection::class, function ($app) use (&$counts): SetupProjection {
+            $counts['setup']++;
+
+            return new SetupProjection(
+                $app->make(IntegrationSecretStore::class),
+                $app->make(IdentityConfigurationSource::class),
+            );
+        });
+
+        $this->app->bind(SystemHealthReport::class, function ($app) use (&$counts): SystemHealthReport {
+            $counts['health']++;
+
+            return new SystemHealthReport(
+                $app->make(HealthInspector::class),
+                $app->make(IdentityHealthCheck::class),
+                $app->make(SessionStoreCheck::class),
+                $app->make(CacheStoreCheck::class),
+                $app->make(BackgroundWorkCheck::class),
+                $app->make(AuditChainVerifier::class),
+            );
+        });
+
+        $props = app(AdministrationHomeProjection::class)
+            ->for($this->userWith($role));
+
+        $this->assertNotEmpty(
+            $props,
+            'The projection returned nothing, so a zero call count would prove nothing.'
+        );
+
+        return $counts;
+    }
+
+    /**
+     * D-145 - NO LINK THE VIEWER CANNOT OPEN.
+     *
+     * ---------------------------------------------------------------------
+     * REPOINTED BY THE AMENDED CL-12 RULING. The rule is unchanged.
+     * ---------------------------------------------------------------------
+     *
+     * THIS USED TO ASSERT THAT AN ORGANISATION ADMINISTRATOR GOT "Withheld"
+     * ON BOTH PLATFORM TILES, with no href and no number. That followed from
+     * D-145 and from their not holding PlatformAdmin. The Product Owner has
+     * granted PlatformAdmin, so the premise is gone while D-145 itself is not:
+     * the tiles are now LINKED for them, and the link goes somewhere they can
+     * actually open - which is what D-145 ever required.
+     *
+     * BOTH HALVES ARE ASSERTED. A tile that is withheld must carry nothing,
+     * and a tile that is linked must be openable. Dropping the first half
+     * would leave "linked" asserted by a test that never sees a withheld tile.
+     */
+    public function test_a_platform_tile_is_linked_when_the_viewer_may_open_it_and_bare_when_not(): void
+    {
+        foreach ([RoleCode::OrganisationAdministrator, RoleCode::SystemAdministrator] as $role) {
+            $tiles = $this->tiles(
+                $this->actingAsUser($this->userWith($role))->get('/console/administration')
+            );
+
+            foreach (['integrations', 'health'] as $key) {
+                $this->assertNotSame(
+                    'withheld',
+                    $tiles[$key]['state'],
+                    "The [{$key}] tile is withheld from a viewer who holds PlatformAdmin."
+                );
+
+                $this->assertNotNull(
+                    $tiles[$key]['href'],
+                    "The [{$key}] tile is shown to a viewer who may open it but carries no link."
+                );
+
+                $this->assertSame(
+                    200,
+                    $this->actingAsUser($this->userWith($role))->get($tiles[$key]['href'])->getStatusCode(),
+                    "The [{$key}] tile links somewhere this viewer cannot open, which is exactly "
+                    .'what D-145 forbids.'
+                );
+            }
+        }
+    }
+
+    /**
+     * AND A WITHHELD TILE STILL CARRIES NOTHING.
+     *
+     * Driven at the projection, because after the amendment no role that can
+     * REACH this screen is withheld from - see the zero-call guard above. This
+     * keeps the withheld shape asserted rather than merely unreachable.
+     */
+    public function test_a_withheld_platform_tile_carries_no_link_and_no_number(): void
+    {
+        $props = app(AdministrationHomeProjection::class)
+            ->for($this->userWith(RoleCode::Auditor));
+
+        $tiles = [];
+
+        foreach ($props['areas'] as $area) {
+            foreach ($area['tiles'] as $tile) {
+                $tiles[$tile['key']] = $tile;
+            }
+        }
+
+        $this->assertCount(
+            8,
+            $tiles,
+            'The projection did not produce all eight tiles, so this guard asserts nothing.'
         );
 
         foreach (['integrations', 'health'] as $key) {
@@ -688,13 +829,36 @@ final class AdministrationHomeTest extends TestCase
     }
 
     /**
-     * Empty is a real state and is rendered as one.
+     * THE ACTION QUEUE CARRIES WHAT IS GENUINELY OUTSTANDING, AND NOTHING ELSE.
      *
-     * A deployment with an organisation, no domains, no exceptions and no
-     * overdue reviews has genuinely nothing to do, and the screen says so
-     * rather than showing an empty box.
+     * ---------------------------------------------------------------------
+     * REPOINTED BY THE AMENDED CL-12 RULING, and the old version is worth
+     * recording because of WHY it passed.
+     * ---------------------------------------------------------------------
+     *
+     * THIS CASE USED TO ASSERT AN EMPTY QUEUE for an Organisation
+     * Administrator on a deployment with an organisation, no domains, no
+     * exceptions and no overdue reviews. It passed - but not because the
+     * deployment had nothing to do. The fixture has a REQUIRED integration
+     * family that is not configured, which is a real outstanding item; the
+     * queue looked empty only because an Organisation Administrator was
+     * WITHHELD from platform values and never saw that row.
+     *
+     * The amended ruling grants them PlatformAdmin, so the row is now theirs
+     * and the old assertion became false - correctly. Rather than configure a
+     * credential in a fixture to force the empty case back, the assertion is
+     * repointed to what it should always have said: the queue contains EXACTLY
+     * the outstanding item and nothing else.
+     *
+     * THIS IS STRONGER THAN THE ORIGINAL, not weaker. An equality over the
+     * whole queue fails if an organisation, domains, reviews or health action
+     * leaks in, AND fails if the integrations row silently disappears - which
+     * the old empty-list assertion could not distinguish from success.
+     *
+     * The empty state itself is still asserted below, against the component,
+     * because that is where the sentence lives.
      */
-    public function test_a_deployment_with_nothing_to_do_says_so(): void
+    public function test_the_action_queue_carries_exactly_what_is_outstanding(): void
     {
         $organisation = $this->make->organisation();
         $user = $this->make->user($organisation);
@@ -703,9 +867,11 @@ final class AdministrationHomeTest extends TestCase
         $response = $this->actingAsUser($user)->get('/console/administration');
 
         $this->assertSame(
-            [],
-            $this->actions($response),
-            'A deployment with nothing outstanding produced an action anyway.'
+            ['integrations'],
+            array_column($this->actions($response), 'key'),
+            'The Action Queue is not exactly the one outstanding item. Either an action was '
+            .'produced for something that is not outstanding, or the unconfigured required '
+            .'integration stopped being reported.'
         );
 
         /*
