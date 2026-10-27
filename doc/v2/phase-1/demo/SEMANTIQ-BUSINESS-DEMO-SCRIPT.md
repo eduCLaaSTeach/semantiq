@@ -243,71 +243,83 @@ that change?' — that question has an answer."*
 
 **Enter in this order** — each step depends on the one before.
 
-## 12. Legal entities
+## 12–19. The data pack
 
-| Name | Country | Registration |
+> **The exact click-by-click steps are in
+> `SEMANTIQ-DEMO-SETUP-STEP-BY-STEP.md`.** Field names below are the real ones
+> on the screens — legal entities ask for a **Jurisdiction**, not a country,
+> and units, departments, teams, groups and domains each need a **Code**.
+
+### Legal entities
+
+| Name | Jurisdiction | Registration |
 | --- | --- | --- |
 | Northwind Learning Group Pte Ltd | Singapore | NW-SG-2019-0441 |
 | Northwind Academy Sdn Bhd | Malaysia | NW-MY-2021-7732 |
 
-## 13. Business units
+### Business units
 
-| Business unit | Legal entity |
+| Name | Code |
 | --- | --- |
-| Corporate Training | Northwind Learning Group Pte Ltd |
-| Professional Certification | Northwind Learning Group Pte Ltd |
-| Digital Campus | Northwind Academy Sdn Bhd |
+| Corporate Training | `corporate-training` |
+| Professional Certification | `professional-certification` |
+| Digital Campus | `digital-campus` |
 
-## 14. Departments
+### Departments
 
-| Department | Business unit |
-| --- | --- |
-| Finance | Corporate Training |
-| People & Culture | Corporate Training |
-| Sales | Corporate Training |
-| Delivery | Professional Certification |
-| Technology | Digital Campus |
-
-## 15. Teams
-
-| Team | Department |
-| --- | --- |
-| Enterprise Sales | Sales |
-| Certification Delivery | Delivery |
-| Data & Platform | Technology |
-
-## 16. People
-
-Use a clearly fictional mail domain so no real person is ever contacted.
-
-| Display name | Email | Department | Team |
-| --- | --- | --- | --- |
-| Arjun Mehta | arjun.mehta@northwind.example | Finance | — |
-| Priya Raman | priya.raman@northwind.example | Finance | — |
-| Daniel Okafor | daniel.okafor@northwind.example | Sales | Enterprise Sales |
-| Mei Lin Tan | meilin.tan@northwind.example | Delivery | Certification Delivery |
-| Sofia Alvarez | sofia.alvarez@northwind.example | Technology | Data & Platform |
-
-## 17. Groups
-
-| Group | Members |
-| --- | --- |
-| Finance Leadership | Arjun Mehta, Priya Raman |
-| Enterprise Sales Team | Daniel Okafor |
-
-## 18. Business domains
-
-| Domain | Owner | Enabled |
+| Name | Code | Business unit |
 | --- | --- | --- |
-| **Finance** | **Arjun Mehta** | Yes |
-| People | Priya Raman | Yes |
-| Sales | Daniel Okafor | Yes |
-| Learning Delivery | Mei Lin Tan | Yes |
+| Finance | `finance` | Corporate Training |
+| People & Culture | `people-culture` | Corporate Training |
+| Sales | `sales` | Corporate Training |
+| Delivery | `delivery` | Professional Certification |
+| Technology | `technology` | Digital Campus |
+
+### Teams
+
+| Name | Code | Department |
+| --- | --- | --- |
+| Enterprise Sales | `enterprise-sales` | Sales |
+| Certification Delivery | `certification-delivery` | Delivery |
+| Data & Platform | `data-platform` | Technology |
+
+### People
+
+**An Object ID is REQUIRED** and must be a GUID. These are synthetic — SemantIQ
+checks only the shape, not that the person exists.
+
+| Name | Email | Object ID |
+| --- | --- | --- |
+| Arjun Mehta | arjun.mehta@northwind.example | `11111111-1111-4111-8111-111111111111` |
+| Priya Raman | priya.raman@northwind.example | `22222222-2222-4222-8222-222222222222` |
+| Daniel Okafor | daniel.okafor@northwind.example | `33333333-3333-4333-8333-333333333333` |
+| Mei Lin Tan | meilin.tan@northwind.example | `44444444-4444-4444-8444-444444444444` |
+| Sofia Alvarez | sofia.alvarez@northwind.example | `55555555-5555-4555-8555-555555555555` |
+
+### Groups
+
+| Name | Code | Members |
+| --- | --- | --- |
+| Finance Leadership | `finance-leadership` | Arjun Mehta, Priya Raman |
+| Enterprise Sales Team | `enterprise-sales-team` | Daniel Okafor |
+
+### Business domains
+
+| Name | Identity code | Owner | Availability |
+| --- | --- | --- | --- |
+| **Finance** | `finance` | **Arjun Mehta** | Enabled |
+| People | `people` | Priya Raman | Enabled |
+| Sales | `sales` | Daniel Okafor | Enabled |
+| Learning Delivery | `learning-delivery` | Mei Lin Tan | Enabled |
 
 **Arjun owns Finance and is given no Finance entitlement. That is deliberate —
 it is demo moment 1.**
 
-## 19. Role assignments — built to make each point
+### Role assignments — built to make each point
+
+Granting access is **four separate actions**: assign a role, grant an
+entitlement on a domain, assign a scope, set a sensitivity ceiling. **Three of
+the five people below stop early on purpose.**
 
 | Person | Role | Entitlement | Scope | Ceiling | Demonstrates |
 | --- | --- | --- | --- | --- | --- |
