@@ -1,0 +1,669 @@
+{
+  "levels": [
+    "solution",
+    "module",
+    "sub-module",
+    "feature"
+  ],
+  "files": {
+    "icon": "the icon to use for this node; a node with children keeps its icons in its own folder, a leaf is one file named after it",
+    "outline": "marketing's outline drawing of the same icon, used only when asked",
+    "in-parent": "the icon with its parent's badge, as marketing drew it inside the parent's set"
+  },
+  "solutions": [
+    {
+      "name": "Agentic CRM",
+      "level": "solution",
+      "path": "agentic-crm",
+      "files": {
+        "icon": "agentic-crm/icon.svg",
+        "outline": "agentic-crm/outline.svg"
+      },
+      "modules": [
+        {
+          "name": "Agentic Contact Manager",
+          "level": "module",
+          "path": "agentic-crm/agentic-contact-manager.svg",
+          "files": {
+            "icon": "agentic-crm/agentic-contact-manager.svg"
+          }
+        },
+        {
+          "name": "Agentic Leads Generator",
+          "level": "module",
+          "path": "agentic-crm/agentic-leads-generator.svg",
+          "files": {
+            "icon": "agentic-crm/agentic-leads-generator.svg"
+          }
+        },
+        {
+          "name": "Agentic Sales Manager",
+          "level": "module",
+          "path": "agentic-crm/agentic-sales-manager.svg",
+          "files": {
+            "icon": "agentic-crm/agentic-sales-manager.svg"
+          }
+        },
+        {
+          "name": "Agentic Contents Builder",
+          "level": "module",
+          "path": "agentic-crm/agentic-contents-builder.svg",
+          "files": {
+            "icon": "agentic-crm/agentic-contents-builder.svg"
+          }
+        },
+        {
+          "name": "Agentic Campaign Builder",
+          "level": "module",
+          "path": "agentic-crm/agentic-campaign-builder.svg",
+          "files": {
+            "icon": "agentic-crm/agentic-campaign-builder.svg"
+          }
+        },
+        {
+          "name": "Agentic SEO Manager",
+          "level": "module",
+          "path": "agentic-crm/agentic-seo-manager.svg",
+          "files": {
+            "icon": "agentic-crm/agentic-seo-manager.svg"
+          }
+        },
+        {
+          "name": "Agentic Marketing Manager",
+          "level": "module",
+          "path": "agentic-crm/agentic-marketing-manager.svg",
+          "files": {
+            "icon": "agentic-crm/agentic-marketing-manager.svg"
+          }
+        },
+        {
+          "name": "Agentic Shopfront",
+          "level": "module",
+          "path": "agentic-crm/agentic-shopfront.svg",
+          "files": {
+            "icon": "agentic-crm/agentic-shopfront.svg"
+          }
+        },
+        {
+          "name": "Agentic Customer Success Manager",
+          "level": "module",
+          "path": "agentic-crm/agentic-customer-success-manager.svg",
+          "files": {
+            "icon": "agentic-crm/agentic-customer-success-manager.svg"
+          }
+        },
+        {
+          "name": "Agentic Sales Concierge",
+          "level": "module",
+          "path": "agentic-crm/agentic-sales-concierge.svg",
+          "files": {
+            "icon": "agentic-crm/agentic-sales-concierge.svg"
+          }
+        },
+        {
+          "name": "CRM Intelligence",
+          "level": "module",
+          "path": "agentic-crm/crm-intelligence.svg",
+          "files": {
+            "icon": "agentic-crm/crm-intelligence.svg"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agentic Product",
+      "level": "solution",
+      "path": "agentic-product",
+      "files": {
+        "icon": "agentic-product/icon.svg",
+        "outline": "agentic-product/outline.svg"
+      },
+      "modules": [
+        {
+          "name": "Agentic Product Manager",
+          "level": "module",
+          "path": "agentic-product/agentic-product-manager.svg",
+          "files": {
+            "icon": "agentic-product/agentic-product-manager.svg"
+          }
+        },
+        {
+          "name": "Agentic Product Marketer",
+          "level": "module",
+          "path": "agentic-product/agentic-product-marketer.svg",
+          "files": {
+            "icon": "agentic-product/agentic-product-marketer.svg"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Adaptive CLaaS",
+      "level": "solution",
+      "path": "adaptive-claas",
+      "files": {
+        "icon": "adaptive-claas/icon.svg",
+        "outline": "adaptive-claas/outline.svg"
+      },
+      "modules": [
+        {
+          "name": "CLaaS Talents",
+          "level": "module",
+          "path": "adaptive-claas/claas-talents.svg",
+          "files": {
+            "icon": "adaptive-claas/claas-talents.svg"
+          }
+        },
+        {
+          "name": "CLaaS Developer",
+          "level": "module",
+          "path": "adaptive-claas/claas-developer.svg",
+          "files": {
+            "icon": "adaptive-claas/claas-developer.svg"
+          }
+        },
+        {
+          "name": "CLaaS Manager",
+          "level": "module",
+          "path": "adaptive-claas/claas-manager.svg",
+          "files": {
+            "icon": "adaptive-claas/claas-manager.svg"
+          }
+        },
+        {
+          "name": "CLaaS Mentor",
+          "level": "module",
+          "path": "adaptive-claas/claas-mentor.svg",
+          "files": {
+            "icon": "adaptive-claas/claas-mentor.svg"
+          }
+        },
+        {
+          "name": "CLaaS Operations",
+          "level": "module",
+          "path": "adaptive-claas/claas-operations.svg",
+          "files": {
+            "icon": "adaptive-claas/claas-operations.svg"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agentic ERP",
+      "level": "solution",
+      "path": "agentic-erp",
+      "files": {
+        "icon": "agentic-erp/icon.svg",
+        "outline": "agentic-erp/outline.svg"
+      },
+      "modules": [
+        {
+          "name": "Agentic Finance",
+          "level": "module",
+          "path": "agentic-erp/agentic-finance.svg",
+          "files": {
+            "icon": "agentic-erp/agentic-finance.svg"
+          }
+        },
+        {
+          "name": "Agentic Procurement",
+          "level": "module",
+          "path": "agentic-erp/agentic-procurement.svg",
+          "files": {
+            "icon": "agentic-erp/agentic-procurement.svg"
+          }
+        },
+        {
+          "name": "Agentic Operations",
+          "level": "module",
+          "path": "agentic-erp/agentic-operations.svg",
+          "files": {
+            "icon": "agentic-erp/agentic-operations.svg"
+          }
+        },
+        {
+          "name": "Agentic Compliance",
+          "level": "module",
+          "path": "agentic-erp/agentic-compliance.svg",
+          "files": {
+            "icon": "agentic-erp/agentic-compliance.svg"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Enterprise Intelligence OS (EOS)",
+      "level": "solution",
+      "path": "eos",
+      "files": {
+        "icon": "eos/icon.svg",
+        "outline": "eos/outline.svg"
+      },
+      "note": "Marketing named this solution Enterprise Intelligence Fabric.",
+      "modules": [
+        {
+          "name": "Integration Hub",
+          "level": "module",
+          "path": "eos/integration-hub",
+          "files": {
+            "icon": "eos/integration-hub/icon.svg",
+            "outline": "eos/integration-hub/outline.svg",
+            "in-parent": "eos/integration-hub/in-parent.svg"
+          },
+          "sub_modules": [
+            {
+              "name": "Enterprise MDM",
+              "level": "sub-module",
+              "path": "eos/integration-hub/enterprise-mdm",
+              "files": {
+                "icon": "eos/integration-hub/enterprise-mdm/icon.svg",
+                "outline": "eos/integration-hub/enterprise-mdm/outline.svg"
+              },
+              "features": [
+                {
+                  "name": "Kernel MDM",
+                  "level": "feature",
+                  "path": "eos/integration-hub/enterprise-mdm/kernel-mdm.svg",
+                  "files": {
+                    "icon": "eos/integration-hub/enterprise-mdm/kernel-mdm.svg"
+                  }
+                },
+                {
+                  "name": "CLaaS MDM",
+                  "level": "feature",
+                  "path": "eos/integration-hub/enterprise-mdm/claas-mdm.svg",
+                  "files": {
+                    "icon": "eos/integration-hub/enterprise-mdm/claas-mdm.svg"
+                  }
+                },
+                {
+                  "name": "CRM MDM",
+                  "level": "feature",
+                  "path": "eos/integration-hub/enterprise-mdm/crm-mdm.svg",
+                  "files": {
+                    "icon": "eos/integration-hub/enterprise-mdm/crm-mdm.svg"
+                  }
+                },
+                {
+                  "name": "Operation MDM",
+                  "level": "feature",
+                  "path": "eos/integration-hub/enterprise-mdm/operation-mdm.svg",
+                  "files": {
+                    "icon": "eos/integration-hub/enterprise-mdm/operation-mdm.svg"
+                  }
+                },
+                {
+                  "name": "Finance MDM",
+                  "level": "feature",
+                  "path": "eos/integration-hub/enterprise-mdm/finance-mdm.svg",
+                  "files": {
+                    "icon": "eos/integration-hub/enterprise-mdm/finance-mdm.svg"
+                  }
+                },
+                {
+                  "name": "Compliance MDM",
+                  "level": "feature",
+                  "path": "eos/integration-hub/enterprise-mdm/compliance-mdm.svg",
+                  "files": {
+                    "icon": "eos/integration-hub/enterprise-mdm/compliance-mdm.svg"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Enterprise MicroServices",
+              "level": "sub-module",
+              "path": "eos/integration-hub/enterprise-microservices.svg",
+              "files": {
+                "icon": "eos/integration-hub/enterprise-microservices.svg"
+              }
+            },
+            {
+              "name": "Intelligence OS Agents",
+              "level": "sub-module",
+              "path": "eos/integration-hub/intelligence-os-agents.svg",
+              "files": {
+                "icon": "eos/integration-hub/intelligence-os-agents.svg"
+              }
+            },
+            {
+              "name": "Enterprise Control Centre",
+              "level": "sub-module",
+              "path": "eos/integration-hub/enterprise-control-centre.svg",
+              "files": {
+                "icon": "eos/integration-hub/enterprise-control-centre.svg"
+              }
+            },
+            {
+              "name": "Security Control Centre",
+              "level": "sub-module",
+              "path": "eos/integration-hub/security-control-centre.svg",
+              "files": {
+                "icon": "eos/integration-hub/security-control-centre.svg"
+              }
+            },
+            {
+              "name": "Content Processor",
+              "level": "sub-module",
+              "path": "eos/integration-hub/content-processor.svg",
+              "files": {
+                "icon": "eos/integration-hub/content-processor.svg"
+              },
+              "note": "Not in the dev task sheet."
+            },
+            {
+              "name": "Task Scheduler",
+              "level": "sub-module",
+              "path": "eos/integration-hub/task-scheduler.svg",
+              "files": {
+                "icon": "eos/integration-hub/task-scheduler.svg"
+              },
+              "note": "Not in the dev task sheet."
+            },
+            {
+              "name": "Process Tracker (Microsoft)",
+              "level": "sub-module",
+              "path": "eos/integration-hub/process-tracker-microsoft.svg",
+              "files": {
+                "icon": "eos/integration-hub/process-tracker-microsoft.svg"
+              },
+              "note": "Not in the dev task sheet."
+            }
+          ]
+        },
+        {
+          "name": "Knowledge Hub",
+          "level": "module",
+          "path": "eos/knowledge-hub",
+          "files": {
+            "icon": "eos/knowledge-hub/icon.svg",
+            "outline": "eos/knowledge-hub/outline.svg",
+            "in-parent": "eos/knowledge-hub/in-parent.svg"
+          },
+          "sub_modules": [
+            {
+              "name": "Enterprise Memory System",
+              "level": "sub-module",
+              "path": "eos/knowledge-hub/enterprise-memory-system.svg",
+              "files": {
+                "icon": "eos/knowledge-hub/enterprise-memory-system.svg"
+              }
+            },
+            {
+              "name": "Knowledge Ingestion",
+              "level": "sub-module",
+              "path": "eos/knowledge-hub/knowledge-ingestion.svg",
+              "files": {
+                "icon": "eos/knowledge-hub/knowledge-ingestion.svg"
+              }
+            },
+            {
+              "name": "Structured Data Management",
+              "level": "sub-module",
+              "path": "eos/knowledge-hub/structured-data-management.svg",
+              "files": {
+                "icon": "eos/knowledge-hub/structured-data-management.svg"
+              }
+            },
+            {
+              "name": "Unstructured Data Management",
+              "level": "sub-module",
+              "path": "eos/knowledge-hub/unstructured-data-management.svg",
+              "files": {
+                "icon": "eos/knowledge-hub/unstructured-data-management.svg"
+              }
+            },
+            {
+              "name": "Enterprise Knowledge Growth",
+              "level": "sub-module",
+              "path": "eos/knowledge-hub/enterprise-knowledge-growth.svg",
+              "files": {
+                "icon": "eos/knowledge-hub/enterprise-knowledge-growth.svg"
+              }
+            },
+            {
+              "name": "Semantic Search & AI Retrieval",
+              "level": "sub-module",
+              "path": "eos/knowledge-hub/semantic-search-and-ai-retrieval.svg",
+              "files": {
+                "icon": "eos/knowledge-hub/semantic-search-and-ai-retrieval.svg"
+              }
+            },
+            {
+              "name": "Knowledge Governance",
+              "level": "sub-module",
+              "path": "eos/knowledge-hub/knowledge-governance.svg",
+              "files": {
+                "icon": "eos/knowledge-hub/knowledge-governance.svg"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Operations Hub",
+          "level": "module",
+          "path": "eos/operations-hub",
+          "files": {
+            "icon": "eos/operations-hub/icon.svg",
+            "outline": "eos/operations-hub/outline.svg",
+            "in-parent": "eos/operations-hub/in-parent.svg"
+          },
+          "sub_modules": [
+            {
+              "name": "Enterprise Operations Engine",
+              "level": "sub-module",
+              "path": "eos/operations-hub/enterprise-operations-engine.svg",
+              "files": {
+                "icon": "eos/operations-hub/enterprise-operations-engine.svg"
+              }
+            },
+            {
+              "name": "SOP Management",
+              "level": "sub-module",
+              "path": "eos/operations-hub/sop-management.svg",
+              "files": {
+                "icon": "eos/operations-hub/sop-management.svg"
+              }
+            },
+            {
+              "name": "Resource Management",
+              "level": "sub-module",
+              "path": "eos/operations-hub/resource-management.svg",
+              "files": {
+                "icon": "eos/operations-hub/resource-management.svg"
+              }
+            },
+            {
+              "name": "Fulfillment & Compliance",
+              "level": "sub-module",
+              "path": "eos/operations-hub/fulfillment-and-compliance.svg",
+              "files": {
+                "icon": "eos/operations-hub/fulfillment-and-compliance.svg"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Intelligence Hub",
+          "level": "module",
+          "path": "eos/intelligence-hub",
+          "files": {
+            "icon": "eos/intelligence-hub/icon.svg",
+            "outline": "eos/intelligence-hub/outline.svg",
+            "in-parent": "eos/intelligence-hub/in-parent.svg"
+          },
+          "sub_modules": [
+            {
+              "name": "Enterprise Data Analytics",
+              "level": "sub-module",
+              "path": "eos/intelligence-hub/enterprise-data-analytics",
+              "files": {
+                "icon": "eos/intelligence-hub/enterprise-data-analytics/icon.svg",
+                "outline": "eos/intelligence-hub/enterprise-data-analytics/outline.svg",
+                "in-parent": "eos/intelligence-hub/enterprise-data-analytics/in-parent.svg"
+              },
+              "features": [
+                {
+                  "name": "Marketing Analytics",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/marketing-analytics.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/marketing-analytics.svg"
+                  }
+                },
+                {
+                  "name": "Sales Analytics",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/sales-analytics.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/sales-analytics.svg"
+                  }
+                },
+                {
+                  "name": "Post Sales Analytics",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/post-sales-analytics.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/post-sales-analytics.svg"
+                  }
+                },
+                {
+                  "name": "Key Accounts Analytics",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/key-accounts-analytics.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/key-accounts-analytics.svg"
+                  }
+                },
+                {
+                  "name": "Talent Analytics",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/talent-analytics.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/talent-analytics.svg"
+                  }
+                },
+                {
+                  "name": "Learning Analytics",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/learning-analytics.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/learning-analytics.svg"
+                  }
+                },
+                {
+                  "name": "Product Analytics",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/product-analytics.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/product-analytics.svg"
+                  }
+                },
+                {
+                  "name": "Resourcing Analytics",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/resourcing-analytics.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/resourcing-analytics.svg"
+                  }
+                },
+                {
+                  "name": "Compliance Analytics",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/compliance-analytics.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/compliance-analytics.svg"
+                  }
+                },
+                {
+                  "name": "Finance Analytics",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/finance-analytics.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/finance-analytics.svg"
+                  }
+                },
+                {
+                  "name": "Customer 360",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/customer-360.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/customer-360.svg"
+                  }
+                },
+                {
+                  "name": "Product 360",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/product-360.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/product-360.svg"
+                  }
+                },
+                {
+                  "name": "Operation 360",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-data-analytics/operation-360.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-data-analytics/operation-360.svg"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Enterprise Decision Automation",
+              "level": "sub-module",
+              "path": "eos/intelligence-hub/enterprise-decision-automation",
+              "files": {
+                "icon": "eos/intelligence-hub/enterprise-decision-automation/icon.svg",
+                "outline": "eos/intelligence-hub/enterprise-decision-automation/outline.svg",
+                "in-parent": "eos/intelligence-hub/enterprise-decision-automation/in-parent.svg"
+              },
+              "features": [
+                {
+                  "name": "AI Models Life Cycle Management",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-decision-automation/ai-models-life-cycle-management.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-decision-automation/ai-models-life-cycle-management.svg"
+                  }
+                },
+                {
+                  "name": "AI Agents Orchestration Management",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-decision-automation/ai-agents-orchestration-management.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-decision-automation/ai-agents-orchestration-management.svg"
+                  }
+                },
+                {
+                  "name": "Decision Automation Management",
+                  "level": "feature",
+                  "path": "eos/intelligence-hub/enterprise-decision-automation/decision-automation-management.svg",
+                  "files": {
+                    "icon": "eos/intelligence-hub/enterprise-decision-automation/decision-automation-management.svg"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Enterprise Decision (AI) Tower",
+              "level": "sub-module",
+              "path": "eos/intelligence-hub/enterprise-decision-ai-tower.svg",
+              "files": {
+                "icon": "eos/intelligence-hub/enterprise-decision-ai-tower.svg"
+              }
+            },
+            {
+              "name": "Enterprise AI Orchestration",
+              "level": "sub-module",
+              "path": "eos/intelligence-hub/enterprise-ai-orchestration.svg",
+              "files": {
+                "icon": "eos/intelligence-hub/enterprise-ai-orchestration.svg"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

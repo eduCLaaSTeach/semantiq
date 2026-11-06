@@ -1,5 +1,6 @@
 {
     "permissions": {
+        "defaultMode": "default",
         "deny": [
             "Bash(rm -rf /)",
             "Bash(rm -rf ~)",
@@ -8,7 +9,13 @@
         ],
         "ask": [
             "Bash(claude mcp add*)",
-            "Bash(claude mcp remove*)"
+            "Bash(claude mcp remove*)",
+            "Bash(*login*)",
+            "Bash(*token*)",
+            "Bash(*install*)",
+            "Bash(*deploy*)",
+            "Bash(*publish*)",
+            "Bash(*migrate*)"
         ],
         "allow": [
             "Read",
@@ -37,17 +44,7 @@
             "Bash(git.exe*)",
             "Bash(gh)",
             "Bash(gh *)",
-            "Bash(gh.exe*)",
-            "mcp__schema__list_tables",
-            "mcp__schema__describe_table",
-            "mcp__schema__find_existing_tables_for_concept",
-            "mcp__schema__list_pending_proposals",
-            "mcp__schema__propose_table_change",
-            "mcp__schema__get_proposal"
+            "Bash(gh.exe*)"
         ]
-    },
-    "enableAllProjectMcpServers": true,
-    "enabledMcpjsonServers": [
-        "schema"
-    ]
+    }
 }

@@ -1,0 +1,20 @@
+# Compact machine-readable project state. A snapshot only: doc/tasktracking/ stays
+# the record for task status. Never a secret, credential or production value here.
+project: null
+phase: null
+current_task: null
+task_status: null
+current_gate: null
+last_accepted_task: null
+frontend:
+  framework: null
+backend:
+  framework: null
+database:
+  # database_metadata, migrations or none
+  schema_source: null
+  status: not_verified
+ai:
+  enabled: null
+blockers: []
+next_action: null
