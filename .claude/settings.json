@@ -1,0 +1,53 @@
+{
+    "permissions": {
+        "deny": [
+            "Bash(rm -rf /)",
+            "Bash(rm -rf ~)",
+            "Write(doc/tasktracking/task-events.jsonl)",
+            "Edit(doc/tasktracking/task-events.jsonl)"
+        ],
+        "ask": [
+            "Bash(claude mcp add*)",
+            "Bash(claude mcp remove*)"
+        ],
+        "allow": [
+            "Read",
+            "Glob",
+            "Grep",
+            "Write(.claude/feedback-logs/**)",
+            "Edit(.claude/feedback-logs/**)",
+            "Write(doc/eod/**)",
+            "Edit(doc/eod/**)",
+            "Write(doc/phasedocument/**)",
+            "Edit(doc/phasedocument/**)",
+            "Write(doc/tasktracking/**)",
+            "Edit(doc/tasktracking/**)",
+            "Write(doc/corerepo/**)",
+            "Edit(doc/corerepo/**)",
+            "Write(doc/orientation-map.html)",
+            "Edit(doc/orientation-map.html)",
+            "Bash(scripts/task-event.sh *)",
+            "Bash(./scripts/task-event.sh *)",
+            "Bash(sh scripts/task-event.sh *)",
+            "Bash(bash scripts/task-event.sh *)",
+            "Bash(claude --version)",
+            "Bash(claude mcp list*)",
+            "Bash(git)",
+            "Bash(git *)",
+            "Bash(git.exe*)",
+            "Bash(gh)",
+            "Bash(gh *)",
+            "Bash(gh.exe*)",
+            "mcp__schema__list_tables",
+            "mcp__schema__describe_table",
+            "mcp__schema__find_existing_tables_for_concept",
+            "mcp__schema__list_pending_proposals",
+            "mcp__schema__propose_table_change",
+            "mcp__schema__get_proposal"
+        ]
+    },
+    "enableAllProjectMcpServers": true,
+    "enabledMcpjsonServers": [
+        "schema"
+    ]
+}
