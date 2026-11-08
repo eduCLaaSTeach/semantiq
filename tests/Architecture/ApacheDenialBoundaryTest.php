@@ -210,13 +210,45 @@ final class ApacheDenialBoundaryTest extends TestCase
      * The old catch-all is what used to make a failed denial harmless. It is
      * gone, and it must not come back: reintroducing it would restore the
      * public/ layer that production no longer has.
+     *
+     * The company's C2S web security block at the top of the file carries the
+     * one forward into public/ that may exist, and it is guarded: it is skipped
+     * whenever public/index.php is absent, which the deployment guarantees by
+     * removing public/ from the staged tree. Any other forward is the old
+     * catch-all coming back.
      */
     public function test_no_forwarder_into_a_public_subdirectory_remains(): void
     {
-        $this->assertStringNotContainsString(
-            'public/$1',
-            $this->htaccess(),
+        $htaccess = $this->htaccess();
+
+        $this->assertSame(
+            1,
+            substr_count($htaccess, 'public/$1'),
             'The forwarder into public/ is back. Production serves directly from the deployment root.'
+        );
+
+        $begin = strpos($htaccess, '# BEGIN C2S Web Security');
+        $end = strpos($htaccess, '# END C2S Web Security');
+        $forward = strpos($htaccess, 'RewriteRule ^(.*)$ public/$1 [L]');
+
+        $this->assertNotFalse($begin, 'The C2S web security block is missing.');
+        $this->assertNotFalse($end, 'The C2S web security block is not closed.');
+        $this->assertNotFalse($forward, 'The only public/ forward is not the C2S one.');
+        $this->assertTrue(
+            $begin < $forward && $forward < $end,
+            'The forward into public/ sits outside the C2S web security block.'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/RewriteCond %\{DOCUMENT_ROOT\}%1public\/index\.php !-f\s*\n\s*RewriteRule \^\(\.\*\)\$ - \[S=1\]\s*\n(\s*#[^\n]*\n)*\s*RewriteCond %\{REQUEST_URI\} !\(\^\|\/\)public\/\s*\n\s*RewriteRule \^\(\.\*\)\$ public\/\$1 \[L\]/',
+            $htaccess,
+            'The forward into public/ is not guarded by the C2S public/index.php skip.'
+        );
+
+        $this->assertStringContainsString(
+            'rm -rf _deploy/public',
+            $this->workflow(),
+            'The deployment no longer removes public/, so the guarded C2S forward would fire in production.'
         );
     }
 

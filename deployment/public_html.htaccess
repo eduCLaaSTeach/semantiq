@@ -1,3 +1,65 @@
+# BEGIN C2S Web Security v2026.11.07
+# The web root .htaccess of every CLaaS2SaaS app on cPanel or any Apache or
+# LiteSpeed host: plain PHP, Laravel, and Laravel with React. Each app keeps
+# this file as deployment/public_html.htaccess, and the deployment copies it
+# to the web root as .htaccess. Copy it as it is. Put the app's own rules
+# below the END line. Laravel's own public/.htaccess stays unchanged.
+
+# No directory listings.
+Options -Indexes
+DirectoryIndex index.php index.html
+
+# Block hidden files and folders such as .env, .git and .htaccess.
+# .well-known stays open for SSL certificate renewal.
+RedirectMatch 403 /\.(?!well-known(/|$))
+
+# Block project files that hold settings, versions or tooling.
+<FilesMatch "(?i)^(composer\.(json|lock)|package(-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|artisan|phpunit\.xml|phpstan\.neon|vite\.config\.[cm]?[jt]s|webpack\.mix\.js|tailwind\.config\.[cm]?[jt]s|postcss\.config\.[cm]?js|tsconfig(\..+)?\.json|jsconfig\.json|docker-compose(\..+)?\.ya?ml|compose\.ya?ml|dockerfile|makefile|web\.config|error_log|php_errorlog|phpinfo\.php)$">
+    Require all denied
+</FilesMatch>
+
+# Block config, secret, log, database, backup, script and notes files.
+<FilesMatch "(?i)(\.(env|ini|conf|cnf|cfg|config|ya?ml|toml|neon|dist|lock|log|sql|dump|sqlite3?|db|mdb|bak|backup|old|orig|save|swp|swo|tmp|temp|md|sh|bash|ps1|bat|cmd|pem|key|crt|csr|p12|pfx|jks|kdbx|htaccess)|\.(sql|dump)\.(gz|zip|bz2|xz|7z|tar)|~)$">
+    Require all denied
+</FilesMatch>
+
+# Never run PHP from upload, storage, vendor or node_modules folders.
+RedirectMatch 403 (?i)/(storage|uploads?|vendor|node_modules)/.*\.(php[0-9]?|phtml|phar|pht)$
+
+<IfModule mod_headers.c>
+    # Hide which PHP version runs the app.
+    Header always unset X-Powered-By
+    Header unset X-Powered-By
+
+    # Security headers for browsers.
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Strict-Transport-Security "max-age=31536000" env=HTTPS
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Leave SSL certificate checks in place.
+    RewriteRule ^\.well-known/ - [L]
+
+    # A plain PHP app has no public/index.php: serve it as it is.
+    RewriteCond %{REQUEST_URI}::$1 ^(.*?/)(.*)::\2$
+    RewriteCond %{DOCUMENT_ROOT}%1public/index.php !-f
+    RewriteRule ^(.*)$ - [S=1]
+
+    # Laravel: forward every request into public/, so only public/ answers.
+    RewriteCond %{REQUEST_URI} !(^|/)public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Without mod_rewrite these rules cannot work, so serve nothing at all.
+<IfModule !mod_rewrite.c>
+    Require all denied
+</IfModule>
+# END C2S Web Security v2026.11.07
+
 # SemantIQ production front door.
 #
 # D-08B, permanent: the cPanel document root is public_html, the deployment root
@@ -106,3 +168,12 @@ ErrorDocument 403 "Forbidden"
 <FilesMatch "(?i)^(\.env.*|composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml|vite\.config\.js|.*\.md|.*\.ya?ml|.*\.sqlite|.*\.log)$">
     Require all denied
 </FilesMatch>
+
+# cPanel only: MultiPHP Manager writes this block into the web root .htaccess,
+# and each deployment replaces that file with this one, so keep it here and
+# set it to the domain's PHP version.
+# php -- BEGIN cPanel-generated handler, do not edit
+<IfModule mime_module>
+  AddHandler application/x-httpd-ea-php85 .php .php8 .phtml
+</IfModule>
+# php -- END cPanel-generated handler, do not edit
