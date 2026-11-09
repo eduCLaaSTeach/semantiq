@@ -175,6 +175,76 @@ would hide that the model changed.
 
 ---
 
+### 0.7 The role picker now mirrors grantability — the final Gate D correction
+
+**Found while preparing Gate D, not by a reviewer.** Check 8 was drafted as
+*"verify no UI offers Organisation Administrator the ability to grant System
+Administrator."* Measured against the real application, it was **false**:
+`AccessController::roleOptions()` returned the whole of
+`RoleCatalogue::roles()`, so the Roles & Access picker listed **System
+Administrator** to every administrator.
+
+**Nothing was ever escalated.** The backend refused the submit and wrote no
+row. What was wrong was the **offer** — and it contradicted the role summary
+added in the same unit, which states *"Cannot grant System Administrator"* in
+writing. A control that presents an option it will not honour teaches
+administrators that refusals are arbitrary.
+
+**THE PICKER NOW MIRRORS GRANTABILITY. THE BACKEND REMAINS THE AUTHORITY.**
+
+| | |
+| --- | --- |
+| System Administrator sees | all seven roles |
+| Organisation Administrator sees | six — **System Administrator absent** |
+| Organisation Administrator → Organisation Administrator | **still permitted**, still through step-up |
+
+**One calculation, two callers.** `grantableRolesFor(User $actor)` reads the
+actor's **current** assignments, unions `RoleCatalogue::grantableBy()` for each
+role held, and returns the result **filtered through
+`RoleCatalogue::roles()`** — which deduplicates and fixes the order in one
+step. Both `roleOptions()` and `refuseIfNotGrantableBy()` now derive from it,
+so **the screen and the refusal cannot disagree**. The grantability algorithm
+is not duplicated, and `RoleCatalogue` itself is unchanged.
+
+**Filtering a dropdown enforces nothing**, and the tests are written so that
+cannot be forgotten: the crafted POST is still refused, still before step-up
+is offered, and still writes no row — asserted independently of what the list
+contains.
+
+**ACCEPTED UX LIMITATION — ruled non-blocking by the Product Owner.**
+
+> An Organisation Administrator cannot select **System Administrator** from the
+> role **filter**, because the filter shares the grantable-role projection.
+> **System Administrator assignments remain visible** in the unfiltered list.
+
+The `roles` prop feeds **both** the grant picker and the filter dropdown on the
+same screen, so narrowing it narrows both.
+
+**This is not a security defect.** Those rows stay visible; authorisation is
+untouched; and the backend still interprets a valid `role` query parameter
+independently of what the dropdown offers.
+
+**Ruled: do not split the prop, do not change the frontend, and do not raise a
+further CL item for it.** Recorded here so the limitation is a decision on the
+record rather than something a later reader discovers and reopens.
+
+CL-12 is not to be expanded again.
+
+**Five mutations run, five caught** — and one of them improved a test rather
+than confirming it. Removing the backend refusal (P2) initially left
+`test_a_crafted_request_for_system_administrator_is_still_refused` **green**:
+with the escalation guard gone the request runs on into the step-up branch, so
+no assignment is written *yet* and a row count alone stays satisfied. "No row"
+was too weak a claim for the name it carried. The case now also asserts the
+refusal reached the administrator, which is what distinguishes *refused* from
+*waiting at Microsoft* — measured, not assumed.
+
+**No authorisation moved.** Action classes, `grantableBy` rules, `RoleCode`,
+`ActionClass`, `AccessEngine`, the navigation authorizer, routes, schema and
+deployment are all untouched.
+
+---
+
 ### 0.6 Gate D is superseded
 
 The eight-check script written against the first ruling must **not** be used.

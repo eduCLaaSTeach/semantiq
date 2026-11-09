@@ -108,7 +108,7 @@ final class AccessController
                 'lastPage' => $assignments->lastPage(),
             ],
             'filters' => ['search' => $search, 'role' => $role, 'state' => $state],
-            'roles' => $this->roleOptions(),
+            'roles' => $this->roleOptions($this->actor($request)),
             'candidates' => $this->candidates($organisation->id),
             // Two different facts: nothing has been granted at all, versus a
             // filter matched nothing. P1-03 shipped a defect by conflating them.
@@ -483,8 +483,50 @@ final class AccessController
      * Asks the SAME catalogue the service asks - RoleCatalogue::grantableBy -
      * rather than reimplementing the rule, so there is one answer and this is
      * only about WHEN it is asked.
+     *
+     * IT NOW ASKS THROUGH grantableRolesFor, which is the same list the picker
+     * is built from. That is the point of the refactor: the screen and the
+     * refusal cannot disagree about who may grant what, because there is only
+     * one calculation to disagree with.
      */
     private function refuseIfNotGrantableBy(RoleCode $role, User $actor): void
+    {
+        if (! in_array($role, $this->grantableRolesFor($actor), true)) {
+            throw AccessViolation::roleNotGrantable($role);
+        }
+    }
+
+    /**
+     * EVERY ROLE THIS ADMINISTRATOR MAY ACTUALLY GRANT.
+     *
+     * One calculation, two callers: the role picker is built from it, and the
+     * pre-flight refusal tests against it. Before this existed the picker
+     * offered RoleCatalogue::roles() unfiltered, so an Organisation
+     * Administrator was shown System Administrator, chose it, and was refused
+     * on submit. The refusal was correct and the offer was not: a control that
+     * presents an option it will not honour teaches administrators that
+     * refusals are arbitrary.
+     *
+     * THE PICKER IS NOT THE AUTHORITY AND MUST NOT BECOME ONE. Filtering the
+     * list hides a choice; it does not enforce anything. The crafted POST that
+     * skips the screen is still refused here, and refused again by
+     * RoleAssignmentService under its own locks. Both tests for that are kept.
+     *
+     * THE UNION, NOT THE FIRST MATCH. Somebody may hold more than one role, so
+     * every current assignment contributes what it may grant. ENDED
+     * assignments are excluded by whereNull('ended_at') - authority that has
+     * been revoked must stop granting immediately, and a stale row must not
+     * keep a picker open.
+     *
+     * ORDERED BY RoleCatalogue::roles(), WHICH ALSO DEDUPLICATES. Filtering the
+     * catalogue rather than the merged list means each role appears once, in
+     * the catalogue's own order, however many roles the actor holds - so the
+     * picker is deterministic and two administrators never see the same roles
+     * in a different order.
+     *
+     * @return list<RoleCode>
+     */
+    private function grantableRolesFor(User $actor): array
     {
         $grantable = [];
 
@@ -497,9 +539,10 @@ final class AccessController
             $grantable = array_merge($grantable, RoleCatalogue::grantableBy($actorRole));
         }
 
-        if (! in_array($role, $grantable, true)) {
-            throw AccessViolation::roleNotGrantable($role);
-        }
+        return array_values(array_filter(
+            RoleCatalogue::roles(),
+            static fn (RoleCode $role): bool => in_array($role, $grantable, true),
+        ));
     }
 
     /**
@@ -623,8 +666,16 @@ final class AccessController
         ];
     }
 
-    /** @return list<array<string, string>> */
-    private function roleOptions(): array
+    /**
+     * The roles this administrator may offer, with the disclosure for each.
+     *
+     * The summary is still RoleCode::summary() - the same sentence the
+     * disclosure tests hold to the grant matrix. This method chooses WHICH
+     * roles are listed, never what is said about one.
+     *
+     * @return list<array<string, string>>
+     */
+    private function roleOptions(User $actor): array
     {
         return array_map(
             static fn (RoleCode $role): array => [
@@ -632,7 +683,7 @@ final class AccessController
                 'label' => $role->label(),
                 'summary' => $role->summary(),
             ],
-            RoleCatalogue::roles(),
+            $this->grantableRolesFor($actor),
         );
     }
 
