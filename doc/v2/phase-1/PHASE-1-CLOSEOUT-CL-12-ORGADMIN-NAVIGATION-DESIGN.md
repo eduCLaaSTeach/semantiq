@@ -175,6 +175,56 @@ would hide that the model changed.
 
 ---
 
+### 0.7 The role picker now mirrors grantability — the final Gate D correction
+
+**Found while preparing Gate D, not by a reviewer.** Check 8 was drafted as
+*"verify no UI offers Organisation Administrator the ability to grant System
+Administrator."* Measured against the real application, it was **false**:
+`AccessController::roleOptions()` returned the whole of
+`RoleCatalogue::roles()`, so the Roles & Access picker listed **System
+Administrator** to every administrator.
+
+**Nothing was ever escalated.** The backend refused the submit and wrote no
+row. What was wrong was the **offer** — and it contradicted the role summary
+added in the same unit, which states *"Cannot grant System Administrator"* in
+writing. A control that presents an option it will not honour teaches
+administrators that refusals are arbitrary.
+
+**THE PICKER NOW MIRRORS GRANTABILITY. THE BACKEND REMAINS THE AUTHORITY.**
+
+| | |
+| --- | --- |
+| System Administrator sees | all seven roles |
+| Organisation Administrator sees | six — **System Administrator absent** |
+| Organisation Administrator → Organisation Administrator | **still permitted**, still through step-up |
+
+**One calculation, two callers.** `grantableRolesFor(User $actor)` reads the
+actor's **current** assignments, unions `RoleCatalogue::grantableBy()` for each
+role held, and returns the result **filtered through
+`RoleCatalogue::roles()`** — which deduplicates and fixes the order in one
+step. Both `roleOptions()` and `refuseIfNotGrantableBy()` now derive from it,
+so **the screen and the refusal cannot disagree**. The grantability algorithm
+is not duplicated, and `RoleCatalogue` itself is unchanged.
+
+**Filtering a dropdown enforces nothing**, and the tests are written so that
+cannot be forgotten: the crafted POST is still refused, still before step-up
+is offered, and still writes no row — asserted independently of what the list
+contains.
+
+**One consequence to note.** The `roles` prop feeds **both** the grant picker
+and the **filter** dropdown on the same screen. Filtering it means an
+Organisation Administrator can no longer *filter* the assignment list by System
+Administrator, though those rows remain visible unfiltered. This follows the
+Product Owner's explicit design instruction and was not treated as licence to
+change the frontend; if the filter should keep the full list, that is a
+separate one-line change passing a second prop.
+
+**No authorisation moved.** Action classes, `grantableBy` rules, `RoleCode`,
+`ActionClass`, `AccessEngine`, the navigation authorizer, routes, schema and
+deployment are all untouched.
+
+---
+
 ### 0.6 Gate D is superseded
 
 The eight-check script written against the first ruling must **not** be used.
