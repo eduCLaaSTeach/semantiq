@@ -211,13 +211,24 @@ cannot be forgotten: the crafted POST is still refused, still before step-up
 is offered, and still writes no row — asserted independently of what the list
 contains.
 
-**One consequence to note.** The `roles` prop feeds **both** the grant picker
-and the **filter** dropdown on the same screen. Filtering it means an
-Organisation Administrator can no longer *filter* the assignment list by System
-Administrator, though those rows remain visible unfiltered. This follows the
-Product Owner's explicit design instruction and was not treated as licence to
-change the frontend; if the filter should keep the full list, that is a
-separate one-line change passing a second prop.
+**ACCEPTED UX LIMITATION — ruled non-blocking by the Product Owner.**
+
+> An Organisation Administrator cannot select **System Administrator** from the
+> role **filter**, because the filter shares the grantable-role projection.
+> **System Administrator assignments remain visible** in the unfiltered list.
+
+The `roles` prop feeds **both** the grant picker and the filter dropdown on the
+same screen, so narrowing it narrows both.
+
+**This is not a security defect.** Those rows stay visible; authorisation is
+untouched; and the backend still interprets a valid `role` query parameter
+independently of what the dropdown offers.
+
+**Ruled: do not split the prop, do not change the frontend, and do not raise a
+further CL item for it.** Recorded here so the limitation is a decision on the
+record rather than something a later reader discovers and reopens.
+
+CL-12 is not to be expanded again.
 
 **Five mutations run, five caught** — and one of them improved a test rather
 than confirming it. Removing the backend refusal (P2) initially left
