@@ -219,6 +219,15 @@ Product Owner's explicit design instruction and was not treated as licence to
 change the frontend; if the filter should keep the full list, that is a
 separate one-line change passing a second prop.
 
+**Five mutations run, five caught** — and one of them improved a test rather
+than confirming it. Removing the backend refusal (P2) initially left
+`test_a_crafted_request_for_system_administrator_is_still_refused` **green**:
+with the escalation guard gone the request runs on into the step-up branch, so
+no assignment is written *yet* and a row count alone stays satisfied. "No row"
+was too weak a claim for the name it carried. The case now also asserts the
+refusal reached the administrator, which is what distinguishes *refused* from
+*waiting at Microsoft* — measured, not assumed.
+
 **No authorisation moved.** Action classes, `grantableBy` rules, `RoleCode`,
 `ActionClass`, `AccessEngine`, the navigation authorizer, routes, schema and
 deployment are all untouched.

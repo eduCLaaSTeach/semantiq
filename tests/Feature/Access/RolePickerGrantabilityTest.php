@@ -160,7 +160,7 @@ final class RolePickerGrantabilityTest extends TestCase
 
         $this->access->assignment($actor, RoleCode::OrganisationAdministrator, $organisation);
 
-        $this->signedInAs($actor)->post('/console/access/assignments', [
+        $response = $this->signedInAs($actor)->post('/console/access/assignments', [
             'user_id' => $target->id,
             'role_code' => RoleCode::SystemAdministrator->value,
         ]);
@@ -174,6 +174,16 @@ final class RolePickerGrantabilityTest extends TestCase
             'An Organisation Administrator created a System Administrator assignment. The '
             .'picker is a disclosure; the refusal is the control, and it did not hold.'
         );
+
+        /*
+         * AND THE REFUSAL ACTUALLY REACHED THEM. "No row" alone is too weak and
+         * was measured to be so: with the escalation guard deleted, this
+         * request runs on into the step-up branch, no assignment is written
+         * YET, and a row count on its own stays green while the guard is gone.
+         * An error on the response is what distinguishes "refused" from
+         * "waiting at Microsoft".
+         */
+        $response->assertSessionHasErrors('access');
     }
 
     /**
