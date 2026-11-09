@@ -31,8 +31,11 @@
    must look like `11111111-1111-4111-8111-111111111111`. SemantIQ cannot
    check whether it names a real person — it only checks the shape. Synthetic
    GUIDs are supplied below.
-2. **Everything needs a Code** — business units, departments, teams, groups
-   and domains. Codes are supplied below. Use lower-case with hyphens.
+2. **Only the business domain's code is mandatory or formatted.** Business
+   unit, department, team and group codes are **optional** free text (max 32).
+   A **business domain's Identity code is required** and must be lower-case
+   letters, digits and single hyphens. A domain also requires an **Access
+   expectation**.
 3. **Order matters.** A department needs its business unit to exist first; a
    team needs its department; a role assignment needs the person and the
    domain. Work top to bottom.
@@ -49,7 +52,7 @@
 | Field | Value |
 | --- | --- |
 | Name | `Northwind Learning Group` |
-| Country | `SG` |
+| Country | `SG` — **exactly two characters**; `Singapore` is rejected |
 | Time zone | `Asia/Singapore` |
 
 3. **Save.**
@@ -69,6 +72,10 @@ organisation as missing.
 | `Northwind Learning Group Pte Ltd` | `Singapore` | `NW-SG-2019-0441` |
 | `Northwind Academy Sdn Bhd` | `Malaysia` | `NW-MY-2021-7732` |
 
+**Jurisdiction is the approved territory NAME, not the ISO code.** `Singapore`
+is accepted; `SG` is refused by the server, not merely absent from the
+dropdown.
+
 *(Registered address is optional — leave it blank.)*
 
 **Expected:** two entities listed, both **Active**.
@@ -82,9 +89,9 @@ organisation as missing.
 
 | Name | Code |
 | --- | --- |
-| `Corporate Training` | `corporate-training` |
-| `Professional Certification` | `professional-certification` |
-| `Digital Campus` | `digital-campus` |
+| `Corporate Training` | `CT` |
+| `Professional Certification` | `PC` |
+| `Digital Campus` | `DC` |
 
 **Expected:** three units, each showing **0 departments** for now.
 
@@ -97,11 +104,11 @@ organisation as missing.
 
 | Name | Code | Business unit |
 | --- | --- | --- |
-| `Finance` | `finance` | Corporate Training |
-| `People & Culture` | `people-culture` | Corporate Training |
-| `Sales` | `sales` | Corporate Training |
-| `Delivery` | `delivery` | Professional Certification |
-| `Technology` | `technology` | Digital Campus |
+| `Finance` | `FIN` | Corporate Training |
+| `People & Culture` | `PC-HR` | Corporate Training |
+| `Sales` | `SAL` | Corporate Training |
+| `Delivery` | `DEL` | Professional Certification |
+| `Technology` | `TEC` | Digital Campus |
 
 **Expected:** five departments. Business Units now shows 3 / 1 / 1.
 
@@ -118,9 +125,9 @@ organisation as missing.
 
 | Name | Code | Department |
 | --- | --- | --- |
-| `Enterprise Sales` | `enterprise-sales` | Sales |
-| `Certification Delivery` | `certification-delivery` | Delivery |
-| `Data & Platform` | `data-platform` | Technology |
+| `Enterprise Sales` | `ENT` | Sales |
+| `Certification Delivery` | `CERT` | Delivery |
+| `Data & Platform` | `DATA` | Technology |
 
 **Expected:** three teams, each with **0 members** for now.
 
@@ -157,8 +164,8 @@ showing **Not assigned** — they hold no roles.
 
 | Name | Code | Description |
 | --- | --- | --- |
-| `Finance Leadership` | `finance-leadership` | `Finance decision makers` |
-| `Enterprise Sales Team` | `enterprise-sales-team` | `Named enterprise accounts` |
+| `Finance Leadership` | `FINLEAD` | `Finance decision makers` |
+| `Enterprise Sales Team` | `ENTSALES` | `Named enterprise accounts` |
 
 3. Open each group and **add members**:
    - **Finance Leadership** → Arjun Mehta, Priya Raman
@@ -184,12 +191,12 @@ Scenario 3 in the demo is sharper if Mei Lin visibly belongs to a team.
 1. Open **System Administration → Business Domains**.
 2. **Add a domain.** Four times.
 
-| Name | Identity code |
-| --- | --- |
-| `Finance` | `finance` |
-| `People` | `people` |
-| `Sales` | `sales` |
-| `Learning Delivery` | `learning-delivery` |
+| Name | Identity code | Access expectation *(required)* |
+| --- | --- | --- |
+| `Finance` | `finance` | `Limited` |
+| `People` | `people` | `Limited` |
+| `Sales` | `sales` | `Broad` |
+| `Learning Delivery` | `learning-delivery` | `Broad` |
 
 3. Open each domain and set the owner under **Accountability** → **Choose a
    person**:
@@ -345,7 +352,9 @@ improvise an explanation in front of the audience.
 | "Add a user" rejects the form | **Object ID** missing or wrong shape | Must be `8-4-4-4-12` hex. Use the GUIDs in Step 2.1 exactly. |
 | Cannot pick a business unit for a department | The business unit does not exist yet | Do Step 1.3 first. |
 | Cannot change a department's business unit | Editing does not move it | Use **Move to**. |
-| Code is rejected | Codes are lower-case letters, digits and hyphens | `people-culture`, not `People & Culture`. |
+| A business DOMAIN code is rejected | Only the domain Identity code is a strict slug | `learning-delivery`, not `Learning Delivery`. Unit/department/team/group codes are free text. |
+| A legal entity jurisdiction is rejected | It must be an approved territory NAME | `Singapore`, not `SG`. |
+| A domain will not save | **Access expectation** is required | Choose Undecided, Broad, Limited or Exceptional. |
 | Simulator says "no entitlement" for Priya | Step 4.4 stopped early | Open her assignment and finish steps 3–5. |
 | Simulator allows Arjun | He was given an entitlement | Remove it. He must have none. |
 | Nobody can sign in at all | Identity/SSO not configured on this instance | Must be set up before any of this. |

@@ -246,9 +246,15 @@ that change?' — that question has an answer."*
 ## 12–19. The data pack
 
 > **The exact click-by-click steps are in
-> `SEMANTIQ-DEMO-SETUP-STEP-BY-STEP.md`.** Field names below are the real ones
-> on the screens — legal entities ask for a **Jurisdiction**, not a country,
-> and units, departments, teams, groups and domains each need a **Code**.
+> `SEMANTIQ-DEMO-SETUP-STEP-BY-STEP.md`, and a full functional test script with
+> verified values is in `SEMANTIQ-PHASE-1-TEST-SCRIPT-WITH-DATA.md`.**
+>
+> Field rules below were checked against the application's own validation:
+> legal entities ask for a **Jurisdiction** and it must be the approved
+> territory **name** (`Singapore`, not `SG`); unit, department, team and group
+> **codes are optional free text**; a business domain's **Identity code is
+> required and is a strict slug**, and a domain also requires an **Access
+> expectation**.
 
 ### Legal entities
 
