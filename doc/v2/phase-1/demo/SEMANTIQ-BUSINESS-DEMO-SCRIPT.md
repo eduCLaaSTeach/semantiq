@@ -14,7 +14,7 @@ complete data pack.
 > | **Production** (`semantiq.claas2saas.com`) | **PART A only** | **Create nothing.** Show the real organisation. |
 > | **A demo / staging instance** | **PART A + PART B** | Use the data pack in §9. |
 >
-> **Do not run Part B on production.** Typing "Northwind Learning Group" into
+> **Do not run Part B on production.** Typing "CLaaS2SaaS Pte Ltd" into
 > the live system would put fictional companies, departments and people into
 > your real audit trail, permanently, where they cannot be removed.
 >
@@ -245,6 +245,11 @@ that change?' — that question has an answer."*
 
 ## 12–19. The data pack
 
+> **CLaaS2SaaS Pte Ltd, Lithan Academy Pte Ltd and Lithan Academy Sdn Bhd are
+> REAL. The org chart, the five people and the domains are INVENTED.** That
+> mixture is why Part B must not run on production: real names on a false org
+> chart is false organisational history, and there is no hard delete.
+>
 > **The exact click-by-click steps are in
 > `SEMANTIQ-DEMO-SETUP-STEP-BY-STEP.md`, and a full functional test script with
 > verified values is in `SEMANTIQ-PHASE-1-TEST-SCRIPT-WITH-DATA.md`.**
@@ -260,8 +265,11 @@ that change?' — that question has an answer."*
 
 | Name | Jurisdiction | Registration |
 | --- | --- | --- |
-| Northwind Learning Group Pte Ltd | Singapore | NW-SG-2019-0441 |
-| Northwind Academy Sdn Bhd | Malaysia | NW-MY-2021-7732 |
+| Lithan Academy Pte Ltd | Singapore | *leave blank* |
+| Lithan Academy Sdn Bhd | Malaysia | *leave blank* |
+
+Registration is nullable and deliberately blank: these are real companies, and
+an invented registration number is false business data.
 
 ### Business units
 
@@ -296,11 +304,11 @@ checks only the shape, not that the person exists.
 
 | Name | Email | Object ID |
 | --- | --- | --- |
-| Arjun Mehta | arjun.mehta@northwind.example | `11111111-1111-4111-8111-111111111111` |
-| Priya Raman | priya.raman@northwind.example | `22222222-2222-4222-8222-222222222222` |
-| Daniel Okafor | daniel.okafor@northwind.example | `33333333-3333-4333-8333-333333333333` |
-| Mei Lin Tan | meilin.tan@northwind.example | `44444444-4444-4444-8444-444444444444` |
-| Sofia Alvarez | sofia.alvarez@northwind.example | `55555555-5555-4555-8555-555555555555` |
+| Arjun Mehta | arjun.mehta@demo.example | `11111111-1111-4111-8111-111111111111` |
+| Priya Raman | priya.raman@demo.example | `22222222-2222-4222-8222-222222222222` |
+| Daniel Okafor | daniel.okafor@demo.example | `33333333-3333-4333-8333-333333333333` |
+| Mei Lin Tan | meilin.tan@demo.example | `44444444-4444-4444-8444-444444444444` |
+| Sofia Alvarez | sofia.alvarez@demo.example | `55555555-5555-4555-8555-555555555555` |
 
 ### Groups
 

@@ -13,12 +13,31 @@ corrects it — see §2.
 >
 > **For production, use the Gate D script instead** — it is read-only.
 
+> ### What in this data is real, and what is not
+>
+> | Real | Invented |
+> | --- | --- |
+> | **CLaaS2SaaS Pte Ltd** — the organisation | Business units, departments and teams |
+> | **Lithan Academy Pte Ltd / Sdn Bhd** — the legal entities | The five test people and their `@demo.example` addresses |
+> | **Sowjanya Chukka** — the System Administrator who signs in | The business domains and every role assignment |
+>
+> **This mixture is exactly why the script must not run on production.** Real
+> company names attached to an invented org chart is not harmless test data —
+> it is **false organisational history**, and with no hard delete it cannot be
+> taken back out. On a non-production instance it is ideal, because the demo
+> reads as your own business.
+>
+> The five people stay fictional on purpose. `@demo.example` is a reserved
+> domain that can never receive mail, so no real colleague is ever named or
+> contacted.
+
+
 | | |
 | --- | --- |
 | Build | `03f238ee52d95645b91a41d6271069b75f6b2320` |
 | Covers | T1–T12 — organisation, people, domains, access, evidence |
 | Time | 45–60 minutes |
-| Sign in as | System Administrator or Organisation Administrator |
+| Sign in as | **Sowjanya Chukka** — System Administrator |
 
 ---
 
@@ -55,7 +74,7 @@ letters, digits and single hyphens (`learning-delivery` ✅,
 
 | Field | Value |
 | --- | --- |
-| Name | `Northwind Learning Group` |
+| Name | `CLaaS2SaaS Pte Ltd` |
 | Country | `SG` *(exactly two characters)* |
 | Time zone | `Asia/Singapore` |
 
@@ -77,8 +96,14 @@ Restore `SG`.
 
 | Name | Jurisdiction | Registration |
 | --- | --- | --- |
-| `Northwind Learning Group Pte Ltd` | `Singapore` | `NW-SG-2019-0441` |
-| `Northwind Academy Sdn Bhd` | `Malaysia` | `NW-MY-2021-7732` |
+| `Lithan Academy Pte Ltd` | `Singapore` | **leave blank** |
+| `Lithan Academy Sdn Bhd` | `Malaysia` | **leave blank** |
+
+**Registration is deliberately left blank.** It is nullable, and a legal entity
+whose registration number is not yet recorded is a real state the application
+supports. These are **real companies**: inventing a registration number for one
+would be entering false business data, and a wrong number is worse than no
+number. If you want the field populated, use the genuine ones.
 
 *Registered address is optional — leave blank.*
 
@@ -98,9 +123,9 @@ approved territory list, not just the dropdown.
 
 | Name | Code *(optional)* | Legal entity |
 | --- | --- | --- |
-| `Corporate Training` | `CT` | Northwind Learning Group Pte Ltd |
-| `Professional Certification` | `PC` | Northwind Learning Group Pte Ltd |
-| `Digital Campus` | `DC` | Northwind Academy Sdn Bhd |
+| `Corporate Training` | `CT` | Lithan Academy Pte Ltd |
+| `Professional Certification` | `PC` | Lithan Academy Pte Ltd |
+| `Digital Campus` | `DC` | Lithan Academy Sdn Bhd |
 
 **Expected:** Three units, each showing **0 departments**.
 
@@ -156,11 +181,11 @@ the person exists, and the screen says so rather than implying otherwise.
 
 | Name | Email | Object ID |
 | --- | --- | --- |
-| `Arjun Mehta` | `arjun.mehta@northwind.example` | `11111111-1111-4111-8111-111111111111` |
-| `Priya Raman` | `priya.raman@northwind.example` | `22222222-2222-4222-8222-222222222222` |
-| `Daniel Okafor` | `daniel.okafor@northwind.example` | `33333333-3333-4333-8333-333333333333` |
-| `Mei Lin Tan` | `meilin.tan@northwind.example` | `44444444-4444-4444-8444-444444444444` |
-| `Sofia Alvarez` | `sofia.alvarez@northwind.example` | `55555555-5555-4555-8555-555555555555` |
+| `Arjun Mehta` | `arjun.mehta@demo.example` | `11111111-1111-4111-8111-111111111111` |
+| `Priya Raman` | `priya.raman@demo.example` | `22222222-2222-4222-8222-222222222222` |
+| `Daniel Okafor` | `daniel.okafor@demo.example` | `33333333-3333-4333-8333-333333333333` |
+| `Mei Lin Tan` | `meilin.tan@demo.example` | `44444444-4444-4444-8444-444444444444` |
+| `Sofia Alvarez` | `sofia.alvarez@demo.example` | `55555555-5555-4555-8555-555555555555` |
 
 **Expected:** Five users — **Active**, **Not signed in yet**, **Not assigned**.
 
