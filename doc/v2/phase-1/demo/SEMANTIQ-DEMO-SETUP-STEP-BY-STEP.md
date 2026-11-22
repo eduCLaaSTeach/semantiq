@@ -19,7 +19,7 @@
 > | --- | --- |
 > | **CLaaS2SaaS Pte Ltd** — the organisation | Business units, departments and teams |
 > | **Lithan Academy Pte Ltd / Sdn Bhd** — the legal entities | The five test people and their `@demo.example` addresses |
-> | **Sowjanya Chukka** — the System Administrator who signs in | The business domains and every role assignment |
+> | **Sowjanya Chukka** — Organisation Administrator, and **Salil Mhatre** — System Administrator | The business domains and every role assignment |
 >
 > **This mixture is exactly why the script must not run on production.** Real
 > company names attached to an invented org chart is not harmless test data —
@@ -39,7 +39,7 @@
 
 | | |
 | --- | --- |
-| Sign in as | **Sowjanya Chukka** — System Administrator |
+| Sign in as | **Sowjanya Chukka** — **Organisation Administrator** |
 | Sign-in method | **Microsoft** — there is no SemantIQ password |
 | Prerequisite | Identity (Entra SSO) already configured, or nobody can sign in at all |
 
@@ -215,12 +215,13 @@ Scenario 3 in the demo is sharper if Mei Lin visibly belongs to a team.
 1. Open **System Administration → Business Domains**.
 2. **Add a domain.** Four times.
 
-| Name | Identity code | Access expectation *(required)* |
-| --- | --- | --- |
-| `Finance` | `finance` | `Limited` |
-| `People` | `people` | `Limited` |
-| `Sales` | `sales` | `Broad` |
-| `Learning Delivery` | `learning-delivery` | `Broad` |
+**Do NOT create these — seven baseline domains already ship with SemantIQ:**
+Customer · Executive · Finance · Learning · Operations · People · Sales. Adding
+your own `finance` or `sales` collides with a shipped identity code.
+
+**Open the existing ones and give them an owner instead.** Add at most one
+genuinely new domain (`Certification` / `certification`) if you want to
+exercise the Add form.
 
 3. Open each domain and set the owner under **Accountability** → **Choose a
    person**:
@@ -230,7 +231,7 @@ Scenario 3 in the demo is sharper if Mei Lin visibly belongs to a team.
 | **Finance** | **Arjun Mehta** |
 | People | Priya Raman |
 | Sales | Daniel Okafor |
-| Learning Delivery | Mei Lin Tan |
+| Learning | Mei Lin Tan |
 
 4. Confirm each shows **Enabled** under **Availability**.
 
@@ -284,7 +285,7 @@ entitlement anywhere.
 
 1. **Assign a role** → **Mei Lin Tan**, role **Business User**. Save.
 2. **Open the assignment** (click the row).
-3. **Grant an entitlement** → domain **Learning Delivery**.
+3. **Grant an entitlement** → domain **Learning** *(a shipped baseline domain)*.
 4. On that entitlement, **assign a scope** → **Own records**.
 5. On that entitlement, **set the sensitivity ceiling** → **Standard**.
 
@@ -323,7 +324,7 @@ be allowed.
 | --- | --- | --- | --- | --- |
 | Arjun Mehta | Domain Owner | — | — | — |
 | Daniel Okafor | Manager | — | — | — |
-| Mei Lin Tan | Business User | Learning Delivery | Own records | Standard |
+| Mei Lin Tan | Business User | Learning | Own records | Standard |
 | Priya Raman | Executive | Finance | Organisation | Confidential |
 | Sofia Alvarez | Auditor | — | — | — |
 
@@ -344,7 +345,7 @@ not having one.
 | --- | --- | --- | --- | --- |
 | 1 | Arjun Mehta | Finance | Standard | **Denied — no entitlement** |
 | 2 | Daniel Okafor | Sales | Standard | **Denied — no entitlement** |
-| 3 | Mei Lin Tan | Learning Delivery | Standard, a record that is **not** her own | **Denied — outside scope** |
+| 3 | Mei Lin Tan | **Learning** | Standard, a record that is **not** her own | **Denied — outside scope** |
 | 4 | Priya Raman | Finance | **Restricted** | **Denied — above ceiling** |
 | 5 | Priya Raman | Finance | **Confidential** | **ALLOWED** |
 
@@ -376,7 +377,7 @@ improvise an explanation in front of the audience.
 | "Add a user" rejects the form | **Object ID** missing or wrong shape | Must be `8-4-4-4-12` hex. Use the GUIDs in Step 2.1 exactly. |
 | Cannot pick a business unit for a department | The business unit does not exist yet | Do Step 1.3 first. |
 | Cannot change a department's business unit | Editing does not move it | Use **Move to**. |
-| A business DOMAIN code is rejected | Only the domain Identity code is a strict slug | `learning-delivery`, not `Learning Delivery`. Unit/department/team/group codes are free text. |
+| A business DOMAIN code is rejected | Only the domain Identity code is a strict slug | `certification`, not `Certification Delivery`. Unit/department/team/group codes are free text. |
 | A legal entity jurisdiction is rejected | It must be an approved territory NAME | `Singapore`, not `SG`. |
 | A domain will not save | **Access expectation** is required | Choose Undecided, Broad, Limited or Exceptional. |
 | Simulator says "no entitlement" for Priya | Step 4.4 stopped early | Open her assignment and finish steps 3–5. |

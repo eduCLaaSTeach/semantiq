@@ -19,7 +19,7 @@ corrects it — see §2.
 > | --- | --- |
 > | **CLaaS2SaaS Pte Ltd** — the organisation | Business units, departments and teams |
 > | **Lithan Academy Pte Ltd / Sdn Bhd** — the legal entities | The five test people and their `@demo.example` addresses |
-> | **Sowjanya Chukka** — the System Administrator who signs in | The business domains and every role assignment |
+> | **Sowjanya Chukka** — Organisation Administrator, and **Salil Mhatre** — System Administrator | The business domains and every role assignment |
 >
 > **This mixture is exactly why the script must not run on production.** Real
 > company names attached to an invented org chart is not harmless test data —
@@ -37,7 +37,7 @@ corrects it — see §2.
 | Build | `03f238ee52d95645b91a41d6271069b75f6b2320` |
 | Covers | T1–T12 — organisation, people, domains, access, evidence |
 | Time | 45–60 minutes |
-| Sign in as | **Sowjanya Chukka** — System Administrator |
+| Sign in as | **Sowjanya Chukka** — **Organisation Administrator** |
 
 ---
 
@@ -63,8 +63,8 @@ were wrong.** They are corrected throughout this script.
 | Company profile `Country` | `Singapore` | **Exactly 2 characters** — `SG` |
 
 **Business domain `code` is the one real slug:** required, max 32, lower-case
-letters, digits and single hyphens (`learning-delivery` ✅,
-`Learning Delivery` ❌).
+letters, digits and single hyphens (`certification` ✅,
+`Certification Delivery` ❌).
 
 ---
 
@@ -238,33 +238,58 @@ Then add members: **Finance Leadership** → Arjun Mehta, Priya Raman.
 
 ## T9 — Business domains
 
-**Screen:** System Administration → Business Domains → **Add a domain**
+**Screen:** System Administration → Business Domains
 
-**`Identity code` is a strict slug.** **`Access expectation` is required.**
+> ### ⚠️ Do NOT create Finance, People, Sales or Learning
+>
+> **Seven baseline domains ship with SemantIQ** and are already there:
+> **Customer · Executive · Finance · Learning · Operations · People · Sales.**
+> Adding your own `finance` or `sales` would collide with a shipped identity
+> code and be rejected.
+>
+> *(An earlier version of this script told you to create them. That was wrong
+> and is corrected here.)*
 
-| Name | Identity code | Access expectation |
+### T9a — Read what ships
+
+**Expected:** the seven baseline domains listed, **Kind = Baseline**. The
+screen states *"A domain does not give anybody access to anything."*
+
+**PASS / FAIL:** ______
+
+### T9b — Give three of them an owner, and enable them
+
+Open each, set **Accountability → Choose a person**, and confirm
+**Availability → Enabled**:
+
+| Domain *(already exists)* | Owner | Why this one |
 | --- | --- | --- |
-| `Finance` | `finance` | `Limited` |
-| `People` | `people` | `Limited` |
-| `Sales` | `sales` | `Broad` |
-| `Learning Delivery` | `learning-delivery` | `Broad` |
+| **Finance** | **Arjun Mehta** | **He will get NO Finance entitlement** — the T11 proof that accountability ≠ access |
+| Learning | Mei Lin Tan | Her scope is tested in T11 |
+| Sales | Daniel Okafor | He holds a role and no entitlement |
 
-Then open each and set the owner under **Accountability → Choose a person**:
+**Expected:** three **Enabled**, each with an owner. The other four may stay
+Disabled and unassigned.
 
-| Domain | Owner |
+**PASS / FAIL:** ______
+
+### T9c — Add ONE custom domain, to test the Add form
+
+**Screen:** **Add Domain**
+
+| Field | Value |
 | --- | --- |
-| **Finance** | **Arjun Mehta** |
-| People | Priya Raman |
-| Sales | Daniel Okafor |
-| Learning Delivery | Mei Lin Tan |
+| Name | `Certification` |
+| Identity code | `certification` — must not clash with a baseline code |
+| Access expectation | `Limited` |
 
-Confirm each reads **Enabled** under **Availability**.
+**Expected:** saves, listed with **Kind = Custom**.
 
-**Negative test:** try identity code `Learning Delivery`.
-**Expected:** **Rejected** — lower-case, digits and single hyphens only.
+**Negative test:** try identity code `Certification Delivery`.
+**Expected:** **Rejected** — lower-case letters, digits and single hyphens only.
 
-> **Arjun now owns Finance and will be given no Finance entitlement.**
-> Deliberate: it is the T11 proof that accountability ≠ access.
+**Second negative test:** try identity code `finance`.
+**Expected:** **Rejected** — that code already belongs to a baseline domain.
 
 **PASS / FAIL:** ______
 
@@ -289,7 +314,7 @@ Granting access is **four separate actions**:
 | --- | --- | --- | --- | --- | --- |
 | Arjun Mehta | Domain Owner | — | — | — | **step 1** |
 | Daniel Okafor | Manager | — | — | — | **step 1** |
-| Mei Lin Tan | Business User | Learning Delivery | **Own records** | Standard | step 4 |
+| Mei Lin Tan | Business User | **Learning** | **Own records** | Standard | step 4 |
 | Priya Raman | Executive | Finance | Organisation | **Confidential** | step 4 |
 | Sofia Alvarez | Auditor | — | — | — | **step 1** |
 
@@ -315,7 +340,7 @@ approval wastes it.
 | --- | --- | --- | --- | --- |
 | 1 | Arjun Mehta | Finance | Standard | **Denied — no entitlement** *(he owns it)* |
 | 2 | Daniel Okafor | Sales | Standard | **Denied — no entitlement** *(he has the role)* |
-| 3 | Mei Lin Tan | Learning Delivery | Standard, a record **not her own** | **Denied — outside scope** |
+| 3 | Mei Lin Tan | **Learning** | Standard, a record **not her own** | **Denied — outside scope** |
 | 4 | Priya Raman | Finance | **Restricted** | **Denied — above ceiling** |
 | 5 | Priya Raman | Finance | **Confidential** | **ALLOWED** |
 
@@ -365,7 +390,7 @@ approval wastes it.
 | T6 | Users + GUID rule | |
 | T7 | Groups | |
 | T8 | Team membership | |
-| T9 | Domains + slug and expectation rules | |
+| T9 | Baseline domains, owners, custom domain + slug rules | |
 | T10 | Four-part grant path + CL-12 picker | |
 | T11 | Access Simulator — five answers | |
 | T12 | Security Status, Access Reviews, Audit | |

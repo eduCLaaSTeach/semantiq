@@ -120,7 +120,7 @@ departments, teams, reporting hierarchy.
 
 **Say:**
 > "A business domain is a category of information — Finance, People, Sales,
-> Learning Delivery. Each has an owner, who is accountable for it."
+> Learning. Each has an owner, who is accountable for it."
 
 **Then pause and say:**
 > "Here is the first thing that makes SemantIQ different. **Owning a domain
@@ -319,12 +319,13 @@ checks only the shape, not that the person exists.
 
 ### Business domains
 
-| Name | Identity code | Owner | Availability |
-| --- | --- | --- | --- |
-| **Finance** | `finance` | **Arjun Mehta** | Enabled |
-| People | `people` | Priya Raman | Enabled |
-| Sales | `sales` | Daniel Okafor | Enabled |
-| Learning Delivery | `learning-delivery` | Mei Lin Tan | Enabled |
+**These already exist — set the owner, do not create them.**
+
+| Domain *(shipped)* | Owner | Availability |
+| --- | --- | --- |
+| **Finance** | **Arjun Mehta** | Enabled |
+| Learning | Mei Lin Tan | Enabled |
+| Sales | Daniel Okafor | Enabled |
 
 **Arjun owns Finance and is given no Finance entitlement. That is deliberate —
 it is demo moment 1.**
@@ -339,7 +340,7 @@ the five people below stop early on purpose.**
 | --- | --- | --- | --- | --- | --- |
 | **Arjun Mehta** | Domain Owner | **none** | — | — | **Owning a domain grants nothing** |
 | **Daniel Okafor** | Manager | **none** | — | — | **A role alone grants nothing** |
-| **Mei Lin Tan** | Business User | Learning Delivery | **Own records** | Standard | **Scope limits reach** |
+| **Mei Lin Tan** | Business User | **Learning** | **Own records** | Standard | **Scope limits reach** |
 | **Priya Raman** | Executive | Finance | Organisation | **Confidential** | **Ceiling limits sensitivity** |
 | **Sofia Alvarez** | Auditor | — | — | — | **Evidence without business data** |
 
@@ -349,7 +350,7 @@ the five people below stop early on purpose.**
 | --- | --- | --- | --- | --- |
 | 1 | Arjun Mehta | Finance | Standard | **Denied — no entitlement** |
 | 2 | Daniel Okafor | Sales | Standard | **Denied — no entitlement** |
-| 3 | Mei Lin Tan | Learning Delivery | Standard, **team record** | **Denied — outside scope** |
+| 3 | Mei Lin Tan | **Learning** | Standard, **team record** | **Denied — outside scope** |
 | 4 | Priya Raman | Finance | **Restricted** | **Denied — above ceiling** |
 | 5 | Priya Raman | Finance | Confidential | **ALLOWED** |
 
